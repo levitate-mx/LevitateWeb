@@ -1,0 +1,13 @@
+node_modules
+dist
+tmp
+.DS_Store
+levitate-homepage-full*.png
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+.vercel
