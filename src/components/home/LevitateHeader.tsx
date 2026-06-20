@@ -35,7 +35,7 @@ const navItems = [
         href: "/modalidades/levitate-motion/generos",
         children: [
           { label: "Clasificación", href: "/modalidades/levitate-motion/generos" },
-          { label: "Reglamento", href: "#reglamento-motion" },
+          { label: "Reglamento", href: "/reglamentos" },
           { label: "Evaluación", href: "/evaluaciones" },
         ],
       },
@@ -44,7 +44,7 @@ const navItems = [
         href: "#categorías",
         children: [
           { label: "Clasificación", href: "#categorías" },
-          { label: "Reglamento", href: "#reglamento-aerial" },
+          { label: "Reglamento", href: "/reglamentos" },
           { label: "Seguridad", href: "#seguridad" },
           { label: "Evaluación", href: "/modalidades/levitate-aerial/evaluacion" },
         ],

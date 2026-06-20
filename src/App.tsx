@@ -2,6 +2,7 @@ import { LevitateAuthRoute, LevitateRegistrationRoute } from "./components/admin
 import { HomePage } from "./components/home/HomePage";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
 import { PremiationPage } from "./components/premiation/PremiationPage";
+import { RegulationsPage } from "./components/regulations/RegulationsPage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
 import { VenuePage } from "./components/venue/VenuePage";
@@ -11,7 +12,7 @@ import { getVenueBySlug } from "./data/venueContent";
 export default function App() {
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
-  const legacyRulesMatch = window.location.pathname.match(/^\/reglamento\/?$/);
+  const regulationsMatch = window.location.pathname.match(/^\/reglamentos?\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
@@ -36,7 +37,11 @@ export default function App() {
     return <MotionGenresPage />;
   }
 
-  if (evaluationsMatch || legacyRulesMatch) {
+  if (regulationsMatch) {
+    return <RegulationsPage />;
+  }
+
+  if (evaluationsMatch) {
     return <RulesPage />;
   }
 
