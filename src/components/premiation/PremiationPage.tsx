@@ -1,12 +1,18 @@
 import {
   BarChart3,
   CheckCircle2,
+  Lightbulb,
   Megaphone,
   Music2,
+  Pencil,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Star,
+  Users,
   WandSparkles,
 } from "lucide-react";
+import { useState } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -116,24 +122,152 @@ const directRanking = [
 
 const specialAwards = [
   {
+    id: "musica",
     icon: Music2,
     title: "Mejor música",
-    copy: "Se reconocerá la selección musical que mejor acompañe la interpretación y potencie la intención artística de la presentación.",
+    summary:
+      "Reconocimiento a la selección, edición e integración musical que fortalece la propuesta escénica.",
+    image: assets.venue,
+    imageAlt: "Escenario Levitate con iluminación para una presentación de competencia.",
+    criteria: [
+      {
+        icon: Music2,
+        title: "Selección musical",
+        copy: "Se reconocerá la elección de música que mejor fortalezca la propuesta artística, el concepto y la interpretación de la coreografía.",
+      },
+      {
+        icon: SlidersHorizontal,
+        title: "Edición y estructura",
+        copy: "Se valorará la calidad de la edición musical, la fluidez de las transiciones, la coherencia entre segmentos y el aprovechamiento de los cambios de ritmo, intensidad y dinámica.",
+      },
+      {
+        icon: Sparkles,
+        title: "Originalidad y creatividad",
+        copy: "Se considerará el uso creativo de mezclas, efectos, adaptaciones o combinaciones musicales que aporten identidad y valor a la presentación.",
+      },
+      {
+        icon: Star,
+        title: "Relación con la ejecución",
+        copy: "La música deberá integrarse de manera efectiva con la coreografía, permitiendo que los movimientos, acentos y momentos clave se desarrollen en armonía con la composición musical.",
+      },
+      {
+        icon: WandSparkles,
+        title: "Impacto escénico",
+        copy: "Se evaluará la capacidad de la música para generar emoción, reforzar la narrativa y contribuir a una experiencia memorable para el público y los jueces.",
+      },
+    ],
+    note: "Este reconocimiento premia exclusivamente la selección, edición e integración musical dentro de la propuesta escénica, independientemente de la calificación técnica obtenida en la competencia.",
   },
   {
-    icon: Sparkles,
-    title: "Mejor idea coreográfica",
-    copy: "Se premiará la originalidad de la propuesta y la creatividad en la composición coreográfica.",
+    id: "coreografia",
+    icon: Lightbulb,
+    title: "Mejor coreografía",
+    summary:
+      "Reconocimiento a la calidad de la composición coreográfica y a la claridad de su propuesta artística.",
+    image: assets.workshops,
+    imageAlt: "Participantes en una sesión de movimiento y preparación coreográfica.",
+    criteria: [
+      {
+        icon: Lightbulb,
+        title: "Creatividad y composición",
+        copy: "Se evaluará la originalidad de la propuesta, la construcción de secuencias, el uso del espacio y la capacidad de desarrollar una idea clara y atractiva.",
+      },
+      {
+        icon: SlidersHorizontal,
+        title: "Estructura coreográfica",
+        copy: "La rutina deberá presentar una composición coherente, con un adecuado desarrollo, transiciones fluidas y una distribución equilibrada de los elementos técnicos y artísticos.",
+      },
+      {
+        icon: Music2,
+        title: "Relación con la música",
+        copy: "Se valorará la sincronía entre la coreografía y la música, así como el aprovechamiento de acentos, cambios de ritmo y matices musicales.",
+      },
+      {
+        icon: Star,
+        title: "Impacto artístico",
+        copy: "Se considerará la capacidad de la coreografía para transmitir emociones, contar una historia o comunicar un concepto de manera efectiva.",
+      },
+      {
+        icon: Sparkles,
+        title: "Innovación y propuesta escénica",
+        copy: "Se reconocerán las coreografías que aporten elementos creativos, recursos originales y una identidad artística que las haga destacar dentro de la competencia.",
+      },
+    ],
+    note: "Este reconocimiento premia la calidad de la composición coreográfica y su propuesta artística, independientemente del nivel técnico de ejecución o de la puntuación final obtenida en la competencia.",
   },
   {
+    id: "vestuario",
     icon: WandSparkles,
     title: "Mejor vestuario",
-    copy: "Se valorará la elección del vestuario de acuerdo al concepto, funcionalidad e impacto visual en el escenario.",
+    summary:
+      "Se reconocerá el vestuario que complemente la propuesta escénica, refuerce el concepto de la coreografía y mantenga coherencia visual, funcionalidad y cuidado en su presentación.",
+    image: assets.competition,
+    imageAlt: "Participante en escenario Levitate durante una presentación.",
+    criteria: [
+      {
+        icon: Star,
+        title: "Relación con la propuesta artística",
+        copy: "El vestuario deberá complementar y reforzar la temática, concepto o historia presentada en la coreografía.",
+      },
+      {
+        icon: Pencil,
+        title: "Creatividad y diseño",
+        copy: "Se valorará la originalidad, estética, combinación de elementos y el impacto visual generado en escena.",
+      },
+      {
+        icon: Sparkles,
+        title: "Presentación y cuidado",
+        copy: "El vestuario deberá encontrarse limpio, en buen estado y con acabados que reflejen atención al detalle.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Funcionalidad y seguridad",
+        copy: "El vestuario no deberá representar riesgos para la ejecución técnica ni interferir con el desarrollo de la rutina.",
+      },
+      {
+        icon: Users,
+        title: "Imagen integral",
+        copy: "Se tomará en cuenta la armonía entre vestuario, peinado, maquillaje y accesorios como parte de la propuesta escénica completa.",
+      },
+    ],
+    note: "ESTE RECONOCIMIENTO ES INDEPENDIENTE DE LA CALIFICACIÓN TÉCNICA Y ARTÍSTICA OBTENIDA EN LA COMPETENCIA.",
   },
   {
+    id: "porra",
     icon: Megaphone,
     title: "Mejor porra",
-    copy: "Se destacará la energía, apoyo y pasión del público que impulse a su equipo a través del aliento.",
+    summary:
+      "Reconocimiento a la energía, organización y actitud positiva de la porra durante toda la competencia.",
+    image: assets.community,
+    imageAlt: "Comunidad Levitate celebrando durante una experiencia de competencia.",
+    criteria: [
+      {
+        icon: Star,
+        title: "Espíritu deportivo y valores",
+        copy: "El premio reconocerá a la porra que demuestre entusiasmo, compañerismo, respeto, inclusión y apoyo positivo durante toda la competencia.",
+      },
+      {
+        icon: Users,
+        title: "Animar es compartir",
+        copy: "Una gran porra no solo alienta a su propia academia, sino que también reconoce, celebra y aplaude el esfuerzo de los demás participantes y escuelas, contribuyendo a un ambiente de unión y crecimiento para toda la comunidad.",
+      },
+      {
+        icon: Megaphone,
+        title: "Uso responsable de accesorios sonoros",
+        copy: "Las cornetas, matracas y otros elementos de animación podrán utilizarse únicamente durante el momento indicado por el conductor del evento para la dinámica de elección de la Mejor Porra.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Respeto y sana convivencia",
+        copy: "No se permitirán gritos ofensivos, burlas, abucheos, conductas antideportivas ni acciones que incomoden, distraigan o molesten a otros participantes, espectadores o academias.",
+      },
+      {
+        icon: CheckCircle2,
+        title: "Seguridad ante todo",
+        copy: "Queda estrictamente prohibido el uso de humo, máquinas de niebla, agua, espuma, confeti líquido, pirotecnia o cualquier otro elemento que pueda representar un riesgo para los asistentes, participantes, instalaciones o equipos del evento.",
+      },
+    ],
+    note: "Se evaluará la energía, creatividad, organización y actitud positiva de la porra. Cualquier conducta o acción que vaya en contra de los valores de respeto, inclusión, seguridad y sana convivencia podrá ser motivo de descalificación para la obtención de este reconocimiento.",
   },
 ];
 
@@ -157,6 +291,10 @@ const considerations = [
 ];
 
 export function PremiationPage() {
+  const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
+  const activeSpecialAward = specialAwards.find((award) => award.id === activeSpecialAwardId) ?? specialAwards[0];
+  const ActiveSpecialAwardIcon = activeSpecialAward.icon;
+
   return (
     <main className="premiation-page">
       <section className="premiation-hero">
@@ -322,28 +460,85 @@ export function PremiationPage() {
       </div>
 
       <div className="premiation-light-flow">
-        <section className="premiation-section premiation-section--light premiation-special">
+        <section className="premiation-section premiation-section--light premiation-special" id="premios-especiales">
           <div className="premiation-section__body">
-            <div className="premiation-split-heading">
+            <div className="premiation-special__heading">
               <div>
-                <p className="premiation-kicker">Premios especiales</p>
+                <p className="premiation-kicker">Criterios de selección</p>
                 <h2>
                   Premios especiales <strong>por bloque</strong>
                 </h2>
               </div>
             </div>
-            <div className="premiation-special-grid">
+
+            <div className="premiation-special-tabs" role="tablist" aria-label="Premios especiales por bloque">
               {specialAwards.map((award) => {
                 const Icon = award.icon;
+                const isActive = award.id === activeSpecialAward.id;
+
                 return (
-                  <article key={award.title}>
-                    <Icon size={34} />
-                    <h3>{award.title}</h3>
-                    <p>{award.copy}</p>
-                  </article>
+                  <button
+                    aria-controls="premiation-special-panel"
+                    aria-selected={isActive}
+                    className={isActive ? "is-active" : undefined}
+                    id={`premiation-special-tab-${award.id}`}
+                    key={award.id}
+                    onClick={() => setActiveSpecialAwardId(award.id)}
+                    role="tab"
+                    type="button"
+                  >
+                    <Icon aria-hidden="true" size={44} strokeWidth={1.8} />
+                    <span>{award.title}</span>
+                  </button>
                 );
               })}
             </div>
+
+            <article
+              aria-labelledby={`premiation-special-tab-${activeSpecialAward.id}`}
+              className="premiation-special-panel"
+              id="premiation-special-panel"
+              key={activeSpecialAward.id}
+              role="tabpanel"
+            >
+              <figure className="premiation-special-panel__visual">
+                <img src={activeSpecialAward.image} alt={activeSpecialAward.imageAlt} loading="lazy" />
+                <span className="premiation-special-panel__visual-badge" aria-hidden="true">
+                  <ActiveSpecialAwardIcon size={44} strokeWidth={1.6} />
+                </span>
+              </figure>
+
+              <div className="premiation-special-panel__details">
+                <div className="premiation-special-panel__summary">
+                  <h3>{activeSpecialAward.title}</h3>
+                  <p>{activeSpecialAward.summary}</p>
+                </div>
+
+                <div className="premiation-special-panel__criteria">
+                  <p className="premiation-kicker">Criterios:</p>
+                  <div className="premiation-special-panel__criteria-grid">
+                    {activeSpecialAward.criteria.map((criterion) => {
+                      const CriterionIcon = criterion.icon;
+
+                      return (
+                        <div className="premiation-special-criterion" key={criterion.title}>
+                          <CriterionIcon aria-hidden="true" size={34} strokeWidth={1.7} />
+                          <div>
+                            <strong>{criterion.title}</strong>
+                            <p>{criterion.copy}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="premiation-special-panel__note">
+                <CheckCircle2 aria-hidden="true" size={22} strokeWidth={2.2} />
+                <p>{activeSpecialAward.note}</p>
+              </div>
+            </article>
           </div>
         </section>
 
