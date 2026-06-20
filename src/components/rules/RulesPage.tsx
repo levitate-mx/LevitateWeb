@@ -29,6 +29,11 @@ type ImageRuleCard = {
 
 type RuleCard = CriterionRuleCard | ImageRuleCard;
 
+type RulesTitle = {
+  text: string;
+  accent: string;
+};
+
 type RulesInfoCard = {
   icon: typeof FileText;
   title: string;
@@ -46,17 +51,17 @@ type RulesProcessCard = {
 type RulesContent = {
   className: string;
   heroEyebrow: string;
-  heroTitle: string;
+  heroTitle: RulesTitle;
   heroIntro: string[];
   heroImage: string;
   carouselLabel: string;
   carouselRail: string;
   ruleCards: RuleCard[];
-  explainerTitle: string;
+  explainerTitle: RulesTitle;
   explainerParagraphs: string[];
   explainerCta?: RulesCta;
   explainerCards: RulesInfoCard[];
-  processTitle: string;
+  processTitle: RulesTitle;
   processIntro: string;
   processCards: RulesProcessCard[];
 };
@@ -214,7 +219,7 @@ const rulesContent: Record<RulesModality, RulesContent> = {
   motion: {
     className: "rules-page--motion",
     heroEyebrow: "Evaluaciones",
-    heroTitle: "Cómo se evalúa tu presentación",
+    heroTitle: { text: "Cómo se evalúa tu", accent: "presentación" },
     heroIntro: [
       "En Levitate, cada presentación es evaluada por jueces especializados bajo un sistema justo, transparente y estandarizado.",
       "Conoce los criterios de evaluación.",
@@ -223,14 +228,14 @@ const rulesContent: Record<RulesModality, RulesContent> = {
     carouselLabel: "Pilares de evaluación Motion",
     carouselRail: "Desliza",
     ruleCards: motionRuleCards,
-    explainerTitle: "Cada género tiene su propia forma de ser evaluado.",
+    explainerTitle: { text: "Cada género tiene su propia forma de ser", accent: "evaluado." },
     explainerParagraphs: [
       "En Levitate, cada género Motion cuenta con su propia hoja de jueceo, diseñada para evaluar con mayor rigor, claridad y precisión las características específicas de cada disciplina.",
       "Este sistema permite que la evaluación se moldee a los diferentes estilos, composiciones, lenguajes técnicos y formas de expresión dentro de los géneros de baile, reconociendo que no todos se construyen ni se interpretan de la misma manera.",
       "Así, cada presentación es evaluada bajo criterios adecuados a su género, manteniendo un proceso justo, especializado y coherente con la propuesta artística de cada participante.",
     ],
     explainerCards: genreEvaluationCards,
-    processTitle: "Sistema de jueceo",
+    processTitle: { text: "Sistema de", accent: "jueceo" },
     processIntro:
       "Nuestro sistema de evaluación está diseñado para ser justo, preciso y transparente, asegurando que cada presentación sea valorada de manera adecuada y profesional.",
     processCards: judgingProcessCards,
@@ -238,7 +243,7 @@ const rulesContent: Record<RulesModality, RulesContent> = {
   aerial: {
     className: "rules-page--aerial",
     heroEyebrow: "Evaluación Aerial",
-    heroTitle: "Cómo se evalúa tu rutina aérea",
+    heroTitle: { text: "Cómo se evalúa tu rutina", accent: "aérea" },
     heroIntro: [
       "Levitate Aerial evalúa técnica, ejecución y performance con criterios adecuados a cada aparato, división y nivel.",
       "Conoce cómo se organiza el jueceo y cuándo aplican obligatorios.",
@@ -247,14 +252,14 @@ const rulesContent: Record<RulesModality, RulesContent> = {
     carouselLabel: "Criterios de evaluación Aerial",
     carouselRail: "Aerial",
     ruleCards: aerialRuleCards,
-    explainerTitle: "Niveles y obligatorios",
+    explainerTitle: { text: "Niveles y", accent: "obligatorios" },
     explainerParagraphs: [
       "Los géneros aéreos se dividen por niveles, y a cada nivel le corresponden obligatorios específicos para ordenar la evaluación con mayor claridad.",
       "En Baby y Legacy no habrá división por niveles ni obligatorios. De Petite a Senior, Nudo se clasifica en Principiante, Intermedio, Avanzado y Elite.",
     ],
     explainerCta: { label: "Conocer obligatorios", href: "#niveles-aerial" },
     explainerCards: aerialLevelCards,
-    processTitle: "Sistema de jueceo",
+    processTitle: { text: "Sistema de", accent: "jueceo" },
     processIntro:
       "El jueceo Aerial se realiza en tiempo real, contempla reclasificación de nivel cuando corresponde y entrega retroalimentación para transparentar la evaluación.",
     processCards: aerialJudgingProcessCards,
@@ -264,6 +269,15 @@ const rulesContent: Record<RulesModality, RulesContent> = {
 type RulesPageProps = {
   modality?: RulesModality;
 };
+
+function RulesTitleText({ title }: { title: RulesTitle }) {
+  return (
+    <>
+      <span className="rules-title__line">{title.text} </span>
+      <span className="rules-title__accent">{title.accent}</span>
+    </>
+  );
+}
 
 export function RulesPage({ modality = "motion" }: RulesPageProps) {
   const content = rulesContent[modality];
@@ -346,7 +360,9 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
       <section className="rules-hero">
         <div className="rules-hero__copy">
           <p className="rules-eyebrow">{content.heroEyebrow}</p>
-          <h1>{content.heroTitle}</h1>
+          <h1>
+            <RulesTitleText title={content.heroTitle} />
+          </h1>
         </div>
 
         <div className="rules-hero__intro">
@@ -383,10 +399,12 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
                   <img src={card.image} alt="" aria-hidden="true" />
                   <div className="rules-card__shade" aria-hidden="true" />
                   {card.kind === "image" ? (
-                    <div className="rules-card__image-caption">
-                      <span>Levitate Aerial</span>
-                      <strong>{card.caption}</strong>
-                    </div>
+                    modality === "aerial" ? null : (
+                      <div className="rules-card__image-caption">
+                        <span>Levitate Aerial</span>
+                        <strong>{card.caption}</strong>
+                      </div>
+                    )
                   ) : (
                     <div className="rules-card__content">
                       <div className="rules-card__topline">
@@ -425,7 +443,9 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
 
       <section className="rules-motion-explainer" aria-labelledby="rules-motion-genre-title">
         <div className="rules-motion-explainer__copy">
-          <h2 id="rules-motion-genre-title">{content.explainerTitle}</h2>
+          <h2 id="rules-motion-genre-title">
+            <RulesTitleText title={content.explainerTitle} />
+          </h2>
           {content.explainerParagraphs.map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
@@ -455,7 +475,9 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
 
       <section className="rules-motion-process" aria-labelledby="rules-motion-process-title">
         <div className="rules-motion-process__intro">
-          <h2 id="rules-motion-process-title">{content.processTitle}</h2>
+          <h2 id="rules-motion-process-title">
+            <RulesTitleText title={content.processTitle} />
+          </h2>
           <p>{content.processIntro}</p>
         </div>
 

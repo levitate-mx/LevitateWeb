@@ -7927,12 +7927,14 @@ button {
   will-change: transform;
 }
 
-.levitate-announcement span {
+.levitate-announcement a {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: clamp(16px, 2.4vw, 34px);
+  min-height: 44px;
   padding: 0 clamp(22px, 3.2vw, 48px);
+  color: inherit;
+  text-decoration: none;
   white-space: nowrap;
 }
 
@@ -7942,23 +7944,46 @@ button {
   letter-spacing: 0.01em;
 }
 
-.levitate-announcement i {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: rgba(5, 5, 5, 0.62);
-  font-size: clamp(0.78rem, 0.9vw, 0.92rem);
-  font-style: normal;
-  font-weight: 720;
-}
-
-.levitate-announcement i::before {
+.levitate-announcement a::before {
   width: 22px;
   height: 22px;
-  border: 1.5px solid currentColor;
+  margin-right: clamp(16px, 2vw, 28px);
+  border: 1.5px solid rgba(5, 5, 5, 0.62);
   border-radius: 999px;
   content: "";
+}
+
+.levitate-announcement a:hover,
+.levitate-announcement a:focus-visible {
+  color: var(--lev-pink);
+}
+
+.levitate-announcement a:hover::before,
+.levitate-announcement a:focus-visible::before {
+  border-color: currentColor;
+}
+
+.levitate-announcement__logo {
+  position: relative;
+  display: inline-flex;
+  color: #08080a;
+  align-items: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.08rem, 1.35vw, 1.42rem);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.levitate-announcement__logo span {
+  display: inline-block;
+}
+
+.levitate-announcement__logo small {
+  margin: 0.28em 0 0 0.34em;
+  font-family: var(--font-body);
+  font-size: 0.34em;
+  font-weight: 800;
+  letter-spacing: 0.18em;
 }
 
 .levitate-hero {
@@ -9325,6 +9350,8 @@ button {
 }
 
 .rules-hero h1 {
+  display: grid;
+  gap: 0.08em;
   max-width: 560px;
   margin: 0;
   font-family: var(--font-display);
@@ -9333,6 +9360,15 @@ button {
   letter-spacing: 0.02em;
   line-height: 0.92;
   text-transform: uppercase;
+}
+
+.rules-title__line,
+.rules-title__accent {
+  display: block;
+}
+
+.rules-title__accent {
+  color: var(--rules-pink);
 }
 
 .rules-hero__intro {
@@ -9624,6 +9660,30 @@ button {
     linear-gradient(180deg, rgba(5, 5, 5, 0.18), rgba(5, 5, 5, 0.88));
 }
 
+.rules-page--aerial .rules-card:not(.rules-card--image) {
+  background:
+    radial-gradient(circle at 86% 24%, rgba(231, 70, 151, 0.2), transparent 17rem),
+    linear-gradient(135deg, #060607 0%, #111014 54%, #070707 100%);
+}
+
+.rules-page--aerial .rules-card:not(.rules-card--image) img {
+  display: none;
+}
+
+.rules-page--aerial .rules-card:not(.rules-card--image) .rules-card__shade {
+  background:
+    linear-gradient(90deg, rgba(5, 5, 5, 0.2), transparent 58%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 7px);
+}
+
+.rules-page--aerial .rules-card--image .rules-card__shade {
+  display: none;
+}
+
+.rules-page--aerial .rules-card--image img {
+  filter: grayscale(0.1) brightness(0.78) contrast(1.08) hue-rotate(300deg);
+}
+
 .rules-card__image-caption {
   position: relative;
   z-index: 1;
@@ -9723,6 +9783,8 @@ button {
 
 .rules-motion-explainer h2,
 .rules-motion-process__intro h2 {
+  display: grid;
+  gap: 0.04em;
   max-width: 580px;
   margin: 0;
   color: #050505;

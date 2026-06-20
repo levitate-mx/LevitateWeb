@@ -88,10 +88,14 @@ const sponsors = [
 ];
 
 const announcementItems = [
-  "Preventa disponible para Otoño 2026",
-  "Asegura tu lugar en Levitate MX",
-  "Inscripciones y beneficios por temporada",
-];
+  { kind: "text", label: "¡Asegura tu lugar!" },
+  { kind: "text", label: "Conoce los precios preventa" },
+  { kind: "text", label: "Otoño 2026" },
+  { kind: "logo", label: "Levitate MX" },
+  { kind: "text", label: "¡Inscríbete ahora!" },
+] satisfies Array<{ kind: "text" | "logo"; label: string }>;
+
+const announcementHref = "#premios";
 
 export function HomePage() {
   useEffect(() => {
@@ -123,10 +127,16 @@ export function HomePage() {
         <div className="levitate-announcement" aria-label="Avisos importantes">
           <div className="levitate-announcement__track">
             {[...announcementItems, ...announcementItems, ...announcementItems].map((item, index) => (
-              <span key={`${item}-${index}`}>
-                <strong>{item}</strong>
-                <i aria-hidden="true">Levitate MX</i>
-              </span>
+              <a href={announcementHref} key={`${item.label}-${index}`}>
+                {item.kind === "logo" ? (
+                  <span className="levitate-announcement__logo" aria-label={item.label}>
+                    <span>Levitate</span>
+                    <small>MX</small>
+                  </span>
+                ) : (
+                  <strong>{item.label}</strong>
+                )}
+              </a>
             ))}
           </div>
         </div>

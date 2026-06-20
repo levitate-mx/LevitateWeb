@@ -19,6 +19,7 @@
   - `--levitate-hero-subtitle-size`
   - `--levitate-hero-description-size`
 - Hero titles should share the same display font, weight, line-height, and letter spacing.
+- In hero and major section titles, at least one meaningful keyword, phrase, or title line should be highlighted in Levitate pink, following the homepage reference: mostly white title text with a clear pink accent such as the supporting title line.
 - Hero descriptions should share the same body font, size, weight, line-height, and max width.
 - Do not create one-off hero title sizes unless there is a strong layout reason; prefer extending the shared typography block.
 
