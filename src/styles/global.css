@@ -9216,26 +9216,6 @@ button {
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.36);
 }
 
-.regulations-sidebar__brand {
-  display: grid;
-  gap: 5px;
-  padding: 0 8px 6px;
-}
-
-.regulations-sidebar__brand span {
-  font-family: var(--font-brand);
-  font-size: 1.62rem;
-  line-height: 1;
-}
-
-.regulations-sidebar__brand small {
-  color: rgba(247, 243, 239, 0.48);
-  font-size: 0.62rem;
-  font-weight: 850;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
 .regulations-tabs {
   display: grid;
   gap: 2px;
@@ -9348,10 +9328,10 @@ button {
   border-color: rgba(5, 5, 5, 0.08);
   border-radius: 0 8px 8px 0;
   background:
-    linear-gradient(rgba(5, 5, 5, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(5, 5, 5, 0.014) 1px, transparent 1px),
-    var(--regulations-paper);
-  background-size: 22px 22px;
+    radial-gradient(circle at 96% 4%, rgba(231, 70, 151, 0.22), transparent 21rem),
+    radial-gradient(circle at 8% 96%, rgba(231, 70, 151, 0.1), transparent 18rem),
+    linear-gradient(135deg, #ffffff 0%, var(--regulations-paper) 56%, #f9edf4 100%);
+  background-size: auto;
   color: #111015;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.26);
 }
@@ -9420,37 +9400,42 @@ button {
 .regulations-rule-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 clamp(28px, 4vw, 58px);
-  padding-top: clamp(28px, 4vw, 52px);
+  align-items: stretch;
+  gap: clamp(14px, 1.8vw, 22px);
+  padding-top: clamp(24px, 3.6vw, 42px);
 }
 
 .regulations-rule {
   display: grid;
-  grid-template-columns: 30px 42px minmax(0, 1fr);
+  align-content: start;
   gap: 12px;
-  min-height: 112px;
-  padding: 4px 0 26px;
-  border-bottom: 1px solid rgba(231, 70, 151, 0.11);
+  min-height: 0;
+  padding: clamp(16px, 1.8vw, 22px);
+  border: 1px solid rgba(231, 70, 151, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.62)),
+    radial-gradient(circle at 100% 0%, rgba(231, 70, 151, 0.1), transparent 12rem);
+  box-shadow: 0 14px 34px rgba(17, 16, 21, 0.055);
 }
 
 .regulations-rule span {
   display: grid;
-  width: 28px;
+  min-width: 42px;
   height: 28px;
+  justify-self: start;
   place-items: center;
-  border: 1px solid rgba(231, 70, 151, 0.48);
   border-radius: 999px;
-  color: var(--regulations-pink);
-  font-size: 0.72rem;
+  background: var(--regulations-pink);
+  color: #fff;
+  font-size: 0.74rem;
   font-weight: 900;
-}
-
-.regulations-rule svg {
-  color: var(--regulations-pink);
+  letter-spacing: 0.08em;
+  box-shadow: 0 10px 22px rgba(231, 70, 151, 0.18);
 }
 
 .regulations-rule p {
-  max-width: 420px;
+  max-width: none;
   margin: 0;
   color: rgba(17, 16, 21, 0.78);
   font-size: clamp(0.88rem, 1vw, 0.98rem);
@@ -9593,9 +9578,7 @@ button {
   }
 
   .regulations-rule {
-    grid-template-columns: 28px 34px minmax(0, 1fr);
-    gap: 10px;
-    min-height: 0;
+    padding: 16px;
   }
 }
 

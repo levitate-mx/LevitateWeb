@@ -234,11 +234,6 @@ export function RegulationsPage() {
 
       <section className="regulations-shell" aria-label="Reglamentos Levitate">
         <aside className="regulations-sidebar" aria-label="Secciones del reglamento">
-          <div className="regulations-sidebar__brand">
-            <span>Levitate</span>
-            <small>Reglamento oficial</small>
-          </div>
-
           <nav className="regulations-tabs" aria-label="Tabs de reglamento">
             {regulationTabs.map((tab) => {
               const Icon = tab.icon;
@@ -291,17 +286,12 @@ export function RegulationsPage() {
             <>
               {activeTab.intro ? <p className="regulations-panel__intro">{activeTab.intro}</p> : null}
               <div className="regulations-rule-grid">
-                {activeTab.rules.map((rule, index) => {
-                  const Icon = rule.icon;
-
-                  return (
-                    <section className="regulations-rule" key={`${activeTab.id}-${index}`}>
-                      <span>{String(index + 1).padStart(2, "0")}</span>
-                      <Icon aria-hidden="true" size={28} strokeWidth={1.7} />
-                      <p>{rule.text}</p>
-                    </section>
-                  );
-                })}
+                {activeTab.rules.map((rule, index) => (
+                  <section className="regulations-rule" key={`${activeTab.id}-${index}`}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <p>{rule.text}</p>
+                  </section>
+                ))}
               </div>
               {activeTab.note ? <p className="regulations-note">{activeTab.note}</p> : null}
             </>
