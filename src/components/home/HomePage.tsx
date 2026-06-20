@@ -10,7 +10,7 @@ import {
   Star,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "./LevitateFooter";
 import { LevitateHeader } from "./LevitateHeader";
@@ -87,31 +87,13 @@ const sponsors = [
   { name: "videoimagendigital" },
 ];
 
-const nextEventDate = new Date("2026-05-29T00:00:00-06:00").getTime();
-
-function getCountdown() {
-  const distance = Math.max(0, nextEventDate - Date.now());
-  const days = Math.floor(distance / 86_400_000);
-  const hours = Math.floor((distance % 86_400_000) / 3_600_000);
-  const minutes = Math.floor((distance % 3_600_000) / 60_000);
-  const seconds = Math.floor((distance % 60_000) / 1000);
-
-  return [
-    { value: String(days).padStart(2, "0"), label: "días" },
-    { value: String(hours).padStart(2, "0"), label: "horas" },
-    { value: String(minutes).padStart(2, "0"), label: "min" },
-    { value: String(seconds).padStart(2, "0"), label: "seg" },
-  ];
-}
+const announcementItems = [
+  "Preventa disponible para Otoño 2026",
+  "Asegura tu lugar en Levitate MX",
+  "Inscripciones y beneficios por temporada",
+];
 
 export function HomePage() {
-  const [countdown, setCountdown] = useState(getCountdown);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setCountdown(getCountdown()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   useEffect(() => {
     const items = document.querySelectorAll<HTMLElement>("[data-levitate-reveal]");
     const observer = new IntersectionObserver(
@@ -137,6 +119,17 @@ export function HomePage() {
         <div className="levitate-hero__smoke" aria-hidden="true" />
         <div className="levitate-hero__silk levitate-hero__silk--one" aria-hidden="true" />
         <div className="levitate-hero__silk levitate-hero__silk--two" aria-hidden="true" />
+
+        <div className="levitate-announcement" aria-label="Avisos importantes">
+          <div className="levitate-announcement__track">
+            {[...announcementItems, ...announcementItems, ...announcementItems].map((item, index) => (
+              <span key={`${item}-${index}`}>
+                <strong>{item}</strong>
+                <i aria-hidden="true">Levitate MX</i>
+              </span>
+            ))}
+          </div>
+        </div>
 
         <LevitateHeader activeLabel="Inicio" />
 
@@ -164,14 +157,7 @@ export function HomePage() {
             <span><MapPin aria-hidden="true" size={17} /> Ciudad de México</span>
             <span><CalendarDays aria-hidden="true" size={17} /> 29, 30 y 31 de mayo 2026</span>
             <div className="levitate-next-event__line" />
-            <div className="levitate-countdown" aria-label="Cuenta regresiva al próximo evento">
-              {countdown.map((item) => (
-                <div key={item.label}>
-                  <strong>{item.value}</strong>
-                  <small>{item.label}</small>
-                </div>
-              ))}
-            </div>
+            <a href="#convocatorias">Ver fechas y sedes <ArrowRight aria-hidden="true" size={16} /></a>
           </aside>
         </div>
       </section>

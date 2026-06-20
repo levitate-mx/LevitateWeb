@@ -10,6 +10,7 @@ import { getVenueBySlug } from "./data/venueContent";
 
 export default function App() {
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
+  const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
   const legacyRulesMatch = window.location.pathname.match(/^\/reglamento\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
@@ -37,6 +38,10 @@ export default function App() {
 
   if (evaluationsMatch || legacyRulesMatch) {
     return <RulesPage />;
+  }
+
+  if (aerialEvaluationsMatch) {
+    return <RulesPage modality="aerial" />;
   }
 
   if (sedesMatch) {
