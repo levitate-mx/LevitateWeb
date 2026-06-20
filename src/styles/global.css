@@ -4419,21 +4419,6 @@ button {
   pointer-events: none;
 }
 
-.premiation-special-panel__visual-badge {
-  position: absolute;
-  top: clamp(18px, 2vw, 28px);
-  left: clamp(18px, 2vw, 28px);
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: clamp(76px, 6vw, 96px);
-  aspect-ratio: 1;
-  color: var(--premiation-pink);
-  border-radius: 50%;
-  background: rgba(255, 244, 250, 0.86);
-  box-shadow: 0 16px 36px rgba(18, 10, 15, 0.18);
-}
-
 .premiation-special-panel__details {
   display: grid;
   align-content: start;

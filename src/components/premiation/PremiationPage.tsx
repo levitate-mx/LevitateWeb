@@ -337,7 +337,6 @@ function renderHighlightedCopy(copy: string, highlights: string[] = []) {
 export function PremiationPage() {
   const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
   const activeSpecialAward = specialAwards.find((award) => award.id === activeSpecialAwardId) ?? specialAwards[0];
-  const ActiveSpecialAwardIcon = activeSpecialAward.icon;
 
   return (
     <main className="premiation-page">
@@ -547,9 +546,6 @@ export function PremiationPage() {
             >
               <figure className="premiation-special-panel__visual">
                 <img src={activeSpecialAward.image} alt={activeSpecialAward.imageAlt} loading="lazy" />
-                <span className="premiation-special-panel__visual-badge" aria-hidden="true">
-                  <ActiveSpecialAwardIcon size={44} strokeWidth={1.6} />
-                </span>
               </figure>
 
               <div className="premiation-special-panel__details">
