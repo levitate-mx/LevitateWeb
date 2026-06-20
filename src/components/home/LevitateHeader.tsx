@@ -19,7 +19,7 @@ const navItems = [
         children: [
           { label: "Ciudad de México", href: "/sedes/ciudad-de-mexico" },
           { label: "Puebla", href: "/sedes/puebla" },
-          { label: "Estado de México", href: "/sedes/silo-dallas" },
+          { label: "Estado de México", href: "/sedes/estado-de-mexico" },
         ],
       },
       { label: "Workshops", href: "/workshops" },

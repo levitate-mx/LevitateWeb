@@ -1,6 +1,8 @@
 import {
   BarChart3,
   CheckCircle2,
+  CircleHelp,
+  CirclePlay,
   Lightbulb,
   Megaphone,
   Music2,
@@ -16,6 +18,8 @@ import { useState } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
+
+const medalVideoUrl = "";
 
 const medalRules = [
   {
@@ -468,6 +472,34 @@ export function PremiationPage() {
                 </div>
               ))}
             </article>
+
+            <aside className="premiation-medal-help" id="video-medallero">
+              <div>
+                <span aria-hidden="true">
+                  <CircleHelp size={26} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <p className="premiation-kicker">¿Tienes dudas?</p>
+                  <h3>Video explicativo del medallero</h3>
+                  <p>
+                    Mira una guía rápida para entender cómo se asignan Oro, Plata, Bronce y Participación según el
+                    puntaje de cada bloque.
+                  </p>
+                </div>
+              </div>
+
+              {medalVideoUrl ? (
+                <a href={medalVideoUrl} rel="noreferrer" target="_blank">
+                  <CirclePlay aria-hidden="true" size={22} strokeWidth={2.3} />
+                  Ver video explicativo
+                </a>
+              ) : (
+                <button disabled type="button">
+                  <CirclePlay aria-hidden="true" size={22} strokeWidth={2.3} />
+                  Video explicativo próximamente
+                </button>
+              )}
+            </aside>
           </div>
         </section>
       </div>

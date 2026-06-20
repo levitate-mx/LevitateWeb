@@ -49,7 +49,7 @@ type SedeContent = {
   jury: JuryMember[];
 };
 
-const sedesContent: Record<"cdmx" | "puebla", SedeContent> = {
+const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   cdmx: {
     heroTitle: "Sede CDMX",
     eventName: "Cirko de Mente",
@@ -140,6 +140,35 @@ const sedesContent: Record<"cdmx" | "puebla", SedeContent> = {
       { date: "7 de junio", items: [
         { title: "Bloque 1", text: "Baby y Petite - Motion" },
         { title: "Bloque 2", text: "Junior, Teen y Senior - Motion" },
+        { title: "Bloque 3", text: "Baby y Petite - Aerial" },
+        { title: "Bloque 4", text: "Junior, Teen y Senior - Aerial" },
+      ] },
+    ],
+    jury: [
+      { name: "Andrea Salinas", specialty: "Contemporary · Jazz", image: assets.community },
+      { name: "Mariana Ríos", specialty: "Hip Hop · Urbano", image: assets.workshops },
+      { name: "Daniel Figueroa", specialty: "Ballet · Técnica clásica", image: assets.venue },
+      { name: "Lucía Torres", specialty: "Danza contemporánea", image: assets.hero },
+    ],
+  },
+  edomex: {
+    heroTitle: "Sede Estado de México",
+    eventName: "Teatro El Gran Recinto",
+    venueName: "Teatro El Gran Recinto",
+    heroImage: assets.venue,
+    location: "Tlalnepantla, Edo. Méx.",
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Teatro%20El%20Gran%20Recinto%20Tlalnepantla%20Estado%20de%20Mexico",
+    date: "13 · 14 · 15\nnoviembre 2026",
+    metaLabel: "Status",
+    metaValue: "Convocatoria próxima",
+    motionGenres: ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"],
+    aerialGenres: ["Tela", "Aro", "Open"],
+    competitionBlocks: [
+      { date: "14 de noviembre", items: [
+        { title: "Bloque 1", text: "Baby y Petite - Motion" },
+        { title: "Bloque 2", text: "Junior, Teen y Senior - Motion" },
+      ] },
+      { date: "15 de noviembre", items: [
         { title: "Bloque 3", text: "Baby y Petite - Aerial" },
         { title: "Bloque 4", text: "Junior, Teen y Senior - Aerial" },
       ] },

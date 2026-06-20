@@ -228,7 +228,7 @@ export function WorkshopsPage() {
                 Los workshops para esta sede se están preparando. Muy pronto conocerás talleres, docentes y horarios que
                 te esperan.
               </p>
-              <a href="/sedes/silo-dallas">
+              <a href="/sedes/estado-de-mexico">
                 Próximamente <ArrowUpRight aria-hidden="true" size={17} />
               </a>
             </div>

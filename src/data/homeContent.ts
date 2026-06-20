@@ -77,11 +77,11 @@ export const experiences = [
 
 export const events = [
   {
-    slug: "silo-dallas",
-    date: "21 JUN",
+    slug: "estado-de-mexico",
+    date: "13 NOV",
     name: "Levitate MX",
-    venue: "Silo Dallas",
-    location: "Dallas, TX, USA",
+    venue: "Teatro El Gran Recinto",
+    location: "Tlalnepantla, Edo. Méx.",
     image: assets.venue,
   },
   {

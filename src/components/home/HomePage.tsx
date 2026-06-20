@@ -35,7 +35,7 @@ const venues = [
     city: "Tlalnepantla, Edo. Méx.",
     date: "13, 14 y 15 noviembre 2026",
     image: assets.venue,
-    href: "/sedes/silo-dallas",
+    href: "/sedes/estado-de-mexico",
   },
 ];
 

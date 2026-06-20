@@ -30,10 +30,36 @@
   --ease-smooth: cubic-bezier(0.77, 0, 0.175, 1);
   --container-pad: clamp(20px, 5vw, 72px);
   --section-space: clamp(80px, 12vw, 160px);
+  --levitate-hero-screen: 100svh;
+  --levitate-hero-title-size: 4.15rem;
+  --levitate-hero-subtitle-size: 1.8rem;
+  --levitate-hero-description-size: 1.04rem;
   color-scheme: dark;
   font-family: var(--font-body);
   background: var(--color-black);
   color: var(--color-white);
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --levitate-hero-screen: 100dvh;
+  }
+}
+
+@media (min-width: 760px) {
+  :root {
+    --levitate-hero-title-size: 6.2rem;
+    --levitate-hero-subtitle-size: 2.3rem;
+    --levitate-hero-description-size: 1.08rem;
+  }
+}
+
+@media (min-width: 1180px) {
+  :root {
+    --levitate-hero-title-size: 7.8rem;
+    --levitate-hero-subtitle-size: 2.9rem;
+    --levitate-hero-description-size: 1.14rem;
+  }
 }
 
 *,
@@ -1526,7 +1552,7 @@ button {
   min-height: 92svh;
   width: min(100%, 1440px);
   margin: 0 auto;
-  padding: 128px var(--container-pad) 92px;
+  padding: clamp(92px, 9vw, 118px) var(--container-pad) clamp(56px, 5vw, 76px);
 }
 
 .venue-back {
@@ -1576,10 +1602,10 @@ button {
 
 .venue-hero__facts {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
-  width: min(100%, 560px);
-  margin-top: 58px;
+  width: min(100%, 1120px);
+  margin-top: clamp(34px, 3.5vw, 42px);
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 18px;
@@ -1590,9 +1616,9 @@ button {
 .venue-hero__facts > div {
   display: grid;
   gap: 7px;
-  min-height: 132px;
+  min-height: 112px;
   align-content: center;
-  padding: 28px 30px;
+  padding: 22px 24px;
   background: rgba(5, 5, 5, 0.58);
 }
 
@@ -4088,6 +4114,93 @@ button {
   line-height: 1.35;
 }
 
+.premiation-medal-help {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(20px, 3vw, 48px);
+  align-items: center;
+  margin-top: clamp(16px, 2vw, 28px);
+  padding: clamp(22px, 2.4vw, 34px);
+  overflow: hidden;
+  border: 1px solid rgba(228, 92, 154, 0.22);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(228, 92, 154, 0.13), transparent 18rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(255, 247, 251, 0.82));
+  box-shadow: 0 22px 62px rgba(48, 34, 38, 0.08);
+}
+
+.premiation-medal-help > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 24px);
+  align-items: center;
+  min-width: 0;
+}
+
+.premiation-medal-help > div > span {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  aspect-ratio: 1;
+  color: var(--premiation-pink);
+  border: 1px solid rgba(228, 92, 154, 0.24);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.premiation-medal-help .premiation-kicker {
+  margin-bottom: 8px;
+}
+
+.premiation-medal-help h3 {
+  margin: 0 0 8px;
+  color: var(--premiation-dark-text);
+  font-size: var(--premiation-small-title-size);
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.premiation-medal-help p:not(.premiation-kicker) {
+  max-width: 720px;
+  margin: 0;
+  color: #302b33;
+  font-weight: 620;
+}
+
+.premiation-medal-help a,
+.premiation-medal-help button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 14px 22px;
+  color: var(--premiation-white);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.09em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  border: 1px solid rgba(228, 92, 154, 0.42);
+  border-radius: 999px;
+  background: var(--premiation-pink);
+  box-shadow: 0 14px 34px rgba(228, 92, 154, 0.22);
+}
+
+.premiation-medal-help button:disabled {
+  color: var(--premiation-pink);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .premiation-recognition {
   padding-top: clamp(56px, 7vw, 104px);
   padding-bottom: clamp(64px, 8vw, 118px);
@@ -4969,6 +5082,15 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .premiation-medal-help {
+    grid-template-columns: 1fr;
+  }
+
+  .premiation-medal-help a,
+  .premiation-medal-help button {
+    width: fit-content;
+  }
+
   .premiation-medal-rule:nth-child(odd) {
     border-left: 0;
   }
@@ -5096,6 +5218,19 @@ button {
     min-height: auto;
     border-left: 0;
     border-top: 1px solid rgba(228, 92, 154, 0.18);
+  }
+
+  .premiation-medal-help {
+    padding: 20px;
+  }
+
+  .premiation-medal-help > div {
+    grid-template-columns: 1fr;
+  }
+
+  .premiation-medal-help a,
+  .premiation-medal-help button {
+    width: 100%;
   }
 
   .premiation-medal-rule:first-child {
@@ -11675,5 +11810,136 @@ button {
 
   .levitate-admin-welcome-panel {
     align-items: flex-start;
+  }
+}
+
+/* Keep all top-level page heroes at a consistent viewport scale. */
+.hero,
+.venue-hero,
+.premiation-hero,
+.workshops-hero,
+.motion-genres-hero,
+.reference-hero,
+.levitate-hero,
+.rules-hero,
+.sedes-hero {
+  width: 100%;
+  min-height: var(--levitate-hero-screen);
+}
+
+.levitate-hero,
+.premiation-hero,
+.workshops-hero,
+.motion-genres-hero,
+.sedes-hero {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.venue-hero__content,
+.reference-hero__content {
+  min-height: var(--levitate-hero-screen);
+}
+
+.levitate-hero__grid,
+.premiation-hero__content,
+.workshops-hero__content,
+.motion-genres-hero__content,
+.sedes-hero__content {
+  align-self: stretch;
+  display: grid;
+  align-content: center;
+  min-height: 0;
+}
+
+.levitate-hero__media,
+.venue-hero > img,
+.premiation-hero > img,
+.workshops-hero__image,
+.motion-genres-hero__image,
+.reference-hero__image,
+.sedes-hero__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Shared hero typography keeps page intros feeling like one system. */
+.hero__title,
+.venue-hero h1,
+.premiation-hero h1,
+.workshops-hero h1,
+.motion-genres-hero h1,
+.reference-hero h1,
+.levitate-hero h1 span,
+.rules-hero h1,
+.sedes-hero h1 {
+  max-width: min(100%, 940px);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: var(--levitate-hero-title-size);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.82;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.levitate-hero h1,
+.motion-genres-hero h1,
+.reference-hero h1 {
+  gap: 0.16em;
+}
+
+.levitate-hero h1 strong,
+.premiation-hero strong,
+.workshops-hero__content > strong,
+.motion-genres-hero__content > p,
+.reference-hero__headline-accent,
+.sedes-hero__content > strong {
+  color: var(--lev-pink);
+  font-family: var(--font-display);
+  font-size: var(--levitate-hero-subtitle-size);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.levitate-hero__copy > p:not(.levitate-eyebrow),
+.venue-hero p:not(.section-eyebrow),
+.premiation-hero p,
+.workshops-hero__content > p:not(.workshops-kicker),
+.reference-hero__copy > p:not(.reference-eyebrow),
+.rules-hero__intro {
+  max-width: 620px;
+  color: rgba(247, 243, 239, 0.82);
+  font-family: var(--font-body);
+  font-size: var(--levitate-hero-description-size);
+  font-weight: 500;
+  line-height: 1.65;
+  letter-spacing: 0;
+}
+
+@media (min-width: 1081px) {
+  .rules-hero {
+    grid-template-areas:
+      "copy mark"
+      "intro mark";
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.48fr);
+    align-content: center;
+  }
+
+  .rules-hero__copy {
+    grid-area: copy;
+  }
+
+  .rules-hero__intro {
+    grid-area: intro;
+    margin-top: 26px;
+  }
+
+  .rules-hero__mark {
+    grid-area: mark;
   }
 }

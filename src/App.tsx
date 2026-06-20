@@ -58,6 +58,10 @@ export default function App() {
       return <SedesPage venueKey="puebla" />;
     }
 
+    if (venueSlug === "estado-de-mexico" || venueSlug === "edomex" || venueSlug === "silo-dallas") {
+      return <SedesPage venueKey="edomex" />;
+    }
+
     return <VenuePage venue={getVenueBySlug(venueMatch[1])} />;
   }
 
