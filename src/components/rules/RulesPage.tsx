@@ -48,19 +48,19 @@ const judgingProcessCards = [
     icon: Clock3,
     number: "01",
     title: "Evaluación en tiempo real",
-    text: "Los jueces califican las coreografías conforme se van presentando en el escenario, registrando sus observaciones y puntajes durante la ejecución de cada rutina.",
+    text: "Los jueces califican cada rutina en vivo, registrando observaciones y puntajes durante la presentación.",
   },
   {
     icon: RefreshCw,
     number: "02",
     title: "Reasignación de género",
-    text: "Si el panel jurado considera que una coreografía corresponde claramente a otro género específico y fue inscrita en una división equivocada, se podrá tomar la decisión de cambiarla de división. En ese caso, la coreografía será evaluada con la hoja de jueceo del género correcto y competirá para ser premiada dentro del género correspondiente.",
+    text: "Si el jurado determina que una coreografía corresponde claramente a otro género y fue inscrita en una división equivocada, podrá reasignarla. Será evaluada con la hoja correcta y competirá por el premio de ese género.",
   },
   {
     icon: FileText,
     number: "03",
     title: "Retroalimentación y transparencia",
-    text: "Las hojas de jueceo serán devueltas a los participantes o responsables de academia a través del portal. Estas hojas funcionan como una herramienta de auto retroalimentación para seguir creciendo, además de garantizar transparencia sobre los puntajes obtenidos.",
+    text: "Las hojas de jueceo se entregarán a participantes o responsables de academia a través del portal. Funcionan como retroalimentación y aseguran transparencia sobre los puntajes obtenidos.",
   },
 ];
 
@@ -236,7 +236,7 @@ export function RulesPage() {
 
       <section className="rules-motion-process" aria-labelledby="rules-motion-process-title">
         <div className="rules-motion-process__intro">
-          <h2 id="rules-motion-process-title">¿Cómo funciona el jueceo en LevitateMX?</h2>
+          <h2 id="rules-motion-process-title">Sistema de jueceo</h2>
           <p>
             Nuestro sistema de evaluación está diseñado para ser justo, preciso y transparente, asegurando que cada
             presentación sea valorada de manera adecuada y profesional.
