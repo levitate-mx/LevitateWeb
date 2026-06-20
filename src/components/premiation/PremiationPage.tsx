@@ -134,26 +134,31 @@ const specialAwards = [
         icon: Music2,
         title: "Selección musical",
         copy: "Se reconocerá la elección de música que mejor fortalezca la propuesta artística, el concepto y la interpretación de la coreografía.",
+        highlights: ["propuesta artística", "concepto", "interpretación"],
       },
       {
         icon: SlidersHorizontal,
         title: "Edición y estructura",
         copy: "Se valorará la calidad de la edición musical, la fluidez de las transiciones, la coherencia entre segmentos y el aprovechamiento de los cambios de ritmo, intensidad y dinámica.",
+        highlights: ["edición musical", "transiciones", "cambios de ritmo", "intensidad y dinámica"],
       },
       {
         icon: Sparkles,
         title: "Originalidad y creatividad",
         copy: "Se considerará el uso creativo de mezclas, efectos, adaptaciones o combinaciones musicales que aporten identidad y valor a la presentación.",
+        highlights: ["mezclas", "efectos", "adaptaciones", "identidad"],
       },
       {
         icon: Star,
         title: "Relación con la ejecución",
         copy: "La música deberá integrarse de manera efectiva con la coreografía, permitiendo que los movimientos, acentos y momentos clave se desarrollen en armonía con la composición musical.",
+        highlights: ["movimientos", "acentos", "momentos clave", "armonía"],
       },
       {
         icon: WandSparkles,
         title: "Impacto escénico",
         copy: "Se evaluará la capacidad de la música para generar emoción, reforzar la narrativa y contribuir a una experiencia memorable para el público y los jueces.",
+        highlights: ["emoción", "narrativa", "experiencia memorable"],
       },
     ],
     note: "Este reconocimiento premia exclusivamente la selección, edición e integración musical dentro de la propuesta escénica, independientemente de la calificación técnica obtenida en la competencia.",
@@ -171,26 +176,31 @@ const specialAwards = [
         icon: Lightbulb,
         title: "Creatividad y composición",
         copy: "Se evaluará la originalidad de la propuesta, la construcción de secuencias, el uso del espacio y la capacidad de desarrollar una idea clara y atractiva.",
+        highlights: ["originalidad", "construcción de secuencias", "uso del espacio", "idea clara y atractiva"],
       },
       {
         icon: SlidersHorizontal,
         title: "Estructura coreográfica",
         copy: "La rutina deberá presentar una composición coherente, con un adecuado desarrollo, transiciones fluidas y una distribución equilibrada de los elementos técnicos y artísticos.",
+        highlights: ["composición coherente", "desarrollo", "transiciones fluidas", "distribución equilibrada"],
       },
       {
         icon: Music2,
         title: "Relación con la música",
         copy: "Se valorará la sincronía entre la coreografía y la música, así como el aprovechamiento de acentos, cambios de ritmo y matices musicales.",
+        highlights: ["sincronía", "acentos", "cambios de ritmo", "matices musicales"],
       },
       {
         icon: Star,
         title: "Impacto artístico",
         copy: "Se considerará la capacidad de la coreografía para transmitir emociones, contar una historia o comunicar un concepto de manera efectiva.",
+        highlights: ["transmitir emociones", "contar una historia", "comunicar un concepto"],
       },
       {
         icon: Sparkles,
         title: "Innovación y propuesta escénica",
         copy: "Se reconocerán las coreografías que aporten elementos creativos, recursos originales y una identidad artística que las haga destacar dentro de la competencia.",
+        highlights: ["elementos creativos", "recursos originales", "identidad artística"],
       },
     ],
     note: "Este reconocimiento premia la calidad de la composición coreográfica y su propuesta artística, independientemente del nivel técnico de ejecución o de la puntuación final obtenida en la competencia.",
@@ -208,26 +218,31 @@ const specialAwards = [
         icon: Star,
         title: "Relación con la propuesta artística",
         copy: "El vestuario deberá complementar y reforzar la temática, concepto o historia presentada en la coreografía.",
+        highlights: ["complementar", "reforzar", "temática", "concepto o historia"],
       },
       {
         icon: Pencil,
         title: "Creatividad y diseño",
         copy: "Se valorará la originalidad, estética, combinación de elementos y el impacto visual generado en escena.",
+        highlights: ["originalidad", "estética", "combinación de elementos", "impacto visual"],
       },
       {
         icon: Sparkles,
         title: "Presentación y cuidado",
         copy: "El vestuario deberá encontrarse limpio, en buen estado y con acabados que reflejen atención al detalle.",
+        highlights: ["limpio", "buen estado", "atención al detalle"],
       },
       {
         icon: ShieldCheck,
         title: "Funcionalidad y seguridad",
         copy: "El vestuario no deberá representar riesgos para la ejecución técnica ni interferir con el desarrollo de la rutina.",
+        highlights: ["riesgos", "ejecución técnica", "desarrollo de la rutina"],
       },
       {
         icon: Users,
         title: "Imagen integral",
         copy: "Se tomará en cuenta la armonía entre vestuario, peinado, maquillaje y accesorios como parte de la propuesta escénica completa.",
+        highlights: ["armonía", "vestuario", "peinado", "maquillaje y accesorios"],
       },
     ],
     note: "ESTE RECONOCIMIENTO ES INDEPENDIENTE DE LA CALIFICACIÓN TÉCNICA Y ARTÍSTICA OBTENIDA EN LA COMPETENCIA.",
@@ -245,26 +260,31 @@ const specialAwards = [
         icon: Star,
         title: "Espíritu deportivo y valores",
         copy: "El premio reconocerá a la porra que demuestre entusiasmo, compañerismo, respeto, inclusión y apoyo positivo durante toda la competencia.",
+        highlights: ["entusiasmo", "compañerismo", "respeto", "inclusión", "apoyo positivo"],
       },
       {
         icon: Users,
         title: "Animar es compartir",
         copy: "Una gran porra no solo alienta a su propia academia, sino que también reconoce, celebra y aplaude el esfuerzo de los demás participantes y escuelas, contribuyendo a un ambiente de unión y crecimiento para toda la comunidad.",
+        highlights: ["reconoce", "celebra", "aplaude", "unión y crecimiento"],
       },
       {
         icon: Megaphone,
         title: "Uso responsable de accesorios sonoros",
         copy: "Las cornetas, matracas y otros elementos de animación podrán utilizarse únicamente durante el momento indicado por el conductor del evento para la dinámica de elección de la Mejor Porra.",
+        highlights: ["cornetas", "matracas", "momento indicado", "Mejor Porra"],
       },
       {
         icon: ShieldCheck,
         title: "Respeto y sana convivencia",
         copy: "No se permitirán gritos ofensivos, burlas, abucheos, conductas antideportivas ni acciones que incomoden, distraigan o molesten a otros participantes, espectadores o academias.",
+        highlights: ["gritos ofensivos", "burlas", "abucheos", "conductas antideportivas"],
       },
       {
         icon: CheckCircle2,
         title: "Seguridad ante todo",
         copy: "Queda estrictamente prohibido el uso de humo, máquinas de niebla, agua, espuma, confeti líquido, pirotecnia o cualquier otro elemento que pueda representar un riesgo para los asistentes, participantes, instalaciones o equipos del evento.",
+        highlights: ["humo", "pirotecnia", "riesgo", "asistentes", "equipos del evento"],
       },
     ],
     note: "Se evaluará la energía, creatividad, organización y actitud positiva de la porra. Cualquier conducta o acción que vaya en contra de los valores de respeto, inclusión, seguridad y sana convivencia podrá ser motivo de descalificación para la obtención de este reconocimiento.",
@@ -289,6 +309,30 @@ const considerations = [
   "Las premiaciones dependen del registro, inscripción, asistencia y participación.",
   "La devolución de hojas de jueceo está disponible al concluir la ceremonia de premiación.",
 ];
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function renderHighlightedCopy(copy: string, highlights: string[] = []) {
+  if (!highlights.length) {
+    return copy;
+  }
+
+  const sortedHighlights = [...highlights].sort((a, b) => b.length - a.length);
+  const highlightedSet = new Set(sortedHighlights.map((highlight) => highlight.toLocaleLowerCase("es-MX")));
+  const parts = copy.split(new RegExp(`(${sortedHighlights.map(escapeRegExp).join("|")})`, "gi"));
+
+  return parts.map((part, index) =>
+    highlightedSet.has(part.toLocaleLowerCase("es-MX")) ? (
+      <mark className="premiation-special-keyword" key={`${part}-${index}`}>
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
 
 export function PremiationPage() {
   const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
@@ -525,7 +569,7 @@ export function PremiationPage() {
                           <CriterionIcon aria-hidden="true" size={34} strokeWidth={1.7} />
                           <div>
                             <strong>{criterion.title}</strong>
-                            <p>{criterion.copy}</p>
+                            <p>{renderHighlightedCopy(criterion.copy, criterion.highlights)}</p>
                           </div>
                         </div>
                       );

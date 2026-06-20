@@ -4505,7 +4505,9 @@ button {
 
 .premiation-special-criterion:last-child:nth-child(odd) {
   grid-column: 1 / -1;
-  max-width: min(58%, 620px);
+  grid-template-columns: 42px minmax(0, 720px);
+  justify-content: center;
+  max-width: none;
   padding-right: 0;
   border-right: 0;
 }
@@ -4533,10 +4535,17 @@ button {
   line-height: 1.45;
 }
 
+.premiation-special-keyword {
+  color: var(--premiation-pink);
+  font-weight: 900;
+  background: linear-gradient(180deg, transparent 58%, rgba(228, 92, 154, 0.14) 58%);
+}
+
 .premiation-special-panel__note {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   margin: clamp(4px, 1vw, 10px) clamp(-54px, -3.6vw, -28px) clamp(-54px, -3.6vw, -28px);
   padding: clamp(14px, 1.4vw, 18px) clamp(28px, 3.6vw, 54px);
@@ -4549,12 +4558,14 @@ button {
 }
 
 .premiation-special-panel__note p {
+  max-width: 1120px;
   margin: 0;
   color: var(--premiation-pink);
   font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.45;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .premiation-light-flow {
@@ -5065,7 +5076,7 @@ button {
   }
 
   .premiation-special-panel__note {
-    align-items: flex-start;
+    align-items: center;
     margin-right: -22px;
     margin-bottom: -22px;
     margin-left: -22px;
