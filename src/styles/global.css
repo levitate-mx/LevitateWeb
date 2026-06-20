@@ -9375,7 +9375,6 @@ button {
 .rules-carousel {
   --rules-card-height: clamp(430px, 62svh, 580px);
   --rules-card-width: clamp(330px, 30vw, 540px);
-  --rules-card-wide-width: clamp(470px, 42vw, 680px);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -9442,10 +9441,6 @@ button {
   background: #101010;
   animation: rules-card-enter 900ms var(--ease-out) both;
   animation-delay: calc(var(--card-index) * 100ms);
-}
-
-.rules-card--wide {
-  flex-basis: var(--rules-card-wide-width);
 }
 
 .rules-card:not(:first-child) {
@@ -9541,27 +9536,6 @@ button {
   line-height: 1.48;
 }
 
-.rules-card__levels {
-  display: block;
-  width: fit-content;
-  margin: 14px 0 0;
-  color: var(--rules-white);
-  font-family: var(--font-display);
-  font-size: clamp(1.28rem, 1.9vw, 2rem);
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  line-height: 0.95;
-  text-transform: uppercase;
-}
-
-.rules-card__note {
-  margin-top: 12px !important;
-  color: var(--rules-pink) !important;
-  font-size: clamp(0.72rem, 0.86vw, 0.84rem) !important;
-  font-weight: 800;
-  line-height: 1.42 !important;
-}
-
 .rules-progress {
   display: flex;
   grid-column: 2;
@@ -9595,57 +9569,163 @@ button {
   transform: translateY(-2px);
 }
 
-.rules-bottom {
+.rules-motion-explainer,
+.rules-motion-process {
+  position: relative;
+  color: #08080a;
+  isolation: isolate;
+}
+
+.rules-motion-explainer {
   display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(260px, 0.6fr) minmax(260px, 0.6fr);
+  grid-template-columns: minmax(310px, 0.92fr) minmax(360px, 0.78fr);
   align-items: center;
-  gap: clamp(22px, 4vw, 72px);
-  padding: 34px clamp(22px, 4.4vw, 68px) 46px;
+  gap: clamp(42px, 7vw, 120px);
+  padding: clamp(76px, 8vw, 126px) clamp(22px, 5vw, 84px);
+  border-top: 1px solid rgba(5, 5, 5, 0.08);
+  background:
+    radial-gradient(circle at 88% 4%, rgba(231, 70, 151, 0.24), transparent 24rem),
+    linear-gradient(120deg, #fbf8f4 0%, #ffffff 54%, #f8edf3 100%);
 }
 
-.rules-bottom p {
-  max-width: 420px;
+.rules-motion-explainer::before,
+.rules-motion-process::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(rgba(5, 5, 5, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 5, 5, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  content: "";
+  opacity: 0.42;
+}
+
+.rules-motion-explainer__copy {
+  max-width: 580px;
+}
+
+.rules-motion-explainer h2,
+.rules-motion-process__intro h2 {
+  max-width: 580px;
   margin: 0;
-  color: rgba(247, 243, 239, 0.76);
-  font-size: 1rem;
-  line-height: 1.45;
-}
-
-.rules-bottom p::before {
-  display: inline-block;
-  margin-right: 20px;
-  color: var(--rules-pink);
-  content: "*";
-  font-size: 2.6rem;
-  line-height: 0;
-  vertical-align: -0.34em;
-}
-
-.rules-bottom a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  min-height: 58px;
-  padding: 0 22px;
-  border-bottom: 2px solid rgba(231, 70, 151, 0.72);
-  color: var(--rules-white);
-  font-size: 0.86rem;
-  font-weight: 850;
-  letter-spacing: 0.14em;
+  color: #050505;
+  font-family: var(--font-display);
+  font-size: 4.45rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.9;
   text-transform: uppercase;
-  transition:
-    color 220ms ease,
-    transform 220ms var(--ease-out);
 }
 
-.rules-bottom a:last-child {
-  border: 1px solid rgba(231, 70, 151, 0.72);
+.rules-motion-explainer h2::after,
+.rules-motion-process__intro h2::after {
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin: 24px 0 0;
+  background: var(--rules-pink);
+  content: "";
 }
 
-.rules-bottom a:hover {
+.rules-motion-explainer__copy p,
+.rules-motion-process__intro p {
+  max-width: 590px;
+  margin: 22px 0 0;
+  color: rgba(5, 5, 5, 0.78);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.62;
+}
+
+.rules-motion-explainer__cards {
+  display: grid;
+  gap: 18px;
+}
+
+.rules-motion-info-card {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  align-items: center;
+  min-height: 126px;
+  padding: 24px 28px;
+  border: 1px solid rgba(5, 5, 5, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 22px 56px rgba(5, 5, 5, 0.09);
+}
+
+.rules-motion-info-card svg,
+.rules-motion-step-card svg {
   color: var(--rules-pink);
-  transform: translateY(-2px);
+}
+
+.rules-motion-info-card h3,
+.rules-motion-step-card h3 {
+  margin: 0;
+  color: #050505;
+  font-size: 0.86rem;
+  font-weight: 920;
+  letter-spacing: 0;
+  line-height: 1.18;
+  text-transform: uppercase;
+}
+
+.rules-motion-info-card p,
+.rules-motion-step-card p {
+  margin: 10px 0 0;
+  color: rgba(5, 5, 5, 0.74);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.48;
+}
+
+.rules-motion-process {
+  display: grid;
+  grid-template-columns: minmax(270px, 0.42fr) minmax(0, 1.58fr);
+  align-items: stretch;
+  gap: clamp(28px, 4vw, 58px);
+  padding: clamp(76px, 7vw, 112px) clamp(22px, 5vw, 84px);
+  border-top: 1px solid rgba(5, 5, 5, 0.08);
+  background:
+    radial-gradient(circle at 4% 96%, rgba(231, 70, 151, 0.16), transparent 20rem),
+    linear-gradient(105deg, #ffffff 0%, #fbfaf8 62%, #f9eef4 100%);
+}
+
+.rules-motion-process__intro {
+  align-self: center;
+}
+
+.rules-motion-process__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.rules-motion-step-card {
+  display: flex;
+  min-height: 372px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 34px 34px 32px;
+  border: 1px solid rgba(5, 5, 5, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 52px rgba(5, 5, 5, 0.08);
+}
+
+.rules-motion-step-card > strong {
+  margin-top: 26px;
+  color: var(--rules-pink);
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 0.86;
+}
+
+.rules-motion-step-card h3 {
+  margin-top: 8px;
 }
 
 @keyframes rules-card-enter {
@@ -9688,16 +9768,63 @@ button {
     min-height: 240px;
   }
 
-  .rules-bottom {
+  .rules-motion-explainer,
+  .rules-motion-process {
+    grid-template-columns: 1fr;
+  }
+
+  .rules-motion-process__intro {
+    align-self: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .rules-motion-process__cards {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 680px) {
-  .rules-hero,
-  .rules-bottom {
+  .rules-hero {
     padding-right: 20px;
     padding-left: 20px;
+  }
+
+  .rules-motion-explainer,
+  .rules-motion-process {
+    padding: 62px 20px;
+  }
+
+  .rules-motion-explainer h2,
+  .rules-motion-process__intro h2 {
+    font-size: 3.75rem;
+  }
+
+  .rules-motion-explainer__copy p,
+  .rules-motion-process__intro p {
+    font-size: 0.94rem;
+  }
+
+  .rules-motion-info-card {
+    grid-template-columns: 48px 1fr;
+    align-items: start;
+    min-height: 0;
+    padding: 22px;
+  }
+
+  .rules-motion-info-card svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .rules-motion-process__cards {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .rules-motion-step-card {
+    min-height: 0;
+    padding: 26px 24px;
   }
 
   .rules-hero h1 {
@@ -9707,7 +9834,6 @@ button {
   .rules-carousel {
     --rules-card-height: clamp(390px, 62svh, 480px);
     --rules-card-width: min(82vw, 360px);
-    --rules-card-wide-width: min(88vw, 430px);
     grid-template-columns: 1fr;
     grid-template-rows: auto var(--rules-card-height) auto;
     gap: 12px;

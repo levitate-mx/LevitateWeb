@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { Clock3, FileText, RefreshCw, SlidersHorizontal, Target } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
@@ -23,13 +23,44 @@ const ruleCards = [
     image: assets.hero,
     text: "Interpretación, musicalización, maquillaje, vestuario, manejo de props, accesorios y presencia escénica.",
   },
+];
+
+const genreEvaluationCards = [
   {
-    number: "04",
-    title: "Niveles y obligatorios",
-    image: assets.workshops,
-    text: "Para las disciplinas áreas las categorías se dividen en tres niveles:",
-    levels: "Principiante • Intermedio • Avanzado",
-    note: "Cada nivel cuenta con obligatorios y criterios técnicos específicos. Por ello, invitamos a maestros y participantes a inscribirse en el nivel que mejor represente su preparación y ejecución actual. Esto permite mantener un jueceo más claro, equilibrado y justo para todos los participantes.",
+    icon: FileText,
+    title: "Hojas por género",
+    text: "Cada género Motion cuenta con criterios específicos para evaluar su técnica, estructura y propuesta.",
+  },
+  {
+    icon: Target,
+    title: "Evaluación rigurosa",
+    text: "El sistema permite analizar cada presentación con mayor precisión según las exigencias del género.",
+  },
+  {
+    icon: SlidersHorizontal,
+    title: "Criterios adaptables",
+    text: "La hoja de jueceo se moldea a los distintos estilos, composiciones y lenguajes de baile.",
+  },
+];
+
+const judgingProcessCards = [
+  {
+    icon: Clock3,
+    number: "01",
+    title: "Evaluación en tiempo real",
+    text: "Los jueces califican las coreografías conforme se van presentando en el escenario, registrando sus observaciones y puntajes durante la ejecución de cada rutina.",
+  },
+  {
+    icon: RefreshCw,
+    number: "02",
+    title: "Reasignación de género",
+    text: "Si el panel jurado considera que una coreografía corresponde claramente a otro género específico y fue inscrita en una división equivocada, se podrá tomar la decisión de cambiarla de división. En ese caso, la coreografía será evaluada con la hoja de jueceo del género correcto y competirá para ser premiada dentro del género correspondiente.",
+  },
+  {
+    icon: FileText,
+    number: "03",
+    title: "Retroalimentación y transparencia",
+    text: "Las hojas de jueceo serán devueltas a los participantes o responsables de academia a través del portal. Estas hojas funcionan como una herramienta de auto retroalimentación para seguir creciendo, además de garantizar transparencia sobre los puntajes obtenidos.",
   },
 ];
 
@@ -140,21 +171,19 @@ export function RulesPage() {
             <div className="rules-track" ref={trackRef}>
               {ruleCards.map((card, index) => (
                 <article
-                  className={`rules-card${activeIndex === index ? " is-active" : ""}${card.note ? " rules-card--wide" : ""}`}
+                  className={`rules-card${activeIndex === index ? " is-active" : ""}`}
                   key={card.title}
                   style={{ "--card-index": index } as CSSProperties}
                 >
                   <img src={card.image} alt="" aria-hidden="true" />
                   <div className="rules-card__shade" aria-hidden="true" />
                   <div className="rules-card__content">
-                  <div className="rules-card__topline">
-                    <strong>{card.number}</strong>
+                    <div className="rules-card__topline">
+                      <strong>{card.number}</strong>
+                    </div>
+                    <h2>{card.title}</h2>
+                    <p>{card.text}</p>
                   </div>
-                  <h2>{card.title}</h2>
-                  <p>{card.text}</p>
-                  {"levels" in card ? <strong className="rules-card__levels">{card.levels}</strong> : null}
-                  {card.note ? <p className="rules-card__note">{card.note}</p> : null}
-                </div>
                 </article>
               ))}
             </div>
@@ -174,14 +203,56 @@ export function RulesPage() {
         </div>
       </section>
 
-      <section className="rules-bottom">
-        <p>Cada criterio se evalúa de manera individual y contribuye al puntaje final de tu presentación.</p>
-        <a href="/#convocatorias">
-          Consulta la guía de evaluación <ArrowUpRight aria-hidden="true" size={18} />
-        </a>
-        <a href="/#convocatorias">
-          Inscribe tu coreografía <ArrowUpRight aria-hidden="true" size={18} />
-        </a>
+      <section className="rules-motion-explainer" aria-labelledby="rules-motion-genre-title">
+        <div className="rules-motion-explainer__copy">
+          <h2 id="rules-motion-genre-title">Cada género tiene su propia forma de ser evaluado.</h2>
+          <p>
+            En Levitate, cada género Motion cuenta con su propia hoja de jueceo, diseñada para evaluar con mayor rigor,
+            claridad y precisión las características específicas de cada disciplina.
+          </p>
+          <p>
+            Este sistema permite que la evaluación se moldee a los diferentes estilos, composiciones, lenguajes técnicos y
+            formas de expresión dentro de los géneros de baile, reconociendo que no todos se construyen ni se interpretan de
+            la misma manera.
+          </p>
+          <p>
+            Así, cada presentación es evaluada bajo criterios adecuados a su género, manteniendo un proceso justo,
+            especializado y coherente con la propuesta artística de cada participante.
+          </p>
+        </div>
+
+        <div className="rules-motion-explainer__cards" aria-label="Ventajas de la evaluación por género">
+          {genreEvaluationCards.map(({ icon: Icon, text, title }) => (
+            <article className="rules-motion-info-card" key={title}>
+              <Icon aria-hidden="true" size={42} strokeWidth={1.8} />
+              <div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="rules-motion-process" aria-labelledby="rules-motion-process-title">
+        <div className="rules-motion-process__intro">
+          <h2 id="rules-motion-process-title">¿Cómo funciona el jueceo en LevitateMX?</h2>
+          <p>
+            Nuestro sistema de evaluación está diseñado para ser justo, preciso y transparente, asegurando que cada
+            presentación sea valorada de manera adecuada y profesional.
+          </p>
+        </div>
+
+        <div className="rules-motion-process__cards">
+          {judgingProcessCards.map(({ icon: Icon, number, text, title }) => (
+            <article className="rules-motion-step-card" key={title}>
+              <Icon aria-hidden="true" size={34} strokeWidth={1.8} />
+              <strong>{number}</strong>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <LevitateFooter useRootLinks />
