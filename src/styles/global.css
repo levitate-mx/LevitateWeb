@@ -6658,6 +6658,14 @@ button {
   line-height: 1.58;
 }
 
+@media (min-width: 2200px) {
+  .motion-genres-catalog__dancer {
+    right: 0;
+    width: clamp(640px, 38vw, 1100px);
+    height: min(88%, 980px);
+  }
+}
+
 @keyframes motion-genres-media-in {
   from {
     opacity: 0;
