@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import {
+  getMediaOverrideSource,
   loadMediaOverrides,
   mediaCssVariableName,
   mediaOverrideChangeEvent,
@@ -103,11 +104,16 @@ export function MediaOverrideRuntime() {
     };
 
     applyMediaOverrides();
-    void loadMediaOverrides().then(() => {
-      if (isMounted) {
-        scheduleApply();
-      }
-    });
+
+    if (getMediaOverrideSource() === "api") {
+      scheduleApply();
+    } else {
+      void loadMediaOverrides().then(() => {
+        if (isMounted) {
+          scheduleApply();
+        }
+      });
+    }
 
     const observer = new MutationObserver(scheduleApply);
     observer.observe(document.documentElement, {

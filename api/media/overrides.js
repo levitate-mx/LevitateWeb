@@ -3,6 +3,7 @@ import { assertMethod, readJsonBody, requireString, sendError, sendJson } from "
 
 const mediaKeyPattern = /^[a-z0-9.-]+$/;
 const maxMediaValueLength = 4_500_000;
+const mediaAssetRoute = "/api/media/asset";
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
@@ -20,7 +21,7 @@ export default async function handler(req, res) {
     await ensureMediaOverridesTable(db);
 
     if (req.method === "GET") {
-      await sendOverrides(res, db);
+      await sendOverrides(res, db, req);
       return;
     }
 
@@ -28,16 +29,17 @@ export default async function handler(req, res) {
       const body = await readJsonBody(req);
       const key = requireMediaKey(body.key);
       const value = requireMediaValue(body.value);
+      const storedValue = await normalizeMediaValueForStorage(req, db, key, value);
 
       await db`
         INSERT INTO levitate_media_overrides (media_key, media_value, updated_at)
-        VALUES (${key}, ${value}, now())
+        VALUES (${key}, ${storedValue}, now())
         ON CONFLICT (media_key) DO UPDATE SET
           media_value = EXCLUDED.media_value,
           updated_at = now()
       `;
 
-      await sendOverrides(res, db);
+      await sendOverrides(res, db, req);
       return;
     }
 
@@ -46,8 +48,12 @@ export default async function handler(req, res) {
       DELETE FROM levitate_media_overrides
       WHERE media_key = ${key}
     `;
+    await db`
+      DELETE FROM levitate_media_assets
+      WHERE media_key = ${key}
+    `;
 
-    await sendOverrides(res, db);
+    await sendOverrides(res, db, req);
   } catch (error) {
     sendError(res, error);
   }
@@ -61,14 +67,31 @@ async function ensureMediaOverridesTable(db) {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS levitate_media_assets (
+      media_key text PRIMARY KEY,
+      content_type text NOT NULL,
+      data_base64 text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
 }
 
-async function sendOverrides(res, db) {
-  const rows = await db`
+async function readOverrideRows(db) {
+  return db`
     SELECT media_key, media_value, updated_at
     FROM levitate_media_overrides
     ORDER BY media_key
   `;
+}
+
+async function sendOverrides(res, db, req) {
+  let rows = await readOverrideRows(db);
+
+  if (await migrateInlineMediaValues(req, db, rows)) {
+    rows = await readOverrideRows(db);
+  }
 
   const items = rows.map((row) => ({
     key: row.media_key,
@@ -81,6 +104,58 @@ async function sendOverrides(res, db) {
     overrides: Object.fromEntries(items.map((item) => [item.key, item.value])),
     items,
   });
+}
+
+async function migrateInlineMediaValues(req, db, rows) {
+  let wasMigrated = false;
+
+  for (const row of rows) {
+    const storedValue = await normalizeMediaValueForStorage(req, db, row.media_key, row.media_value);
+
+    if (storedValue !== row.media_value) {
+      wasMigrated = true;
+
+      await db`
+        UPDATE levitate_media_overrides
+        SET
+          media_value = ${storedValue},
+          updated_at = now()
+        WHERE media_key = ${row.media_key}
+      `;
+    }
+  }
+
+  return wasMigrated;
+}
+
+async function normalizeMediaValueForStorage(req, db, key, value) {
+  const parsedDataUrl = parseDataUrl(value);
+
+  if (!parsedDataUrl) {
+    return value;
+  }
+
+  const [asset] = await db`
+    INSERT INTO levitate_media_assets (
+      media_key,
+      content_type,
+      data_base64,
+      updated_at
+    )
+    VALUES (
+      ${key},
+      ${parsedDataUrl.contentType},
+      ${parsedDataUrl.base64},
+      now()
+    )
+    ON CONFLICT (media_key) DO UPDATE SET
+      content_type = EXCLUDED.content_type,
+      data_base64 = EXCLUDED.data_base64,
+      updated_at = now()
+    RETURNING updated_at
+  `;
+
+  return getMediaAssetUrl(req, key, serializeDate(asset.updated_at));
 }
 
 function requireMediaKey(value) {
@@ -124,6 +199,39 @@ function isAllowedMediaValue(value) {
     value.startsWith("data:image/") ||
     value.startsWith("data:video/")
   );
+}
+
+function parseDataUrl(value) {
+  const match = value.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([\s\S]+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    contentType: match[1].toLowerCase(),
+    base64: match[2].replace(/\s/g, ""),
+  };
+}
+
+function getMediaAssetUrl(req, key, version) {
+  const query = new URLSearchParams({
+    key,
+    v: version || new Date().toISOString(),
+  });
+
+  return `${getApiOrigin(req)}${mediaAssetRoute}?${query.toString()}`;
+}
+
+function getApiOrigin(req) {
+  if (process.env.MEDIA_API_ORIGIN) {
+    return process.env.MEDIA_API_ORIGIN.replace(/\/$/, "");
+  }
+
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  const protocol = req.headers["x-forwarded-proto"] || "https";
+
+  return host ? `${protocol}://${host}` : "https://jueceo-levitate-web.vercel.app";
 }
 
 function setCorsHeaders(req, res) {

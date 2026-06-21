@@ -72,3 +72,10 @@ CREATE TABLE IF NOT EXISTS levitate_media_overrides (
   media_value TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS levitate_media_assets (
+  media_key TEXT PRIMARY KEY,
+  content_type TEXT NOT NULL,
+  data_base64 TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

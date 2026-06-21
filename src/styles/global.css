@@ -86,6 +86,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html[data-levitate-media-boot="loading"] body {
+  opacity: 0;
+}
+
+html[data-levitate-media-boot="ready"] body {
+  opacity: 1;
+}
+
 body.menu-open {
   overflow: visible;
 }

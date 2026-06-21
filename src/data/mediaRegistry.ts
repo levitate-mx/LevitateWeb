@@ -452,6 +452,7 @@ export async function loadMediaOverrides(): Promise<MediaOverrideResult> {
 
   try {
     const response = await fetch(mediaOverrideApiPath, {
+      cache: "no-store",
       headers: mediaApiHeaders(),
     });
 
