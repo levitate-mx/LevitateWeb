@@ -252,7 +252,7 @@ export function MediaManagerPanel() {
 
             return (
               <article className={`levitate-media-card${hasOverride ? " has-override" : ""}`} key={slot.key}>
-                <figure className="levitate-media-card__preview">
+                <figure className="levitate-media-card__preview" data-levitate-media-ignore="true">
                   {mediaType === "video" ? (
                     <video src={previewSource} controls muted playsInline preload="metadata" />
                   ) : (

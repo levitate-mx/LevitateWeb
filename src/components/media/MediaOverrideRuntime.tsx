@@ -31,6 +31,7 @@ const mediaAttributes: MediaAttribute[] = [
 ];
 
 const mediaKeyAttribute = "data-levitate-media-key";
+const mediaIgnoreAttribute = "data-levitate-media-ignore";
 
 function cssUrl(value: string) {
   return `url("${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`;
@@ -41,6 +42,8 @@ function getSlotKeyFromSource(source: string) {
 }
 
 function applyMediaAttribute(element: Element, config: MediaAttribute, overrides: MediaOverrides) {
+  if (element.closest(`[${mediaIgnoreAttribute}]`)) return;
+
   const currentSource = element.getAttribute(config.attribute);
   if (!currentSource) return;
 
@@ -109,7 +112,7 @@ export function MediaOverrideRuntime() {
     const observer = new MutationObserver(scheduleApply);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["src", "poster", mediaKeyAttribute],
+      attributeFilter: ["src", "poster", mediaKeyAttribute, mediaIgnoreAttribute],
       childList: true,
       subtree: true,
     });
