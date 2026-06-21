@@ -160,7 +160,7 @@ function requireMediaValue(value) {
   }
 
   if (!isAllowedMediaValue(mediaValue)) {
-    const error = new Error("value must be an image URL, /assets path or data:image payload");
+    const error = new Error("value must be a media URL, /assets path, data:image payload or data:video payload");
     error.statusCode = 400;
     error.code = "validation_error";
     throw error;

@@ -16,10 +16,15 @@ export type MediaOverrideResult = {
   errorMessage?: string;
 };
 
+type MediaOverrideWriteOptions = {
+  allowLocalFallback?: boolean;
+};
+
 export const mediaOverrideStorageKey = "levitate-media-overrides";
 export const mediaAdminTokenStorageKey = "levitate-media-admin-token";
 export const mediaOverrideChangeEvent = "levitate-media-overrides-change";
-export const mediaOverrideApiPath = "/api/media/overrides";
+export const mediaOverrideApiPath =
+  import.meta.env.VITE_MEDIA_OVERRIDE_API_URL || "https://jueceo-levitate-web.vercel.app/api/media/overrides";
 
 export const mediaSlots: MediaSlot[] = [
   {
@@ -497,14 +502,27 @@ export async function loadMediaOverrides(): Promise<MediaOverrideResult> {
   }
 }
 
-export async function saveMediaOverride(key: string, value: string): Promise<MediaOverrideResult> {
+export async function saveMediaOverride(
+  key: string,
+  value: string,
+  options: MediaOverrideWriteOptions = {},
+): Promise<MediaOverrideResult> {
   const nextValue = value.trim();
+  const allowLocalFallback = options.allowLocalFallback ?? true;
 
   if (!nextValue) {
-    return deleteMediaOverride(key);
+    return deleteMediaOverride(key, options);
   }
 
   if (!canUseFetch()) {
+    if (!allowLocalFallback) {
+      return {
+        overrides: cachedMediaOverrides,
+        source: currentMediaOverrideSource,
+        errorMessage: "La API de imágenes no está disponible en este navegador.",
+      };
+    }
+
     setMediaOverride(key, nextValue);
 
     return { overrides: cachedMediaOverrides, source: "local" };
@@ -523,14 +541,35 @@ export async function saveMediaOverride(key: string, value: string): Promise<Med
 
     return { overrides, source: "api" };
   } catch (error) {
+    if (!allowLocalFallback) {
+      return {
+        overrides: cachedMediaOverrides,
+        source: currentMediaOverrideSource,
+        errorMessage: mediaOverrideErrorMessage(error),
+      };
+    }
+
     setMediaOverride(key, nextValue);
 
     return { overrides: cachedMediaOverrides, source: "local", errorMessage: mediaOverrideErrorMessage(error) };
   }
 }
 
-export async function deleteMediaOverride(key: string): Promise<MediaOverrideResult> {
+export async function deleteMediaOverride(
+  key: string,
+  options: MediaOverrideWriteOptions = {},
+): Promise<MediaOverrideResult> {
+  const allowLocalFallback = options.allowLocalFallback ?? true;
+
   if (!canUseFetch()) {
+    if (!allowLocalFallback) {
+      return {
+        overrides: cachedMediaOverrides,
+        source: currentMediaOverrideSource,
+        errorMessage: "La API de imágenes no está disponible en este navegador.",
+      };
+    }
+
     resetMediaOverride(key);
 
     return { overrides: cachedMediaOverrides, source: "local" };
@@ -548,6 +587,14 @@ export async function deleteMediaOverride(key: string): Promise<MediaOverrideRes
 
     return { overrides, source: "api" };
   } catch (error) {
+    if (!allowLocalFallback) {
+      return {
+        overrides: cachedMediaOverrides,
+        source: currentMediaOverrideSource,
+        errorMessage: mediaOverrideErrorMessage(error),
+      };
+    }
+
     resetMediaOverride(key);
 
     return { overrides: cachedMediaOverrides, source: "local", errorMessage: mediaOverrideErrorMessage(error) };

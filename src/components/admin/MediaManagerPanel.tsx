@@ -40,6 +40,12 @@ function getSlotMediaType(slot: MediaSlot) {
   return slot.mediaType || "image";
 }
 
+function getApiErrorNotice(slotLabel: string, errorMessage?: string) {
+  const detail = errorMessage ? ` Detalle: ${errorMessage}` : "";
+
+  return `${slotLabel} no se guardó en la API, así que otros usuarios todavía no verán ese cambio.${detail}`;
+}
+
 function matchesSlot(slot: MediaSlot, query: string, page: string) {
   const normalizedQuery = query.trim().toLowerCase();
   const matchesPage = page === "Todas" || slot.page === page;
@@ -81,7 +87,7 @@ export function MediaManagerPanel() {
       if (result.source === "local" && result.errorMessage) {
         setNotice({
           tone: "warning",
-          text: "La API de imágenes no respondió. El panel está usando el respaldo local de este navegador.",
+          text: "La API de imágenes no respondió. Podés previsualizar, pero Guardar no publicará cambios globales hasta que la API esté disponible.",
         });
       }
     });
@@ -135,15 +141,21 @@ export function MediaManagerPanel() {
     setSavingKeys((current) => new Set(current).add(slot.key));
 
     try {
-      const result = await saveMediaOverride(slot.key, drafts[slot.key] || "");
+      const result = await saveMediaOverride(slot.key, drafts[slot.key] || "", { allowLocalFallback: false });
       setDrafts(result.overrides);
       setSource(result.source);
+
+      if (result.errorMessage) {
+        setNotice({
+          tone: "error",
+          text: getApiErrorNotice(slot.label, result.errorMessage),
+        });
+        return;
+      }
+
       setNotice({
-        tone: result.source === "api" ? "success" : "warning",
-        text:
-          result.source === "api"
-            ? `${slot.label} actualizada en la API.`
-            : `${slot.label} quedó guardada solo en este navegador. Revisa la conexión con la API.`,
+        tone: "success",
+        text: `${slot.label} actualizada en la API. Ya queda visible para todos.`,
       });
     } finally {
       setSavingKeys((current) => {
@@ -158,15 +170,21 @@ export function MediaManagerPanel() {
     setSavingKeys((current) => new Set(current).add(slot.key));
 
     try {
-      const result = await deleteMediaOverride(slot.key);
+      const result = await deleteMediaOverride(slot.key, { allowLocalFallback: false });
       setDrafts(result.overrides);
       setSource(result.source);
+
+      if (result.errorMessage) {
+        setNotice({
+          tone: "error",
+          text: getApiErrorNotice(slot.label, result.errorMessage),
+        });
+        return;
+      }
+
       setNotice({
-        tone: result.source === "api" ? "success" : "warning",
-        text:
-          result.source === "api"
-            ? `${slot.label} volvió a la imagen original en la API.`
-            : `${slot.label} volvió a la imagen original solo en este navegador.`,
+        tone: "success",
+        text: `${slot.label} volvió a la imagen original en la API. Ya queda visible para todos.`,
       });
     } finally {
       setSavingKeys((current) => {
@@ -188,10 +206,12 @@ export function MediaManagerPanel() {
         <div className="levitate-media-manager__intro">
           <ImageIcon aria-hidden="true" size={30} strokeWidth={2.2} />
           <div>
-            <strong>Cambia las imágenes sin tocar código.</strong>
+            <strong>
+              {source === "api" ? "Cambia las imágenes sin tocar código." : "API no conectada: los cambios no se publican."}
+            </strong>
             <p>
-              Usa una URL pública o sube una imagen. Los cambios se guardan en la API cuando el backend está
-              disponible.
+              Usa una URL pública o sube una imagen. El botón Guardar solo confirma cambios cuando la API responde,
+              para evitar fotos guardadas únicamente en este navegador.
             </p>
             <small>Origen actual: {source === "api" ? "API / base de datos" : "respaldo local"}</small>
           </div>

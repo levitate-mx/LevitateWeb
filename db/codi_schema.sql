@@ -66,3 +66,9 @@ CREATE INDEX IF NOT EXISTS idx_codi_payment_attempts_order_id ON codi_payment_at
 CREATE INDEX IF NOT EXISTS idx_codi_payment_attempts_provider_payment_id
   ON codi_payment_attempts(provider_payment_id);
 CREATE INDEX IF NOT EXISTS idx_codi_payment_events_order_id ON codi_payment_events(order_id);
+
+CREATE TABLE IF NOT EXISTS levitate_media_overrides (
+  media_key TEXT PRIMARY KEY,
+  media_value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
