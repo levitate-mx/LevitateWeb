@@ -16,10 +16,6 @@ export default async function handler(req, res) {
   try {
     assertMethod(req, ["GET", "PUT", "DELETE"]);
 
-    if (req.method !== "GET") {
-      assertMediaAdminToken(req);
-    }
-
     const db = sql();
     await ensureMediaOverridesTable(db);
 
@@ -87,23 +83,6 @@ async function sendOverrides(res, db) {
   });
 }
 
-function assertMediaAdminToken(req) {
-  const expectedToken = process.env.MEDIA_ADMIN_TOKEN || "";
-
-  if (!expectedToken) {
-    return;
-  }
-
-  const receivedToken = req.headers["x-levitate-admin-token"] || "";
-
-  if (receivedToken !== expectedToken) {
-    const error = new Error("Invalid media admin token");
-    error.statusCode = 401;
-    error.code = "invalid_media_admin_token";
-    throw error;
-  }
-}
-
 function requireMediaKey(value) {
   const key = requireString(value, "key");
 
@@ -157,7 +136,7 @@ function setCorsHeaders(req, res) {
 
   res.setHeader("vary", "Origin");
   res.setHeader("access-control-allow-methods", "GET, PUT, DELETE, OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type, x-levitate-admin-token");
+  res.setHeader("access-control-allow-headers", "content-type");
   res.setHeader("access-control-max-age", "86400");
 }
 

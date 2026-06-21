@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ImageIcon,
-  KeyRound,
   Link2,
   RotateCcw,
   Save,
@@ -14,10 +13,8 @@ import {
   deleteMediaOverride,
   loadMediaOverrides,
   mediaSlots,
-  readMediaAdminToken,
   readMediaOverrides,
   saveMediaOverride,
-  writeMediaAdminToken,
   type MediaOverrideSource,
   type MediaSlot,
 } from "../../data/mediaRegistry";
@@ -63,7 +60,6 @@ export function MediaManagerPanel() {
   const [query, setQuery] = useState("");
   const [activePage, setActivePage] = useState("Todas");
   const [source, setSource] = useState<MediaOverrideSource>("local");
-  const [adminToken, setAdminToken] = useState(readMediaAdminToken);
   const [isLoading, setIsLoading] = useState(true);
   const [savingKeys, setSavingKeys] = useState<Set<string>>(() => new Set());
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -99,17 +95,6 @@ export function MediaManagerPanel() {
 
   const updateDraft = (key: string, value: string) => {
     setDrafts((current) => ({ ...current, [key]: value }));
-  };
-
-  const handleAdminTokenSave = () => {
-    const wasSaved = writeMediaAdminToken(adminToken);
-
-    setNotice({
-      tone: wasSaved ? "success" : "error",
-      text: wasSaved
-        ? "Token de edición guardado en este navegador."
-        : "No se pudo guardar el token en este navegador.",
-    });
   };
 
   const handleFileChange = async (slot: MediaSlot, event: ChangeEvent<HTMLInputElement>) => {
@@ -228,24 +213,6 @@ export function MediaManagerPanel() {
               type="search"
               value={query}
             />
-          </label>
-
-          <label className="levitate-admin-field">
-            <span className="levitate-admin-field__label">
-              <KeyRound aria-hidden="true" size={18} /> Token de edición
-            </span>
-            <span className="levitate-media-manager__token-field">
-              <input
-                autoComplete="off"
-                onChange={(event) => setAdminToken(event.target.value)}
-                placeholder="Opcional si no hay secret"
-                type="password"
-                value={adminToken}
-              />
-              <button onClick={handleAdminTokenSave} type="button">
-                Guardar token
-              </button>
-            </span>
           </label>
 
           <label className="levitate-admin-field">

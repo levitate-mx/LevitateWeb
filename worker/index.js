@@ -79,10 +79,6 @@ export default {
     }
 
     if (url.pathname === "/api/media/overrides") {
-      if (request.method !== "GET") {
-        assertMediaAdminToken(request, env);
-      }
-
       const id = env.MEDIA_OVERRIDES.idFromName("global");
       const store = env.MEDIA_OVERRIDES.get(id);
 
@@ -96,23 +92,6 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
-
-function assertMediaAdminToken(request, env) {
-  const expectedToken = env.MEDIA_ADMIN_TOKEN || "";
-
-  if (!expectedToken) {
-    return;
-  }
-
-  const receivedToken = request.headers.get("x-levitate-admin-token") || "";
-
-  if (receivedToken !== expectedToken) {
-    const error = new Error("Invalid media admin token");
-    error.statusCode = 401;
-    error.code = "invalid_media_admin_token";
-    throw error;
-  }
-}
 
 async function readJsonBody(request) {
   try {

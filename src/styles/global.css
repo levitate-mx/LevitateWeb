@@ -12509,37 +12509,9 @@ button {
 
 .levitate-media-manager__toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.58fr) minmax(190px, 0.32fr);
+  grid-template-columns: minmax(220px, 1fr) minmax(190px, 0.36fr);
   gap: 16px;
   align-items: end;
-}
-
-.levitate-media-manager__token-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.levitate-media-manager__token-field button {
-  min-height: 54px;
-  padding: 0 14px;
-  border: 1px solid rgba(231, 70, 151, 0.38);
-  border-radius: 7px;
-  background: rgba(231, 70, 151, 0.1);
-  color: var(--admin-pink);
-  cursor: pointer;
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  transition:
-    background 180ms ease,
-    color 180ms ease;
-}
-
-.levitate-media-manager__token-field button:hover {
-  background: var(--admin-pink);
-  color: #fff;
 }
 
 .levitate-media-manager__notice {

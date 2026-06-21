@@ -21,7 +21,6 @@ type MediaOverrideWriteOptions = {
 };
 
 export const mediaOverrideStorageKey = "levitate-media-overrides";
-export const mediaAdminTokenStorageKey = "levitate-media-admin-token";
 export const mediaOverrideChangeEvent = "levitate-media-overrides-change";
 export const mediaOverrideApiPath =
   import.meta.env.VITE_MEDIA_OVERRIDE_API_URL || "https://jueceo-levitate-web.vercel.app/api/media/overrides";
@@ -357,46 +356,13 @@ function mediaOverrideErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "No se pudo conectar con la API de imágenes.";
 }
 
-export function readMediaAdminToken() {
-  if (!canUseLocalStorage()) return "";
-
-  try {
-    return window.localStorage.getItem(mediaAdminTokenStorageKey) || "";
-  } catch {
-    return "";
-  }
-}
-
-export function writeMediaAdminToken(token: string) {
-  if (!canUseLocalStorage()) return false;
-
-  try {
-    const nextToken = token.trim();
-
-    if (nextToken) {
-      window.localStorage.setItem(mediaAdminTokenStorageKey, nextToken);
-    } else {
-      window.localStorage.removeItem(mediaAdminTokenStorageKey);
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function mediaApiHeaders(hasBody = false) {
   const headers: Record<string, string> = {
     accept: "application/json",
   };
-  const token = readMediaAdminToken();
 
   if (hasBody) {
     headers["content-type"] = "application/json";
-  }
-
-  if (token) {
-    headers["x-levitate-admin-token"] = token;
   }
 
   return headers;
