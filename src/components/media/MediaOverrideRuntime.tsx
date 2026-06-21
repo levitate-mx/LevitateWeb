@@ -5,6 +5,7 @@ import {
   mediaOverrideChangeEvent,
   mediaSlots,
   mediaSlotsByDefaultUrl,
+  mediaSlotsByKey,
   normalizeMediaSource,
   readMediaOverrides,
   type MediaOverrides,
@@ -18,7 +19,7 @@ type MediaAttribute = {
 
 const mediaAttributes: MediaAttribute[] = [
   {
-    selector: "img[src], source[src]",
+    selector: "img[src], source[src], video[src]",
     attribute: "src",
     defaultAttribute: "data-levitate-media-default-src",
   },
@@ -28,6 +29,8 @@ const mediaAttributes: MediaAttribute[] = [
     defaultAttribute: "data-levitate-media-default-poster",
   },
 ];
+
+const mediaKeyAttribute = "data-levitate-media-key";
 
 function cssUrl(value: string) {
   return `url("${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}")`;
@@ -42,19 +45,32 @@ function applyMediaAttribute(element: Element, config: MediaAttribute, overrides
   if (!currentSource) return;
 
   const storedDefault = element.getAttribute(config.defaultAttribute);
-  const defaultSource = storedDefault || currentSource;
+  const explicitSlotKey = element.getAttribute(mediaKeyAttribute);
+  const explicitSlot = explicitSlotKey ? mediaSlotsByKey.get(explicitSlotKey) : undefined;
+  const defaultSource = storedDefault || explicitSlot?.defaultUrl || currentSource;
 
   if (!storedDefault) {
     element.setAttribute(config.defaultAttribute, defaultSource);
   }
 
-  const slotKey = getSlotKeyFromSource(defaultSource);
+  const slotKey = explicitSlot?.key || getSlotKeyFromSource(defaultSource);
   if (!slotKey) return;
 
   const nextSource = overrides[slotKey] || defaultSource;
 
   if (currentSource !== nextSource) {
     element.setAttribute(config.attribute, nextSource);
+
+    if (config.attribute === "src") {
+      const video =
+        element.tagName === "SOURCE"
+          ? element.closest("video")
+          : element.tagName === "VIDEO"
+            ? (element as HTMLVideoElement)
+            : null;
+
+      video?.load();
+    }
   }
 }
 
@@ -93,7 +109,7 @@ export function MediaOverrideRuntime() {
     const observer = new MutationObserver(scheduleApply);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["src", "poster"],
+      attributeFilter: ["src", "poster", mediaKeyAttribute],
       childList: true,
       subtree: true,
     });

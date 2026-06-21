@@ -4,6 +4,7 @@ export type MediaSlot = {
   page: string;
   description: string;
   defaultUrl: string;
+  mediaType?: "image" | "video";
 };
 
 export type MediaOverrides = Record<string, string>;
@@ -55,6 +56,119 @@ export const mediaSlots: MediaSlot[] = [
     page: "Home y Sedes",
     description: "Imagen de venue usada en sedes, trofeos, eventos y bloques de convocatoria.",
     defaultUrl: "/assets/visuals/venue-stage.jpg",
+  },
+  {
+    key: "premiation.hero",
+    label: "Hero de premiación",
+    page: "Premiación",
+    description: "Imagen poster/fallback del hero principal de la página de premiación.",
+    defaultUrl: "/assets/visuals/experience-competition.jpg",
+  },
+  {
+    key: "premiation.hero.video",
+    label: "Hero de premiación - Video",
+    page: "Premiación",
+    description: "Video de fondo del hero principal de la página de premiación.",
+    defaultUrl: "/assets/visuals/workshops-experience-bg.mp4",
+    mediaType: "video",
+  },
+  {
+    key: "premiation.direct.second",
+    label: "Ranking directo - 2do lugar",
+    page: "Premiación",
+    description: "Imagen de la tarjeta de segundo lugar en competencia directa.",
+    defaultUrl: "/assets/visuals/gallery-community.jpg",
+  },
+  {
+    key: "premiation.direct.first",
+    label: "Ranking directo - 1er lugar",
+    page: "Premiación",
+    description: "Imagen de la tarjeta destacada de primer lugar en competencia directa.",
+    defaultUrl: "/assets/visuals/venue-stage.jpg",
+  },
+  {
+    key: "premiation.direct.third",
+    label: "Ranking directo - 3er lugar",
+    page: "Premiación",
+    description: "Imagen de la tarjeta de tercer lugar en competencia directa.",
+    defaultUrl: "/assets/visuals/experience-workshops.jpg",
+  },
+  {
+    key: "premiation.medal-system.motion",
+    label: "Medallero - Motion",
+    page: "Premiación",
+    description: "Imagen del bloque de sistema de medallero para Motion.",
+    defaultUrl: "/assets/visuals/experience-competition.jpg",
+  },
+  {
+    key: "premiation.medal-system.aerial",
+    label: "Medallero - Aerial",
+    page: "Premiación",
+    description: "Imagen del bloque de sistema de medallero para Aerial.",
+    defaultUrl: "/assets/visuals/hero-stage.jpg",
+  },
+  {
+    key: "premiation.recognition.medals",
+    label: "Reconocimientos - Medallas",
+    page: "Premiación",
+    description: "Imagen de la tarjeta de reconocimientos de medallas.",
+    defaultUrl: "/assets/medallero-oro.png",
+  },
+  {
+    key: "premiation.recognition.trophies",
+    label: "Reconocimientos - Trofeos",
+    page: "Premiación",
+    description: "Imagen de la tarjeta de reconocimientos de trofeos.",
+    defaultUrl: "/assets/visuals/venue-stage.jpg",
+  },
+  {
+    key: "premiation.recognition.special",
+    label: "Reconocimientos - Premios especiales",
+    page: "Premiación",
+    description: "Imagen de la tarjeta de reconocimientos de premios especiales.",
+    defaultUrl: "/assets/visuals/gallery-community.jpg",
+  },
+  {
+    key: "premiation.special.music",
+    label: "Premios especiales - Mejor música",
+    page: "Premiación",
+    description: "Imagen del panel de premio especial a mejor música.",
+    defaultUrl: "/assets/visuals/venue-stage.jpg",
+  },
+  {
+    key: "premiation.special.choreography",
+    label: "Premios especiales - Mejor coreografía",
+    page: "Premiación",
+    description: "Imagen del panel de premio especial a mejor coreografía.",
+    defaultUrl: "/assets/visuals/experience-workshops.jpg",
+  },
+  {
+    key: "premiation.special.costume",
+    label: "Premios especiales - Mejor vestuario",
+    page: "Premiación",
+    description: "Imagen del panel de premio especial a mejor vestuario.",
+    defaultUrl: "/assets/visuals/experience-competition.jpg",
+  },
+  {
+    key: "premiation.special.cheer",
+    label: "Premios especiales - Mejor porra",
+    page: "Premiación",
+    description: "Imagen del panel de premio especial a mejor porra.",
+    defaultUrl: "/assets/visuals/gallery-community.jpg",
+  },
+  {
+    key: "premiation.mvp.motion",
+    label: "MVP Motion",
+    page: "Premiación",
+    description: "Imagen de la tarjeta MVP Motion.",
+    defaultUrl: "/assets/visuals/experience-workshops.jpg",
+  },
+  {
+    key: "premiation.mvp.aerial",
+    label: "MVP Aerial",
+    page: "Premiación",
+    description: "Imagen de la tarjeta MVP Aerial.",
+    defaultUrl: "/assets/visuals/experience-competition.jpg",
   },
   {
     key: "medal.gold",

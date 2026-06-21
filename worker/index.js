@@ -174,7 +174,8 @@ function isAllowedMediaValue(value) {
     value.startsWith("/assets/") ||
     value.startsWith("https://") ||
     value.startsWith("http://") ||
-    value.startsWith("data:image/")
+    value.startsWith("data:image/") ||
+    value.startsWith("data:video/")
   );
 }
 

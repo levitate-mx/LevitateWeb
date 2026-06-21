@@ -26,6 +26,7 @@ const medalRules = [
     label: "Oro",
     description: "Del puntaje más alto hasta 5 puntos menos.",
     image: "/assets/medallero-oro.png",
+    mediaKey: "medal.gold",
     alt: "Medalla de oro Levitate 2026.",
     tone: "gold",
   },
@@ -33,6 +34,7 @@ const medalRules = [
     label: "Plata",
     description: "De 6 a 15 puntos por debajo del puntaje más alto.",
     image: "/assets/medallero-plata.png",
+    mediaKey: "medal.silver",
     alt: "Medalla de plata Levitate 2026.",
     tone: "silver",
   },
@@ -40,6 +42,7 @@ const medalRules = [
     label: "Bronce",
     description: "De 16 a 25 puntos por debajo del puntaje más alto.",
     image: "/assets/medallero-bronce.png",
+    mediaKey: "medal.bronze",
     alt: "Medalla de bronce Levitate 2026.",
     tone: "bronze",
   },
@@ -47,6 +50,7 @@ const medalRules = [
     label: "Participación",
     description: "26 puntos o más por debajo del puntaje más alto.",
     image: "/assets/medallero-participacion.png",
+    mediaKey: "medal.participation",
     alt: "Medalla de participación Levitate 2026.",
     tone: "pink",
   },
@@ -60,6 +64,7 @@ const medalSystems = [
     options: ["Baby", "Petite", "Junior", "Teen", "Senior", "Legacy"],
     copy: "Se aplican rangos de medalla de acuerdo con el mayor puntaje obtenido en una misma división.",
     image: assets.competition,
+    mediaKey: "premiation.medal-system.motion",
     imageAlt: "Participante de Motion sobre escenario Levitate.",
     imageFirst: true,
   },
@@ -70,6 +75,7 @@ const medalSystems = [
     options: ["Nudo", "Principiantes", "Intermedio", "Avanzado", "Elite"],
     copy: "Se aplican rangos de medalla de acuerdo con el mayor puntaje obtenido en un mismo nivel.",
     image: assets.hero,
+    mediaKey: "premiation.medal-system.aerial",
     imageAlt: "Participante de Aerial en telas durante una experiencia Levitate.",
     imageFirst: false,
   },
@@ -80,6 +86,7 @@ const recognitionShowcase = [
     title: "Medallas",
     label: "Oro · Plata · Bronce · Participación",
     image: "/assets/medallero-oro.png",
+    mediaKey: "premiation.recognition.medals",
     alt: "Medalla de oro del sistema de medallero Levitate.",
     copy: "Reconocimientos individuales diseñados para distinguir ranking, puntaje absoluto y participación dentro de cada sede.",
   },
@@ -87,6 +94,7 @@ const recognitionShowcase = [
     title: "Trofeos",
     label: "Dúos · Tríos · Grupales",
     image: assets.venue,
+    mediaKey: "premiation.recognition.trophies",
     alt: "Escenario Levitate preparado para entrega de trofeos.",
     copy: "Piezas de escenario para primeros lugares en formatos colectivos, acompañadas por medallas para sus integrantes.",
   },
@@ -94,6 +102,7 @@ const recognitionShowcase = [
     title: "Premios especiales",
     label: "MVP · Vestuario · Música · Porra",
     image: assets.community,
+    mediaKey: "premiation.recognition.special",
     alt: "Comunidad Levitate celebrando una experiencia de competencia.",
     copy: "Distinciones seleccionadas por el equipo técnico para reconocer presencia, creatividad, energía y propuesta artística.",
   },
@@ -104,6 +113,7 @@ const directRanking = [
     place: "2do lugar",
     award: "Plata",
     image: assets.community,
+    mediaKey: "premiation.direct.second",
     alt: "Participante recibiendo reconocimiento en escenario Levitate.",
     variant: "silver",
   },
@@ -111,6 +121,7 @@ const directRanking = [
     place: "1er lugar",
     award: "Oro",
     image: assets.venue,
+    mediaKey: "premiation.direct.first",
     alt: "Escenario Levitate durante una premiación.",
     variant: "gold",
     featured: true,
@@ -119,6 +130,7 @@ const directRanking = [
     place: "3er lugar",
     award: "Bronce",
     image: assets.workshops,
+    mediaKey: "premiation.direct.third",
     alt: "Participantes durante una experiencia Levitate.",
     variant: "bronze",
   },
@@ -132,6 +144,7 @@ const specialAwards = [
     summary:
       "Reconocimiento a la selección, edición e integración musical que fortalece la propuesta escénica.",
     image: assets.venue,
+    mediaKey: "premiation.special.music",
     imageAlt: "Escenario Levitate con iluminación para una presentación de competencia.",
     criteria: [
       {
@@ -174,6 +187,7 @@ const specialAwards = [
     summary:
       "Reconocimiento a la calidad de la composición coreográfica y a la claridad de su propuesta artística.",
     image: assets.workshops,
+    mediaKey: "premiation.special.choreography",
     imageAlt: "Participantes en una sesión de movimiento y preparación coreográfica.",
     criteria: [
       {
@@ -216,6 +230,7 @@ const specialAwards = [
     summary:
       "Se reconocerá el vestuario que complemente la propuesta escénica, refuerce el concepto de la coreografía y mantenga coherencia visual, funcionalidad y cuidado en su presentación.",
     image: assets.competition,
+    mediaKey: "premiation.special.costume",
     imageAlt: "Participante en escenario Levitate durante una presentación.",
     criteria: [
       {
@@ -258,6 +273,7 @@ const specialAwards = [
     summary:
       "Reconocimiento a la energía, organización y actitud positiva de la porra durante toda la competencia.",
     image: assets.community,
+    mediaKey: "premiation.special.cheer",
     imageAlt: "Comunidad Levitate celebrando durante una experiencia de competencia.",
     criteria: [
       {
@@ -300,11 +316,13 @@ const mvpAwards = [
     title: "MVP Motion",
     copy: "Para el puntaje más alto de la competencia de géneros de piso.",
     image: assets.workshops,
+    mediaKey: "premiation.mvp.motion",
   },
   {
     title: "MVP Aerial",
     copy: "Para el puntaje más alto de la competencia de géneros aéreos.",
     image: assets.competition,
+    mediaKey: "premiation.mvp.aerial",
   },
 ];
 
@@ -346,7 +364,30 @@ export function PremiationPage() {
     <main className="premiation-page">
       <section className="premiation-hero">
         <LevitateHeader activeLabel="Convocatoria" useRootLinks />
-        <img src={assets.competition} alt="" aria-hidden="true" />
+        <video
+          className="premiation-hero__video"
+          data-levitate-media-key="premiation.hero"
+          poster={assets.competition}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+        >
+          <source
+            src="/assets/visuals/workshops-experience-bg.mp4"
+            data-levitate-media-key="premiation.hero.video"
+            type="video/mp4"
+          />
+        </video>
+        <img
+          className="premiation-hero__fallback"
+          src={assets.competition}
+          data-levitate-media-key="premiation.hero"
+          alt=""
+          aria-hidden="true"
+        />
         <div className="premiation-hero__shade" aria-hidden="true" />
         <div className="premiation-hero__content">
           <h1>Premiación</h1>
@@ -384,7 +425,7 @@ export function PremiationPage() {
                   key={rank.place}
                 >
                   <figure>
-                    <img src={rank.image} alt={rank.alt} loading="lazy" />
+                    <img src={rank.image} data-levitate-media-key={rank.mediaKey} alt={rank.alt} loading="lazy" />
                   </figure>
                   <div>
                     <strong>{rank.place}</strong>
@@ -432,7 +473,12 @@ export function PremiationPage() {
                   >
                     {system.imageFirst && (
                       <figure className="premiation-medal-system__visual">
-                        <img src={system.image} alt={system.imageAlt} loading="lazy" />
+                        <img
+                          src={system.image}
+                          data-levitate-media-key={system.mediaKey}
+                          alt={system.imageAlt}
+                          loading="lazy"
+                        />
                       </figure>
                     )}
                     <div className="premiation-medal-system__content">
@@ -453,7 +499,12 @@ export function PremiationPage() {
 
                     {!system.imageFirst && (
                       <figure className="premiation-medal-system__visual">
-                        <img src={system.image} alt={system.imageAlt} loading="lazy" />
+                        <img
+                          src={system.image}
+                          data-levitate-media-key={system.mediaKey}
+                          alt={system.imageAlt}
+                          loading="lazy"
+                        />
                       </figure>
                     )}
                   </article>
@@ -464,7 +515,7 @@ export function PremiationPage() {
             <article className="premiation-medal-rules" aria-label="Rangos del sistema de medallero">
               {medalRules.map((rule) => (
                 <div className={`premiation-medal-rule is-${rule.tone}`} key={rule.label}>
-                  <img src={rule.image} alt={rule.alt} loading="lazy" />
+                  <img src={rule.image} data-levitate-media-key={rule.mediaKey} alt={rule.alt} loading="lazy" />
                   <div>
                     <strong>{rule.label}</strong>
                     <p>{rule.description}</p>
@@ -520,7 +571,7 @@ export function PremiationPage() {
               {recognitionShowcase.map((item) => (
                 <article className="premiation-recognition__card" key={item.title}>
                   <figure className="premiation-recognition__visual">
-                    <img src={item.image} alt={item.alt} loading="lazy" />
+                    <img src={item.image} data-levitate-media-key={item.mediaKey} alt={item.alt} loading="lazy" />
                   </figure>
                   <div>
                     <span className="premiation-recognition__label">{item.label}</span>
@@ -577,7 +628,12 @@ export function PremiationPage() {
               role="tabpanel"
             >
               <figure className="premiation-special-panel__visual">
-                <img src={activeSpecialAward.image} alt={activeSpecialAward.imageAlt} loading="lazy" />
+                <img
+                  src={activeSpecialAward.image}
+                  data-levitate-media-key={activeSpecialAward.mediaKey}
+                  alt={activeSpecialAward.imageAlt}
+                  loading="lazy"
+                />
               </figure>
 
               <div className="premiation-special-panel__details">
@@ -630,7 +686,7 @@ export function PremiationPage() {
               <div className="premiation-mvp__cards">
                 {mvpAwards.map((award) => (
                   <article key={award.title}>
-                    <img src={award.image} alt="" aria-hidden="true" />
+                    <img src={award.image} data-levitate-media-key={award.mediaKey} alt="" aria-hidden="true" />
                     <h3>{award.title}</h3>
                     <p>{award.copy}</p>
                   </article>

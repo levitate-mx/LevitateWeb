@@ -36,6 +36,10 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
+function getSlotMediaType(slot: MediaSlot) {
+  return slot.mediaType || "image";
+}
+
 function matchesSlot(slot: MediaSlot, query: string, page: string) {
   const normalizedQuery = query.trim().toLowerCase();
   const matchesPage = page === "Todas" || slot.page === page;
@@ -108,17 +112,22 @@ export function MediaManagerPanel() {
 
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setNotice({ tone: "error", text: "El archivo debe ser una imagen." });
+    const mediaType = getSlotMediaType(slot);
+
+    if (!file.type.startsWith(`${mediaType}/`)) {
+      setNotice({ tone: "error", text: `El archivo debe ser ${mediaType === "video" ? "un video" : "una imagen"}.` });
       return;
     }
 
     try {
       const dataUrl = await readFileAsDataUrl(file);
       updateDraft(slot.key, dataUrl);
-      setNotice({ tone: "success", text: `Imagen cargada para ${slot.label}. Guarda para aplicarla.` });
+      setNotice({
+        tone: "success",
+        text: `${mediaType === "video" ? "Video" : "Imagen"} cargado para ${slot.label}. Guarda para aplicarlo.`,
+      });
     } catch {
-      setNotice({ tone: "error", text: "No se pudo cargar la imagen." });
+      setNotice({ tone: "error", text: `No se pudo cargar ${mediaType === "video" ? "el video" : "la imagen"}.` });
     }
   };
 
@@ -252,11 +261,16 @@ export function MediaManagerPanel() {
             const previewSource = draft || slot.defaultUrl;
             const hasOverride = Boolean(draft.trim());
             const isSaving = savingKeys.has(slot.key);
+            const mediaType = getSlotMediaType(slot);
 
             return (
               <article className={`levitate-media-card${hasOverride ? " has-override" : ""}`} key={slot.key}>
                 <figure className="levitate-media-card__preview">
-                  <img alt={slot.label} src={previewSource} loading="lazy" />
+                  {mediaType === "video" ? (
+                    <video src={previewSource} controls muted playsInline preload="metadata" />
+                  ) : (
+                    <img alt={slot.label} src={previewSource} loading="lazy" />
+                  )}
                 </figure>
 
                 <div className="levitate-media-card__body">
@@ -272,7 +286,7 @@ export function MediaManagerPanel() {
 
                   <label className="levitate-admin-field">
                     <span className="levitate-admin-field__label">
-                      <Link2 aria-hidden="true" size={17} /> URL de imagen
+                      <Link2 aria-hidden="true" size={17} /> URL de {mediaType === "video" ? "video" : "imagen"}
                     </span>
                     <input
                       onChange={(event) => updateDraft(slot.key, event.target.value)}
@@ -286,9 +300,9 @@ export function MediaManagerPanel() {
                   <div className="levitate-media-card__actions">
                     <label className="levitate-media-card__upload">
                       <Upload aria-hidden="true" size={18} />
-                      Subir imagen
+                      Subir {mediaType === "video" ? "video" : "imagen"}
                       <input
-                        accept="image/*"
+                        accept={`${mediaType}/*`}
                         disabled={isLoading || isSaving}
                         onChange={(event) => void handleFileChange(slot, event)}
                         type="file"
