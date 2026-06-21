@@ -4846,7 +4846,7 @@ button {
   background:
     linear-gradient(90deg, rgba(5, 5, 5, 0.96) 0%, rgba(5, 5, 5, 0.76) 44%, rgba(5, 5, 5, 0.96) 100%),
     radial-gradient(circle at 82% 12%, rgba(228, 92, 154, 0.24), transparent 22rem),
-    url("/assets/visuals/experience-competition.jpg") center 42% / cover no-repeat;
+    var(--levitate-media-visual-competition, url("/assets/visuals/experience-competition.jpg")) center 42% / cover no-repeat;
 }
 
 .premiation-bottom::before {
@@ -12448,6 +12448,304 @@ button {
   text-transform: uppercase;
 }
 
+.levitate-media-manager__body {
+  display: grid;
+  gap: clamp(22px, 3vw, 34px);
+  padding: clamp(28px, 4vw, 48px);
+}
+
+.levitate-media-manager__intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid rgba(17, 16, 21, 0.1);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(231, 70, 151, 0.14), transparent 18rem),
+    rgba(241, 235, 228, 0.44);
+}
+
+.levitate-media-manager__intro svg {
+  flex: 0 0 auto;
+  color: var(--admin-pink);
+}
+
+.levitate-media-manager__intro strong {
+  display: block;
+  margin: 0 0 5px;
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.levitate-media-manager__intro p {
+  max-width: 720px;
+  margin: 0;
+  color: rgba(17, 16, 21, 0.66);
+  font-size: 0.96rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.levitate-media-manager__intro small {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 12px;
+  padding: 7px 9px;
+  border: 1px solid rgba(231, 70, 151, 0.22);
+  border-radius: 999px;
+  background: rgba(231, 70, 151, 0.09);
+  color: var(--admin-pink);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levitate-media-manager__toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.58fr) minmax(190px, 0.32fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.levitate-media-manager__token-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.levitate-media-manager__token-field button {
+  min-height: 54px;
+  padding: 0 14px;
+  border: 1px solid rgba(231, 70, 151, 0.38);
+  border-radius: 7px;
+  background: rgba(231, 70, 151, 0.1);
+  color: var(--admin-pink);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.levitate-media-manager__token-field button:hover {
+  background: var(--admin-pink);
+  color: #fff;
+}
+
+.levitate-media-manager__notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(17, 16, 21, 0.12);
+  border-radius: 7px;
+  background: rgba(241, 235, 228, 0.52);
+  color: rgba(17, 16, 21, 0.78);
+  font-size: 0.92rem;
+  font-weight: 760;
+}
+
+.levitate-media-manager__notice svg {
+  flex: 0 0 auto;
+}
+
+.levitate-media-manager__notice.is-success {
+  border-color: rgba(231, 70, 151, 0.24);
+  background: rgba(231, 70, 151, 0.1);
+  color: #89345c;
+}
+
+.levitate-media-manager__notice.is-warning {
+  border-color: rgba(176, 114, 30, 0.24);
+  background: rgba(176, 114, 30, 0.08);
+  color: #7d541d;
+}
+
+.levitate-media-manager__notice.is-error {
+  border-color: rgba(151, 28, 28, 0.24);
+  background: rgba(151, 28, 28, 0.08);
+  color: #7b2727;
+}
+
+.levitate-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+  gap: 18px;
+}
+
+.levitate-media-card {
+  overflow: hidden;
+  border: 1px solid rgba(17, 16, 21, 0.11);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 40px rgba(17, 16, 21, 0.08);
+}
+
+.levitate-media-card.has-override {
+  border-color: rgba(231, 70, 151, 0.34);
+  box-shadow:
+    0 20px 44px rgba(17, 16, 21, 0.1),
+    0 0 0 1px rgba(231, 70, 151, 0.08);
+}
+
+.levitate-media-card__preview {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  margin: 0;
+  overflow: hidden;
+  background: #111015;
+}
+
+.levitate-media-card__preview::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 54%, rgba(5, 5, 5, 0.26));
+  content: "";
+  pointer-events: none;
+}
+
+.levitate-media-card__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.levitate-media-card__body {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.levitate-media-card__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.levitate-media-card__heading span {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--admin-pink);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.levitate-media-card__heading h2 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2.25vw, 2.15rem);
+  font-weight: 400;
+  letter-spacing: 0.035em;
+  line-height: 0.94;
+  text-transform: uppercase;
+}
+
+.levitate-media-card__heading small {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: 1px solid rgba(17, 16, 21, 0.1);
+  border-radius: 999px;
+  background: rgba(241, 235, 228, 0.72);
+  color: rgba(17, 16, 21, 0.58);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levitate-media-card.has-override .levitate-media-card__heading small {
+  border-color: rgba(231, 70, 151, 0.24);
+  background: rgba(231, 70, 151, 0.12);
+  color: var(--admin-pink);
+}
+
+.levitate-media-card__body > p {
+  margin: 0;
+  color: rgba(17, 16, 21, 0.66);
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.44;
+}
+
+.levitate-media-card .levitate-admin-field small {
+  overflow-wrap: anywhere;
+}
+
+.levitate-media-card__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.levitate-media-card__actions button,
+.levitate-media-card__upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(17, 16, 21, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(17, 16, 21, 0.78);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms var(--ease-out);
+}
+
+.levitate-media-card__actions button:hover,
+.levitate-media-card__upload:hover {
+  border-color: rgba(231, 70, 151, 0.34);
+  background: rgba(231, 70, 151, 0.1);
+  color: var(--admin-pink);
+  transform: translateY(-1px);
+}
+
+.levitate-media-card__actions button:nth-of-type(1) {
+  border-color: rgba(231, 70, 151, 0.48);
+  background: var(--admin-pink);
+  color: #fff;
+}
+
+.levitate-media-card__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.44;
+  transform: none;
+}
+
+.levitate-media-card__actions svg,
+.levitate-media-card__upload svg {
+  flex: 0 0 auto;
+}
+
+.levitate-media-card__upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (max-width: 940px) {
   .levitate-auth-shell {
     grid-template-columns: 1fr;
@@ -12468,6 +12766,10 @@ button {
   }
 
   .levitate-admin-transfer {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-media-manager__toolbar {
     grid-template-columns: 1fr;
   }
 

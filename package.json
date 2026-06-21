@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "db:migrate:codi": "node scripts/migrate-codi-db.mjs",
+    "db:migrate": "npm run db:migrate:codi",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy"
   },

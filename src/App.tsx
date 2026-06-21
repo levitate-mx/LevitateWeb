@@ -1,5 +1,7 @@
+import { type ReactNode } from "react";
 import { LevitateAuthRoute, LevitateRegistrationRoute } from "./components/admin";
 import { HomePage } from "./components/home/HomePage";
+import { MediaOverrideRuntime } from "./components/media/MediaOverrideRuntime";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
 import { PremiationPage } from "./components/premiation/PremiationPage";
 import { RegulationsPage } from "./components/regulations/RegulationsPage";
@@ -9,9 +11,19 @@ import { VenuePage } from "./components/venue/VenuePage";
 import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
 import { getVenueBySlug } from "./data/venueContent";
 
+function withMediaRuntime(page: ReactNode) {
+  return (
+    <>
+      <MediaOverrideRuntime />
+      {page}
+    </>
+  );
+}
+
 export default function App() {
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
+  const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
   const regulationsMatch = window.location.pathname.match(/^\/reglamentos?\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
@@ -21,59 +33,63 @@ export default function App() {
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
   const venueMatch = window.location.pathname.match(/^\/sedes\/([^/]+)\/?$/);
 
+  if (adminMediaMatch) {
+    return withMediaRuntime(<LevitateRegistrationRoute initialScreen="media" />);
+  }
+
   if (registrationMatch) {
-    return <LevitateRegistrationRoute />;
+    return withMediaRuntime(<LevitateRegistrationRoute />);
   }
 
   if (loginMatch) {
-    return <LevitateAuthRoute />;
+    return withMediaRuntime(<LevitateAuthRoute />);
   }
 
   if (premiationMatch) {
-    return <PremiationPage />;
+    return withMediaRuntime(<PremiationPage />);
   }
 
   if (motionGenresMatch) {
-    return <MotionGenresPage />;
+    return withMediaRuntime(<MotionGenresPage />);
   }
 
   if (regulationsMatch) {
-    return <RegulationsPage />;
+    return withMediaRuntime(<RegulationsPage />);
   }
 
   if (evaluationsMatch) {
-    return <RulesPage />;
+    return withMediaRuntime(<RulesPage />);
   }
 
   if (aerialEvaluationsMatch) {
-    return <RulesPage modality="aerial" />;
+    return withMediaRuntime(<RulesPage modality="aerial" />);
   }
 
   if (sedesMatch) {
-    return <SedesPage />;
+    return withMediaRuntime(<SedesPage />);
   }
 
   if (workshopsMatch) {
-    return <WorkshopsPage />;
+    return withMediaRuntime(<WorkshopsPage />);
   }
 
   if (venueMatch) {
     const venueSlug = venueMatch[1];
 
     if (venueSlug === "ciudad-de-mexico" || venueSlug === "cdmx") {
-      return <SedesPage venueKey="cdmx" />;
+      return withMediaRuntime(<SedesPage venueKey="cdmx" />);
     }
 
     if (venueSlug === "puebla" || venueSlug === "monterrey") {
-      return <SedesPage venueKey="puebla" />;
+      return withMediaRuntime(<SedesPage venueKey="puebla" />);
     }
 
     if (venueSlug === "estado-de-mexico" || venueSlug === "edomex" || venueSlug === "silo-dallas") {
-      return <SedesPage venueKey="edomex" />;
+      return withMediaRuntime(<SedesPage venueKey="edomex" />);
     }
 
-    return <VenuePage venue={getVenueBySlug(venueMatch[1])} />;
+    return withMediaRuntime(<VenuePage venue={getVenueBySlug(venueMatch[1])} />);
   }
 
-  return <HomePage />;
+  return withMediaRuntime(<HomePage />);
 }
