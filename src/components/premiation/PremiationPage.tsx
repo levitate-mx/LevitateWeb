@@ -381,13 +381,6 @@ export function PremiationPage() {
             type="video/mp4"
           />
         </video>
-        <img
-          className="premiation-hero__fallback"
-          src={assets.competition}
-          data-levitate-media-key="premiation.hero"
-          alt=""
-          aria-hidden="true"
-        />
         <div className="premiation-hero__shade" aria-hidden="true" />
         <div className="premiation-hero__content">
           <h1>Premiación</h1>
