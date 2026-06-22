@@ -81,7 +81,7 @@ export const mediaSlots: MediaSlot[] = [
     label: "Ranking directo - 2do lugar",
     page: "Premiación",
     description: "Imagen de la tarjeta de segundo lugar en competencia directa.",
-    defaultUrl: "/assets/visuals/gallery-community.jpg",
+    defaultUrl: "/assets/ranking-plata.png",
   },
   {
     key: "premiation.direct.first",
@@ -103,14 +103,14 @@ export const mediaSlots: MediaSlot[] = [
     label: "Medallero - Motion",
     page: "Premiación",
     description: "Imagen del bloque de sistema de medallero para Motion.",
-    defaultUrl: "/assets/visuals/experience-competition.jpg",
+    defaultUrl: "/assets/premiation-motion-medal-system.jpg",
   },
   {
     key: "premiation.medal-system.aerial",
     label: "Medallero - Aerial",
     page: "Premiación",
     description: "Imagen del bloque de sistema de medallero para Aerial.",
-    defaultUrl: "/assets/visuals/hero-stage.jpg",
+    defaultUrl: "/assets/premiation-aerial-medal-system.jpg",
   },
   {
     key: "premiation.recognition.medals",
