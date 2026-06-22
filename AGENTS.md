@@ -29,6 +29,12 @@
 - Do not route one sede to a visually different hero pattern unless the user explicitly asks for a different page type.
 - Keep old route aliases working when changing a visible sede URL.
 
+## Grid And Card Layouts
+
+- In responsive card grids with two or more columns, avoid leaving a single orphan card at half width on the final row.
+- When a card is alone in the last row, extend it across the available grid columns, for example with `:last-child:nth-child(odd) { grid-column: 1 / -1; }` in two-column grids.
+- Keep the mobile single-column layout natural; the full-width orphan rule should not create horizontal overflow.
+
 ## Verification
 
 - After changing hero layout or typography, run `npm run build`.

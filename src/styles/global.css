@@ -4629,6 +4629,10 @@ button {
   line-height: 1.5;
 }
 
+.premiation-special-criterion:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .premiation-special-keyword {
   color: var(--premiation-pink);
   font-weight: 900;
@@ -4658,8 +4662,9 @@ button {
   font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.45;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.045em;
   text-align: center;
+  text-transform: uppercase;
 }
 
 .premiation-light-flow {
@@ -9246,17 +9251,14 @@ button {
   padding: clamp(34px, 5vw, 64px) 0 clamp(42px, 6vw, 86px);
 }
 
-.regulations-sidebar,
-.regulations-panel {
-  min-height: clamp(720px, 76vh, 980px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
 .regulations-sidebar {
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-height: 0;
   padding: 24px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px 0 0 8px;
   background:
     radial-gradient(circle at 18% 2%, rgba(231, 70, 151, 0.16), transparent 11rem),
@@ -9337,7 +9339,6 @@ button {
 .regulations-download {
   display: grid;
   min-height: 250px;
-  margin-top: auto;
   place-items: center;
   padding: 28px 20px;
   border-radius: 8px;
@@ -9371,8 +9372,10 @@ button {
 
 .regulations-panel {
   position: relative;
+  min-height: clamp(720px, 76vh, 980px);
   overflow: hidden;
   padding: clamp(28px, 4vw, 56px);
+  border: 1px solid rgba(5, 5, 5, 0.08);
   border-color: rgba(5, 5, 5, 0.08);
   border-radius: 0 8px 8px 0;
   background:
@@ -9447,18 +9450,19 @@ button {
 
 .regulations-rule-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
-  gap: clamp(14px, 1.8vw, 22px);
+  gap: 12px;
   padding-top: clamp(24px, 3.6vw, 42px);
 }
 
 .regulations-rule {
   display: grid;
-  align-content: start;
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(12px, 1.4vw, 18px);
   min-height: 0;
-  padding: clamp(16px, 1.8vw, 22px);
+  padding: clamp(14px, 1.5vw, 18px) clamp(16px, 1.8vw, 22px);
   border: 1px solid rgba(231, 70, 151, 0.12);
   border-radius: 8px;
   background:
@@ -9469,8 +9473,8 @@ button {
 
 .regulations-rule span {
   display: grid;
-  min-width: 42px;
-  height: 28px;
+  width: 42px;
+  height: 30px;
   justify-self: start;
   place-items: center;
   border-radius: 999px;
@@ -9549,7 +9553,7 @@ button {
   }
 
   .regulations-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
   }
 
