@@ -1,5 +1,13 @@
 # Codex Project Notes
 
+## Git Sync Workflow
+
+- Before starting any code or content change, check `git status --short`.
+- Fetch the latest `main` with `git fetch levitate main`.
+- If the working tree is clean, run `git pull --ff-only levitate main` before editing.
+- If there are local uncommitted changes, do not pull over them. Stop and clarify, or fetch only and explain the local state.
+- Keep this workflow in place because multiple people and agents may work on the repo.
+
 ## Hero Sections
 
 - All top-level page heroes must feel like the same design system.
