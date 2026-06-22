@@ -707,6 +707,20 @@ export function PremiationPage() {
 
       <div className="premiation-dark-flow premiation-awards-end">
         <section className="premiation-bottom">
+          <video
+            className="premiation-bottom__video"
+            data-levitate-media-key="premiation.block.background"
+            autoPlay
+            loop
+            muted
+            playsInline
+          >
+            <source
+              src="/assets/premiation-block-background.mp4"
+              data-levitate-media-key="premiation.block.background"
+              type="video/mp4"
+            />
+          </video>
           <article className="premiation-bottom__headline">
             <p className="premiation-kicker">Entrega de premios</p>
             <h2>

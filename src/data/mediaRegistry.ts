@@ -77,6 +77,14 @@ export const mediaSlots: MediaSlot[] = [
     mediaType: "video",
   },
   {
+    key: "premiation.block.background",
+    label: "Premiación por bloque - Video",
+    page: "Premiación",
+    description: "Video de fondo del bloque final de entrega de premios.",
+    defaultUrl: "/assets/premiation-block-background.mp4",
+    mediaType: "video",
+  },
+  {
     key: "premiation.direct.second",
     label: "Ranking directo - 2do lugar",
     page: "Premiación",
