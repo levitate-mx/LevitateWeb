@@ -4499,9 +4499,9 @@ button {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
-  gap: clamp(24px, 3vw, 44px);
-  align-items: start;
+  grid-template-columns: minmax(280px, 0.76fr) minmax(0, 1.48fr);
+  gap: clamp(28px, 4vw, 58px);
+  align-items: stretch;
   padding: clamp(28px, 3.6vw, 54px);
   overflow: hidden;
   border: 1px solid rgba(228, 92, 154, 0.16);
@@ -4516,9 +4516,7 @@ button {
 
 .premiation-special-panel__visual {
   position: relative;
-  align-self: start;
-  width: 100%;
-  height: clamp(360px, 29vw, 520px);
+  min-height: clamp(360px, 31vw, 500px);
   margin: 0;
   overflow: hidden;
   border: 1px solid rgba(228, 92, 154, 0.18);
@@ -4531,6 +4529,7 @@ button {
   display: block;
   width: 100%;
   height: 100%;
+  min-height: inherit;
   object-fit: cover;
   object-position: center;
   filter: saturate(0.96) contrast(1.05);
@@ -4589,8 +4588,8 @@ button {
 .premiation-special-panel__criteria-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
-  gap: clamp(12px, 1.2vw, 16px);
+  grid-auto-rows: auto;
+  gap: 12px;
 }
 
 .premiation-special-criterion {
@@ -4599,7 +4598,6 @@ button {
   align-items: start;
   gap: 12px;
   min-width: 0;
-  min-height: clamp(150px, 10vw, 184px);
   height: 100%;
   padding: clamp(16px, 1.5vw, 22px);
   border: 1px solid rgba(228, 92, 154, 0.14);
@@ -4631,6 +4629,11 @@ button {
   font-size: clamp(0.82rem, 0.82vw, 0.88rem);
   font-weight: 560;
   line-height: 1.5;
+}
+
+.premiation-special-criterion:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  height: auto;
 }
 
 .premiation-special-keyword {
@@ -4826,8 +4829,9 @@ button {
 
 .premiation-awards-end {
   background:
-    radial-gradient(circle at 82% 12%, rgba(228, 92, 154, 0.2), transparent 28rem),
-    linear-gradient(180deg, #050505 0%, #070507 100%);
+    linear-gradient(118deg, rgba(228, 92, 154, 0.14) 0%, transparent 34%),
+    linear-gradient(244deg, rgba(228, 92, 154, 0.1) 0%, transparent 32%),
+    linear-gradient(180deg, #050505 0%, #080608 52%, #050505 100%);
 }
 
 .premiation-awards-end::before {
@@ -4845,21 +4849,10 @@ button {
   overflow: hidden;
   border-bottom: 1px solid rgba(228, 92, 154, 0.28);
   background:
-    radial-gradient(circle at 82% 12%, rgba(228, 92, 154, 0.24), transparent 22rem),
+    linear-gradient(120deg, rgba(228, 92, 154, 0.14) 0%, transparent 42%),
+    linear-gradient(260deg, rgba(228, 92, 154, 0.1) 0%, transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, transparent 42%),
     #050505;
-}
-
-.premiation-bottom__video {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  opacity: 0.58;
-  filter: saturate(0.92) contrast(1.08);
-  transform: scale(1.02);
 }
 
 .premiation-bottom::before {
@@ -4867,8 +4860,8 @@ button {
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(90deg, rgba(5, 5, 5, 0.9) 0%, rgba(5, 5, 5, 0.66) 44%, rgba(5, 5, 5, 0.92) 100%),
-    linear-gradient(180deg, rgba(5, 5, 5, 0.18), rgba(5, 5, 5, 0.62)),
+    linear-gradient(90deg, rgba(5, 5, 5, 0.34) 0%, transparent 48%, rgba(5, 5, 5, 0.42) 100%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0.12), rgba(5, 5, 5, 0.5)),
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 5px);
   content: "";
   pointer-events: none;
