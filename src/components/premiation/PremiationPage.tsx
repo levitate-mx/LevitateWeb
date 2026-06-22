@@ -116,14 +116,16 @@ const directRanking = [
     mediaKey: "premiation.direct.second",
     alt: "Participante recibiendo reconocimiento en escenario Levitate.",
     variant: "silver",
+    mediaType: "image",
   },
   {
     place: "1er lugar",
     award: "Oro",
-    image: assets.venue,
+    image: "/assets/ranking-oro.mp4",
     mediaKey: "premiation.direct.first",
     alt: "Escenario Levitate durante una premiación.",
     variant: "gold",
+    mediaType: "video",
     featured: true,
   },
   {
@@ -133,6 +135,7 @@ const directRanking = [
     mediaKey: "premiation.direct.third",
     alt: "Participantes durante una experiencia Levitate.",
     variant: "bronze",
+    mediaType: "image",
   },
 ];
 
@@ -418,7 +421,19 @@ export function PremiationPage() {
                   key={rank.place}
                 >
                   <figure>
-                    <img src={rank.image} data-levitate-media-key={rank.mediaKey} alt={rank.alt} loading="lazy" />
+                    {rank.mediaType === "video" ? (
+                      <video
+                        src={rank.image}
+                        data-levitate-media-key={rank.mediaKey}
+                        aria-label={rank.alt}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      <img src={rank.image} data-levitate-media-key={rank.mediaKey} alt={rank.alt} loading="lazy" />
+                    )}
                   </figure>
                   <div>
                     <strong>{rank.place}</strong>

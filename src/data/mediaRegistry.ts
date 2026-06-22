@@ -88,7 +88,8 @@ export const mediaSlots: MediaSlot[] = [
     label: "Ranking directo - 1er lugar",
     page: "Premiación",
     description: "Imagen de la tarjeta destacada de primer lugar en competencia directa.",
-    defaultUrl: "/assets/visuals/venue-stage.jpg",
+    defaultUrl: "/assets/ranking-oro.mp4",
+    mediaType: "video",
   },
   {
     key: "premiation.direct.third",
