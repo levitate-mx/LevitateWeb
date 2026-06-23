@@ -14,7 +14,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -40,6 +40,17 @@ type RegistrationCost = {
 type CartState = Record<string, number>;
 
 const mediaPackageDetails = ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"];
+const mediaPackageHighlights = [
+  { amount: "10", label: "fotos de acción" },
+  { amount: "1", label: "video de presentación" },
+  { amount: "2", label: "fotos estudio" },
+];
+const mediaPackageImages = [
+  "/assets/visuals/experience-competition.jpg",
+  "/assets/mvp-querida-yo-2024.jpg",
+  "/assets/mvp-run-primavera-2026-veracruz.jpg",
+  "/assets/mvp-instruction-primavera-2026-puebla.jpg",
+];
 
 const registrationCosts: RegistrationCost[] = [
   { category: "Solo", participants: "1 bailarín", presale: 1500, regular: 1750 },
@@ -136,6 +147,7 @@ function getProductIcon(productId: string) {
 export function ShopPage() {
   const [cart, setCart] = useState<CartState>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [activeMediaImageIndex, setActiveMediaImageIndex] = useState(0);
   const cartLines = useMemo(
     () =>
       products
@@ -147,6 +159,14 @@ export function ShopPage() {
   const subtotal = cartLines.reduce((total, line) => total + line.product.price * line.quantity, 0);
   const ticketProducts = products.filter((product) => product.category === "Boletos");
   const mediaProducts = products.filter((product) => product.category === "Fotografía y video");
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setActiveMediaImageIndex((currentIndex) => (currentIndex + 1) % mediaPackageImages.length);
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const addProduct = (productId: string) => {
     setCart((current) => ({ ...current, [productId]: (current[productId] ?? 0) + 1 }));
@@ -222,17 +242,29 @@ export function ShopPage() {
   const renderMediaPackage = () => (
     <div className="shop-media-package">
       <article className="shop-media-package__overview">
-        <figure>
-          <img src="/assets/visuals/experience-competition.jpg" alt="" loading="lazy" />
+        <figure className="shop-media-stack">
+          {mediaPackageImages.map((image, index) => (
+            <img
+              alt=""
+              aria-hidden="true"
+              className={`shop-media-stack__image${index === activeMediaImageIndex ? " is-active" : ""}`}
+              key={image}
+              loading="lazy"
+              src={image}
+            />
+          ))}
           <span>Paquete all inclusive</span>
         </figure>
         <div>
           <p>Fotografía y video</p>
-          <h3>Un paquete. Cuatro formatos.</h3>
-          <span>Todos los formatos incluyen la misma cobertura; solo cambia el costo por tipo de participación.</span>
+          <h3>Paquete all inclusive.</h3>
+          <span>Tu cobertura oficial incluye estos entregables; solo cambia el costo por tipo de participación.</span>
           <ul>
-            {mediaPackageDetails.map((detail) => (
-              <li key={detail}>{detail}</li>
+            {mediaPackageHighlights.map((detail) => (
+              <li key={`${detail.amount}-${detail.label}`}>
+                <strong>{detail.amount}</strong>
+                <span>{detail.label}</span>
+              </li>
             ))}
           </ul>
         </div>
@@ -299,7 +331,6 @@ export function ShopPage() {
                 <br />
                 <strong>experiencia</strong>
               </h1>
-              <span>Inscripciones, accesos y cobertura oficial reunidos en un solo lugar.</span>
             </div>
 
             <section className="shop-registration" id="inscripciones" aria-labelledby="registration-title">

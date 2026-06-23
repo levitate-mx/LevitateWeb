@@ -10,7 +10,7 @@ import {
   Star,
   Users,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "./LevitateFooter";
 import { LevitateHeader } from "./LevitateHeader";
@@ -88,8 +88,43 @@ const announcementItems = [
 ] satisfies Array<{ kind: "text" | "logo"; label: string }>;
 
 const announcementHref = "#premios";
+const heroVideoMediaQuery = "(min-width: 769px) and (prefers-reduced-motion: no-preference)";
+
+type BrowserConnection = {
+  effectiveType?: string;
+  saveData?: boolean;
+};
+
+function canUseHomeHeroVideo() {
+  const connection =
+    (navigator as Navigator & {
+      connection?: BrowserConnection;
+      mozConnection?: BrowserConnection;
+      webkitConnection?: BrowserConnection;
+    }).connection ??
+    (navigator as Navigator & { mozConnection?: BrowserConnection }).mozConnection ??
+    (navigator as Navigator & { webkitConnection?: BrowserConnection }).webkitConnection;
+
+  if (connection?.saveData || connection?.effectiveType?.includes("2g")) {
+    return false;
+  }
+
+  return window.matchMedia(heroVideoMediaQuery).matches;
+}
 
 export function HomePage() {
+  const [shouldRenderHeroVideo, setShouldRenderHeroVideo] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(heroVideoMediaQuery);
+    const updateHeroVideoPreference = () => setShouldRenderHeroVideo(canUseHomeHeroVideo());
+
+    updateHeroVideoPreference();
+    mediaQuery.addEventListener("change", updateHeroVideoPreference);
+
+    return () => mediaQuery.removeEventListener("change", updateHeroVideoPreference);
+  }, []);
+
   useEffect(() => {
     const items = document.querySelectorAll<HTMLElement>("[data-levitate-reveal]");
     const observer = new IntersectionObserver(
@@ -111,18 +146,21 @@ export function HomePage() {
   return (
     <main className="levitate-page">
       <section id="inicio" className="levitate-hero">
-        <video
-          className="levitate-hero__media"
-          poster="/assets/levitate-home-hero-poster.jpg"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          aria-hidden="true"
-        >
-          <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
-        </video>
+        <img className="levitate-hero__poster" src="/assets/levitate-home-hero-poster.jpg" alt="" fetchPriority="high" aria-hidden="true" />
+        {shouldRenderHeroVideo ? (
+          <video
+            className="levitate-hero__media"
+            poster="/assets/levitate-home-hero-poster.jpg"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="none"
+            aria-hidden="true"
+          >
+            <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
+          </video>
+        ) : null}
         <div className="levitate-hero__smoke" aria-hidden="true" />
 
         <div className="levitate-announcement" aria-label="Avisos importantes">
