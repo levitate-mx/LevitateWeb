@@ -198,7 +198,7 @@ export function WorkshopsPage() {
                 <CalendarDays aria-hidden="true" size={17} /> Viernes 29 de mayo
               </p>
               <p>
-                <MapPin aria-hidden="true" size={17} /> Parque Juana de Asbaje
+                <MapPin aria-hidden="true" size={17} /> CAO Tiempo Nuevo, Miguel Hidalgo, Tlalpan
               </p>
               <h3>Workshops confirmados</h3>
               <ul>

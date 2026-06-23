@@ -31,6 +31,8 @@ type SedeContent = {
   eventName: string;
   venueName: string;
   heroImage: string;
+  motionImage?: string;
+  aerialImage?: string;
   location: string;
   mapsUrl: string;
   date: string;
@@ -53,10 +55,12 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   cdmx: {
     heroTitle: "Sede CDMX",
     eventName: "Cirko de Mente",
-    venueName: "Fuentes Brotantes, Tlalpan",
+    venueName: "CAO Tiempo Nuevo",
     heroImage: assets.venue,
-    location: "Fuentes Brotantes, Tlalpan",
-    mapsUrl: "https://maps.app.goo.gl/1k47MRq8nSqp82AE7",
+    motionImage: "/assets/sedes-cdmx-motion.jpg",
+    aerialImage: "/assets/sedes-cdmx-aerial.jpg",
+    location: "CAO Tiempo Nuevo, Miguel Hidalgo, Tlalpan",
+    mapsUrl: "https://share.google/gU1NBVUQocefpnxPP",
     date: "29 · 30 · 31\nmayo 2026",
     metaLabel: "Status",
     metaValue: "Convocatoria\nfinalizada",
@@ -76,7 +80,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     ],
     workshops: {
       title: "Viernes 29 de mayo",
-      location: "Parque Juana de Asbaje",
+      location: "CAO Tiempo Nuevo, Miguel Hidalgo, Tlalpan",
       groups: [
         { label: "Grupo A", text: "Menores de 12 años\nDanza aérea" },
         { label: "Grupo B", text: "Mayores de 13 años\nDanza aérea" },
@@ -117,11 +121,11 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       ],
     },
     jury: [
-      { name: "Andrea Salinas", specialty: "Contemporary · Jazz", image: assets.community },
-      { name: "Mariana Ríos", specialty: "Hip Hop · Urbano", image: assets.workshops },
-      { name: "Daniel Figueroa", specialty: "Ballet · Técnica clásica", image: assets.venue },
-      { name: "Oscar Ramírez", specialty: "Acrobacia · Tricks", image: assets.competition },
-      { name: "Lucía Torres", specialty: "Danza contemporánea", image: assets.hero },
+      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: assets.community },
+      { name: "Alex Nájera", specialty: "Artista circense", image: assets.workshops },
+      { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: assets.venue },
+      { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: assets.competition },
+      { name: "Ángela Kryuff", specialty: "Maestra de danza · Técnica y composición escénica", image: assets.hero },
     ],
   },
   puebla: {
@@ -277,7 +281,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
           <SectionHeading kicker="Géneros" title="Participantes" />
           <div className="sedes-genre-grid">
             <article className="sedes-genre-card sedes-genre-card--motion">
-              <img src={assets.competition} alt="Participante de danza motion en escena" />
+              <img src={venue.motionImage ?? assets.competition} alt="Participante de Motion con vestuario rojo en escenario Levitate" />
               <div>
                 <h3>Motion</h3>
                 <GenreList items={venue.motionGenres} />
@@ -289,7 +293,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
                 <h3>Aerial</h3>
                 <GenreList columns={1} items={venue.aerialGenres} />
               </div>
-              <img src={assets.hero} alt="Participante aérea en aro" />
+              <img src={venue.aerialImage ?? assets.hero} alt="Participante de Aerial en tela durante una presentación Levitate" />
             </article>
           </div>
         </section>
@@ -380,7 +384,17 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       </section>
 
       <section className="sedes-final-cta">
-        <img src={venue.heroImage} alt="" aria-hidden="true" />
+        <video
+          className="sedes-final-cta__video"
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster={venue.heroImage}
+          aria-hidden="true"
+        >
+          <source src="/assets/sedes-final-cta-bg.mp4" type="video/mp4" />
+        </video>
         <div className="sedes-final-cta__line" aria-hidden="true"><span>✦</span></div>
         <div className="sedes-final-cta__content">
           <p>Convocatoria</p>
