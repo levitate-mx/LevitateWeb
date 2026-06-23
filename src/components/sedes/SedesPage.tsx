@@ -159,7 +159,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     heroTitle: "Sede Estado de México",
     eventName: "Teatro El Gran Recinto",
     venueName: "Teatro El Gran Recinto",
-    heroImage: assets.venue,
+    heroImage: "/assets/sedes-edomex-hero.jpg",
     location: "Tlalnepantla, Edo. Méx.",
     mapsUrl: "https://www.google.com/maps/search/?api=1&query=Teatro%20El%20Gran%20Recinto%20Tlalnepantla%20Estado%20de%20Mexico",
     date: "13 · 14 · 15\nnoviembre 2026",
