@@ -1,4 +1,20 @@
-import { Minus, PackageCheck, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
+import {
+  Camera,
+  ChevronRight,
+  CreditCard,
+  Minus,
+  PackageCheck,
+  Plus,
+  Search,
+  ShoppingBag,
+  ShoppingCart,
+  Ticket,
+  Trash2,
+  UserRound,
+  UsersRound,
+  Video,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -6,54 +22,94 @@ import { LevitateHeader } from "../home/LevitateHeader";
 type ShopProduct = {
   id: string;
   name: string;
-  category: string;
+  category: "Boletos" | "Fotografía y video";
   description: string;
   price: number;
-  image: string;
+  badge?: string;
+  image?: string;
+  details?: string[];
+  visual: "ticket" | "photo" | "icon";
+};
+
+type RegistrationCost = {
+  category: string;
+  participants: string;
+  presale: number;
+  regular: number;
 };
 
 type CartState = Record<string, number>;
 
+const registrationCosts: RegistrationCost[] = [
+  { category: "Solo", participants: "1 bailarín", presale: 1500, regular: 1750 },
+  { category: "Dúo", participants: "2 bailarines", presale: 1300, regular: 1400 },
+  { category: "Trío", participants: "3 bailarines", presale: 950, regular: 1200 },
+  { category: "Grupos", participants: "4 o más bailarines", presale: 800, regular: 1000 },
+];
+
 const products: ShopProduct[] = [
   {
-    id: "hoodie",
-    name: "Hoodie Levitate",
-    category: "Merch",
-    description: "Sudadera genérica para entrenamientos, viajes y backstage.",
-    price: 890,
-    image: "/assets/visuals/hero-stage.jpg",
+    id: "ticket-block",
+    name: "Boleto por bloque",
+    category: "Boletos",
+    description: "Acceso a un bloque específico del evento.",
+    price: 350,
+    visual: "ticket",
   },
   {
-    id: "tote",
-    name: "Tote bag",
-    category: "Accesorios",
-    description: "Bolsa ligera para básicos de competencia y clases.",
-    price: 320,
-    image: "/assets/premiation-recognition-special.jpg",
+    id: "ticket-full-pass",
+    name: "Full pass",
+    category: "Boletos",
+    description: "Acceso a todos los bloques del evento.",
+    price: 600,
+    badge: "Más popular",
+    visual: "ticket",
   },
   {
-    id: "bottle",
-    name: "Termo escénico",
-    category: "Accesorios",
-    description: "Termo de uso diario con acabado negro y detalle rosa.",
-    price: 420,
-    image: "/assets/visuals/experience-workshops.jpg",
+    id: "ticket-day-pass",
+    name: "Day pass",
+    category: "Boletos",
+    description: "Acceso por día.",
+    price: 450,
+    visual: "ticket",
   },
   {
-    id: "ticket",
-    name: "Boleto general",
-    category: "Evento",
-    description: "Entrada genérica de prueba para una jornada Levitate.",
-    price: 250,
-    image: "/assets/visuals/venue-stage.jpg",
+    id: "photo-solos",
+    name: "All inclusive solos",
+    category: "Fotografía y video",
+    description: "Paquete de foto y video para una participación solo.",
+    price: 1000,
+    badge: "Paquete destacado",
+    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
+    image: "/assets/visuals/experience-competition.jpg",
+    visual: "photo",
   },
   {
-    id: "pack",
-    name: "Kit participante",
-    category: "Competencia",
-    description: "Paquete base con artículos genéricos para participantes.",
-    price: 640,
-    image: "/assets/medallero-oro.png",
+    id: "photo-duos",
+    name: "All inclusive dúos",
+    category: "Fotografía y video",
+    description: "Precio por participante.",
+    price: 700,
+    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
+    visual: "icon",
+  },
+  {
+    id: "photo-trios",
+    name: "All inclusive tríos",
+    category: "Fotografía y video",
+    description: "Precio por participante.",
+    price: 600,
+    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
+    visual: "icon",
+  },
+  {
+    id: "photo-groups",
+    name: "All inclusive grupos",
+    category: "Fotografía y video",
+    description: "Precio por participante.",
+    price: 500,
+    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
+    visual: "icon",
   },
 ];
 
@@ -65,6 +121,18 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
 
 function formatCurrency(value: number) {
   return currencyFormatter.format(value);
+}
+
+function getProductIcon(productId: string) {
+  if (productId.includes("duos") || productId.includes("trios") || productId.includes("groups")) {
+    return <UsersRound aria-hidden="true" size={42} />;
+  }
+
+  if (productId.includes("photo")) {
+    return <UserRound aria-hidden="true" size={42} />;
+  }
+
+  return <Ticket aria-hidden="true" size={42} />;
 }
 
 export function ShopPage() {
@@ -79,6 +147,8 @@ export function ShopPage() {
   );
   const cartCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const subtotal = cartLines.reduce((total, line) => total + line.product.price * line.quantity, 0);
+  const ticketProducts = products.filter((product) => product.category === "Boletos");
+  const mediaProducts = products.filter((product) => product.category === "Fotografía y video");
 
   const addProduct = (productId: string) => {
     setCart((current) => ({ ...current, [productId]: (current[productId] ?? 0) + 1 }));
@@ -102,6 +172,53 @@ export function ShopPage() {
       const { [productId]: _removed, ...nextCart } = current;
       return nextCart;
     });
+  };
+
+  const renderProductCard = (product: ShopProduct) => {
+    const quantity = cart[product.id] ?? 0;
+
+    return (
+      <article className={`shop-product-card shop-product-card--${product.visual}`} key={product.id}>
+        {product.badge ? <span className="shop-product-card__badge">{product.badge}</span> : null}
+
+        <figure>
+          {product.visual === "ticket" ? (
+            <div className="shop-ticket-visual" aria-hidden="true">
+              <span>Levitate MX</span>
+              <strong>{product.name}</strong>
+              <small>{product.description}</small>
+            </div>
+          ) : product.image ? (
+            <img src={product.image} alt="" loading="lazy" />
+          ) : (
+            <div className="shop-icon-visual">{getProductIcon(product.id)}</div>
+          )}
+        </figure>
+
+        <div className="shop-product-card__body">
+          <div>
+            <p>{product.category}</p>
+            <h3>{product.name}</h3>
+            <span>{product.description}</span>
+            {product.details ? (
+              <ul>
+                {product.details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
+          <div className="shop-product-card__buy">
+            <strong>{formatCurrency(product.price)}</strong>
+            <button onClick={() => addProduct(product.id)} type="button">
+              <ShoppingCart aria-hidden="true" size={18} />
+              {quantity > 0 ? `Añadir (${quantity})` : "Añadir al carrito"}
+            </button>
+          </div>
+        </div>
+      </article>
+    );
   };
 
   return (
@@ -136,42 +253,125 @@ export function ShopPage() {
         ) : null}
 
         <div className="shop-hero__content">
+          <aside className="shop-sidebar" aria-label="Categorías de tienda">
+            <label className="shop-search">
+              <Search aria-hidden="true" size={19} />
+              <input aria-label="Buscar productos" placeholder="Buscar productos..." type="search" />
+            </label>
+
+            <nav aria-label="Categorías">
+              <p>Categorías</p>
+              <a href="#inscripciones">
+                <UserRound aria-hidden="true" size={21} />
+                Inscripciones
+              </a>
+              <a href="#boletos">
+                <Ticket aria-hidden="true" size={21} />
+                Boletos
+              </a>
+              <a href="#foto-video">
+                <Camera aria-hidden="true" size={21} />
+                Fotografía y video
+              </a>
+            </nav>
+
+            <nav aria-label="Información">
+              <p>Información</p>
+              {["Preguntas frecuentes", "Políticas de compra", "Términos y condiciones", "Contacto"].map((item) => (
+                <a href="#contacto" key={item}>
+                  {item}
+                  <ChevronRight aria-hidden="true" size={18} />
+                </a>
+              ))}
+            </nav>
+          </aside>
+
           <section className="shop-catalog" aria-labelledby="shop-title">
             <div className="shop-catalog__heading">
               <p>Tienda Levitate</p>
               <h1 id="shop-title">
-                Tienda <strong>oficial</strong>
+                Compra tu
+                <br />
+                <strong>experiencia</strong>
               </h1>
-              <span>Productos genéricos para maqueta inicial.</span>
+              <span>Inscripciones, accesos y cobertura oficial reunidos en un solo lugar.</span>
             </div>
 
-            <div className="shop-product-grid">
-              {products.map((product) => {
-                const quantity = cart[product.id] ?? 0;
+            <section className="shop-registration" id="inscripciones" aria-labelledby="registration-title">
+              <div className="shop-registration__intro">
+                <div className="shop-section-number">
+                  <span>01</span>
+                  <i />
+                </div>
+                <h2 id="registration-title">Inscripción</h2>
+                <p>
+                  Registra tu participación en Levitate MX. El proceso inicia con el registro del titular de academia y
+                  después cada participante puede consultar su subtotal con CURP.
+                </p>
+              </div>
 
-                return (
-                  <article className="shop-product-card" key={product.id}>
-                    <figure>
-                      <img src={product.image} alt="" loading="lazy" />
-                      <span>{product.category}</span>
-                    </figure>
-                    <div className="shop-product-card__body">
-                      <div>
-                        <h2>{product.name}</h2>
-                        <p>{product.description}</p>
-                      </div>
-                      <div className="shop-product-card__buy">
-                        <strong>{formatCurrency(product.price)}</strong>
-                        <button onClick={() => addProduct(product.id)} type="button">
-                          <Plus aria-hidden="true" size={18} />
-                          {quantity > 0 ? `Agregar (${quantity})` : "Agregar"}
-                        </button>
-                      </div>
+              <div className="shop-registration__actions">
+                <article>
+                  <UserRound aria-hidden="true" size={48} />
+                  <div>
+                    <h3>Previo registro</h3>
+                    <p>Realizado por el titular de la academia.</p>
+                  </div>
+                </article>
+                <article>
+                  <CreditCard aria-hidden="true" size={48} />
+                  <div>
+                    <h3>Pago asociado al CURP</h3>
+                    <p>Ingresa tu CURP y consulta tu subtotal.</p>
+                  </div>
+                </article>
+              </div>
+
+              <div className="shop-registration__buttons">
+                <a className="shop-primary-action" href="/registro">
+                  Registrarse
+                  <ChevronRight aria-hidden="true" size={23} />
+                </a>
+                <a className="shop-secondary-action" href="#consulta-curp">
+                  Ya me registré
+                  <ChevronRight aria-hidden="true" size={23} />
+                </a>
+              </div>
+
+              <div className="shop-cost-table" aria-label="Categorías y costos de inscripción">
+                <div className="shop-cost-table__title">Categorías y costos de inscripción</div>
+                <div className="shop-cost-table__grid">
+                  <div>Categorías</div>
+                  <div>Participantes</div>
+                  <div>Costo inscripción por participante</div>
+                  {registrationCosts.map((cost) => (
+                    <div className="shop-cost-table__row" key={cost.category}>
+                      <span>{cost.category}</span>
+                      <span>{cost.participants}</span>
+                      <span>
+                        Preventa {formatCurrency(cost.presale)} / Normal {formatCurrency(cost.regular)}
+                      </span>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="shop-product-section" id="boletos" aria-labelledby="tickets-title">
+              <div className="shop-product-section__head">
+                <h2 id="tickets-title">Boletos</h2>
+                <i />
+              </div>
+              <div className="shop-product-grid shop-product-grid--tickets">{ticketProducts.map(renderProductCard)}</div>
+            </section>
+
+            <section className="shop-product-section" id="foto-video" aria-labelledby="media-title">
+              <div className="shop-product-section__head">
+                <h2 id="media-title">Fotografía y video</h2>
+                <i />
+              </div>
+              <div className="shop-product-grid shop-product-grid--media">{mediaProducts.map(renderProductCard)}</div>
+            </section>
           </section>
 
           {isCartOpen ? (
@@ -198,7 +398,15 @@ export function ShopPage() {
                 <div className="shop-cart__lines">
                   {cartLines.map(({ product, quantity }) => (
                     <article className="shop-cart-line" key={product.id}>
-                      <img src={product.image} alt="" loading="lazy" />
+                      <span className="shop-cart-line__icon">
+                        {product.category === "Boletos" ? (
+                          <Ticket aria-hidden="true" size={20} />
+                        ) : product.id.includes("photo") ? (
+                          <Camera aria-hidden="true" size={20} />
+                        ) : (
+                          <Video aria-hidden="true" size={20} />
+                        )}
+                      </span>
                       <div className="shop-cart-line__copy">
                         <strong>{product.name}</strong>
                         <span>{formatCurrency(product.price)} c/u</span>
@@ -223,7 +431,7 @@ export function ShopPage() {
                 <div className="shop-cart__empty">
                   <ShoppingBag aria-hidden="true" size={36} />
                   <strong>Carrito vacío</strong>
-                  <p>Agrega productos para ver el resumen de compra.</p>
+                  <p>Agrega boletos o paquetes de foto y video para ver tu resumen.</p>
                 </div>
               )}
 
@@ -233,8 +441,8 @@ export function ShopPage() {
                   <strong>{formatCurrency(subtotal)}</strong>
                 </div>
                 <div>
-                  <span>Envío</span>
-                  <strong>{cartCount > 0 ? "Por definir" : "$0"}</strong>
+                  <span>Inscripción</span>
+                  <strong>Por CURP</strong>
                 </div>
                 <button disabled={cartCount === 0} type="button">
                   <PackageCheck aria-hidden="true" size={19} />

@@ -1,20 +1,20 @@
 import { useState } from "react";
-import { Building2, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
 const mvpPerformances = [
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: assets.competition },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: "/assets/sedes-cdmx-aerial.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: "/assets/premiation-recognition-special.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: "/assets/sedes-cdmx-motion.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: assets.venue },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: assets.workshops },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: "/assets/premiation-aerial-medal-system.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: "/assets/premiation-motion-medal-system.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: assets.hero },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", category: "Categoría por anunciar", image: "/assets/sedes-edomex-hero.jpg" },
+  { year: "Otoño 2023", title: "Barracuda", academy: "Ventuerion", venue: "CDMX", image: "/assets/mvp-barracuda-2023.jpg" },
+  { year: "Primavera 2024", title: "Paint in Black", academy: "Dance Forum", venue: "CDMX", image: "/assets/mvp-paint-in-black-2024.jpg" },
+  { year: "Otoño 2024", title: "Zozobra", academy: "Spiralis", venue: "CDMX", image: "/assets/mvp-zozobra-2024.jpg" },
+  { year: "Primavera 2024", title: "Querida Yo", academy: "Ars Nova", venue: "Puebla", image: "/assets/mvp-querida-yo-2024.jpg" },
+  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.venue },
+  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.workshops },
+  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/premiation-aerial-medal-system.jpg" },
+  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/premiation-motion-medal-system.jpg" },
+  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.hero },
+  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/sedes-edomex-hero.jpg" },
 ];
 
 function getMvpStackPosition(index: number, activeIndex: number) {
@@ -94,8 +94,8 @@ export function HallOfFamePage() {
                           <dd>{performance.academy}</dd>
                         </div>
                         <div>
-                          <dt><Star aria-hidden="true" size={20} /> Categoría</dt>
-                          <dd>{performance.category}</dd>
+                          <dt><MapPin aria-hidden="true" size={20} /> Sede</dt>
+                          <dd>{performance.venue}</dd>
                         </div>
                       </dl>
                     </div>

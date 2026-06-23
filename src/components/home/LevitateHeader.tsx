@@ -52,13 +52,8 @@ const navItems = [
     ],
   },
   {
-    label: "Costos",
-    href: "#premios",
-    children: [
-      { label: "Inscripción", href: "#premios" },
-      { label: "Boletos", href: "#premios" },
-      { label: "Fotografía y video", href: "#premios" },
-    ],
+    label: "Tienda",
+    href: "/tienda",
   },
   {
     label: "Salón de la fama",

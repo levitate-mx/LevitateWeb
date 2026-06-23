@@ -394,20 +394,13 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       </section>
 
       <section className="sedes-final-cta">
-        <video
-          className="sedes-final-cta__video"
-          autoPlay
-          loop
-          muted
-          playsInline
-          poster={venue.heroImage}
-          onLoadedMetadata={(event) => {
-            event.currentTarget.playbackRate = 0.75;
-          }}
+        <img
+          className="sedes-final-cta__background"
+          src="/assets/sedes-edomex-hero.jpg"
+          alt=""
+          loading="lazy"
           aria-hidden="true"
-        >
-          <source src="/assets/sedes-final-cta-bg.mp4" type="video/mp4" />
-        </video>
+        />
         <div className="sedes-final-cta__line" aria-hidden="true"><span>✦</span></div>
         <div className="sedes-final-cta__content">
           <p>Convocatoria</p>
