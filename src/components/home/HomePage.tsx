@@ -111,10 +111,19 @@ export function HomePage() {
   return (
     <main className="levitate-page">
       <section id="inicio" className="levitate-hero">
-        <img className="levitate-hero__media" src={assets.hero} alt="" aria-hidden="true" />
+        <video
+          className="levitate-hero__media"
+          poster={assets.hero}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+        >
+          <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
+        </video>
         <div className="levitate-hero__smoke" aria-hidden="true" />
-        <div className="levitate-hero__silk levitate-hero__silk--one" aria-hidden="true" />
-        <div className="levitate-hero__silk levitate-hero__silk--two" aria-hidden="true" />
 
         <div className="levitate-announcement" aria-label="Avisos importantes">
           <div className="levitate-announcement__track">
@@ -151,15 +160,6 @@ export function HomePage() {
               </a>
             </div>
           </div>
-
-          <aside className="levitate-next-event" aria-label="Próximo evento" data-levitate-reveal>
-            <p>Próximo evento</p>
-            <h2>Cirko de Mente</h2>
-            <span><MapPin aria-hidden="true" size={17} /> Ciudad de México</span>
-            <span><CalendarDays aria-hidden="true" size={17} /> 29, 30 y 31 de mayo 2026</span>
-            <div className="levitate-next-event__line" />
-            <a href="#convocatorias">Ver fechas y sedes <ArrowRight aria-hidden="true" size={16} /></a>
-          </aside>
         </div>
       </section>
 

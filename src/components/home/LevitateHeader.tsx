@@ -62,10 +62,10 @@ const navItems = [
   },
   {
     label: "Salón de la fama",
-    href: "#salon-de-la-fama",
+    href: "/salon-de-la-fama/mvps",
     children: [
-      { label: "MVPs", href: "#mvps" },
-      { label: "Premios especiales", href: "#premios-especiales" },
+      { label: "MVPs", href: "/salon-de-la-fama/mvps" },
+      { label: "Premios especiales", href: "/premiacion#premios-especiales" },
       { label: "Becados", href: "#becados" },
     ],
   },

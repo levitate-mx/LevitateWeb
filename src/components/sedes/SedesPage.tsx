@@ -285,8 +285,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
                 <p className="sedes-genre-card__eyebrow">Géneros de competencia</p>
                 <h3>Motion</h3>
                 <div className="sedes-genre-card__label">
-                  <span className="sedes-genre-card__mark sedes-genre-card__mark--motion" aria-hidden="true" />
-                  <strong>Géneros de danza y piso</strong>
+                  <em>Géneros no aéreos</em>
                 </div>
                 <GenreList items={venue.motionGenres} />
               </div>
@@ -297,8 +296,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
                 <p className="sedes-genre-card__eyebrow">Géneros de competencia</p>
                 <h3>Aerial</h3>
                 <div className="sedes-genre-card__label">
-                  <span className="sedes-genre-card__mark sedes-genre-card__mark--aerial" aria-hidden="true" />
-                  <strong>Géneros aéreos</strong>
+                  <em>Géneros aéreos</em>
                 </div>
                 <GenreList columns={1} items={venue.aerialGenres} />
               </div>
