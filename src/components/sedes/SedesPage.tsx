@@ -51,6 +51,9 @@ type SedeContent = {
   jury: JuryMember[];
 };
 
+const defaultMotionGenres = ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"];
+const defaultAerialGenres = ["Tela", "Aro", "Open"];
+
 const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   cdmx: {
     heroTitle: "Sede CDMX",
@@ -64,8 +67,8 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     date: "29 · 30 · 31\nmayo 2026",
     metaLabel: "Status",
     metaValue: "Convocatoria\nfinalizada",
-    motionGenres: ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"],
-    aerialGenres: ["Tela", "Aro", "Open"],
+    motionGenres: defaultMotionGenres,
+    aerialGenres: defaultAerialGenres,
     competitionBlocks: [
       { date: "30 de mayo", items: [
         { title: "Bloque 1", text: "Baby · Aéreo\nPetite · Aro · Open\nJunior · Tela" },
@@ -138,8 +141,8 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     date: "7 junio 2026",
     metaLabel: "Status",
     metaValue: "Inscripciones abiertas",
-    motionGenres: ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos (nuevo!)", "Jazz", "Lírico", "Open (nuevo!)"],
-    aerialGenres: ["Tela", "Aro", "Open"],
+    motionGenres: defaultMotionGenres,
+    aerialGenres: defaultAerialGenres,
     competitionBlocks: [
       { date: "7 de junio", items: [
         { title: "Bloque 1", text: "Baby y Petite - Motion" },
@@ -151,8 +154,10 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     jury: [
       { name: "Andrea Salinas", specialty: "Contemporary · Jazz", image: assets.community },
       { name: "Mariana Ríos", specialty: "Hip Hop · Urbano", image: assets.workshops },
-      { name: "Daniel Figueroa", specialty: "Ballet · Técnica clásica", image: assets.venue },
-      { name: "Lucía Torres", specialty: "Danza contemporánea", image: assets.hero },
+      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
+      { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
+      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.png" },
+      { name: "Luis Raio", specialty: "Especialista en aéreos · Aerial straps", image: "/assets/luis-raio.png" },
     ],
   },
   edomex: {
@@ -165,8 +170,8 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     date: "13 · 14 · 15\nnoviembre 2026",
     metaLabel: "Status",
     metaValue: "Convocatoria próxima",
-    motionGenres: ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"],
-    aerialGenres: ["Tela", "Aro", "Open"],
+    motionGenres: defaultMotionGenres,
+    aerialGenres: defaultAerialGenres,
     competitionBlocks: [
       { date: "14 de noviembre", items: [
         { title: "Bloque 1", text: "Baby y Petite - Motion" },
@@ -379,7 +384,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
           <SectionHeading kicker="Jurado" title="invitado" />
           <p>Conoce al panel de artistas y profesionales que formarán parte de esta sede.</p>
         </div>
-        <div className={`sedes-jury-grid${venue.jury.length === 4 ? " sedes-jury-grid--four" : ""}`}>
+        <div className={`sedes-jury-grid${venue.jury.length === 4 ? " sedes-jury-grid--four" : ""}${venue.jury.length === 6 ? " sedes-jury-grid--six" : ""}`}>
           {venue.jury.map((judge) => (
             <article className="sedes-jury-card" key={judge.name}>
               <img src={judge.image} alt="" aria-hidden="true" />

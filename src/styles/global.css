@@ -9185,46 +9185,103 @@ button {
   content: "";
 }
 
+.levitate-hof__viewport {
+  --hof-card-width: clamp(318px, 28vw, 392px);
+  --hof-card-height: 558px;
+  --hof-image-height: 248px;
+  --hof-gap: clamp(18px, 2vw, 28px);
+  --hof-start-offset: max(20px, calc((100vw - var(--hof-card-width)) / 2));
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin-top: 38px;
+  overflow: hidden;
+  perspective: 1500px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 9%, #000 91%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 9%, #000 91%, transparent 100%);
+}
+
+.levitate-hof__viewport::before,
+.levitate-hof__viewport::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: min(18vw, 220px);
+  content: "";
+  pointer-events: none;
+}
+
+.levitate-hof__viewport::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(251, 247, 241, 0.94), rgba(251, 247, 241, 0));
+}
+
+.levitate-hof__viewport::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(255, 250, 245, 0.94), rgba(255, 250, 245, 0));
+}
+
 .levitate-hof__rail {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 22px;
-  width: 100%;
-  margin-top: 34px;
-  overflow-x: auto;
-  padding: 0 max(24px, calc((100vw - 1180px) / 2)) 10px;
-  scroll-padding-inline: max(24px, calc((100vw - 1180px) / 2));
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
+  width: max-content;
+  padding: 24px 0 70px;
+  animation: levitate-hof-loop 62s linear infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
-.levitate-hof__rail::-webkit-scrollbar {
-  display: none;
+.levitate-hof__viewport:hover .levitate-hof__rail {
+  animation-play-state: paused;
+}
+
+.levitate-hof__loop {
+  display: flex;
+  gap: var(--hof-gap);
+  padding-right: var(--hof-gap);
 }
 
 .levitate-mvp-card {
   position: relative;
   display: grid;
-  flex: 0 0 min(780px, calc(100vw - 64px));
-  grid-template-columns: minmax(260px, 1.05fr) minmax(260px, 0.74fr);
-  gap: clamp(22px, 3vw, 42px);
-  min-height: 360px;
-  padding: 22px;
+  flex: 0 0 var(--hof-card-width);
+  grid-template-rows: var(--hof-image-height) minmax(0, 1fr);
+  width: var(--hof-card-width);
+  height: var(--hof-card-height);
+  padding: 16px;
   overflow: hidden;
   border: 1px solid rgba(231, 70, 151, 0.18);
-  border-radius: 14px;
+  border-radius: 18px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(255, 246, 250, 0.78)),
-    rgba(255, 255, 255, 0.86);
-  box-shadow: 0 28px 90px rgba(32, 20, 27, 0.1);
-  scroll-snap-align: center;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 250, 0.82)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(32, 20, 27, 0.11);
+  transform-origin: center center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
 }
 
-.levitate-mvp-card.is-featured {
-  flex-basis: min(900px, calc(100vw - 64px));
-  border-color: rgba(231, 70, 151, 0.28);
-  box-shadow: 0 34px 110px rgba(32, 20, 27, 0.15);
+.levitate-mvp-card.is-depth-front {
+  z-index: 3;
+  border-color: rgba(231, 70, 151, 0.3);
+  box-shadow: 0 38px 110px rgba(32, 20, 27, 0.18);
+  transform: translateY(0) translateZ(42px) rotateY(0deg);
+}
+
+.levitate-mvp-card.is-depth-mid {
+  z-index: 2;
+  opacity: 0.9;
+  filter: saturate(0.96) contrast(0.98);
+  transform: translateY(18px) translateZ(-18px) rotateY(-4deg);
+}
+
+.levitate-mvp-card.is-depth-back {
+  z-index: 1;
+  opacity: 0.72;
+  filter: saturate(0.86) contrast(0.95);
+  transform: translateY(34px) translateZ(-72px) rotateY(5deg);
 }
 
 .levitate-mvp-card::before {
@@ -9244,17 +9301,19 @@ button {
 }
 
 .levitate-mvp-card figure {
-  min-height: 0;
+  height: var(--hof-image-height);
   margin: 0;
   overflow: hidden;
   border: 1px solid rgba(17, 16, 21, 0.08);
-  border-radius: 10px;
+  border-radius: 13px;
   background: #0b0b0d;
 }
 
 .levitate-mvp-card figure img {
+  display: block;
+  width: 100%;
   height: 100%;
-  min-height: 316px;
+  min-height: 0;
   object-fit: cover;
   object-position: center;
   filter: saturate(1.04) contrast(1.04);
@@ -9279,9 +9338,10 @@ button {
 
 .levitate-mvp-card__content {
   display: grid;
-  align-content: center;
+  grid-template-rows: auto auto auto 1fr;
+  align-content: start;
   min-width: 0;
-  padding: clamp(6px, 1.6vw, 18px) 4px;
+  padding: 18px 4px 2px;
 }
 
 .levitate-mvp-card__content small {
@@ -9296,10 +9356,10 @@ button {
 }
 
 .levitate-mvp-card h2 {
-  margin: 28px 0 0;
+  margin: 20px 0 0;
   color: var(--lev-pink);
   font-family: var(--font-display);
-  font-size: clamp(3.1rem, 4.7vw, 4.8rem);
+  font-size: clamp(2.85rem, 3.4vw, 3.75rem);
   font-weight: 400;
   line-height: 0.88;
   letter-spacing: 0.06em;
@@ -9311,13 +9371,14 @@ button {
   display: block;
   width: min(100%, 280px);
   height: 1px;
-  margin: 22px 0 24px;
+  margin: 18px 0 16px;
   background: linear-gradient(90deg, rgba(231, 70, 151, 0.72), rgba(231, 70, 151, 0.24), transparent);
 }
 
 .levitate-mvp-card dl {
   display: grid;
-  gap: 18px;
+  align-self: end;
+  gap: 14px;
   margin: 0;
 }
 
@@ -9352,24 +9413,14 @@ button {
   line-height: 1.28;
 }
 
-.levitate-hof__dots {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 20px;
-}
+@keyframes levitate-hof-loop {
+  from {
+    transform: translate3d(var(--hof-start-offset), 0, 0);
+  }
 
-.levitate-hof__dots span {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(231, 70, 151, 0.22);
-}
-
-.levitate-hof__dots span.is-active {
-  background: var(--lev-pink);
+  to {
+    transform: translate3d(calc(-50% + var(--hof-start-offset)), 0, 0);
+  }
 }
 
 .levitate-sponsors {
@@ -11618,6 +11669,11 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.sedes-jury-grid--six {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 1180px);
+}
+
 .sedes-jury-card {
   overflow: hidden;
   border: 1px solid rgba(231, 70, 151, 0.24);
@@ -11865,20 +11921,10 @@ button {
     grid-row: span 2;
   }
 
-  .levitate-mvp-card,
-  .levitate-mvp-card.is-featured {
-    flex-basis: min(620px, calc(100vw - 48px));
-    grid-template-columns: 1fr;
-  }
-
-  .levitate-mvp-card figure img {
-    aspect-ratio: 16 / 10;
-    min-height: 0;
-    height: auto;
-  }
-
-  .levitate-mvp-card__content {
-    align-content: start;
+  .levitate-hof__viewport {
+    --hof-card-width: min(74vw, 360px);
+    --hof-card-height: 540px;
+    --hof-image-height: 228px;
   }
 
   .sedes-event-info,
@@ -11948,23 +11994,22 @@ button {
     font-size: clamp(3.35rem, 15vw, 5rem);
   }
 
-  .levitate-hof__rail {
-    gap: 16px;
+  .levitate-hof__viewport {
+    --hof-card-width: min(82vw, 320px);
+    --hof-card-height: 524px;
+    --hof-image-height: 210px;
+    --hof-gap: 16px;
     margin-top: 30px;
-    padding-right: 20px;
-    padding-left: 20px;
-    scroll-padding-inline: 20px;
   }
 
-  .levitate-mvp-card,
-  .levitate-mvp-card.is-featured {
-    flex-basis: min(100%, calc(100vw - 40px));
-    min-height: 0;
-    padding: 16px;
+  .levitate-hof__rail {
+    padding-top: 18px;
+    padding-bottom: 58px;
+    animation-duration: 48s;
   }
 
   .levitate-mvp-card h2 {
-    font-size: clamp(2.55rem, 13vw, 3.55rem);
+    font-size: clamp(2.35rem, 11vw, 3.15rem);
   }
 
   .levitate-nav__dropdown {
@@ -12138,6 +12183,7 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .levitate-hero__media,
   .levitate-announcement__track,
+  .levitate-hof__rail,
   .levitate-nav,
   .levitate-why__manifesto strong,
   .levitate-why__manifesto em,
