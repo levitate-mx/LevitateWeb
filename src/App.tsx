@@ -6,6 +6,7 @@ import { PremiationPage } from "./components/premiation/PremiationPage";
 import { RegulationsPage } from "./components/regulations/RegulationsPage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
+import { ShopPage } from "./components/shop/ShopPage";
 import { VenuePage } from "./components/venue/VenuePage";
 import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
 import { getVenueBySlug } from "./data/venueContent";
@@ -21,6 +22,7 @@ export default function App() {
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
   const motionGenresMatch = window.location.pathname.match(/^\/modalidades\/levitate-motion\/generos\/?$/);
   const sedesMatch = window.location.pathname.match(/^\/sedes\/?$/);
+  const shopMatch = window.location.pathname.match(/^\/tienda\/?$/);
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
   const venueMatch = window.location.pathname.match(/^\/sedes\/([^/]+)\/?$/);
 
@@ -62,6 +64,10 @@ export default function App() {
 
   if (sedesMatch) {
     return <SedesPage />;
+  }
+
+  if (shopMatch) {
+    return <ShopPage />;
   }
 
   if (workshopsMatch) {
