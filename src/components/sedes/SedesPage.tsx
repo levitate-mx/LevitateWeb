@@ -59,7 +59,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     heroTitle: "Sede CDMX",
     eventName: "CAO Tiempo Nuevo",
     venueName: "CAO Tiempo Nuevo",
-    heroImage: assets.venue,
+    heroImage: "/assets/sedes-cdmx-hero.png",
     motionImage: "/assets/sedes-cdmx-motion.jpg",
     aerialImage: "/assets/sedes-cdmx-aerial.jpg",
     location: "Miguel Hidalgo, Tlalpan",
@@ -152,8 +152,6 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       ] },
     ],
     jury: [
-      { name: "Andrea Salinas", specialty: "Contemporary · Jazz", image: assets.community },
-      { name: "Mariana Ríos", specialty: "Hip Hop · Urbano", image: assets.workshops },
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
       { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
       { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.png" },

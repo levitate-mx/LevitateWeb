@@ -20,7 +20,7 @@ const venues = [
     title: "Teatro El Gran Recinto",
     city: "Tlalnepantla, Edo. Méx.",
     date: "13, 14 y 15 noviembre 2026",
-    image: assets.venue,
+    image: "/assets/sedes-edomex-hero.jpg",
     href: "/sedes/estado-de-mexico",
   },
   {
@@ -113,7 +113,7 @@ export function HomePage() {
       <section id="inicio" className="levitate-hero">
         <video
           className="levitate-hero__media"
-          poster={assets.hero}
+          poster="/assets/levitate-home-hero-poster.jpg"
           autoPlay
           muted
           loop
