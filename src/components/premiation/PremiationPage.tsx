@@ -146,8 +146,7 @@ const specialAwards = [
     title: "Mejor música",
     summary:
       "Reconocimiento a la selección, edición e integración musical que fortalece la propuesta escénica.",
-    image: assets.venue,
-    mediaKey: "premiation.special.music",
+    image: "/assets/premio-especial-musica.png",
     imageAlt: "Escenario Levitate con iluminación para una presentación de competencia.",
     criteria: [
       {
@@ -189,8 +188,7 @@ const specialAwards = [
     title: "Mejor coreografía",
     summary:
       "Reconocimiento a la calidad de la composición coreográfica y a la claridad de su propuesta artística.",
-    image: assets.workshops,
-    mediaKey: "premiation.special.choreography",
+    image: "/assets/premio-especial-coreografia.png",
     imageAlt: "Participantes en una sesión de movimiento y preparación coreográfica.",
     criteria: [
       {
@@ -232,8 +230,7 @@ const specialAwards = [
     title: "Mejor vestuario",
     summary:
       "Se reconocerá el vestuario que complemente la propuesta escénica, refuerce el concepto de la coreografía y mantenga coherencia visual, funcionalidad y cuidado en su presentación.",
-    image: assets.competition,
-    mediaKey: "premiation.special.costume",
+    image: "/assets/premio-especial-vestuario.png",
     imageAlt: "Participante en escenario Levitate durante una presentación.",
     criteria: [
       {
@@ -275,8 +272,7 @@ const specialAwards = [
     title: "Mejor porra",
     summary:
       "Reconocimiento a la energía, organización y actitud positiva de la porra durante toda la competencia.",
-    image: assets.community,
-    mediaKey: "premiation.special.cheer",
+    image: "/assets/premio-especial-porra.png",
     imageAlt: "Comunidad Levitate celebrando durante una experiencia de competencia.",
     criteria: [
       {
@@ -628,17 +624,21 @@ export function PremiationPage() {
               })}
             </div>
 
+            <div className="premiation-special-preload" aria-hidden="true">
+              {specialAwards.map((award) => (
+                <img alt="" key={award.id} src={award.image} loading="eager" />
+              ))}
+            </div>
+
             <article
               aria-labelledby={`premiation-special-tab-${activeSpecialAward.id}`}
               className="premiation-special-panel"
               id="premiation-special-panel"
-              key={activeSpecialAward.id}
               role="tabpanel"
             >
               <figure className="premiation-special-panel__visual">
                 <img
                   src={activeSpecialAward.image}
-                  data-levitate-media-key={activeSpecialAward.mediaKey}
                   alt={activeSpecialAward.imageAlt}
                   loading="lazy"
                 />
@@ -671,7 +671,6 @@ export function PremiationPage() {
               </div>
 
               <div className="premiation-special-panel__note">
-                <CheckCircle2 aria-hidden="true" size={22} strokeWidth={2.2} />
                 <p>{activeSpecialAward.note}</p>
               </div>
             </article>

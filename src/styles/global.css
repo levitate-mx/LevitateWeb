@@ -4495,6 +4495,15 @@ button {
   word-break: normal;
 }
 
+.premiation-special-preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .premiation-special-panel {
   position: relative;
   z-index: 1;
@@ -4652,10 +4661,6 @@ button {
   padding: clamp(14px, 1.4vw, 18px) clamp(28px, 3.6vw, 54px);
   color: var(--premiation-pink);
   background: rgba(228, 92, 154, 0.1);
-}
-
-.premiation-special-panel__note svg {
-  flex: 0 0 auto;
 }
 
 .premiation-special-panel__note p {
