@@ -82,10 +82,9 @@ export function HallOfFamePage() {
                   >
                     <figure>
                       <img src={performance.image} alt={`Imagen de referencia para ${performance.title}`} loading={isActive ? "eager" : "lazy"} />
-                      <span>{performance.year}</span>
                     </figure>
                     <div className="levitate-mvp-card__content">
-                      <small>MVP Levitate</small>
+                      <small>{performance.year}</small>
                       <h2>{performance.title}</h2>
                       <i aria-hidden="true" />
                       <dl>

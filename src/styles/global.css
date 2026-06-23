@@ -9351,27 +9351,10 @@ button {
   filter: saturate(1.04) contrast(1.04);
 }
 
-.levitate-mvp-card figure span {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  padding: 0 14px;
-  border: 1px solid rgba(231, 70, 151, 0.34);
-  border-radius: 999px;
-  background: rgba(255, 250, 247, 0.88);
-  color: var(--lev-pink);
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-}
-
 .levitate-mvp-card__content {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
   align-content: center;
+  gap: clamp(14px, 1.8vw, 22px);
   min-width: 0;
   padding: clamp(6px, 1.6vw, 18px) 4px;
 }
@@ -9388,8 +9371,8 @@ button {
 }
 
 .levitate-mvp-card h2 {
-  margin: 28px 0 0;
-  color: var(--lev-pink);
+  margin: 0;
+  color: var(--lev-ink);
   font-family: var(--font-display);
   font-size: clamp(3.1rem, 4.2vw, 4.55rem);
   font-weight: 400;
@@ -9400,25 +9383,27 @@ button {
 }
 
 .levitate-mvp-card__content > i {
-  display: block;
-  width: min(100%, 280px);
+  display: none;
+  width: min(100%, 360px);
   height: 1px;
-  margin: 22px 0 24px;
   background: linear-gradient(90deg, rgba(231, 70, 151, 0.72), rgba(231, 70, 151, 0.24), transparent);
 }
 
 .levitate-mvp-card dl {
   display: grid;
-  align-self: end;
-  gap: 18px;
+  gap: 0;
   margin: 0;
+  border-top: 1px solid rgba(231, 70, 151, 0.14);
 }
 
 .levitate-mvp-card dl div {
   display: grid;
   gap: 6px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(231, 70, 151, 0.18);
+  padding: 14px 0;
+}
+
+.levitate-mvp-card dl div + div {
+  border-top: 1px solid rgba(231, 70, 151, 0.14);
 }
 
 .levitate-mvp-card dt {
