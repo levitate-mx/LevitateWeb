@@ -54,12 +54,12 @@ type SedeContent = {
 const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   cdmx: {
     heroTitle: "Sede CDMX",
-    eventName: "Cirko de Mente",
+    eventName: "CAO Tiempo Nuevo",
     venueName: "CAO Tiempo Nuevo",
     heroImage: assets.venue,
     motionImage: "/assets/sedes-cdmx-motion.jpg",
     aerialImage: "/assets/sedes-cdmx-aerial.jpg",
-    location: "CAO Tiempo Nuevo, Miguel Hidalgo, Tlalpan",
+    location: "Miguel Hidalgo, Tlalpan",
     mapsUrl: "https://share.google/gU1NBVUQocefpnxPP",
     date: "29 · 30 · 31\nmayo 2026",
     metaLabel: "Status",

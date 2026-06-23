@@ -10800,6 +10800,7 @@ button {
 }
 
 .sedes-section-heading p {
+  position: relative;
   color: var(--sedes-pink);
 }
 
@@ -10848,7 +10849,6 @@ button {
   min-height: 300px;
   object-fit: cover;
   object-position: center;
-  filter: saturate(1.02) hue-rotate(306deg);
 }
 
 .sedes-genre-card > div {
@@ -11254,7 +11254,7 @@ button {
 }
 
 .sedes-jury__header .sedes-section-heading {
-  margin: 0 0 14px;
+  margin: 0 0 clamp(34px, 3.2vw, 46px);
 }
 
 .sedes-jury__header > p {
