@@ -8,7 +8,6 @@ import {
   ClipboardList,
   GraduationCap,
   Home,
-  ImageIcon,
   KeyRound,
   LockKeyhole,
   LogIn,
@@ -30,9 +29,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { MediaManagerPanel } from "./MediaManagerPanel";
 
-type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "media";
+type AdminScreenId = "home" | "choreographers" | "participants" | "dance";
 type AuthMode = "login" | "register";
 
 type AdminNavItem = {
@@ -60,7 +58,6 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar alumnos", icon: GraduationCap, screen: "participants" },
   { label: "Registrar baile", icon: Music2, screen: "dance" },
-  { label: "Imágenes del sitio", icon: ImageIcon, screen: "media" },
   { label: "Cambiar contraseña", icon: LockKeyhole },
   { label: "Reporte participante", icon: ClipboardList },
   { label: "Salir", icon: LogOut, action: "logout" },
@@ -646,10 +643,6 @@ function getAdminScreen(screen: AdminScreenId) {
 
   if (screen === "dance") {
     return <DanceRegistrationPanel />;
-  }
-
-  if (screen === "media") {
-    return <MediaManagerPanel />;
   }
 
   return <AdminWelcomePanel />;

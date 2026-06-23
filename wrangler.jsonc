@@ -6,22 +6,6 @@
   "observability": {
     "enabled": true
   },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "MEDIA_OVERRIDES",
-        "class_name": "MediaOverridesStore"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1_media_overrides_store",
-      "new_sqlite_classes": [
-        "MediaOverridesStore"
-      ]
-    }
-  ],
   "assets": {
     "binding": "ASSETS",
     "run_worker_first": [
