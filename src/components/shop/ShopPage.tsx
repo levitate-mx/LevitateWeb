@@ -5,7 +5,6 @@ import {
   Minus,
   PackageCheck,
   Plus,
-  Search,
   ShoppingBag,
   ShoppingCart,
   Ticket,
@@ -39,6 +38,8 @@ type RegistrationCost = {
 };
 
 type CartState = Record<string, number>;
+
+const mediaPackageDetails = ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"];
 
 const registrationCosts: RegistrationCost[] = [
   { category: "Solo", participants: "1 bailarín", presale: 1500, regular: 1750 },
@@ -80,7 +81,7 @@ const products: ShopProduct[] = [
     description: "Paquete de foto y video para una participación solo.",
     price: 1000,
     badge: "Paquete destacado",
-    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
+    details: mediaPackageDetails,
     image: "/assets/visuals/experience-competition.jpg",
     visual: "photo",
   },
@@ -90,7 +91,6 @@ const products: ShopProduct[] = [
     category: "Fotografía y video",
     description: "Precio por participante.",
     price: 700,
-    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
     visual: "icon",
   },
   {
@@ -99,7 +99,6 @@ const products: ShopProduct[] = [
     category: "Fotografía y video",
     description: "Precio por participante.",
     price: 600,
-    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
     visual: "icon",
   },
   {
@@ -108,7 +107,6 @@ const products: ShopProduct[] = [
     category: "Fotografía y video",
     description: "Precio por participante.",
     price: 500,
-    details: ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"],
     visual: "icon",
   },
 ];
@@ -221,6 +219,46 @@ export function ShopPage() {
     );
   };
 
+  const renderMediaPackage = () => (
+    <div className="shop-media-package">
+      <article className="shop-media-package__overview">
+        <figure>
+          <img src="/assets/visuals/experience-competition.jpg" alt="" loading="lazy" />
+          <span>Paquete all inclusive</span>
+        </figure>
+        <div>
+          <p>Fotografía y video</p>
+          <h3>Un paquete. Cuatro formatos.</h3>
+          <span>Todos los formatos incluyen la misma cobertura; solo cambia el costo por tipo de participación.</span>
+          <ul>
+            {mediaPackageDetails.map((detail) => (
+              <li key={detail}>{detail}</li>
+            ))}
+          </ul>
+        </div>
+      </article>
+
+      <div className="shop-media-package__prices" aria-label="Precios de fotografía y video">
+        {mediaProducts.map((product) => {
+          const quantity = cart[product.id] ?? 0;
+          const label = product.name.replace("All inclusive ", "");
+
+          return (
+            <article className="shop-media-price-card" key={product.id}>
+              <span>{label}</span>
+              <strong>{formatCurrency(product.price)}</strong>
+              <p>{product.id === "photo-solos" ? "por participación" : "por participante"}</p>
+              <button onClick={() => addProduct(product.id)} type="button">
+                <ShoppingCart aria-hidden="true" size={18} />
+                {quantity > 0 ? `Añadir (${quantity})` : "Añadir"}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <main className={`shop-page ${isCartOpen ? "is-cart-open" : ""}`}>
       <section className="shop-hero">
@@ -253,39 +291,6 @@ export function ShopPage() {
         ) : null}
 
         <div className="shop-hero__content">
-          <aside className="shop-sidebar" aria-label="Categorías de tienda">
-            <label className="shop-search">
-              <Search aria-hidden="true" size={19} />
-              <input aria-label="Buscar productos" placeholder="Buscar productos..." type="search" />
-            </label>
-
-            <nav aria-label="Categorías">
-              <p>Categorías</p>
-              <a href="#inscripciones">
-                <UserRound aria-hidden="true" size={21} />
-                Inscripciones
-              </a>
-              <a href="#boletos">
-                <Ticket aria-hidden="true" size={21} />
-                Boletos
-              </a>
-              <a href="#foto-video">
-                <Camera aria-hidden="true" size={21} />
-                Fotografía y video
-              </a>
-            </nav>
-
-            <nav aria-label="Información">
-              <p>Información</p>
-              {["Preguntas frecuentes", "Políticas de compra", "Términos y condiciones", "Contacto"].map((item) => (
-                <a href="#contacto" key={item}>
-                  {item}
-                  <ChevronRight aria-hidden="true" size={18} />
-                </a>
-              ))}
-            </nav>
-          </aside>
-
           <section className="shop-catalog" aria-labelledby="shop-title">
             <div className="shop-catalog__heading">
               <p>Tienda Levitate</p>
@@ -339,19 +344,27 @@ export function ShopPage() {
               </div>
 
               <div className="shop-cost-table" aria-label="Categorías y costos de inscripción">
-                <div className="shop-cost-table__title">Categorías y costos de inscripción</div>
+                <div className="shop-cost-table__head">
+                  <span>Costos de inscripción</span>
+                  <h3>Categorías</h3>
+                  <p>Precios por participante según formato. Preventa disponible por tiempo limitado.</p>
+                </div>
                 <div className="shop-cost-table__grid">
-                  <div>Categorías</div>
-                  <div>Participantes</div>
-                  <div>Costo inscripción por participante</div>
                   {registrationCosts.map((cost) => (
-                    <div className="shop-cost-table__row" key={cost.category}>
-                      <span>{cost.category}</span>
-                      <span>{cost.participants}</span>
-                      <span>
-                        Preventa {formatCurrency(cost.presale)} / Normal {formatCurrency(cost.regular)}
-                      </span>
-                    </div>
+                    <article className="shop-cost-card" key={cost.category}>
+                      <div className="shop-cost-card__top">
+                        <span>{cost.category}</span>
+                        <small>{cost.participants}</small>
+                      </div>
+                      <div className="shop-cost-card__price">
+                        <span>Preventa</span>
+                        <strong>{formatCurrency(cost.presale)}</strong>
+                      </div>
+                      <div className="shop-cost-card__normal">
+                        <span>Normal</span>
+                        <strong>{formatCurrency(cost.regular)}</strong>
+                      </div>
+                    </article>
                   ))}
                 </div>
               </div>
@@ -370,7 +383,7 @@ export function ShopPage() {
                 <h2 id="media-title">Fotografía y video</h2>
                 <i />
               </div>
-              <div className="shop-product-grid shop-product-grid--media">{mediaProducts.map(renderProductCard)}</div>
+              {renderMediaPackage()}
             </section>
           </section>
 
