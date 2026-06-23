@@ -13,6 +13,20 @@
     ],
     "not_found_handling": "single-page-application"
   },
+  "migrations": [
+    {
+      "tag": "v1_media_overrides_store",
+      "new_sqlite_classes": [
+        "MediaOverridesStore"
+      ]
+    },
+    {
+      "tag": "v2_delete_media_overrides_store",
+      "deleted_classes": [
+        "MediaOverridesStore"
+      ]
+    }
+  ],
   "compatibility_flags": [
     "nodejs_compat"
   ]
