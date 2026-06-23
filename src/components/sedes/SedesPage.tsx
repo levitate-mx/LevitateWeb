@@ -121,11 +121,11 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       ],
     },
     jury: [
-      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: assets.community },
-      { name: "Alex Nájera", specialty: "Artista circense", image: assets.workshops },
-      { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: assets.venue },
-      { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: assets.competition },
-      { name: "Ángela Kryuff", specialty: "Maestra de danza · Técnica y composición escénica", image: assets.hero },
+      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
+      { name: "Alex Nájera", specialty: "Artista circense", image: "/assets/alex-najera.jpg" },
+      { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: "/assets/vladimir-garza.jpg" },
+      { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
+      { name: "Ángela Kryuff", specialty: "Maestra de danza · Técnica y composición escénica", image: "/assets/angela-kryuff.jpg" },
     ],
   },
   puebla: {
@@ -278,19 +278,28 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
 
       <div className="sedes-light-flow">
         <section className="sedes-light-section sedes-genres">
-          <SectionHeading kicker="Géneros" title="Participantes" />
           <div className="sedes-genre-grid">
             <article className="sedes-genre-card sedes-genre-card--motion">
               <img src={venue.motionImage ?? assets.competition} alt="Participante de Motion con vestuario rojo en escenario Levitate" />
               <div>
+                <p className="sedes-genre-card__eyebrow">Géneros de competencia</p>
                 <h3>Motion</h3>
+                <div className="sedes-genre-card__label">
+                  <span className="sedes-genre-card__mark sedes-genre-card__mark--motion" aria-hidden="true" />
+                  <strong>Géneros de danza y piso</strong>
+                </div>
                 <GenreList items={venue.motionGenres} />
               </div>
             </article>
 
             <article className="sedes-genre-card sedes-genre-card--aerial">
               <div>
+                <p className="sedes-genre-card__eyebrow">Géneros de competencia</p>
                 <h3>Aerial</h3>
+                <div className="sedes-genre-card__label">
+                  <span className="sedes-genre-card__mark sedes-genre-card__mark--aerial" aria-hidden="true" />
+                  <strong>Géneros aéreos</strong>
+                </div>
                 <GenreList columns={1} items={venue.aerialGenres} />
               </div>
               <img src={venue.aerialImage ?? assets.hero} alt="Participante de Aerial en tela durante una presentación Levitate" />
@@ -391,6 +400,9 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
           muted
           playsInline
           poster={venue.heroImage}
+          onLoadedMetadata={(event) => {
+            event.currentTarget.playbackRate = 0.75;
+          }}
           aria-hidden="true"
         >
           <source src="/assets/sedes-final-cta-bg.mp4" type="video/mp4" />

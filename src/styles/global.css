@@ -10822,7 +10822,7 @@ button {
 .sedes-genre-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: clamp(22px, 4vw, 52px);
+  gap: clamp(18px, 2.8vw, 40px);
   width: min(100%, 1480px);
   margin: 0 auto;
 }
@@ -10830,23 +10830,28 @@ button {
 .sedes-genre-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(170px, 0.55fr) minmax(230px, 1fr);
+  grid-template-columns: minmax(185px, 0.48fr) minmax(280px, 0.72fr);
   align-items: stretch;
-  min-height: 300px;
+  gap: clamp(22px, 2.8vw, 42px);
   overflow: hidden;
-  border: 1px solid rgba(5, 5, 5, 0.06);
-  background: rgba(255, 255, 255, 0.42);
-  box-shadow: 0 24px 70px rgba(45, 30, 42, 0.08);
+  padding: clamp(16px, 1.8vw, 22px);
+  border: 1px solid rgba(231, 70, 151, 0.22);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(231, 70, 151, 0.11), transparent 13rem),
+    rgba(255, 255, 255, 0.58);
+  box-shadow: 0 24px 70px rgba(45, 30, 42, 0.07);
 }
 
 .sedes-genre-card--aerial {
-  grid-template-columns: minmax(230px, 1fr) minmax(170px, 0.55fr);
+  grid-template-columns: minmax(280px, 0.72fr) minmax(185px, 0.48fr);
 }
 
 .sedes-genre-card img {
   width: 100%;
   height: 100%;
-  min-height: 300px;
+  min-height: clamp(300px, 24vw, 390px);
+  border-radius: 7px;
   object-fit: cover;
   object-position: center;
 }
@@ -10854,23 +10859,106 @@ button {
 .sedes-genre-card > div {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  padding: clamp(46px, 5.4vw, 70px) clamp(22px, 3.4vw, 44px) clamp(22px, 3.4vw, 44px);
+  justify-content: center;
+  min-width: 0;
+  padding: clamp(20px, 2.3vw, 32px) clamp(6px, 1.4vw, 20px);
+}
+
+.sedes-genre-card__eyebrow {
+  margin: 0 0 clamp(10px, 1.1vw, 16px);
+  color: rgba(17, 16, 21, 0.62);
+  font-family: var(--font-display);
+  font-size: clamp(0.8rem, 0.98vw, 1rem);
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .sedes-genre-card h3 {
-  margin: 0 0 20px;
+  margin: 0 0 clamp(16px, 1.8vw, 24px);
+  color: var(--sedes-pink);
   font-family: var(--font-display);
-  font-size: clamp(1.45rem, 2vw, 2.05rem);
+  font-size: clamp(3rem, 4.8vw, 5.35rem);
   font-weight: 950;
-  letter-spacing: 0.055em;
+  line-height: 0.88;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.sedes-genre-card__label {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 1.3vw, 16px);
+  margin-bottom: clamp(22px, 2.5vw, 34px);
+  color: rgba(17, 16, 21, 0.74);
+  font-size: clamp(1rem, 1.25vw, 1.2rem);
+  line-height: 1.2;
+}
+
+.sedes-genre-card__label strong {
+  font-weight: 850;
+}
+
+.sedes-genre-card__mark {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  color: var(--sedes-pink);
+}
+
+.sedes-genre-card__mark--motion::before,
+.sedes-genre-card__mark--motion::after {
+  position: absolute;
+  bottom: 4px;
+  width: 8px;
+  height: 25px;
+  border: 2px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 999px 999px;
+  content: "";
+}
+
+.sedes-genre-card__mark--motion::before {
+  left: 7px;
+  transform: rotate(-14deg);
+}
+
+.sedes-genre-card__mark--motion::after {
+  right: 7px;
+  transform: rotate(14deg);
+}
+
+.sedes-genre-card__mark--aerial {
+  border: 2px solid currentColor;
+  border-radius: 999px;
+}
+
+.sedes-genre-card__mark--aerial::before,
+.sedes-genre-card__mark--aerial::after {
+  position: absolute;
+  left: 50%;
+  background: currentColor;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.sedes-genre-card__mark--aerial::before {
+  top: -5px;
+  width: 2px;
+  height: 42px;
+}
+
+.sedes-genre-card__mark--aerial::after {
+  bottom: 5px;
+  width: 18px;
+  height: 2px;
 }
 
 .sedes-genre-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 28px;
+  gap: 0 clamp(20px, 2.2vw, 36px);
 }
 
 .sedes-genre-list--single {
@@ -10879,7 +10967,7 @@ button {
 
 .sedes-genre-list ul {
   display: grid;
-  gap: 10px;
+  gap: clamp(9px, 0.9vw, 13px);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -10888,9 +10976,9 @@ button {
 .sedes-genre-card li {
   position: relative;
   width: fit-content;
-  padding-left: 18px;
+  padding-left: 20px;
   color: rgba(17, 16, 21, 0.86);
-  font-size: clamp(1rem, 1.15vw, 1.18rem);
+  font-size: clamp(1rem, 1.22vw, 1.24rem);
   font-weight: 800;
   line-height: 1.18;
 }
