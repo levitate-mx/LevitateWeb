@@ -1,4 +1,4 @@
-import { Minus, PackageCheck, Plus, ShoppingBag, ShoppingCart, Trash2 } from "lucide-react";
+import { Minus, PackageCheck, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -69,6 +69,7 @@ function formatCurrency(value: number) {
 
 export function ShopPage() {
   const [cart, setCart] = useState<CartState>({});
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const cartLines = useMemo(
     () =>
       products
@@ -81,6 +82,7 @@ export function ShopPage() {
 
   const addProduct = (productId: string) => {
     setCart((current) => ({ ...current, [productId]: (current[productId] ?? 0) + 1 }));
+    setIsCartOpen(true);
   };
 
   const decreaseProduct = (productId: string) => {
@@ -103,9 +105,35 @@ export function ShopPage() {
   };
 
   return (
-    <main className="shop-page">
+    <main className={`shop-page ${isCartOpen ? "is-cart-open" : ""}`}>
       <section className="shop-hero">
         <LevitateHeader activeLabel="Tienda" useRootLinks />
+
+        <button
+          aria-controls="shop-cart-panel"
+          aria-expanded={isCartOpen}
+          className="shop-cart-toggle"
+          onClick={() => setIsCartOpen((current) => !current)}
+          type="button"
+        >
+          <ShoppingCart aria-hidden="true" size={22} />
+          <span>
+            <small>Carrito</small>
+            <strong>
+              {cartCount} {cartCount === 1 ? "item" : "items"}
+            </strong>
+          </span>
+          <b>{formatCurrency(subtotal)}</b>
+        </button>
+
+        {isCartOpen ? (
+          <button
+            aria-label="Cerrar carrito"
+            className="shop-cart-scrim"
+            onClick={() => setIsCartOpen(false)}
+            type="button"
+          />
+        ) : null}
 
         <div className="shop-hero__content">
           <section className="shop-catalog" aria-labelledby="shop-title">
@@ -146,65 +174,75 @@ export function ShopPage() {
             </div>
           </section>
 
-          <aside className="shop-cart" aria-label="Carrito de compras">
-            <div className="shop-cart__header">
-              <span>
-                <ShoppingCart aria-hidden="true" size={22} />
-              </span>
-              <div>
-                <p>Carrito</p>
-                <strong>{cartCount} {cartCount === 1 ? "item" : "items"}</strong>
+          {isCartOpen ? (
+            <aside className="shop-cart" id="shop-cart-panel" aria-label="Carrito de compras">
+              <div className="shop-cart__topline">
+                <div className="shop-cart__header">
+                  <span>
+                    <ShoppingCart aria-hidden="true" size={22} />
+                  </span>
+                  <div>
+                    <p>Carrito</p>
+                    <strong>
+                      {cartCount} {cartCount === 1 ? "item" : "items"}
+                    </strong>
+                  </div>
+                </div>
+                <button className="shop-cart__close" onClick={() => setIsCartOpen(false)} type="button">
+                  <X aria-hidden="true" size={18} />
+                  Cerrar
+                </button>
               </div>
-            </div>
 
-            {cartLines.length > 0 ? (
-              <div className="shop-cart__lines">
-                {cartLines.map(({ product, quantity }) => (
-                  <article className="shop-cart-line" key={product.id}>
-                    <img src={product.image} alt="" loading="lazy" />
-                    <div className="shop-cart-line__copy">
-                      <strong>{product.name}</strong>
-                      <span>{formatCurrency(product.price)} c/u</span>
-                      <div className="shop-cart-line__controls">
-                        <button aria-label={`Quitar una unidad de ${product.name}`} onClick={() => decreaseProduct(product.id)} type="button">
-                          <Minus aria-hidden="true" size={16} />
-                        </button>
-                        <b>{quantity}</b>
-                        <button aria-label={`Agregar una unidad de ${product.name}`} onClick={() => addProduct(product.id)} type="button">
-                          <Plus aria-hidden="true" size={16} />
-                        </button>
-                        <button aria-label={`Eliminar ${product.name}`} onClick={() => removeProduct(product.id)} type="button">
-                          <Trash2 aria-hidden="true" size={16} />
-                        </button>
+              {cartLines.length > 0 ? (
+                <div className="shop-cart__lines">
+                  {cartLines.map(({ product, quantity }) => (
+                    <article className="shop-cart-line" key={product.id}>
+                      <img src={product.image} alt="" loading="lazy" />
+                      <div className="shop-cart-line__copy">
+                        <strong>{product.name}</strong>
+                        <span>{formatCurrency(product.price)} c/u</span>
+                        <div className="shop-cart-line__controls">
+                          <button aria-label={`Quitar una unidad de ${product.name}`} onClick={() => decreaseProduct(product.id)} type="button">
+                            <Minus aria-hidden="true" size={16} />
+                          </button>
+                          <b>{quantity}</b>
+                          <button aria-label={`Agregar una unidad de ${product.name}`} onClick={() => addProduct(product.id)} type="button">
+                            <Plus aria-hidden="true" size={16} />
+                          </button>
+                          <button aria-label={`Eliminar ${product.name}`} onClick={() => removeProduct(product.id)} type="button">
+                            <Trash2 aria-hidden="true" size={16} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <strong>{formatCurrency(product.price * quantity)}</strong>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="shop-cart__empty">
-                <ShoppingBag aria-hidden="true" size={36} />
-                <strong>Carrito vacío</strong>
-                <p>Agrega productos para ver el resumen de compra.</p>
-              </div>
-            )}
+                      <strong>{formatCurrency(product.price * quantity)}</strong>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="shop-cart__empty">
+                  <ShoppingBag aria-hidden="true" size={36} />
+                  <strong>Carrito vacío</strong>
+                  <p>Agrega productos para ver el resumen de compra.</p>
+                </div>
+              )}
 
-            <div className="shop-cart__summary">
-              <div>
-                <span>Subtotal</span>
-                <strong>{formatCurrency(subtotal)}</strong>
+              <div className="shop-cart__summary">
+                <div>
+                  <span>Subtotal</span>
+                  <strong>{formatCurrency(subtotal)}</strong>
+                </div>
+                <div>
+                  <span>Envío</span>
+                  <strong>{cartCount > 0 ? "Por definir" : "$0"}</strong>
+                </div>
+                <button disabled={cartCount === 0} type="button">
+                  <PackageCheck aria-hidden="true" size={19} />
+                  Continuar compra
+                </button>
               </div>
-              <div>
-                <span>Envío</span>
-                <strong>{cartCount > 0 ? "Por definir" : "$0"}</strong>
-              </div>
-              <button disabled={cartCount === 0} type="button">
-                <PackageCheck aria-hidden="true" size={19} />
-                Continuar compra
-              </button>
-            </div>
-          </aside>
+            </aside>
+          ) : null}
         </div>
       </section>
 
