@@ -8634,9 +8634,9 @@ button {
 
 .levitate-venue-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  width: 100%;
+  width: min(100%, 1480px);
   margin: 0 auto;
 }
 
@@ -8659,6 +8659,16 @@ button {
   border-color: rgba(231, 70, 151, 0.56);
   box-shadow: 0 28px 58px rgba(0, 0, 0, 0.56);
   transform: translateY(-5px);
+}
+
+.levitate-venue-card--soon {
+  cursor: default;
+}
+
+.levitate-venue-card--soon:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.38);
+  transform: none;
 }
 
 .levitate-venue-card img {
@@ -8724,6 +8734,11 @@ button {
   color: var(--lev-pink);
   font-size: 0.84rem;
   font-weight: 760;
+}
+
+.levitate-venue-card--soon span {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .levitate-why {
@@ -9099,7 +9114,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 70px;
   color: rgba(255, 255, 255, 0.86);
   font-size: 0.76rem;
   font-weight: 850;
@@ -9112,6 +9127,16 @@ button {
   width: min(100%, 154px);
   max-height: 42px;
   object-fit: contain;
+}
+
+.levitate-sponsor-row .sponsor-aeparty img {
+  width: min(100%, 210px);
+  max-height: 46px;
+}
+
+.levitate-sponsor-row .sponsor-videoimagen img {
+  width: min(100%, 124px);
+  max-height: 72px;
 }
 
 .levitate-sponsor-row strong:not(.has-logo) span {
@@ -11375,11 +11400,12 @@ button {
 }
 
 .sedes-jury-card img {
+  display: block;
   width: 100%;
-  aspect-ratio: 6 / 5;
+  aspect-ratio: 2 / 3;
   height: auto;
   object-fit: cover;
-  filter: saturate(0.95) hue-rotate(306deg) contrast(1.05);
+  object-position: center top;
 }
 
 .sedes-jury-card h3 {
@@ -11799,7 +11825,7 @@ button {
   }
 
   .sedes-jury-card img {
-    height: 250px;
+    height: auto;
   }
 
   .sedes-final-cta__line {

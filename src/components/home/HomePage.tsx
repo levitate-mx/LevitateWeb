@@ -17,25 +17,17 @@ import { LevitateHeader } from "./LevitateHeader";
 
 const venues = [
   {
-    title: "Cirko de Mente",
-    city: "Ciudad de México",
-    date: "29, 30 y 31 de mayo 2026",
-    image: assets.competition,
-    href: "/sedes/ciudad-de-mexico",
-  },
-  {
-    title: "Auditorio Daniel Forcelledo",
-    city: "Puebla",
-    date: "7 de junio 2026",
-    image: assets.hero,
-    href: "/sedes/puebla",
-  },
-  {
     title: "Teatro El Gran Recinto",
     city: "Tlalnepantla, Edo. Méx.",
     date: "13, 14 y 15 noviembre 2026",
     image: assets.venue,
     href: "/sedes/estado-de-mexico",
+  },
+  {
+    title: "Primavera 2027",
+    city: "",
+    date: "",
+    image: assets.hero,
   },
 ];
 
@@ -82,9 +74,9 @@ const gallery = [
 ];
 
 const sponsors = [
-  { name: "Electrolit", logo: "/assets/electrolit-logo.png" },
-  { name: "aeparty" },
-  { name: "videoimagendigital" },
+  { name: "Electrolit", logo: "/assets/electrolit-logo.png", className: "sponsor-electrolit" },
+  { name: "AEParty", logo: "/assets/sponsor-aeparty.png", className: "sponsor-aeparty" },
+  { name: "VideoImagen Digital", logo: "/assets/sponsor-videoimagen-digital.png", className: "sponsor-videoimagen" },
 ];
 
 const announcementItems = [
@@ -145,7 +137,6 @@ export function HomePage() {
 
         <div className="levitate-hero__grid">
           <div className="levitate-hero__copy" data-levitate-reveal>
-            <p className="levitate-eyebrow">Competencia nacional de danza</p>
             <h1>
               <span>Eleva tu arte</span>
               <strong>Vive la experiencia Levitate</strong>
@@ -179,17 +170,33 @@ export function HomePage() {
           <span />
         </div>
         <div className="levitate-venue-grid">
-          {venues.map((venue) => (
-            <a className="levitate-venue-card" href={venue.href} key={venue.title} data-levitate-reveal>
-              <img src={venue.image} alt="" loading="lazy" />
-              <div>
-                <h3>{venue.title}</h3>
-                <p><MapPin aria-hidden="true" size={16} /> {venue.city}</p>
-                <p><CalendarDays aria-hidden="true" size={16} /> {venue.date}</p>
-                <span>Ver convocatoria <ArrowRight aria-hidden="true" size={16} /></span>
-              </div>
-            </a>
-          ))}
+          {venues.map((venue) => {
+            const content = (
+              <>
+                <img src={venue.image} alt="" loading="lazy" />
+                <div>
+                  <h3>{venue.title}</h3>
+                  {venue.city ? <p><MapPin aria-hidden="true" size={16} /> {venue.city}</p> : null}
+                  {venue.date ? <p><CalendarDays aria-hidden="true" size={16} /> {venue.date}</p> : null}
+                  {venue.href ? (
+                    <span>Ver convocatoria <ArrowRight aria-hidden="true" size={16} /></span>
+                  ) : (
+                    <span>Próximamente...</span>
+                  )}
+                </div>
+              </>
+            );
+
+            return venue.href ? (
+              <a className="levitate-venue-card" href={venue.href} key={venue.title} data-levitate-reveal>
+                {content}
+              </a>
+            ) : (
+              <article className="levitate-venue-card levitate-venue-card--soon" key={venue.title} data-levitate-reveal>
+                {content}
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -264,7 +271,7 @@ export function HomePage() {
         </div>
         <div className="levitate-sponsor-row" data-levitate-reveal>
           {sponsors.map((sponsor) => (
-            <strong className={sponsor.logo ? "has-logo" : ""} key={sponsor.name}>
+            <strong className={`has-logo ${sponsor.className}`} key={sponsor.name}>
               {sponsor.logo ? <img src={sponsor.logo} alt={sponsor.name} loading="lazy" /> : <span>{sponsor.name}</span>}
             </strong>
           ))}
