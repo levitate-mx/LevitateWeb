@@ -9331,14 +9331,14 @@ button {
 }
 
 .levitate-mvp-card figure {
+  display: grid;
   min-height: 0;
   margin: 0;
   overflow: hidden;
-  border: 1px solid rgba(17, 16, 21, 0.08);
+  border: 0;
   border-radius: 13px;
-  background:
-    radial-gradient(circle at 50% 22%, rgba(231, 70, 151, 0.2), transparent 16rem),
-    linear-gradient(135deg, #120913, #050505);
+  background: transparent;
+  place-items: center;
 }
 
 .levitate-mvp-card figure img {
@@ -9349,6 +9349,16 @@ button {
   object-fit: contain;
   object-position: center;
   filter: saturate(1.04) contrast(1.04);
+}
+
+.levitate-mvp-card figure img.levitate-mvp-card__image--fill {
+  object-fit: cover;
+  object-position: center center;
+}
+
+.levitate-mvp-card figure img.levitate-mvp-card__image--nahual {
+  object-position: center center;
+  transform: scale(1.035);
 }
 
 .levitate-mvp-card__content {
@@ -12095,7 +12105,7 @@ button {
 .shop-cart-toggle {
   position: fixed;
   z-index: 32;
-  top: clamp(86px, 8.5vw, 116px);
+  top: clamp(14px, 2vw, 28px);
   right: clamp(16px, 2.5vw, 36px);
   justify-content: flex-start;
   width: min(340px, calc(100vw - 32px));
@@ -12784,7 +12794,7 @@ button {
 .shop-cart {
   position: fixed;
   z-index: 28;
-  top: clamp(84px, 8vw, 112px);
+  top: clamp(14px, 2vw, 28px);
   right: clamp(14px, 2.5vw, 36px);
   bottom: clamp(14px, 2vw, 30px);
   display: grid;
@@ -13057,15 +13067,14 @@ button {
   }
 
   .shop-cart-toggle {
-    top: auto;
+    top: 12px;
     right: 18px;
-    bottom: 18px;
     left: 18px;
     width: auto;
   }
 
   .shop-cart {
-    top: auto;
+    top: 12px;
     right: 12px;
     bottom: 12px;
     left: 12px;
@@ -13158,14 +13167,50 @@ button {
 
 .shop-page {
   background:
-    url("/assets/visuals/venue-stage.jpg") center top / cover fixed,
-    #050505;
-  color: var(--lev-white);
+    radial-gradient(circle at 88% 4%, rgba(231, 70, 151, 0.14), transparent 28rem),
+    radial-gradient(circle at 8% 28%, rgba(231, 70, 151, 0.07), transparent 24rem),
+    linear-gradient(180deg, #fffaf7 0%, #f7f3ef 46%, #fffaf7 100%);
+  color: var(--lev-ink);
 }
 
 .shop-page > * {
   position: relative;
   z-index: 1;
+}
+
+.shop-hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(255, 250, 247, 0.74), rgba(255, 250, 247, 0.96) 52%, #fffaf7 100%),
+    url("/assets/visuals/venue-stage.jpg") center top / cover fixed;
+  opacity: 0.42;
+  content: "";
+}
+
+.shop-page .levitate-nav {
+  border-color: rgba(17, 16, 21, 0.08);
+  background: rgba(255, 250, 247, 0.82);
+  box-shadow: 0 18px 60px rgba(17, 16, 21, 0.08);
+}
+
+.shop-page .levitate-logo,
+.shop-page .levitate-logo::after,
+.shop-page .levitate-nav__link {
+  color: rgba(17, 16, 21, 0.78);
+}
+
+.shop-page .levitate-logo {
+  color: var(--lev-ink);
+}
+
+.shop-page .levitate-logo small,
+.shop-page .levitate-nav__link.is-active,
+.shop-page .levitate-nav__link:hover,
+.shop-page .levitate-nav__item.is-open > .levitate-nav__link,
+.shop-page .levitate-nav__item:focus-within > .levitate-nav__link {
+  color: var(--lev-pink);
 }
 
 .shop-hero__content {
@@ -13189,24 +13234,32 @@ button {
 }
 
 .shop-catalog__heading h1 {
+  color: var(--lev-ink);
   font-size: var(--levitate-hero-title-size);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .shop-catalog__heading span {
-  color: rgba(247, 243, 239, 0.78);
+  width: fit-content;
+  max-width: 620px;
+  padding: 14px 18px;
+  border: 1px solid rgba(247, 243, 239, 0.16);
+  border-radius: 8px;
+  background: rgba(5, 5, 5, 0.58);
+  color: rgba(255, 250, 247, 0.9);
   font-size: var(--levitate-hero-description-size);
+  box-shadow: 0 18px 54px rgba(17, 16, 21, 0.12);
+  backdrop-filter: blur(12px);
 }
 
 .shop-registration,
 .shop-product-section {
   overflow: hidden;
-  border: 1px solid rgba(247, 243, 239, 0.14);
-  background:
-    linear-gradient(180deg, rgba(247, 243, 239, 0.105), rgba(247, 243, 239, 0.045)),
-    rgba(5, 5, 5, 0.78);
-  color: var(--lev-white);
-  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.36);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(17, 16, 21, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--lev-ink);
+  box-shadow: 0 24px 70px rgba(17, 16, 21, 0.08);
+  backdrop-filter: blur(16px);
 }
 
 .shop-registration h2,
@@ -13216,14 +13269,14 @@ button {
 .shop-media-package__overview h3,
 .shop-media-price-card > span,
 .shop-cost-card__top > span {
-  color: #fff;
+  color: var(--lev-ink);
 }
 
 .shop-registration__intro p,
 .shop-media-package__overview > div > span,
 .shop-cost-table__head p,
 .shop-product-card__body span {
-  color: rgba(247, 243, 239, 0.68);
+  color: rgba(17, 16, 21, 0.62);
 }
 
 .shop-registration__actions article,
@@ -13232,27 +13285,30 @@ button {
 .shop-media-package__overview,
 .shop-media-price-card,
 .shop-cost-card {
-  border-color: rgba(247, 243, 239, 0.13);
+  border-color: rgba(17, 16, 21, 0.08);
   background:
-    linear-gradient(180deg, rgba(247, 243, 239, 0.1), rgba(247, 243, 239, 0.045)),
-    rgba(11, 11, 13, 0.82);
-  color: var(--lev-white);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 250, 247, 0.74)),
+    #fffaf7;
+  color: var(--lev-ink);
+  box-shadow: 0 16px 48px rgba(17, 16, 21, 0.065);
 }
 
 .shop-registration__actions article {
-  min-height: 142px;
+  min-height: 132px;
 }
 
 .shop-registration__actions h3,
-.shop-registration__actions p,
 .shop-cost-card__top small,
 .shop-media-price-card p {
-  color: rgba(247, 243, 239, 0.7);
+  color: rgba(17, 16, 21, 0.66);
 }
 
 .shop-registration__actions h3 {
-  color: #fff;
+  color: var(--lev-ink);
+}
+
+.shop-registration__actions p {
+  color: rgba(17, 16, 21, 0.56);
 }
 
 .shop-registration__buttons {
@@ -13260,23 +13316,22 @@ button {
 }
 
 .shop-secondary-action {
-  border-color: rgba(247, 243, 239, 0.2);
-  background: rgba(247, 243, 239, 0.045);
+  border-color: rgba(231, 70, 151, 0.42);
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .shop-secondary-action:hover,
 .shop-product-card button:hover,
 .shop-media-price-card button:hover {
-  border-color: rgba(231, 70, 151, 0.8);
-  background: rgba(231, 70, 151, 0.12);
+  border-color: rgba(231, 70, 151, 0.78);
+  background: rgba(231, 70, 151, 0.08);
 }
 
 .shop-cost-table {
   background:
-    radial-gradient(circle at 92% 0%, rgba(231, 70, 151, 0.16), transparent 18rem),
-    linear-gradient(180deg, rgba(247, 243, 239, 0.08), rgba(247, 243, 239, 0.035)),
-    rgba(5, 5, 5, 0.64);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    radial-gradient(circle at 94% 0%, rgba(231, 70, 151, 0.12), transparent 18rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(247, 243, 239, 0.82));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .shop-cost-card {
@@ -13284,34 +13339,33 @@ button {
 }
 
 .shop-cost-card__price {
-  border-top-color: rgba(247, 243, 239, 0.12);
+  border-top-color: rgba(17, 16, 21, 0.09);
 }
 
 .shop-cost-card__normal {
-  border-color: rgba(247, 243, 239, 0.1);
-  background: rgba(247, 243, 239, 0.06);
+  border-color: rgba(17, 16, 21, 0.07);
+  background: rgba(17, 16, 21, 0.035);
 }
 
 .shop-cost-card__normal strong,
-.shop-media-package__overview li,
 .shop-product-card li,
 .shop-media-price-card > span {
-  color: rgba(247, 243, 239, 0.86);
+  color: rgba(17, 16, 21, 0.84);
 }
 
 .shop-product-card figure,
 .shop-ticket-visual,
 .shop-icon-visual {
-  background: rgba(247, 243, 239, 0.06);
+  background: rgba(247, 243, 239, 0.72);
 }
 
 .shop-product-card figure {
-  border-bottom: 1px solid rgba(247, 243, 239, 0.1);
+  border-bottom: 1px solid rgba(17, 16, 21, 0.07);
 }
 
 .shop-ticket-visual {
   background:
-    linear-gradient(90deg, rgba(247, 243, 239, 0.9) 0 74%, rgba(255, 255, 255, 0.98) 74% 100%),
+    linear-gradient(90deg, rgba(247, 243, 239, 0.98) 0 74%, rgba(255, 255, 255, 0.98) 74% 100%),
     #f7f3ef;
 }
 
@@ -13321,13 +13375,18 @@ button {
 
 .shop-media-package__overview {
   background:
-    linear-gradient(180deg, rgba(247, 243, 239, 0.1), rgba(247, 243, 239, 0.04)),
-    rgba(5, 5, 5, 0.78);
+    radial-gradient(circle at 96% 8%, rgba(231, 70, 151, 0.11), transparent 18rem),
+    rgba(255, 250, 247, 0.9);
+}
+
+.shop-media-package__overview figure::after {
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0.04), rgba(5, 5, 5, 0.32));
 }
 
 .shop-media-package__overview li {
-  border-color: rgba(231, 70, 151, 0.28);
-  background: rgba(231, 70, 151, 0.1);
+  border-color: rgba(231, 70, 151, 0.22);
+  background: rgba(231, 70, 151, 0.075);
+  color: rgba(17, 16, 21, 0.82);
 }
 
 .shop-media-price-card {
@@ -13336,7 +13395,16 @@ button {
 
 .shop-media-price-card button,
 .shop-product-card button {
-  background: rgba(247, 243, 239, 0.035);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.shop-cart-toggle,
+.shop-cart {
+  border-color: rgba(247, 243, 239, 0.18);
+  background:
+    linear-gradient(135deg, rgba(247, 243, 239, 0.16), rgba(247, 243, 239, 0.06)),
+    rgba(5, 5, 5, 0.8);
+  color: var(--lev-white);
 }
 
 @media (max-width: 680px) {

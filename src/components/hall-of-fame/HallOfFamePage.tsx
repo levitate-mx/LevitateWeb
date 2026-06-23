@@ -7,8 +7,48 @@ import { LevitateHeader } from "../home/LevitateHeader";
 const mvpPerformances = [
   { year: "Otoño 2023", title: "Barracuda", academy: "Ventuerion", venue: "CDMX", image: "/assets/mvp-barracuda-2023.jpg" },
   { year: "Primavera 2024", title: "Paint in Black", academy: "Dance Forum", venue: "CDMX", image: "/assets/mvp-paint-in-black-2024.jpg" },
+  {
+    year: "Primavera 2024",
+    title: "Querida Yo",
+    academy: "Ars Nova",
+    venue: "Puebla",
+    image: "/assets/mvp-querida-yo-2024.jpg",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
   { year: "Otoño 2024", title: "Zozobra", academy: "Spiralis", venue: "CDMX", image: "/assets/mvp-zozobra-2024.jpg" },
-  { year: "Primavera 2024", title: "Querida Yo", academy: "Ars Nova", venue: "Puebla", image: "/assets/mvp-querida-yo-2024.jpg" },
+  { year: "2025", title: "Party, Party, Party", academy: "Stiletto Estudio de Danza", venue: "San Luis Potosí", image: "/assets/mvp-party-party-party-2025-slp.png" },
+  {
+    year: "Primavera 2026",
+    title: "RUN",
+    academy: "Release Danza de Alto Rendimiento",
+    venue: "Veracruz",
+    image: "/assets/mvp-run-primavera-2026-veracruz.jpg",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
+  {
+    year: "Primavera 2026",
+    title: "El Nahual",
+    academy: "Azquil",
+    venue: "CDMX",
+    image: "/assets/mvp-el-nahual-primavera-2026-cdmx.jpg",
+    imageClassName: "levitate-mvp-card__image--fill levitate-mvp-card__image--nahual",
+  },
+  {
+    year: "Primavera 2026",
+    title: "INSTRUCTION",
+    academy: "Plataforma studio",
+    venue: "Puebla",
+    image: "/assets/mvp-instruction-primavera-2026-puebla.jpg",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
+  {
+    year: "Otoño 2026",
+    title: "LA FORMA",
+    academy: "Release Danza de Alto Rendimiento",
+    venue: "CDMX",
+    image: "/assets/mvp-la-forma-otono-2026-cdmx.jpg",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
   { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.venue },
   { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.workshops },
   { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/premiation-aerial-medal-system.jpg" },
@@ -81,7 +121,12 @@ export function HallOfFamePage() {
                     key={`${performance.image}-${index}`}
                   >
                     <figure>
-                      <img src={performance.image} alt={`Imagen de referencia para ${performance.title}`} loading={isActive ? "eager" : "lazy"} />
+                      <img
+                        className={performance.imageClassName}
+                        src={performance.image}
+                        alt={`Imagen de referencia para ${performance.title}`}
+                        loading={isActive ? "eager" : "lazy"}
+                      />
                     </figure>
                     <div className="levitate-mvp-card__content">
                       <small>{performance.year}</small>
