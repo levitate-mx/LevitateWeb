@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Award, Building2, ChevronLeft, ChevronRight, Download, MapPin, Sparkles } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, Download, MapPin } from "lucide-react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -195,12 +195,10 @@ export function HallOfFamePage() {
 
             <aside className="levitate-scholarships__panel" aria-label="Criterios de becados">
               <div>
-                <Award aria-hidden="true" size={34} />
                 <span>Ranking</span>
                 <p>Mejores puntajes oficiales de la competencia.</p>
               </div>
               <div>
-                <Sparkles aria-hidden="true" size={34} />
                 <span>Impulso</span>
                 <p>Reconocimiento para continuar el proceso competitivo.</p>
               </div>

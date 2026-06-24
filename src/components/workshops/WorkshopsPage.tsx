@@ -193,7 +193,7 @@ export function WorkshopsPage() {
           <article className="workshops-venue-card workshops-venue-card--confirmed">
             <img src={assets.hero} alt="Artista en telas durante entrenamiento escénico Levitate." loading="lazy" />
             <div>
-              <h2>CDMX · Cirko de Mente</h2>
+              <h2>CDMX · CAO</h2>
               <p>
                 <CalendarDays aria-hidden="true" size={17} /> Viernes 29 de mayo
               </p>

@@ -6260,7 +6260,7 @@ button {
   }
 
   .workshops-page .levitate-nav nav {
-    display: none;
+    display: flex;
   }
 
   .workshops-hero {
@@ -9581,7 +9581,7 @@ button {
 
 .levitate-scholarships__panel > div {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   min-height: 190px;
   align-content: center;
   justify-items: center;
@@ -9592,11 +9592,6 @@ button {
     radial-gradient(circle at 90% 8%, rgba(231, 70, 151, 0.14), transparent 12rem),
     rgba(255, 255, 255, 0.64);
   box-shadow: 0 24px 70px rgba(32, 20, 27, 0.09);
-}
-
-.levitate-scholarships__panel svg {
-  color: var(--lev-pink);
-  stroke-width: 1.6;
 }
 
 .levitate-scholarships__panel span {
@@ -13868,6 +13863,27 @@ button {
     padding-left: 20px;
   }
 
+  .levitate-nav {
+    gap: 16px;
+  }
+
+  .levitate-nav nav {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 22px;
+    overflow-x: auto;
+    padding-bottom: 14px;
+    scrollbar-width: none;
+  }
+
+  .levitate-nav nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .levitate-nav__link {
+    white-space: nowrap;
+  }
+
   .hall-fame-shell {
     background:
       radial-gradient(circle at 76% 4%, rgba(231, 70, 151, 0.22), transparent 18rem),
@@ -13965,29 +13981,41 @@ button {
   .levitate-nav__dropdown {
     --levitate-menu-top: 126px;
     top: var(--levitate-menu-top);
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     width: 100vw;
     height: calc(100dvh - var(--levitate-menu-top));
     min-height: calc(100vh - var(--levitate-menu-top));
   }
 
   .levitate-nav__dropdown-visual {
-    min-height: 100%;
-    padding: 20px;
+    display: none;
   }
 
   .levitate-nav__dropdown-list {
+    justify-content: start;
+    gap: 24px;
     min-height: 100%;
-    padding: 20px;
+    padding: 28px 24px 36px;
+    background: rgba(247, 243, 239, 0.98);
+    clip-path: none;
   }
 
   .levitate-nav__dropdown-main {
-    font-size: clamp(1.55rem, 7.8vw, 2.45rem);
+    font-size: clamp(2rem, 10vw, 3rem);
     white-space: normal;
   }
 
+  .levitate-nav__dropdown-sublist,
+  .levitate-nav__dropdown-item:hover .levitate-nav__dropdown-sublist,
+  .levitate-nav__dropdown-item:focus-within .levitate-nav__dropdown-sublist {
+    max-height: none;
+    padding-top: 10px;
+    opacity: 1;
+    transform: none;
+  }
+
   .levitate-nav__dropdown-sublist a {
-    font-size: clamp(0.7rem, 2.8vw, 0.86rem);
+    font-size: clamp(0.76rem, 3.2vw, 0.92rem);
     white-space: normal;
   }
 
