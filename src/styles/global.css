@@ -8653,7 +8653,6 @@ button {
   inset: 0;
   height: 100%;
   object-fit: cover;
-  filter: grayscale(1) saturate(0) contrast(1.08) brightness(0.58);
   transition: transform 650ms var(--ease-out);
 }
 
@@ -8662,12 +8661,7 @@ button {
 }
 
 .levitate-venue-card::after {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0.14)),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.44));
-  content: "";
+  content: none;
 }
 
 .levitate-venue-card > div {
@@ -9491,45 +9485,11 @@ button {
   pointer-events: none;
 }
 
-.levitate-scholarships__menu,
 .levitate-scholarships__grid {
   position: relative;
   z-index: 1;
   width: min(100%, 1180px);
   margin: 0 auto;
-}
-
-.levitate-scholarships__menu {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.levitate-scholarships__menu a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  border: 1px solid rgba(17, 16, 21, 0.1);
-  border-radius: 999px;
-  padding: 0 18px;
-  color: rgba(17, 16, 21, 0.64);
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  transition:
-    border-color 200ms ease,
-    color 200ms ease,
-    background 200ms ease;
-}
-
-.levitate-scholarships__menu a:hover,
-.levitate-scholarships__menu a.is-active {
-  border-color: rgba(231, 70, 151, 0.34);
-  background: rgba(231, 70, 151, 0.08);
-  color: var(--lev-pink);
 }
 
 .levitate-scholarships__grid {
@@ -9543,6 +9503,8 @@ button {
   display: grid;
   gap: 18px;
   max-width: 780px;
+  justify-items: center;
+  text-align: center;
 }
 
 .levitate-scholarships__copy .levitate-eyebrow {
@@ -9555,10 +9517,10 @@ button {
 .levitate-scholarships__copy h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(4rem, 7vw, 7.8rem);
+  font-size: clamp(3.4rem, 5.8vw, 6.2rem);
   font-weight: 400;
-  letter-spacing: 0.045em;
-  line-height: 0.84;
+  letter-spacing: 0.03em;
+  line-height: 0.92;
   text-transform: uppercase;
   text-wrap: balance;
 }
@@ -9588,7 +9550,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  justify-self: start;
+  justify-self: center;
   min-height: 52px;
   margin-top: 8px;
   border: 2px solid rgba(231, 70, 151, 0.82);
@@ -9621,7 +9583,8 @@ button {
   display: grid;
   gap: 10px;
   min-height: 190px;
-  align-content: end;
+  align-content: center;
+  justify-items: center;
   border: 1px solid rgba(231, 70, 151, 0.2);
   border-radius: 8px;
   padding: clamp(18px, 2vw, 24px);
@@ -9639,19 +9602,22 @@ button {
 .levitate-scholarships__panel span {
   color: var(--lev-ink);
   font-family: var(--font-display);
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: clamp(2rem, 2.8vw, 2.75rem);
   font-weight: 400;
   letter-spacing: 0.06em;
   line-height: 0.9;
+  text-align: center;
   text-transform: uppercase;
 }
 
 .levitate-scholarships__panel p {
+  max-width: 28ch;
   margin: 0;
   color: rgba(17, 16, 21, 0.62);
   font-size: 0.96rem;
   font-weight: 720;
   line-height: 1.45;
+  text-align: center;
 }
 
 .levitate-sponsors {
@@ -12273,6 +12239,7 @@ button {
     background 180ms ease,
     border-color 180ms ease,
     color 180ms ease,
+    opacity 180ms ease,
     transform 180ms var(--ease-out);
 }
 
@@ -12308,11 +12275,22 @@ button {
     rgba(5, 5, 5, 0.82);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(16px);
-}
-
-.shop-page.is-cart-open .shop-cart-toggle {
   opacity: 0;
   pointer-events: none;
+  transform: translateY(-12px);
+}
+
+.shop-page.is-scrolled .shop-cart-toggle {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.shop-page.is-cart-open .shop-cart-toggle,
+.shop-page.is-cart-open.is-scrolled .shop-cart-toggle {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-12px);
 }
 
 .shop-cart-toggle > span {
@@ -12947,21 +12925,6 @@ button {
   gap: 7px;
   align-items: start;
   justify-items: start;
-}
-
-.shop-product-card__price span {
-  display: inline-flex;
-  width: fit-content;
-  border: 1px solid rgba(231, 70, 151, 0.28);
-  border-radius: 999px;
-  padding: 7px 12px 6px;
-  background: rgba(231, 70, 151, 0.08);
-  color: var(--lev-pink);
-  font-size: 0.75rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  line-height: 1;
-  text-transform: uppercase;
 }
 
 .shop-product-card__price-row {
@@ -13991,7 +13954,8 @@ button {
   }
 
   .levitate-scholarships__copy h2 {
-    font-size: clamp(3.4rem, 16vw, 5rem);
+    font-size: clamp(3rem, 13vw, 4.4rem);
+    line-height: 0.94;
   }
 
   .levitate-scholarships__download {

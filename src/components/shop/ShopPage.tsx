@@ -157,6 +157,7 @@ export function ShopPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeMediaImageIndex, setActiveMediaImageIndex] = useState(0);
   const [enteredDiscountCode, setEnteredDiscountCode] = useState("");
+  const [hasScrolledPastHeroTop, setHasScrolledPastHeroTop] = useState(false);
   const cartLines = useMemo(
     () =>
       products
@@ -193,6 +194,17 @@ export function ShopPage() {
     }, 5000);
 
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const updateCartVisibility = () => {
+      setHasScrolledPastHeroTop(window.scrollY > 8);
+    };
+
+    updateCartVisibility();
+    window.addEventListener("scroll", updateCartVisibility, { passive: true });
+
+    return () => window.removeEventListener("scroll", updateCartVisibility);
   }, []);
 
   const addProduct = (productId: string) => {
@@ -256,7 +268,6 @@ export function ShopPage() {
 
           <div className="shop-product-card__buy">
             <div className="shop-product-card__price">
-              {product.regularPrice ? <span>Descuento preventa</span> : null}
               <div className="shop-product-card__price-row">
                 <strong>{formatCurrency(product.price)}</strong>
                 {product.regularPrice ? (
@@ -339,7 +350,7 @@ export function ShopPage() {
   );
 
   return (
-    <main className={`shop-page ${isCartOpen ? "is-cart-open" : ""}`}>
+    <main className={`shop-page ${isCartOpen ? "is-cart-open" : ""}${hasScrolledPastHeroTop ? " is-scrolled" : ""}`}>
       <section className="shop-hero">
         <LevitateHeader activeLabel="Tienda" useRootLinks />
 

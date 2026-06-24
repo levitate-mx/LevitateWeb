@@ -160,11 +160,6 @@ export function HallOfFamePage() {
         </section>
 
         <section className="levitate-scholarships" id="becados" aria-labelledby="scholarships-title">
-          <div className="levitate-scholarships__menu" aria-label="Secciones del salón de la fama">
-            <a href="#mvps">MVPs</a>
-            <a className="is-active" href="#becados">Becados</a>
-          </div>
-
           <div className="levitate-scholarships__grid">
             <div className="levitate-scholarships__copy">
               <p className="levitate-eyebrow">Reconocimiento Levitate</p>
