@@ -7,6 +7,7 @@ import {
   Plus,
   ShoppingBag,
   ShoppingCart,
+  Sparkles,
   Ticket,
   Trash2,
   UserRound,
@@ -24,6 +25,7 @@ type ShopProduct = {
   category: "Boletos" | "Fotografía y video";
   description: string;
   price: number;
+  regularPrice?: number;
   badge?: string;
   image?: string;
   details?: string[];
@@ -41,9 +43,9 @@ type CartState = Record<string, number>;
 
 const mediaPackageDetails = ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"];
 const mediaPackageHighlights = [
-  { amount: "10", label: "fotos de acción" },
-  { amount: "1", label: "video de presentación" },
-  { amount: "2", label: "fotos estudio" },
+  { amount: "10", icon: Camera, label: "fotos de acción" },
+  { amount: "1", icon: Video, label: "video de presentación" },
+  { amount: "2", icon: Sparkles, label: "fotos estudio" },
 ];
 const mediaPackageImages = [
   "/assets/visuals/experience-competition.jpg",
@@ -65,7 +67,9 @@ const products: ShopProduct[] = [
     name: "Boleto por bloque",
     category: "Boletos",
     description: "Acceso a un bloque específico del evento.",
-    price: 350,
+    price: 250,
+    regularPrice: 350,
+    badge: "¡¡¡Oferta!!!",
     visual: "ticket",
   },
   {
@@ -127,6 +131,10 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 0,
   style: "currency",
 });
+const discountCode = "COLIBRI26";
+const discountRate = 0.1;
+const ticketPresaleDeadline = "10 de octubre";
+const registrationPresaleDeadline = "30 de septiembre";
 
 function formatCurrency(value: number) {
   return currencyFormatter.format(value);
@@ -148,6 +156,7 @@ export function ShopPage() {
   const [cart, setCart] = useState<CartState>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeMediaImageIndex, setActiveMediaImageIndex] = useState(0);
+  const [enteredDiscountCode, setEnteredDiscountCode] = useState("");
   const cartLines = useMemo(
     () =>
       products
@@ -157,6 +166,24 @@ export function ShopPage() {
   );
   const cartCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const subtotal = cartLines.reduce((total, line) => total + line.product.price * line.quantity, 0);
+  const mediaSubtotal = cartLines.reduce(
+    (total, line) =>
+      line.product.category === "Fotografía y video" ? total + line.product.price * line.quantity : total,
+    0,
+  );
+  const normalizedDiscountCode = enteredDiscountCode.trim().toUpperCase();
+  const hasDiscountCode = normalizedDiscountCode.length > 0;
+  const isDiscountCodeValid = normalizedDiscountCode === discountCode;
+  const isDiscountApplied = isDiscountCodeValid && mediaSubtotal > 0;
+  const discountAmount = isDiscountApplied ? Math.round(mediaSubtotal * discountRate) : 0;
+  const discountMessage = !hasDiscountCode
+    ? ""
+    : isDiscountApplied
+      ? "10% aplicado a foto y video"
+      : isDiscountCodeValid
+        ? "Aplica solo con paquetes de foto y video"
+        : "Código no válido";
+  const total = subtotal - discountAmount;
   const ticketProducts = products.filter((product) => product.category === "Boletos");
   const mediaProducts = products.filter((product) => product.category === "Fotografía y video");
 
@@ -228,7 +255,16 @@ export function ShopPage() {
           </div>
 
           <div className="shop-product-card__buy">
-            <strong>{formatCurrency(product.price)}</strong>
+            <div className="shop-product-card__price">
+              {product.regularPrice ? <span>Descuento preventa</span> : null}
+              <strong>{formatCurrency(product.price)}</strong>
+              {product.regularPrice ? (
+                <small>
+                  Preventa hasta el {ticketPresaleDeadline}.{" "}
+                  Normal <del>{formatCurrency(product.regularPrice)}</del>
+                </small>
+              ) : null}
+            </div>
             <button onClick={() => addProduct(product.id)} type="button">
               <ShoppingCart aria-hidden="true" size={18} />
               {quantity > 0 ? `Añadir (${quantity})` : "Añadir al carrito"}
@@ -260,12 +296,17 @@ export function ShopPage() {
           <h3>Paquete all inclusive.</h3>
           <span>Tu cobertura oficial incluye estos entregables; solo cambia el costo por tipo de participación.</span>
           <ul>
-            {mediaPackageHighlights.map((detail) => (
-              <li key={`${detail.amount}-${detail.label}`}>
-                <strong>{detail.amount}</strong>
-                <span>{detail.label}</span>
-              </li>
-            ))}
+            {mediaPackageHighlights.map((detail) => {
+              const HighlightIcon = detail.icon;
+
+              return (
+                <li key={`${detail.amount}-${detail.label}`}>
+                  <HighlightIcon aria-hidden="true" size={26} />
+                  <strong>{detail.amount}</strong>
+                  <span>{detail.label}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </article>
@@ -310,7 +351,7 @@ export function ShopPage() {
               {cartCount} {cartCount === 1 ? "item" : "items"}
             </strong>
           </span>
-          <b>{formatCurrency(subtotal)}</b>
+          <b>{formatCurrency(total)}</b>
         </button>
 
         {isCartOpen ? (
@@ -378,7 +419,10 @@ export function ShopPage() {
                 <div className="shop-cost-table__head">
                   <span>Costos de inscripción</span>
                   <h3>Categorías</h3>
-                  <p>Precios por participante según formato. Preventa disponible por tiempo limitado.</p>
+                  <p>
+                    Precios por participante según formato. Preventa de inscripción hasta el{" "}
+                    {registrationPresaleDeadline}.
+                  </p>
                 </div>
                 <div className="shop-cost-table__grid">
                   {registrationCosts.map((cost) => (
@@ -390,6 +434,7 @@ export function ShopPage() {
                       <div className="shop-cost-card__price">
                         <span>Preventa</span>
                         <strong>{formatCurrency(cost.presale)}</strong>
+                        <small>Hasta el {registrationPresaleDeadline}</small>
                       </div>
                       <div className="shop-cost-card__normal">
                         <span>Normal</span>
@@ -480,13 +525,38 @@ export function ShopPage() {
               )}
 
               <div className="shop-cart__summary">
+                <label className="shop-cart__discount">
+                  <span>Código de descuento</span>
+                  <input
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    onChange={(event) => setEnteredDiscountCode(event.target.value)}
+                    placeholder="COLIBRI26"
+                    type="text"
+                    value={enteredDiscountCode}
+                  />
+                  <small className="shop-cart__discount-note">
+                    COLIBRI26 aplica a los primeros 20 paquetes de foto y video.
+                  </small>
+                  {hasDiscountCode ? (
+                    <small className={isDiscountApplied ? "is-valid" : ""}>
+                      {discountMessage}
+                    </small>
+                  ) : null}
+                </label>
                 <div>
                   <span>Subtotal</span>
                   <strong>{formatCurrency(subtotal)}</strong>
                 </div>
-                <div>
-                  <span>Inscripción</span>
-                  <strong>Por CURP</strong>
+                {isDiscountApplied ? (
+                  <div className="shop-cart__discount-row">
+                    <span>Descuento COLIBRI26</span>
+                    <strong>-{formatCurrency(discountAmount)}</strong>
+                  </div>
+                ) : null}
+                <div className="shop-cart__total">
+                  <span>Total</span>
+                  <strong>{formatCurrency(total)}</strong>
                 </div>
                 <button disabled={cartCount === 0} type="button">
                   <PackageCheck aria-hidden="true" size={19} />

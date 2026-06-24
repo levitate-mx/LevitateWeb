@@ -8039,9 +8039,7 @@ button {
   position: relative;
   min-height: var(--levitate-hero-screen);
   overflow: hidden;
-  background:
-    radial-gradient(circle at 74% 22%, rgba(231, 70, 151, 0.18), transparent 24rem),
-    linear-gradient(180deg, #050505 0%, #050505 100%);
+  background: #050505;
   isolation: isolate;
 }
 
@@ -8058,12 +8056,10 @@ button {
 
 .levitate-hero__poster {
   z-index: -5;
-  opacity: 0.92;
 }
 
 .levitate-hero__media {
   z-index: -4;
-  opacity: 0.9;
   animation: levitate-media-in 1700ms var(--ease-out) forwards;
 }
 
@@ -8071,12 +8067,7 @@ button {
   position: absolute;
   z-index: -2;
   inset: 0;
-  background:
-    radial-gradient(circle at 12% 82%, rgba(231, 70, 151, 0.3), transparent 22rem),
-    radial-gradient(circle at 88% 24%, rgba(231, 70, 151, 0.18), transparent 24rem),
-    radial-gradient(circle at 60% 50%, rgba(255, 255, 255, 0.08), transparent 18rem),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.62) 46%, rgba(0, 0, 0, 0.78) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.4) 70%, #050505 100%);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.58) 0%, rgba(0, 0, 0, 0.16) 48%, rgba(0, 0, 0, 0.32) 100%);
 }
 
 .levitate-menu-shell {
@@ -8662,7 +8653,6 @@ button {
   inset: 0;
   height: 100%;
   object-fit: cover;
-  filter: saturate(1.02) hue-rotate(302deg) contrast(1.1) brightness(0.62);
   transition: transform 650ms var(--ease-out);
 }
 
@@ -8671,12 +8661,7 @@ button {
 }
 
 .levitate-venue-card::after {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.92), rgba(0, 0, 0, 0.56), rgba(0, 0, 0, 0.08)),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.38));
-  content: "";
+  content: none;
 }
 
 .levitate-venue-card > div {
@@ -12275,6 +12260,14 @@ button {
   font-size: clamp(2rem, 3vw, 2.8rem);
 }
 
+.shop-cost-card__price small {
+  color: rgba(17, 16, 21, 0.56);
+  font-size: 0.78rem;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .shop-cost-card__normal {
   display: flex;
   align-items: center;
@@ -12442,6 +12435,7 @@ button {
 }
 
 .shop-media-package__overview li {
+  position: relative;
   display: grid;
   gap: 4px;
   min-height: 116px;
@@ -12454,6 +12448,14 @@ button {
     rgba(231, 70, 151, 0.075);
   color: var(--lev-ink);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.shop-media-package__overview li svg {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: rgba(231, 70, 151, 0.58);
+  stroke-width: 1.8;
 }
 
 .shop-media-package__overview li strong {
@@ -12733,9 +12735,43 @@ button {
   align-items: center;
 }
 
-.shop-product-card__buy > strong {
+.shop-product-card__price {
+  display: grid;
+  gap: 6px;
+  align-items: start;
+  justify-items: start;
+}
+
+.shop-product-card__price span {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid rgba(231, 70, 151, 0.28);
+  border-radius: 999px;
+  padding: 7px 12px 6px;
+  background: rgba(231, 70, 151, 0.08);
+  color: var(--lev-pink);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.shop-product-card__price strong {
   color: var(--lev-pink);
   font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+}
+
+.shop-product-card__price small {
+  color: rgba(17, 16, 21, 0.62);
+  font-size: 0.92rem;
+  font-weight: 820;
+}
+
+.shop-product-card__price del {
+  color: rgba(17, 16, 21, 0.54);
+  text-decoration-color: var(--lev-pink);
+  text-decoration-thickness: 2px;
 }
 
 .shop-product-card button {
@@ -12802,7 +12838,7 @@ button {
   max-width: 9ch;
 }
 
-.shop-product-card--icon .shop-product-card__buy > strong {
+.shop-product-card--icon .shop-product-card__price strong {
   font-size: clamp(1.65rem, 2.2vw, 2.1rem);
 }
 
@@ -13016,6 +13052,59 @@ button {
   border-top: 1px solid rgba(247, 243, 239, 0.15);
 }
 
+.shop-cart__discount {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(247, 243, 239, 0.14);
+  border-radius: 8px;
+  background: rgba(247, 243, 239, 0.055);
+}
+
+.shop-cart__discount > span {
+  color: var(--lev-pink);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.shop-cart__discount input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(247, 243, 239, 0.18);
+  border-radius: 5px;
+  background: rgba(5, 5, 5, 0.24);
+  color: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  outline: 0;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.shop-cart__discount input:focus {
+  border-color: rgba(231, 70, 151, 0.72);
+  box-shadow: 0 0 0 3px rgba(231, 70, 151, 0.14);
+}
+
+.shop-cart__discount input::placeholder {
+  color: rgba(247, 243, 239, 0.34);
+}
+
+.shop-cart__discount small {
+  color: rgba(247, 243, 239, 0.56);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.shop-cart__discount small.is-valid,
+.shop-cart__discount-row strong {
+  color: var(--lev-pink);
+}
+
 .shop-cart__summary > div {
   display: flex;
   justify-content: space-between;
@@ -13029,11 +13118,16 @@ button {
   color: #fff;
 }
 
+.shop-cart__total {
+  padding-top: 12px;
+  border-top: 1px solid rgba(247, 243, 239, 0.15);
+}
+
 .shop-cart-toggle b,
 .shop-cost-card__price strong,
 .shop-cost-card__normal strong,
 .shop-media-price-card strong,
-.shop-product-card__buy > strong,
+.shop-product-card__price strong,
 .shop-cart-line > strong,
 .shop-cart__summary strong {
   font-family: var(--font-display);
