@@ -9179,8 +9179,8 @@ button {
 }
 
 .levitate-hof__carousel {
-  --hof-card-width: clamp(760px, 72vw, 1120px);
-  --hof-card-height: clamp(390px, 33vw, 500px);
+  --hof-card-width: clamp(720px, 66vw, 1040px);
+  --hof-card-height: clamp(430px, 38vw, 560px);
   position: relative;
   z-index: 1;
   width: min(100%, 1520px);
@@ -9239,7 +9239,7 @@ button {
   position: absolute;
   top: 0;
   left: 50%;
-  grid-template-columns: minmax(420px, 1.32fr) minmax(250px, 0.68fr);
+  grid-template-columns: minmax(390px, 1.12fr) minmax(280px, 0.88fr);
   gap: clamp(22px, 2.6vw, 36px);
   width: var(--hof-card-width);
   height: var(--hof-card-height);
@@ -9368,13 +9368,13 @@ button {
 .levitate-mvp-card__image {
   position: relative;
   z-index: 1;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   filter: saturate(1.04) contrast(1.04);
 }
 
 .levitate-mvp-card__image.levitate-mvp-card__image--fill {
-  object-fit: contain;
+  object-fit: cover;
   object-position: center center;
 }
 

@@ -5,7 +5,14 @@ import { LevitateHeader } from "../home/LevitateHeader";
 
 const mvpPerformances = [
   { year: "Otoño 2023", title: "Barracuda", academy: "Ventuerion", venue: "CDMX", image: "/assets/mvp-barracuda-2023.jpg" },
-  { year: "Primavera 2024", title: "Paint in Black", academy: "Dance Forum", venue: "CDMX", image: "/assets/mvp-paint-in-black-2024.jpg" },
+  {
+    year: "Primavera 2024",
+    title: "Paint in Black",
+    academy: "Dance Forum",
+    venue: "CDMX",
+    image: "/assets/mvp-paint-in-black-2024.jpg",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
   {
     year: "Primavera 2024",
     title: "Querida Yo",
@@ -15,7 +22,14 @@ const mvpPerformances = [
     imageClassName: "levitate-mvp-card__image--fill",
   },
   { year: "Otoño 2024", title: "Zozobra", academy: "Spiralis", venue: "CDMX", image: "/assets/mvp-zozobra-2024.jpg" },
-  { year: "2025", title: "Party, Party, Party", academy: "Stiletto Estudio de Danza", venue: "San Luis Potosí", image: "/assets/mvp-party-party-party-2025-slp.png" },
+  {
+    year: "2025",
+    title: "Party, Party, Party",
+    academy: "Stiletto Estudio de Danza",
+    venue: "San Luis Potosí",
+    image: "/assets/mvp-party-party-party-2025-slp.png",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
   {
     year: "Primavera 2026",
     title: "RUN",
