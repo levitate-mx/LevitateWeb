@@ -8653,6 +8653,7 @@ button {
   inset: 0;
   height: 100%;
   object-fit: cover;
+  filter: grayscale(1) saturate(0) contrast(1.08) brightness(0.58);
   transition: transform 650ms var(--ease-out);
 }
 
@@ -8661,7 +8662,12 @@ button {
 }
 
 .levitate-venue-card::after {
-  content: none;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0.14)),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.44));
+  content: "";
 }
 
 .levitate-venue-card > div {
@@ -9068,7 +9074,7 @@ button {
   min-height: var(--levitate-hero-screen);
   background:
     radial-gradient(circle at 76% 4%, rgba(231, 70, 151, 0.22), transparent 18rem),
-    linear-gradient(180deg, #050505 0%, #050505 120px, #fbf7f1 120px, #fffaf5 100%);
+    linear-gradient(180deg, #050505 0%, #050505 100%);
 }
 
 .hall-fame-shell > .levitate-nav {
@@ -9082,18 +9088,18 @@ button {
   min-height: calc(var(--levitate-hero-screen) - 120px);
   padding: clamp(54px, 6vw, 86px) 0 clamp(72px, 7vw, 104px);
   background:
-    radial-gradient(circle at 14% 12%, rgba(231, 70, 151, 0.13), transparent 20rem),
-    radial-gradient(circle at 82% 78%, rgba(231, 70, 151, 0.11), transparent 24rem),
-    linear-gradient(180deg, #fbf7f1 0%, #fffaf5 54%, #f8f0ee 100%);
-  color: var(--lev-ink);
+    radial-gradient(circle at 18% 12%, rgba(231, 70, 151, 0.26), transparent 24rem),
+    radial-gradient(circle at 82% 78%, rgba(231, 70, 151, 0.18), transparent 28rem),
+    linear-gradient(180deg, #050505 0%, #100b0f 62%, #050505 100%);
+  color: #fff;
 }
 
 .levitate-hof::before {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(104deg, transparent 0 46%, rgba(231, 70, 151, 0.08) 46.05% 46.18%, transparent 46.24%),
-    linear-gradient(0deg, transparent 0 51%, rgba(231, 70, 151, 0.06) 51.05% 51.16%, transparent 51.22%);
+    linear-gradient(104deg, transparent 0 46%, rgba(231, 70, 151, 0.18) 46.05% 46.18%, transparent 46.24%),
+    linear-gradient(0deg, transparent 0 51%, rgba(255, 255, 255, 0.05) 51.05% 51.16%, transparent 51.22%);
   content: "";
   pointer-events: none;
 }
@@ -9140,7 +9146,7 @@ button {
 }
 
 .levitate-hof__header .levitate-eyebrow {
-  color: rgba(17, 16, 21, 0.66);
+  color: rgba(255, 255, 255, 0.68);
   font-size: 0.88rem;
   letter-spacing: 0.32em;
 }
@@ -9164,7 +9170,7 @@ button {
   display: block;
   max-width: 540px;
   margin-top: 14px;
-  color: rgba(17, 16, 21, 0.68);
+  color: rgba(255, 255, 255, 0.74);
   font-size: 1.08rem;
   font-weight: 720;
   line-height: 1.45;
@@ -9179,11 +9185,11 @@ button {
 }
 
 .levitate-hof__carousel {
-  --hof-card-width: clamp(680px, 58vw, 920px);
-  --hof-card-height: clamp(360px, 31vw, 440px);
+  --hof-card-width: clamp(760px, 72vw, 1120px);
+  --hof-card-height: clamp(390px, 33vw, 500px);
   position: relative;
   z-index: 1;
-  width: min(100%, 1400px);
+  width: min(100%, 1520px);
   margin: 44px auto 0;
   padding: 0 clamp(58px, 6vw, 90px) 74px;
 }
@@ -9239,8 +9245,8 @@ button {
   position: absolute;
   top: 0;
   left: 50%;
-  grid-template-columns: minmax(300px, 1.08fr) minmax(250px, 0.74fr);
-  gap: clamp(22px, 3vw, 42px);
+  grid-template-columns: minmax(420px, 1.32fr) minmax(250px, 0.68fr);
+  gap: clamp(22px, 2.6vw, 36px);
   width: var(--hof-card-width);
   height: var(--hof-card-height);
   padding: clamp(16px, 1.9vw, 22px);
@@ -9330,26 +9336,55 @@ button {
   overflow: hidden;
   border: 0;
   border-radius: 13px;
-  background: transparent;
+  background: #120d11;
   place-items: center;
+  isolation: isolate;
 }
 
-.levitate-mvp-card figure img {
+.levitate-mvp-card__image-backdrop,
+.levitate-mvp-card__image {
   display: block;
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+.levitate-mvp-card__image-backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.72;
+  filter: blur(18px) saturate(1.12) contrast(1.08) brightness(0.64);
+  transform: scale(1.1);
+}
+
+.levitate-mvp-card figure::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 42%, transparent 0 38%, rgba(5, 5, 5, 0.2) 72%, rgba(5, 5, 5, 0.42) 100%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0.06), rgba(5, 5, 5, 0.28));
+  content: "";
+  pointer-events: none;
+}
+
+.levitate-mvp-card__image {
+  position: relative;
+  z-index: 1;
   object-fit: contain;
   object-position: center;
   filter: saturate(1.04) contrast(1.04);
 }
 
-.levitate-mvp-card figure img.levitate-mvp-card__image--fill {
-  object-fit: cover;
+.levitate-mvp-card__image.levitate-mvp-card__image--fill {
+  object-fit: contain;
   object-position: center center;
 }
 
-.levitate-mvp-card figure img.levitate-mvp-card__image--nahual {
+.levitate-mvp-card__image.levitate-mvp-card__image--nahual {
   object-position: center center;
   transform: scale(1.035);
 }
@@ -9431,6 +9466,192 @@ button {
   font-size: 1rem;
   font-weight: 840;
   line-height: 1.28;
+}
+
+.levitate-scholarships {
+  position: relative;
+  display: grid;
+  gap: clamp(24px, 3vw, 40px);
+  padding: clamp(58px, 7vw, 104px) var(--container-pad) clamp(70px, 8vw, 118px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(231, 70, 151, 0.16), transparent 22rem),
+    radial-gradient(circle at 92% 22%, rgba(231, 70, 151, 0.12), transparent 24rem),
+    linear-gradient(180deg, #fffaf5 0%, #f7f0ea 100%);
+  color: var(--lev-ink);
+}
+
+.levitate-scholarships::before {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(104deg, transparent 0 49%, rgba(231, 70, 151, 0.08) 49.05% 49.18%, transparent 49.24%),
+    linear-gradient(0deg, transparent 0 62%, rgba(231, 70, 151, 0.06) 62.05% 62.16%, transparent 62.22%);
+  content: "";
+  pointer-events: none;
+}
+
+.levitate-scholarships__menu,
+.levitate-scholarships__grid {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.levitate-scholarships__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.levitate-scholarships__menu a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid rgba(17, 16, 21, 0.1);
+  border-radius: 999px;
+  padding: 0 18px;
+  color: rgba(17, 16, 21, 0.64);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition:
+    border-color 200ms ease,
+    color 200ms ease,
+    background 200ms ease;
+}
+
+.levitate-scholarships__menu a:hover,
+.levitate-scholarships__menu a.is-active {
+  border-color: rgba(231, 70, 151, 0.34);
+  background: rgba(231, 70, 151, 0.08);
+  color: var(--lev-pink);
+}
+
+.levitate-scholarships__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.48fr);
+  gap: clamp(28px, 5vw, 76px);
+  align-items: center;
+}
+
+.levitate-scholarships__copy {
+  display: grid;
+  gap: 18px;
+  max-width: 780px;
+}
+
+.levitate-scholarships__copy .levitate-eyebrow {
+  margin: 0;
+  color: var(--lev-pink);
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+}
+
+.levitate-scholarships__copy h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 7vw, 7.8rem);
+  font-weight: 400;
+  letter-spacing: 0.045em;
+  line-height: 0.84;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.levitate-scholarships__copy h2 span {
+  color: var(--lev-pink);
+}
+
+.levitate-scholarships__copy strong {
+  color: rgba(17, 16, 21, 0.8);
+  font-size: clamp(1.15rem, 2vw, 1.65rem);
+  font-weight: 840;
+  line-height: 1.25;
+}
+
+.levitate-scholarships__copy p:not(.levitate-eyebrow) {
+  max-width: 680px;
+  margin: 0;
+  color: rgba(17, 16, 21, 0.64);
+  font-size: clamp(1rem, 1.35vw, 1.14rem);
+  font-weight: 660;
+  line-height: 1.6;
+}
+
+.levitate-scholarships__download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  justify-self: start;
+  min-height: 52px;
+  margin-top: 8px;
+  border: 2px solid rgba(231, 70, 151, 0.82);
+  padding: 0 22px;
+  background: var(--lev-pink);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 0 18px 46px rgba(231, 70, 151, 0.2);
+  transition:
+    background 200ms ease,
+    border-color 200ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.levitate-scholarships__download:hover {
+  border-color: rgba(255, 121, 186, 0.96);
+  background: #d83788;
+  transform: translateY(-3px);
+}
+
+.levitate-scholarships__panel {
+  display: grid;
+  gap: 14px;
+}
+
+.levitate-scholarships__panel > div {
+  display: grid;
+  gap: 10px;
+  min-height: 190px;
+  align-content: end;
+  border: 1px solid rgba(231, 70, 151, 0.2);
+  border-radius: 8px;
+  padding: clamp(18px, 2vw, 24px);
+  background:
+    radial-gradient(circle at 90% 8%, rgba(231, 70, 151, 0.14), transparent 12rem),
+    rgba(255, 255, 255, 0.64);
+  box-shadow: 0 24px 70px rgba(32, 20, 27, 0.09);
+}
+
+.levitate-scholarships__panel svg {
+  color: var(--lev-pink);
+  stroke-width: 1.6;
+}
+
+.levitate-scholarships__panel span {
+  color: var(--lev-ink);
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 3rem);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.levitate-scholarships__panel p {
+  margin: 0;
+  color: rgba(17, 16, 21, 0.62);
+  font-size: 0.96rem;
+  font-weight: 720;
+  line-height: 1.45;
 }
 
 .levitate-sponsors {
@@ -11879,20 +12100,6 @@ button {
   min-height: var(--levitate-hero-screen);
 }
 
-.shop-page .levitate-nav {
-  position: relative;
-  z-index: 5;
-  width: calc(100% - clamp(28px, 5vw, 72px));
-  margin-top: 16px;
-  border: 1px solid rgba(247, 243, 239, 0.1);
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(247, 243, 239, 0.08), rgba(247, 243, 239, 0.035)),
-    rgba(5, 5, 5, 0.56);
-  padding: 18px clamp(18px, 2.2vw, 34px);
-  backdrop-filter: blur(16px);
-}
-
 .shop-hero__content {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -13338,34 +13545,10 @@ button {
   inset: 0;
   z-index: -1;
   background:
-    linear-gradient(180deg, rgba(255, 250, 247, 0.74), rgba(255, 250, 247, 0.96) 52%, #fffaf7 100%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0.82) 0%, rgba(5, 5, 5, 0.66) 28%, rgba(255, 250, 247, 0.9) 68%, #fffaf7 100%),
     url("/assets/visuals/venue-stage.jpg") center top / cover fixed;
-  opacity: 0.42;
+  opacity: 0.78;
   content: "";
-}
-
-.shop-page .levitate-nav {
-  border-color: rgba(17, 16, 21, 0.08);
-  background: rgba(255, 250, 247, 0.82);
-  box-shadow: 0 18px 60px rgba(17, 16, 21, 0.08);
-}
-
-.shop-page .levitate-logo,
-.shop-page .levitate-logo::after,
-.shop-page .levitate-nav__link {
-  color: rgba(17, 16, 21, 0.78);
-}
-
-.shop-page .levitate-logo {
-  color: var(--lev-ink);
-}
-
-.shop-page .levitate-logo small,
-.shop-page .levitate-nav__link.is-active,
-.shop-page .levitate-nav__link:hover,
-.shop-page .levitate-nav__item.is-open > .levitate-nav__link,
-.shop-page .levitate-nav__item:focus-within > .levitate-nav__link {
-  color: var(--lev-pink);
 }
 
 .shop-hero__content {
@@ -13568,6 +13751,14 @@ button {
 }
 
 @media (max-width: 1080px) {
+  .levitate-scholarships__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-scholarships__panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .levitate-nav {
     grid-template-columns: 1fr;
   }
@@ -13717,7 +13908,7 @@ button {
   .hall-fame-shell {
     background:
       radial-gradient(circle at 76% 4%, rgba(231, 70, 151, 0.22), transparent 18rem),
-      linear-gradient(180deg, #050505 0%, #050505 168px, #fbf7f1 168px, #fffaf5 100%);
+      linear-gradient(180deg, #050505 0%, #050505 100%);
   }
 
   .levitate-hof {
@@ -13788,6 +13979,23 @@ button {
 
   .levitate-mvp-card h2 {
     font-size: clamp(2.35rem, 11vw, 3.15rem);
+  }
+
+  .levitate-scholarships {
+    padding-top: 48px;
+  }
+
+  .levitate-scholarships__grid,
+  .levitate-scholarships__panel {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-scholarships__copy h2 {
+    font-size: clamp(3.4rem, 16vw, 5rem);
+  }
+
+  .levitate-scholarships__download {
+    width: 100%;
   }
 
   .levitate-nav__dropdown {

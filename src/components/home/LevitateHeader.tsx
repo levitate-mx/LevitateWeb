@@ -58,10 +58,6 @@ const navItems = [
   {
     label: "Salón de la fama",
     href: "/salon-de-la-fama/mvps",
-    children: [
-      { label: "MVPs", href: "/salon-de-la-fama/mvps" },
-      { label: "Becados", href: "#becados" },
-    ],
   },
   { label: "Contacto", href: "#contacto" },
 ] satisfies NavItem[];

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Building2, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
-import { assets } from "../../data/homeContent";
+import { Award, Building2, ChevronLeft, ChevronRight, Download, MapPin, Sparkles } from "lucide-react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -49,12 +48,6 @@ const mvpPerformances = [
     image: "/assets/mvp-la-forma-otono-2026-cdmx.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.venue },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.workshops },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/premiation-aerial-medal-system.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/premiation-motion-medal-system.jpg" },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: assets.hero },
-  { year: "2026", title: "MVP por anunciar", academy: "Academia por anunciar", venue: "Sede por anunciar", image: "/assets/sedes-edomex-hero.jpg" },
 ];
 
 function getMvpStackPosition(index: number, activeIndex: number) {
@@ -122,7 +115,14 @@ export function HallOfFamePage() {
                   >
                     <figure>
                       <img
-                        className={performance.imageClassName}
+                        aria-hidden="true"
+                        className="levitate-mvp-card__image-backdrop"
+                        src={performance.image}
+                        alt=""
+                        loading={isActive ? "eager" : "lazy"}
+                      />
+                      <img
+                        className={`levitate-mvp-card__image${performance.imageClassName ? ` ${performance.imageClassName}` : ""}`}
                         src={performance.image}
                         alt={`Imagen de referencia para ${performance.title}`}
                         loading={isActive ? "eager" : "lazy"}
@@ -156,6 +156,46 @@ export function HallOfFamePage() {
             >
               <ChevronRight aria-hidden="true" size={26} />
             </button>
+          </div>
+        </section>
+
+        <section className="levitate-scholarships" id="becados" aria-labelledby="scholarships-title">
+          <div className="levitate-scholarships__menu" aria-label="Secciones del salón de la fama">
+            <a href="#mvps">MVPs</a>
+            <a className="is-active" href="#becados">Becados</a>
+          </div>
+
+          <div className="levitate-scholarships__grid">
+            <div className="levitate-scholarships__copy">
+              <p className="levitate-eyebrow">Reconocimiento Levitate</p>
+              <h2 id="scholarships-title">
+                <span>Becados</span>
+                {" "}
+                de próxima edición
+              </h2>
+              <strong>Los mejores puntajes de la competencia.</strong>
+              <p>
+                Este reconocimiento impulsa a quienes dejaron una marca especial en el escenario. Las becas celebran
+                su nivel, disciplina y presencia para que sigan entrenando, creciendo y compitiendo dentro de Levitate.
+              </p>
+              <a className="levitate-scholarships__download" download href="/assets/becados-proxima-edicion.pdf">
+                <Download aria-hidden="true" size={20} />
+                Descargar PDF de becados
+              </a>
+            </div>
+
+            <aside className="levitate-scholarships__panel" aria-label="Criterios de becados">
+              <div>
+                <Award aria-hidden="true" size={34} />
+                <span>Ranking</span>
+                <p>Mejores puntajes oficiales de la competencia.</p>
+              </div>
+              <div>
+                <Sparkles aria-hidden="true" size={34} />
+                <span>Impulso</span>
+                <p>Reconocimiento para continuar el proceso competitivo.</p>
+              </div>
+            </aside>
           </div>
         </section>
       </section>
