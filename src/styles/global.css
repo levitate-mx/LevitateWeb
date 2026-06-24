@@ -12737,7 +12737,7 @@ button {
 
 .shop-product-card__price {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   align-items: start;
   justify-items: start;
 }
@@ -12757,15 +12757,29 @@ button {
   text-transform: uppercase;
 }
 
+.shop-product-card__price-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+}
+
 .shop-product-card__price strong {
   color: var(--lev-pink);
   font-size: clamp(1.55rem, 2.2vw, 2.15rem);
 }
 
-.shop-product-card__price small {
-  color: rgba(17, 16, 21, 0.62);
-  font-size: 0.92rem;
+.shop-product-card__normal-price {
+  color: rgba(17, 16, 21, 0.58);
+  font-size: clamp(1rem, 1.3vw, 1.18rem);
   font-weight: 820;
+  white-space: nowrap;
+}
+
+.shop-product-card__price-deadline {
+  color: rgba(17, 16, 21, 0.62);
+  font-size: 0.88rem;
+  font-weight: 760;
 }
 
 .shop-product-card__price del {

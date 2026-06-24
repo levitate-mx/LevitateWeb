@@ -257,11 +257,17 @@ export function ShopPage() {
           <div className="shop-product-card__buy">
             <div className="shop-product-card__price">
               {product.regularPrice ? <span>Descuento preventa</span> : null}
-              <strong>{formatCurrency(product.price)}</strong>
+              <div className="shop-product-card__price-row">
+                <strong>{formatCurrency(product.price)}</strong>
+                {product.regularPrice ? (
+                  <small className="shop-product-card__normal-price">
+                    Normal <del>{formatCurrency(product.regularPrice)}</del>
+                  </small>
+                ) : null}
+              </div>
               {product.regularPrice ? (
-                <small>
-                  Preventa hasta el {ticketPresaleDeadline}.{" "}
-                  Normal <del>{formatCurrency(product.regularPrice)}</del>
+                <small className="shop-product-card__price-deadline">
+                  Preventa hasta el {ticketPresaleDeadline}
                 </small>
               ) : null}
             </div>
@@ -531,12 +537,12 @@ export function ShopPage() {
                     autoCapitalize="characters"
                     autoComplete="off"
                     onChange={(event) => setEnteredDiscountCode(event.target.value)}
-                    placeholder="COLIBRI26"
+                    placeholder="Ingresa tu código"
                     type="text"
                     value={enteredDiscountCode}
                   />
                   <small className="shop-cart__discount-note">
-                    COLIBRI26 aplica a los primeros 20 paquetes de foto y video.
+                    Promoción sujeta a disponibilidad.
                   </small>
                   {hasDiscountCode ? (
                     <small className={isDiscountApplied ? "is-valid" : ""}>
@@ -550,7 +556,7 @@ export function ShopPage() {
                 </div>
                 {isDiscountApplied ? (
                   <div className="shop-cart__discount-row">
-                    <span>Descuento COLIBRI26</span>
+                    <span>Descuento aplicado</span>
                     <strong>-{formatCurrency(discountAmount)}</strong>
                   </div>
                 ) : null}
