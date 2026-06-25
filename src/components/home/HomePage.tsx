@@ -66,10 +66,13 @@ const gallery = [
   { image: assets.communityFolkStage, className: "levitate-gallery__item--stage", alt: "Grupo de danza folclórica en escenario Levitate" },
   { image: assets.communityLyraSmoke, className: "levitate-gallery__item--lyra-smoke", alt: "Artista en aro aéreo sobre escenario con humo e iluminación" },
   { image: assets.communityKidsStage, className: "levitate-gallery__item--kids-stage", alt: "Grupo infantil bailando en escenario Levitate" },
+  { image: assets.communityFloorSpotlight, className: "levitate-gallery__item--floor-spotlight", alt: "Artista de danza bajo luces de escenario" },
   { image: assets.communityRedHoop, className: "levitate-gallery__item--red-hoop", alt: "Artista en aro aéreo con vestuario rojo sobre escenario Levitate" },
+  { image: assets.communityAerial, className: "levitate-gallery__item--aerial-hoop", alt: "Artista suspendida en aro aéreo con luz escénica" },
   { image: assets.communityAquaSilks, className: "levitate-gallery__item--aqua-silks", alt: "Artista en telas aéreas color aqua durante una presentación" },
   { image: assets.communityDuoSilks, className: "levitate-gallery__item--duo-silks", alt: "Dúo de artistas en telas aéreas con luces moradas" },
   { image: assets.communityRedSilks, className: "levitate-gallery__item--red-silks", alt: "Artista en telas aéreas rojas sobre escenario" },
+  { image: assets.communityBlueSilks, className: "levitate-gallery__item--blue-silks", alt: "Artista en telas aéreas azules durante una presentación" },
 ];
 
 const sponsors = [
