@@ -181,10 +181,10 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       ] },
     ],
     jury: [
-      { name: "Andrea Salinas", specialty: "Contemporary · Jazz", image: assets.community },
-      { name: "Mariana Ríos", specialty: "Hip Hop · Urbano", image: assets.workshops },
-      { name: "Daniel Figueroa", specialty: "Ballet · Técnica clásica", image: assets.venue },
-      { name: "Lucía Torres", specialty: "Danza contemporánea", image: assets.hero },
+      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
+      { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: "/assets/vladimir-garza.jpg" },
+      { name: "Pendiente", specialty: "Juez por confirmar", image: assets.community },
+      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.png" },
     ],
   },
 };

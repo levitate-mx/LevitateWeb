@@ -9102,7 +9102,6 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: saturate(1.04) hue-rotate(302deg) contrast(1.08) brightness(0.76);
   transition: transform 650ms var(--ease-out);
 }
 
