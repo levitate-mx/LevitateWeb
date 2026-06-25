@@ -9067,11 +9067,12 @@ button {
 .hall-fame-shell {
   min-height: var(--levitate-hero-screen);
   background:
-    radial-gradient(circle at 76% 4%, rgba(231, 70, 151, 0.22), transparent 18rem),
-    linear-gradient(180deg, #050505 0%, #050505 100%);
+    radial-gradient(circle at 18% 12%, rgba(231, 70, 151, 0.26), transparent 24rem),
+    radial-gradient(circle at 82% 78%, rgba(231, 70, 151, 0.18), transparent 28rem),
+    linear-gradient(180deg, #050505 0%, #100b0f 62%, #050505 100%);
 }
 
-.hall-fame-shell > .levitate-nav {
+.hall-fame-shell > .levitate-menu-shell {
   position: relative;
   z-index: 4;
 }
@@ -9081,10 +9082,7 @@ button {
   overflow: hidden;
   min-height: calc(var(--levitate-hero-screen) - 120px);
   padding: clamp(54px, 6vw, 86px) 0 clamp(72px, 7vw, 104px);
-  background:
-    radial-gradient(circle at 18% 12%, rgba(231, 70, 151, 0.26), transparent 24rem),
-    radial-gradient(circle at 82% 78%, rgba(231, 70, 151, 0.18), transparent 28rem),
-    linear-gradient(180deg, #050505 0%, #100b0f 62%, #050505 100%);
+  background: transparent;
   color: #fff;
 }
 
