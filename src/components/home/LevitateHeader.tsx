@@ -55,7 +55,6 @@ const navItems = [
     label: "Tienda",
     href: "/tienda",
   },
-  { label: "Galería", href: "#galeria" },
   {
     label: "Salón de la fama",
     href: "/salon-de-la-fama/mvps",

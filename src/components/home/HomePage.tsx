@@ -105,80 +105,21 @@ const galleryImages = {
   },
 };
 
-const galleryExamples = [
-  {
-    id: "mosaico",
-    label: "01",
-    title: "Mosaico",
-    className: "levitate-gallery--mosaic",
-    tiles: [
-      { ...galleryImages.folkStage, className: "is-feature" },
-      { ...galleryImages.floorSpotlight, className: "is-wide-top" },
-      { ...galleryImages.aerialHoop, className: "is-wide-top" },
-      { ...galleryImages.redHoop, className: "is-wide-mid" },
-      { ...galleryImages.lyraSmoke, className: "is-wide-mid" },
-      { ...galleryImages.kidsStage, className: "is-feature-lower" },
-      { ...galleryImages.aquaSilks, className: "is-tall" },
-      { ...galleryImages.duoSilks, className: "is-tall" },
-      { ...galleryImages.redSilks, className: "is-tall" },
-      { ...galleryImages.blueSilks, className: "is-tall" },
-    ],
-  },
-  {
-    id: "editorial",
-    label: "02",
-    title: "Editorial",
-    className: "levitate-gallery--editorial",
-    tiles: [
-      { ...galleryImages.lyraSmoke, className: "is-cover" },
-      { ...galleryImages.folkStage, className: "is-side-a" },
-      { ...galleryImages.redHoop, className: "is-side-b" },
-      { ...galleryImages.kidsStage, className: "is-strip-a" },
-      { ...galleryImages.duoSilks, className: "is-strip-b" },
-    ],
-  },
-  {
-    id: "ritmo",
-    label: "03",
-    title: "Ritmo",
-    className: "levitate-gallery--rhythm",
-    tiles: [
-      { ...galleryImages.folkStage, className: "is-landscape" },
-      { ...galleryImages.aquaSilks, className: "is-portrait" },
-      { ...galleryImages.duoSilks, className: "is-portrait is-raised" },
-      { ...galleryImages.redSilks, className: "is-portrait" },
-      { ...galleryImages.kidsStage, className: "is-landscape is-lower" },
-      { ...galleryImages.blueSilks, className: "is-portrait is-raised" },
-    ],
-  },
-  {
-    id: "escenario",
-    label: "04",
-    title: "Escenario",
-    className: "levitate-gallery--stage",
-    tiles: [
-      { ...galleryImages.floorSpotlight, className: "is-backdrop" },
-      { ...galleryImages.folkStage, className: "is-main" },
-      { ...galleryImages.redHoop, className: "is-card-a" },
-      { ...galleryImages.aerialHoop, className: "is-card-b" },
-      { ...galleryImages.lyraSmoke, className: "is-card-c" },
-    ],
-  },
-  {
-    id: "postales",
-    label: "05",
-    title: "Postales",
-    className: "levitate-gallery--postcards",
-    tiles: [
-      { ...galleryImages.redHoop, className: "is-postcard-a" },
-      { ...galleryImages.folkStage, className: "is-postcard-b" },
-      { ...galleryImages.kidsStage, className: "is-postcard-c" },
-      { ...galleryImages.duoSilks, className: "is-postcard-d" },
-      { ...galleryImages.aquaSilks, className: "is-postcard-e" },
-      { ...galleryImages.blueSilks, className: "is-postcard-f" },
-    ],
-  },
-];
+const stageGallery = {
+  id: "escenario",
+  className: "levitate-gallery--stage",
+  tiles: [
+    { ...galleryImages.floorSpotlight, className: "is-backdrop" },
+    { ...galleryImages.folkStage, className: "is-main" },
+    { ...galleryImages.redHoop, className: "is-card-a" },
+    { ...galleryImages.aerialHoop, className: "is-card-b" },
+    { ...galleryImages.lyraSmoke, className: "is-card-c" },
+    { ...galleryImages.kidsStage, className: "is-card-d" },
+    { ...galleryImages.aquaSilks, className: "is-card-e" },
+    { ...galleryImages.duoSilks, className: "is-card-f" },
+    { ...galleryImages.blueSilks, className: "is-card-g" },
+  ],
+};
 
 const sponsors = [
   { name: "Electrolit", logo: "/assets/electrolit-logo.png", className: "sponsor-electrolit" },
@@ -221,8 +162,6 @@ function canUseHomeHeroVideo() {
 
 export function HomePage() {
   const [shouldRenderHeroVideo, setShouldRenderHeroVideo] = useState(false);
-  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
-  const activeGallery = galleryExamples[activeGalleryIndex] ?? galleryExamples[0];
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(heroVideoMediaQuery);
@@ -396,38 +335,13 @@ export function HomePage() {
       </section>
 
       <section id="galeria" className="levitate-community">
-        <div className="levitate-community__copy" data-levitate-reveal>
-          <p className="levitate-eyebrow">Comunidad</p>
-          <h2>
-            Explora <span>formatos</span> de galería
-          </h2>
-          <span aria-hidden="true" />
-          <div className="levitate-gallery-tabs" role="tablist" aria-label="Ejemplos de galería">
-            {galleryExamples.map((example, index) => (
-              <button
-                aria-controls={`levitate-gallery-panel-${example.id}`}
-                aria-selected={activeGalleryIndex === index}
-                id={`levitate-gallery-tab-${example.id}`}
-                key={example.id}
-                onClick={() => setActiveGalleryIndex(index)}
-                role="tab"
-                type="button"
-              >
-                <span>{example.label}</span>
-                <strong>{example.title}</strong>
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div
-          aria-labelledby={`levitate-gallery-tab-${activeGallery.id}`}
-          className={`levitate-gallery ${activeGallery.className}`}
-          id={`levitate-gallery-panel-${activeGallery.id}`}
-          role="tabpanel"
+          aria-label="Galería de comunidad Levitate en escenario"
+          className={`levitate-gallery ${stageGallery.className}`}
+          id={`levitate-gallery-panel-${stageGallery.id}`}
         >
-          {activeGallery.tiles.map((item, index) => (
-            <figure className={`levitate-gallery__tile ${item.className}`} key={`${activeGallery.id}-${item.image}-${index}`}>
+          {stageGallery.tiles.map((item, index) => (
+            <figure className={`levitate-gallery__tile ${item.className}`} key={`${stageGallery.id}-${item.image}-${index}`}>
               <img src={item.image} alt={item.alt} loading="lazy" />
             </figure>
           ))}
