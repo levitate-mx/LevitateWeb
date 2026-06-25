@@ -62,17 +62,122 @@ const stats = [
   { icon: Building2, value: "6", label: "sedes nacionales" },
 ];
 
-const gallery = [
-  { image: assets.communityFolkStage, className: "levitate-gallery__item--stage", alt: "Grupo de danza folclórica en escenario Levitate" },
-  { image: assets.communityLyraSmoke, className: "levitate-gallery__item--lyra-smoke", alt: "Artista en aro aéreo sobre escenario con humo e iluminación" },
-  { image: assets.communityKidsStage, className: "levitate-gallery__item--kids-stage", alt: "Grupo infantil bailando en escenario Levitate" },
-  { image: assets.communityFloorSpotlight, className: "levitate-gallery__item--floor-spotlight", alt: "Artista de danza bajo luces de escenario" },
-  { image: assets.communityRedHoop, className: "levitate-gallery__item--red-hoop", alt: "Artista en aro aéreo con vestuario rojo sobre escenario Levitate" },
-  { image: assets.communityAerial, className: "levitate-gallery__item--aerial-hoop", alt: "Artista suspendida en aro aéreo con luz escénica" },
-  { image: assets.communityAquaSilks, className: "levitate-gallery__item--aqua-silks", alt: "Artista en telas aéreas color aqua durante una presentación" },
-  { image: assets.communityDuoSilks, className: "levitate-gallery__item--duo-silks", alt: "Dúo de artistas en telas aéreas con luces moradas" },
-  { image: assets.communityRedSilks, className: "levitate-gallery__item--red-silks", alt: "Artista en telas aéreas rojas sobre escenario" },
-  { image: assets.communityBlueSilks, className: "levitate-gallery__item--blue-silks", alt: "Artista en telas aéreas azules durante una presentación" },
+const galleryImages = {
+  folkStage: {
+    image: assets.communityFolkStage,
+    alt: "Grupo de danza folclórica en escenario Levitate",
+  },
+  lyraSmoke: {
+    image: assets.communityLyraSmoke,
+    alt: "Artista en aro aéreo sobre escenario con humo e iluminación",
+  },
+  kidsStage: {
+    image: assets.communityKidsStage,
+    alt: "Grupo infantil bailando en escenario Levitate",
+  },
+  floorSpotlight: {
+    image: assets.communityFloorSpotlight,
+    alt: "Artista de danza bajo luces de escenario",
+  },
+  redHoop: {
+    image: assets.communityRedHoop,
+    alt: "Artista en aro aéreo con vestuario rojo sobre escenario Levitate",
+  },
+  aerialHoop: {
+    image: assets.communityAerial,
+    alt: "Artista suspendida en aro aéreo con luz escénica",
+  },
+  aquaSilks: {
+    image: assets.communityAquaSilks,
+    alt: "Artista en telas aéreas color aqua durante una presentación",
+  },
+  duoSilks: {
+    image: assets.communityDuoSilks,
+    alt: "Dúo de artistas en telas aéreas con luces moradas",
+  },
+  redSilks: {
+    image: assets.communityRedSilks,
+    alt: "Artista en telas aéreas rojas sobre escenario",
+  },
+  blueSilks: {
+    image: assets.communityBlueSilks,
+    alt: "Artista en telas aéreas azules durante una presentación",
+  },
+};
+
+const galleryExamples = [
+  {
+    id: "mosaico",
+    label: "01",
+    title: "Mosaico",
+    className: "levitate-gallery--mosaic",
+    tiles: [
+      { ...galleryImages.folkStage, className: "is-feature" },
+      { ...galleryImages.floorSpotlight, className: "is-wide-top" },
+      { ...galleryImages.aerialHoop, className: "is-wide-top" },
+      { ...galleryImages.redHoop, className: "is-wide-mid" },
+      { ...galleryImages.lyraSmoke, className: "is-wide-mid" },
+      { ...galleryImages.kidsStage, className: "is-feature-lower" },
+      { ...galleryImages.aquaSilks, className: "is-tall" },
+      { ...galleryImages.duoSilks, className: "is-tall" },
+      { ...galleryImages.redSilks, className: "is-tall" },
+      { ...galleryImages.blueSilks, className: "is-tall" },
+    ],
+  },
+  {
+    id: "editorial",
+    label: "02",
+    title: "Editorial",
+    className: "levitate-gallery--editorial",
+    tiles: [
+      { ...galleryImages.lyraSmoke, className: "is-cover" },
+      { ...galleryImages.folkStage, className: "is-side-a" },
+      { ...galleryImages.redHoop, className: "is-side-b" },
+      { ...galleryImages.kidsStage, className: "is-strip-a" },
+      { ...galleryImages.duoSilks, className: "is-strip-b" },
+    ],
+  },
+  {
+    id: "ritmo",
+    label: "03",
+    title: "Ritmo",
+    className: "levitate-gallery--rhythm",
+    tiles: [
+      { ...galleryImages.folkStage, className: "is-landscape" },
+      { ...galleryImages.aquaSilks, className: "is-portrait" },
+      { ...galleryImages.duoSilks, className: "is-portrait is-raised" },
+      { ...galleryImages.redSilks, className: "is-portrait" },
+      { ...galleryImages.kidsStage, className: "is-landscape is-lower" },
+      { ...galleryImages.blueSilks, className: "is-portrait is-raised" },
+    ],
+  },
+  {
+    id: "escenario",
+    label: "04",
+    title: "Escenario",
+    className: "levitate-gallery--stage",
+    tiles: [
+      { ...galleryImages.floorSpotlight, className: "is-backdrop" },
+      { ...galleryImages.folkStage, className: "is-main" },
+      { ...galleryImages.redHoop, className: "is-card-a" },
+      { ...galleryImages.aerialHoop, className: "is-card-b" },
+      { ...galleryImages.lyraSmoke, className: "is-card-c" },
+    ],
+  },
+  {
+    id: "postales",
+    label: "05",
+    title: "Postales",
+    className: "levitate-gallery--postcards",
+    tiles: [
+      { ...galleryImages.redHoop, className: "is-postcard-a" },
+      { ...galleryImages.folkStage, className: "is-postcard-b" },
+      { ...galleryImages.kidsStage, className: "is-postcard-c" },
+      { ...galleryImages.duoSilks, className: "is-postcard-d" },
+      { ...galleryImages.aquaSilks, className: "is-postcard-e" },
+      { ...galleryImages.blueSilks, className: "is-postcard-f" },
+    ],
+  },
 ];
 
 const sponsors = [
@@ -116,6 +221,8 @@ function canUseHomeHeroVideo() {
 
 export function HomePage() {
   const [shouldRenderHeroVideo, setShouldRenderHeroVideo] = useState(false);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+  const activeGallery = galleryExamples[activeGalleryIndex] ?? galleryExamples[0];
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(heroVideoMediaQuery);
@@ -288,18 +395,49 @@ export function HomePage() {
         })}
       </section>
 
-      <section id="workshops" className="levitate-community">
+      <section id="galeria" className="levitate-community">
         <div className="levitate-community__copy" data-levitate-reveal>
           <p className="levitate-eyebrow">Comunidad</p>
-          <h2>Donde el arte nos une</h2>
+          <h2>
+            Explora <span>formatos</span> de galería
+          </h2>
           <span aria-hidden="true" />
+          <div className="levitate-gallery-tabs" role="tablist" aria-label="Ejemplos de galería">
+            {galleryExamples.map((example, index) => (
+              <button
+                aria-controls={`levitate-gallery-panel-${example.id}`}
+                aria-selected={activeGalleryIndex === index}
+                id={`levitate-gallery-tab-${example.id}`}
+                key={example.id}
+                onClick={() => setActiveGalleryIndex(index)}
+                role="tab"
+                type="button"
+              >
+                <span>{example.label}</span>
+                <strong>{example.title}</strong>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="levitate-gallery" data-levitate-reveal>
-          {gallery.map((item, index) => (
-            <figure className={item.className} key={`${item.image}-${index}`}>
+
+        <div
+          aria-labelledby={`levitate-gallery-tab-${activeGallery.id}`}
+          className={`levitate-gallery ${activeGallery.className}`}
+          id={`levitate-gallery-panel-${activeGallery.id}`}
+          role="tabpanel"
+        >
+          {activeGallery.tiles.map((item, index) => (
+            <figure className={`levitate-gallery__tile ${item.className}`} key={`${activeGallery.id}-${item.image}-${index}`}>
               <img src={item.image} alt={item.alt} loading="lazy" />
             </figure>
           ))}
+          <div className="levitate-gallery__statement" aria-label="Donde el arte nos une">
+            <span>Comunidad</span>
+            <strong>
+              Donde el <em>arte</em> nos une
+            </strong>
+            <i aria-hidden="true" />
+          </div>
         </div>
       </section>
 
