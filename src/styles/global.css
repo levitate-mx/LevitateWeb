@@ -8661,12 +8661,26 @@ button {
 }
 
 .levitate-venue-card::after {
-  content: none;
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.92) 0%,
+      rgba(0, 0, 0, 0.86) 24%,
+      rgba(0, 0, 0, 0.62) 48%,
+      rgba(0, 0, 0, 0.34) 72%,
+      rgba(0, 0, 0, 0.48) 100%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.46));
 }
 
 .levitate-venue-card > div {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: grid;
   align-content: end;
   min-height: 256px;
@@ -8989,9 +9003,10 @@ button {
 
 .levitate-community {
   display: grid;
-  grid-template-columns: minmax(220px, 0.35fr) minmax(0, 1fr);
-  gap: 30px;
-  padding: 38px clamp(30px, 6vw, 80px) 38px;
+  grid-template-columns: minmax(220px, 0.3fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 52px);
+  padding: clamp(46px, 6vw, 78px) clamp(30px, 6vw, 80px);
   background:
     radial-gradient(circle at 12% 100%, rgba(231, 70, 151, 0.22), transparent 24rem),
     radial-gradient(circle at 90% 20%, rgba(231, 70, 151, 0.13), transparent 26rem),
@@ -9022,38 +9037,101 @@ button {
 
 .levitate-gallery {
   display: grid;
-  grid-template-columns: 1.1fr 0.8fr 1.15fr 0.82fr;
-  grid-auto-rows: 112px;
-  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(6, clamp(64px, 5.4vw, 80px));
+  gap: 14px;
 }
 
 .levitate-gallery figure {
+  position: relative;
   min-height: 0;
   margin: 0;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 11px;
   background: #0b0b0d;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.28);
 }
 
-.levitate-gallery__item--wide {
-  grid-column: span 2;
+.levitate-gallery figure::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.24)),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.18), transparent 52%);
+  pointer-events: none;
 }
 
-.levitate-gallery__item--tall {
-  grid-row: span 2;
+.levitate-gallery__item--stage {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
 }
 
-.levitate-gallery__item--vertical {
+.levitate-gallery__item--lyra-smoke {
+  grid-column: 1 / 3;
+  grid-row: 3 / 5;
+}
+
+.levitate-gallery__item--kids-stage {
+  grid-column: 1 / 3;
+  grid-row: 5 / 7;
+}
+
+.levitate-gallery__item--red-hoop {
+  grid-column: 3;
+  grid-row: 1 / 7;
+}
+
+.levitate-gallery__item--aqua-silks {
   grid-column: 4;
-  grid-row: 2 / span 2;
+  grid-row: 1 / 3;
+}
+
+.levitate-gallery__item--red-silks {
+  grid-column: 4;
+  grid-row: 3 / 7;
+}
+
+.levitate-gallery__item--duo-silks {
+  grid-column: 5 / 7;
+  grid-row: 1 / 7;
 }
 
 .levitate-gallery img {
+  width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: saturate(1.04) hue-rotate(302deg) contrast(1.07) brightness(0.76);
+  filter: saturate(1.04) hue-rotate(302deg) contrast(1.08) brightness(0.76);
   transition: transform 650ms var(--ease-out);
+}
+
+.levitate-gallery__item--stage img {
+  object-position: 50% 58%;
+}
+
+.levitate-gallery__item--lyra-smoke img {
+  object-position: 50% 54%;
+}
+
+.levitate-gallery__item--kids-stage img {
+  object-position: 50% 55%;
+}
+
+.levitate-gallery__item--aqua-silks img {
+  object-position: 52% 62%;
+}
+
+.levitate-gallery__item--red-silks img {
+  object-position: 40% 48%;
+}
+
+.levitate-gallery__item--red-hoop img {
+  object-position: 49% 48%;
+}
+
+.levitate-gallery__item--duo-silks img {
+  object-position: 50% 47%;
 }
 
 .levitate-gallery figure:hover img {
@@ -13780,11 +13858,39 @@ button {
 
   .levitate-gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
   }
 
-  .levitate-gallery__item--vertical {
+  .levitate-gallery__item--stage,
+  .levitate-gallery__item--lyra-smoke,
+  .levitate-gallery__item--kids-stage,
+  .levitate-gallery__item--red-hoop,
+  .levitate-gallery__item--red-silks,
+  .levitate-gallery__item--duo-silks,
+  .levitate-gallery__item--aqua-silks {
     grid-column: auto;
-    grid-row: span 2;
+    grid-row: auto;
+    aspect-ratio: 4 / 3;
+  }
+
+  .levitate-gallery__item--lyra-smoke,
+  .levitate-gallery__item--kids-stage,
+  .levitate-gallery__item--duo-silks,
+  .levitate-gallery__item--red-silks {
+    grid-column: 1 / -1;
+    aspect-ratio: 4 / 5;
+  }
+
+  .levitate-gallery__item--red-hoop,
+  .levitate-gallery__item--aqua-silks {
+    aspect-ratio: 4 / 5;
+  }
+
+  .levitate-gallery__item--stage,
+  .levitate-gallery__item--hoop {
+    grid-column: 1 / -1;
+    aspect-ratio: 16 / 9;
   }
 
   .levitate-hof__carousel {

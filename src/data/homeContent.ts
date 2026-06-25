@@ -8,6 +8,16 @@ export const assets = {
   competition: "/assets/visuals/experience-competition.jpg",
   workshops: "/assets/visuals/experience-workshops.jpg",
   community: "/assets/visuals/gallery-community.jpg",
+  communityAerial: "/assets/visuals/community-aerial-hoop.jpg",
+  communityAquaSilks: "/assets/visuals/community-aqua-silks.jpg",
+  communityBlueSilks: "/assets/visuals/community-blue-silks.jpg",
+  communityDuoSilks: "/assets/visuals/community-duo-silks.jpg",
+  communityFolkStage: "/assets/visuals/community-folk-stage.jpg",
+  communityFloorSpotlight: "/assets/visuals/community-floor-spotlight.jpg",
+  communityKidsStage: "/assets/visuals/community-kids-stage.jpg",
+  communityLyraSmoke: "/assets/visuals/community-lyra-smoke.jpg",
+  communityRedHoop: "/assets/visuals/community-red-hoop.jpg",
+  communityRedSilks: "/assets/visuals/community-red-silks.jpg",
   venue: "/assets/visuals/venue-stage.jpg",
 };
 

@@ -63,14 +63,13 @@ const stats = [
 ];
 
 const gallery = [
-  { image: assets.venue, className: "levitate-gallery__item--wide", alt: "Público durante una presentación Levitate" },
-  { image: assets.community, alt: "Comunidad Levitate celebrando backstage" },
-  { image: assets.workshops, alt: "Jueces y producción de Levitate" },
-  { image: assets.competition, className: "levitate-gallery__item--tall", alt: "Artista aérea en escena" },
-  { image: assets.hero, alt: "Reconocimientos Levitate" },
-  { image: assets.competition, alt: "Presentación aérea con luces rosas" },
-  { image: assets.venue, className: "levitate-gallery__item--wide", alt: "Escenario Levitate con público" },
-  { image: assets.competition, className: "levitate-gallery__item--vertical", alt: "Presentación vertical Levitate en escena" },
+  { image: assets.communityFolkStage, className: "levitate-gallery__item--stage", alt: "Grupo de danza folclórica en escenario Levitate" },
+  { image: assets.communityLyraSmoke, className: "levitate-gallery__item--lyra-smoke", alt: "Artista en aro aéreo sobre escenario con humo e iluminación" },
+  { image: assets.communityKidsStage, className: "levitate-gallery__item--kids-stage", alt: "Grupo infantil bailando en escenario Levitate" },
+  { image: assets.communityRedHoop, className: "levitate-gallery__item--red-hoop", alt: "Artista en aro aéreo con vestuario rojo sobre escenario Levitate" },
+  { image: assets.communityAquaSilks, className: "levitate-gallery__item--aqua-silks", alt: "Artista en telas aéreas color aqua durante una presentación" },
+  { image: assets.communityDuoSilks, className: "levitate-gallery__item--duo-silks", alt: "Dúo de artistas en telas aéreas con luces moradas" },
+  { image: assets.communityRedSilks, className: "levitate-gallery__item--red-silks", alt: "Artista en telas aéreas rojas sobre escenario" },
 ];
 
 const sponsors = [
@@ -193,7 +192,7 @@ export function HomePage() {
               <a className="levitate-button levitate-button--primary" href="#convocatorias">
                 Ver próximos eventos <ArrowRight aria-hidden="true" size={18} />
               </a>
-              <a className="levitate-button levitate-button--outline" href="#contacto">
+              <a className="levitate-button levitate-button--outline" href="https://wa.me/5217774920775">
                 <MessageCircle aria-hidden="true" size={18} /> Contáctanos por WhatsApp
               </a>
             </div>
