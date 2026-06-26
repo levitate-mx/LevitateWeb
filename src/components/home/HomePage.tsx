@@ -62,65 +62,6 @@ const stats = [
   { icon: Building2, value: "6", label: "sedes nacionales" },
 ];
 
-const galleryImages = {
-  folkStage: {
-    image: assets.communityFolkStage,
-    alt: "Grupo de danza folclórica en escenario Levitate",
-  },
-  lyraSmoke: {
-    image: assets.communityLyraSmoke,
-    alt: "Artista en aro aéreo sobre escenario con humo e iluminación",
-  },
-  kidsStage: {
-    image: assets.communityKidsStage,
-    alt: "Grupo infantil bailando en escenario Levitate",
-  },
-  floorSpotlight: {
-    image: assets.communityFloorSpotlight,
-    alt: "Artista de danza bajo luces de escenario",
-  },
-  redHoop: {
-    image: assets.communityRedHoop,
-    alt: "Artista en aro aéreo con vestuario rojo sobre escenario Levitate",
-  },
-  aerialHoop: {
-    image: assets.communityAerial,
-    alt: "Artista suspendida en aro aéreo con luz escénica",
-  },
-  aquaSilks: {
-    image: assets.communityAquaSilks,
-    alt: "Artista en telas aéreas color aqua durante una presentación",
-  },
-  duoSilks: {
-    image: assets.communityDuoSilks,
-    alt: "Dúo de artistas en telas aéreas con luces moradas",
-  },
-  redSilks: {
-    image: assets.communityRedSilks,
-    alt: "Artista en telas aéreas rojas sobre escenario",
-  },
-  blueSilks: {
-    image: assets.communityBlueSilks,
-    alt: "Artista en telas aéreas azules durante una presentación",
-  },
-};
-
-const stageGallery = {
-  id: "escenario",
-  className: "levitate-gallery--stage",
-  tiles: [
-    { ...galleryImages.floorSpotlight, className: "is-backdrop" },
-    { ...galleryImages.folkStage, className: "is-main" },
-    { ...galleryImages.redHoop, className: "is-card-a" },
-    { ...galleryImages.aerialHoop, className: "is-card-b" },
-    { ...galleryImages.lyraSmoke, className: "is-card-c" },
-    { ...galleryImages.kidsStage, className: "is-card-d" },
-    { ...galleryImages.aquaSilks, className: "is-card-e" },
-    { ...galleryImages.duoSilks, className: "is-card-f" },
-    { ...galleryImages.blueSilks, className: "is-card-g" },
-  ],
-};
-
 const sponsors = [
   { name: "Electrolit", logo: "/assets/electrolit-logo.png", className: "sponsor-electrolit" },
   { name: "AEParty", logo: "/assets/sponsor-aeparty.png", className: "sponsor-aeparty" },
@@ -332,27 +273,6 @@ export function HomePage() {
             </article>
           );
         })}
-      </section>
-
-      <section id="galeria" className="levitate-community">
-        <div
-          aria-label="Galería de comunidad Levitate en escenario"
-          className={`levitate-gallery ${stageGallery.className}`}
-          id={`levitate-gallery-panel-${stageGallery.id}`}
-        >
-          {stageGallery.tiles.map((item, index) => (
-            <figure className={`levitate-gallery__tile ${item.className}`} key={`${stageGallery.id}-${item.image}-${index}`}>
-              <img src={item.image} alt={item.alt} loading="lazy" />
-            </figure>
-          ))}
-          <div className="levitate-gallery__statement" aria-label="Donde el arte nos une">
-            <span>Comunidad</span>
-            <strong>
-              Donde el <em>arte</em> nos une
-            </strong>
-            <i aria-hidden="true" />
-          </div>
-        </div>
       </section>
 
       <section className="levitate-sponsors" aria-label="Sponsors">

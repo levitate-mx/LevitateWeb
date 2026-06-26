@@ -1,6 +1,5 @@
 export const navLinks = [
   { label: "Inicio", href: "/#inicio" },
-  { label: "Galería", href: "/#galeria" },
 ];
 
 export const assets = {
@@ -41,12 +40,6 @@ export const megaMenuItems = [
     description: "Próximas ciudades, fechas y experiencia completa por evento.",
   },
   {
-    label: "Galería",
-    href: "/#galeria",
-    image: assets.community,
-    description: "Momentos editoriales de comunidad, escenario y formación.",
-  },
-  {
     label: "Convocatoria",
     href: "/#convocatoria",
     image: assets.hero,
@@ -80,7 +73,7 @@ export const experiences = [
     title: "Comunidad",
     description: "Academias, familias y participantes conectando desde una misma pasión.",
     image: assets.community,
-    href: "#galeria",
+    href: "#categorías",
     alt: "Participantes y equipo compartiendo un momento backstage.",
   },
 ];

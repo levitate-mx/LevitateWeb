@@ -39,7 +39,7 @@ export function WhyLevitateSection() {
   }, [prefersReducedMotion]);
 
   return (
-    <section ref={sectionRef} id="galeria" className="section section--why">
+    <section ref={sectionRef} id="por-que-levitate" className="section section--why">
       <div className="section__inner why-layout">
         <MotionReveal className="why-copy">
           <SectionEyebrow>POR QUÉ LEVITATE</SectionEyebrow>

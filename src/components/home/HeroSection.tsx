@@ -70,12 +70,12 @@ export function HeroSection() {
           <Button href="#eventos">Ver próximos eventos</Button>
         </div>
 
-        <Button href="#galeria" variant="ghost" icon="play" className="hero__trailer">
+        <Button href="#eventos" variant="ghost" icon="play" className="hero__trailer">
           Ver tráiler
         </Button>
       </div>
 
-      <a className="scroll-cue" href="#galeria">
+      <a className="scroll-cue" href="#eventos">
         <span>Desliza para explorar</span>
         <ArrowDown aria-hidden="true" size={17} strokeWidth={1.8} />
       </a>
