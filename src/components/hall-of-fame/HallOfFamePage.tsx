@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, ChevronLeft, ChevronRight, Download, MapPin } from "lucide-react";
+import { Building2, ChevronDown, ChevronLeft, ChevronRight, Download, MapPin } from "lucide-react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -64,6 +64,12 @@ const mvpPerformances = [
   },
 ];
 
+const scholarshipDownloads = [
+  { label: "Veracruz Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
+  { label: "Puebla Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
+  { label: "CDMX Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
+];
+
 function getMvpStackPosition(index: number, activeIndex: number) {
   const total = mvpPerformances.length;
   let offset = (index - activeIndex + total) % total;
@@ -80,6 +86,8 @@ function getMvpStackPosition(index: number, activeIndex: number) {
 
 export function HallOfFamePage() {
   const [activeMvpIndex, setActiveMvpIndex] = useState(0);
+  const [selectedScholarshipIndex, setSelectedScholarshipIndex] = useState(0);
+  const selectedScholarshipDownload = scholarshipDownloads[selectedScholarshipIndex] ?? scholarshipDownloads[0];
 
   const showMvp = (step: number) => {
     setActiveMvpIndex((currentIndex) => (currentIndex + step + mvpPerformances.length) % mvpPerformances.length);
@@ -187,10 +195,27 @@ export function HallOfFamePage() {
                 Este reconocimiento impulsa a quienes dejaron una marca especial en el escenario. Las becas celebran
                 su nivel, disciplina y presencia para que sigan entrenando, creciendo y compitiendo dentro de Levitate.
               </p>
-              <a className="levitate-scholarships__download" download href="/assets/becados-proxima-edicion.pdf">
-                <Download aria-hidden="true" size={20} />
-                Descargar PDF de becados
-              </a>
+              <div className="levitate-scholarships__actions">
+                <label className="levitate-scholarships__select" htmlFor="scholarship-edition">
+                  <span>Edición</span>
+                  <select
+                    id="scholarship-edition"
+                    onChange={(event) => setSelectedScholarshipIndex(Number(event.target.value))}
+                    value={selectedScholarshipIndex}
+                  >
+                    {scholarshipDownloads.map((download, index) => (
+                      <option key={download.label} value={index}>
+                        {download.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown aria-hidden="true" size={20} />
+                </label>
+                <a className="levitate-scholarships__download" download href={selectedScholarshipDownload.href}>
+                  <Download aria-hidden="true" size={20} />
+                  Descargar PDF
+                </a>
+              </div>
             </div>
 
           </div>

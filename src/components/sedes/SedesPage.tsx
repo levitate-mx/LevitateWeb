@@ -252,7 +252,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
     <main className="sedes-page">
       <section className="sedes-hero">
         <LevitateHeader activeLabel="Convocatoria" useRootLinks />
-        <img className="sedes-hero__image" src={venue.heroImage} alt="" aria-hidden="true" />
+        <img className={`sedes-hero__image sedes-hero__image--${venueKey}`} src={venue.heroImage} alt="" aria-hidden="true" />
         <div className="sedes-hero__shade" aria-hidden="true" />
 
         <div className="sedes-hero__content">
