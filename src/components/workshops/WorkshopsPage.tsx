@@ -19,7 +19,7 @@ const includedCards = [
   {
     icon: Users,
     title: "Participantes inscritos",
-    copy: "Si estás inscrito en la competencia, accedes sin costo a los workshops incluidos en tu experiencia Levitate.",
+    copy: "Si estás inscrito en la competencia, accedes sin costo a 3 de los workshops incluidos en tu experiencia Levitate.",
   },
   {
     icon: Ticket,
