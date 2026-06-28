@@ -341,12 +341,14 @@ function renderHighlightedCopy(copy: string, highlights: string[] = []) {
 
 export function PremiationPage() {
   const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
+  const [isHeroVideoReady, setIsHeroVideoReady] = useState(false);
   const activeSpecialAward = specialAwards.find((award) => award.id === activeSpecialAwardId) ?? specialAwards[0];
 
   return (
     <main className="premiation-page">
-      <section className="premiation-hero">
+      <section className={`premiation-hero${isHeroVideoReady ? "" : " is-video-loading"}`}>
         <LevitateHeader activeLabel="Convocatoria" useRootLinks />
+        <div className="levitate-video-fallback" aria-hidden="true" />
         <video
           className="premiation-hero__video"
           poster={assets.competition}
@@ -356,6 +358,8 @@ export function PremiationPage() {
           playsInline
           preload="metadata"
           aria-hidden="true"
+          onCanPlay={() => setIsHeroVideoReady(true)}
+          onLoadedData={() => setIsHeroVideoReady(true)}
         >
           <source src="/assets/visuals/workshops-experience-bg.mp4" type="video/mp4" />
         </video>

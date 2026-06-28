@@ -103,6 +103,7 @@ function canUseHomeHeroVideo() {
 
 export function HomePage() {
   const [shouldRenderHeroVideo, setShouldRenderHeroVideo] = useState(false);
+  const [isHeroVideoReady, setIsHeroVideoReady] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(heroVideoMediaQuery);
@@ -113,6 +114,10 @@ export function HomePage() {
 
     return () => mediaQuery.removeEventListener("change", updateHeroVideoPreference);
   }, []);
+
+  useEffect(() => {
+    setIsHeroVideoReady(!shouldRenderHeroVideo);
+  }, [shouldRenderHeroVideo]);
 
   useEffect(() => {
     const items = document.querySelectorAll<HTMLElement>("[data-levitate-reveal]");
@@ -134,7 +139,8 @@ export function HomePage() {
 
   return (
     <main className="levitate-page">
-      <section id="inicio" className="levitate-hero">
+      <section id="inicio" className={`levitate-hero${shouldRenderHeroVideo && !isHeroVideoReady ? " is-video-loading" : ""}`}>
+        <div className="levitate-video-fallback" aria-hidden="true" />
         <img className="levitate-hero__poster" src="/assets/levitate-home-hero-poster.jpg" alt="" fetchPriority="high" aria-hidden="true" />
         {shouldRenderHeroVideo ? (
           <video
@@ -146,6 +152,8 @@ export function HomePage() {
             playsInline
             preload="none"
             aria-hidden="true"
+            onCanPlay={() => setIsHeroVideoReady(true)}
+            onLoadedData={() => setIsHeroVideoReady(true)}
           >
             <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
           </video>

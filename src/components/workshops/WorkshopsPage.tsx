@@ -65,6 +65,7 @@ const basics = [
 
 export function WorkshopsPage() {
   const [isExperienceOverlayVisible, setIsExperienceOverlayVisible] = useState(true);
+  const [isExperienceVideoReady, setIsExperienceVideoReady] = useState(false);
   const experienceOverlayTimer = useRef<number | null>(null);
 
   const scheduleExperienceOverlayHide = useCallback(() => {
@@ -119,7 +120,9 @@ export function WorkshopsPage() {
       <section className="workshops-light-section workshops-intro">
         <div className="workshops-intro__layout">
           <article className="workshops-intro__copy">
-            <h2>Más que una clase, una experiencia formativa.</h2>
+            <h2>
+              Más que una clase, una <span>experiencia formativa</span>.
+            </h2>
             <p>
               Cada workshop está diseñado para entrenar, inspirar y potenciar tu arte. Vivirás una experiencia única con
               docentes invitados de alto nivel.
@@ -127,7 +130,11 @@ export function WorkshopsPage() {
           </article>
 
           <figure className="workshops-intro__media">
-            <img src={assets.workshops} alt="Participantes entrenando en una experiencia formativa Levitate." loading="lazy" />
+            <img
+              src="/assets/workshops-experiencia-formativa.jpg"
+              alt="Participantes entrenando en una experiencia formativa Levitate."
+              loading="lazy"
+            />
           </figure>
 
           <article className="workshops-intro__audience">
@@ -159,8 +166,7 @@ export function WorkshopsPage() {
               aria-hidden="true"
               loading="lazy"
             />
-            No todas las sedes cuentan con workshops. La disponibilidad se comunica y publica en la convocatoria de cada
-            evento.
+            La disponibilidad de los talleres se comunica según la convocatoria de cada sede.
           </div>
         </div>
       </section>
@@ -191,14 +197,19 @@ export function WorkshopsPage() {
 
         <div className="workshops-venue-grid">
           <article className="workshops-venue-card workshops-venue-card--confirmed">
-            <img src={assets.hero} alt="Artista en telas durante entrenamiento escénico Levitate." loading="lazy" />
+            <img
+              className="workshops-venue-card__image--cdmx"
+              src="/assets/workshops-cdmx-parque-juana-asbaje.png"
+              alt="Participantes del workshop de CDMX en Parque Juana de Asbaje."
+              loading="lazy"
+            />
             <div>
-              <h2>CDMX · CAO</h2>
+              <h2>CDMX</h2>
               <p>
                 <CalendarDays aria-hidden="true" size={17} /> Viernes 29 de mayo
               </p>
               <p>
-                <MapPin aria-hidden="true" size={17} /> CAO Tiempo Nuevo, Miguel Hidalgo, Tlalpan
+                <MapPin aria-hidden="true" size={17} /> Parque Juana de Asbaje, Tlalpan
               </p>
               <h3>Workshops confirmados</h3>
               <ul>
@@ -217,9 +228,15 @@ export function WorkshopsPage() {
           </article>
 
           <article className="workshops-venue-card workshops-venue-card--soon">
-            <img src={assets.workshops} alt="" aria-hidden="true" loading="lazy" />
+            <img
+              className="workshops-venue-card__image--edomex"
+              src="/assets/workshops-edomex-taller-1.jpg"
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+            />
             <div>
-              <h2>Edo. Méx. · Teatro El Gran Recinto</h2>
+              <h2>EDO MEX</h2>
               <p>
                 <CalendarDays aria-hidden="true" size={17} /> 13 de noviembre
               </p>
@@ -237,10 +254,15 @@ export function WorkshopsPage() {
       </section>
 
       <section
-        className={`workshops-experience${isExperienceOverlayVisible ? "" : " is-overlay-hidden"}`}
+        className={[
+          "workshops-experience",
+          isExperienceOverlayVisible ? "" : "is-overlay-hidden",
+          isExperienceVideoReady ? "" : "is-video-loading",
+        ].filter(Boolean).join(" ")}
         onFocus={revealExperienceOverlay}
         onPointerMove={revealExperienceOverlay}
       >
+        <div className="levitate-video-fallback" aria-hidden="true" />
         <video
           className="workshops-experience__background"
           aria-hidden="true"
@@ -250,8 +272,10 @@ export function WorkshopsPage() {
           playsInline
           poster={assets.community}
           preload="metadata"
+          onCanPlay={() => setIsExperienceVideoReady(true)}
+          onLoadedData={() => setIsExperienceVideoReady(true)}
         >
-          <source src="/assets/visuals/workshops-experience-bg.mp4" type="video/mp4" />
+          <source src="/assets/videos/talleres-mix.mp4" type="video/mp4" />
         </video>
         <div className="workshops-experience__overlay">
           <div className="workshops-experience__copy">
