@@ -3,7 +3,6 @@ import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
 import { PremiationPage } from "./components/premiation/PremiationPage";
-import { RegulationsPage } from "./components/regulations/RegulationsPage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
 import { ShopPage } from "./components/shop/ShopPage";
@@ -15,7 +14,6 @@ export default function App() {
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
-  const regulationsMatch = window.location.pathname.match(/^\/reglamentos?\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const hallOfFameMvpsMatch = window.location.pathname.match(/^\/salon-de-la-fama\/mvps\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
@@ -48,10 +46,6 @@ export default function App() {
 
   if (motionGenresMatch) {
     return <MotionGenresPage />;
-  }
-
-  if (regulationsMatch) {
-    return <RegulationsPage />;
   }
 
   if (evaluationsMatch) {

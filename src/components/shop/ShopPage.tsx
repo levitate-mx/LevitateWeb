@@ -408,7 +408,7 @@ export function ShopPage() {
                 <article>
                   <UserRound aria-hidden="true" size={48} />
                   <div>
-                    <h3>Previo registro</h3>
+                    <h3>Registro</h3>
                     <p>Realizado por el titular de la academia.</p>
                   </div>
                 </article>

@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Download } from "lucide-react";
 
 type NavItem = {
   label: string;
   href: string;
   children?: NavItem[];
+  download?: boolean;
 };
 
-const navItems = [
+const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+
+const navItems: NavItem[] = [
   { label: "Inicio", href: "#inicio" },
   {
     label: "Convocatoria",
@@ -35,8 +39,8 @@ const navItems = [
         href: "/modalidades/levitate-motion/generos",
         children: [
           { label: "Clasificación", href: "/modalidades/levitate-motion/generos" },
-          { label: "Reglamento", href: "/reglamentos" },
           { label: "Evaluación", href: "/evaluaciones" },
+          { label: "Reglamento", href: regulationsPdfHref, download: true },
         ],
       },
       {
@@ -44,9 +48,9 @@ const navItems = [
         href: "#categorías",
         children: [
           { label: "Clasificación", href: "#categorías" },
-          { label: "Reglamento", href: "/reglamentos" },
-          { label: "Seguridad", href: "#seguridad" },
           { label: "Evaluación", href: "/modalidades/levitate-aerial/evaluacion" },
+          { label: "Seguridad", href: "#seguridad" },
+          { label: "Reglamento", href: regulationsPdfHref, download: true },
         ],
       },
     ],
@@ -60,7 +64,7 @@ const navItems = [
     href: "/salon-de-la-fama/mvps",
   },
   { label: "Contacto", href: "#contacto" },
-] satisfies NavItem[];
+];
 
 function resolveHref(href: string, useRootLinks: boolean) {
   if (!useRootLinks || href.startsWith("/")) {
@@ -110,8 +114,14 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false }:
             {child.children ? (
               <div className="levitate-nav__dropdown-sublist" aria-label={`${child.label} submenu`}>
                 {child.children.map((nestedChild) => (
-                  <a href={resolveHref(nestedChild.href, useRootLinks)} key={nestedChild.label}>
-                    {nestedChild.label}
+                  <a
+                    className={nestedChild.download ? "is-download" : undefined}
+                    download={nestedChild.download ? true : undefined}
+                    href={resolveHref(nestedChild.href, useRootLinks)}
+                    key={nestedChild.label}
+                  >
+                    <span>{nestedChild.label}</span>
+                    {nestedChild.download ? <Download aria-hidden="true" size={14} strokeWidth={2.2} /> : null}
                   </a>
                 ))}
               </div>

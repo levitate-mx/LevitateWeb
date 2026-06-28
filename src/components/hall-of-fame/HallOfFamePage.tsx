@@ -193,16 +193,6 @@ export function HallOfFamePage() {
               </a>
             </div>
 
-            <aside className="levitate-scholarships__panel" aria-label="Criterios de becados">
-              <div>
-                <span>Ranking</span>
-                <p>Mejores puntajes oficiales de la competencia.</p>
-              </div>
-              <div>
-                <span>Impulso</span>
-                <p>Reconocimiento para continuar el proceso competitivo.</p>
-              </div>
-            </aside>
           </div>
         </section>
       </section>

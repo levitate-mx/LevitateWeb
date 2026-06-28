@@ -302,12 +302,10 @@ const mvpAwards = [
   {
     title: "MVP Motion",
     copy: "Para el puntaje más alto de la competencia de géneros de piso.",
-    image: assets.workshops,
   },
   {
     title: "MVP Aerial",
     copy: "Para el puntaje más alto de la competencia de géneros aéreos.",
-    image: assets.competition,
   },
 ];
 
@@ -663,7 +661,6 @@ export function PremiationPage() {
               <div className="premiation-mvp__cards">
                 {mvpAwards.map((award) => (
                   <article key={award.title}>
-                    <img src={award.image} alt="" aria-hidden="true" />
                     <h3>{award.title}</h3>
                     <p>{award.copy}</p>
                   </article>
