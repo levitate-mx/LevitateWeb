@@ -402,14 +402,17 @@ export function PremiationPage() {
                 <div className="premiation-ranking-box" aria-label="Ranking por bloque de competencia">
                   <div className="premiation-ranking-grid">
                     {directRanking.map((rank) => (
-                      <article className="premiation-ranking-item" key={rank.place}>
-                        <strong>{rank.place}</strong>
+                      <article className={`premiation-ranking-item is-${rank.variant}`} key={rank.place}>
                         <figure>
                           {rank.mediaType === "video" ? (
                             <video src={rank.image} aria-label={rank.alt} autoPlay loop muted playsInline />
                           ) : (
                             <img src={rank.image} alt={rank.alt} loading="lazy" />
                           )}
+                          <figcaption>
+                            <span>{rank.award}</span>
+                            <strong>{rank.place}</strong>
+                          </figcaption>
                         </figure>
                       </article>
                     ))}
