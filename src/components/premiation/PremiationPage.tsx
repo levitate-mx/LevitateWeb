@@ -423,20 +423,20 @@ export function PremiationPage() {
                     <p>Se forma con participantes que comparten la misma división, género, categoría y nivel.</p>
                   </div>
                 </aside>
+
+                <aside className="premiation-system-note">
+                  <Trophy aria-hidden="true" size={48} strokeWidth={1.9} />
+                  <div>
+                    <strong>Importante</strong>
+                    <p>
+                      El medallero reconoce tu puntaje individual. El ranking reconoce tu posición frente a tus
+                      competidores directos.
+                    </p>
+                    <p>Por eso puede haber un 1er lugar oro, plata, bronce o participación.</p>
+                  </div>
+                </aside>
               </article>
             </div>
-
-            <aside className="premiation-system-note">
-              <Trophy aria-hidden="true" size={48} strokeWidth={1.9} />
-              <div>
-                <strong>Importante</strong>
-                <p>
-                  El medallero reconoce tu puntaje individual. El ranking reconoce tu posición frente a tus competidores
-                  directos.
-                </p>
-                <p>Por eso puede haber un 1er lugar oro, plata, bronce o participación.</p>
-              </div>
-            </aside>
           </div>
         </section>
       </div>

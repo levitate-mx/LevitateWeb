@@ -3578,7 +3578,7 @@ button {
 
 .premiation-system__layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(300px, 0.48fr) minmax(0, 1fr);
   gap: clamp(28px, 3.4vw, 54px);
   align-items: stretch;
 }
@@ -3593,10 +3593,12 @@ button {
 .premiation-ranking-panel {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(10px, 1.15vw, 16px);
 }
 
 .premiation-score-panel {
-  padding-right: clamp(18px, 2.4vw, 34px);
+  padding-right: clamp(16px, 2vw, 28px);
   border-right: 1px solid rgba(228, 92, 154, 0.22);
 }
 
@@ -3640,7 +3642,7 @@ button {
 .premiation-score-panel > p,
 .premiation-ranking-panel > p {
   max-width: 620px;
-  margin: 0 0 clamp(18px, 2vw, 28px);
+  margin: 0;
   color: #39323c;
   font-size: var(--premiation-body-size);
   font-weight: 570;
@@ -3654,10 +3656,10 @@ button {
 
 .premiation-score-row {
   display: grid;
-  grid-template-columns: clamp(118px, 10vw, 154px) minmax(0, 1fr);
+  grid-template-columns: clamp(78px, 6.8vw, 112px) minmax(0, 1fr);
   gap: clamp(14px, 1.4vw, 22px);
   align-items: center;
-  min-height: clamp(104px, 8.3vw, 132px);
+  min-height: clamp(96px, 7.6vw, 124px);
   padding: clamp(12px, 1.2vw, 18px) clamp(16px, 1.6vw, 22px);
   border: 1px solid rgba(228, 92, 154, 0.18);
   border-radius: 8px;
@@ -3668,7 +3670,7 @@ button {
 .premiation-score-row img {
   display: block;
   width: 100%;
-  max-height: 94px;
+  max-height: 86px;
   object-fit: contain;
   filter: drop-shadow(0 12px 18px rgba(43, 31, 35, 0.14));
 }
@@ -3717,16 +3719,17 @@ button {
 
 .premiation-ranking-box {
   display: grid;
-  flex: 1 1 auto;
-  gap: clamp(12px, 1.25vw, 18px);
-  align-content: stretch;
-  padding: clamp(12px, 1.35vw, 20px);
+  flex: 0 0 auto;
+  gap: clamp(12px, 1.15vw, 16px);
+  align-content: start;
+  padding: clamp(12px, 1.2vw, 18px);
 }
 
 .premiation-ranking-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: clamp(10px, 1vw, 14px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 1.7vw, 24px);
+  align-items: start;
 }
 
 .premiation-ranking-item {
@@ -3735,15 +3738,16 @@ button {
 
 .premiation-ranking-item figure {
   position: relative;
+  display: grid;
+  gap: 10px;
   width: 100%;
-  min-height: clamp(116px, 9.4vw, 148px);
-  aspect-ratio: 4.8 / 1;
+  min-height: 0;
   margin: 0;
-  overflow: hidden;
-  border: 1px solid rgba(228, 92, 154, 0.28);
-  border-radius: 8px;
-  background: #050505;
-  box-shadow: 0 18px 34px rgba(23, 20, 27, 0.1);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   isolation: isolate;
 }
 
@@ -3757,15 +3761,11 @@ button {
 }
 
 .premiation-ranking-item figure::before {
-  background:
-    linear-gradient(90deg, rgba(10, 8, 13, 0.84) 0%, rgba(10, 8, 13, 0.48) 48%, rgba(228, 92, 154, 0.18) 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(5, 5, 5, 0.26));
+  display: none;
 }
 
 .premiation-ranking-item figure::after {
-  inset: auto 0 0;
-  height: 5px;
-  background: var(--premiation-pink);
+  display: none;
 }
 
 .premiation-ranking-item.is-gold figure::after {
@@ -3784,37 +3784,49 @@ button {
 .premiation-ranking-item video {
   display: block;
   width: 100%;
-  height: 100%;
+  height: clamp(132px, 11vw, 176px);
   object-fit: cover;
-  opacity: 0.76;
-  filter: saturate(1.12) contrast(1.02);
-  transform: scale(1.02);
+  overflow: hidden;
+  border: 1px solid rgba(228, 92, 154, 0.24);
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(23, 20, 27, 0.12);
+  filter: saturate(1.08) contrast(1.02);
 }
 
 .premiation-ranking-item figcaption {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(20px, 2.2vw, 32px);
+  padding: 0;
+  text-align: center;
 }
 
 .premiation-ranking-item figcaption strong {
   display: block;
-  color: #ffffff;
+  color: var(--premiation-pink);
   font-family: var(--font-display);
-  font-size: clamp(2.15rem, 4vw, 3.85rem);
+  font-size: clamp(1.45rem, 2.2vw, 2.3rem);
   font-weight: 400;
-  line-height: 0.85;
+  line-height: 0.9;
   letter-spacing: 0.06em;
-  text-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+  text-shadow: none;
   text-transform: uppercase;
 }
 
+.premiation-ranking-item.is-gold figcaption strong {
+  color: #b77a15;
+}
+
+.premiation-ranking-item.is-silver figcaption strong {
+  color: #878286;
+}
+
+.premiation-ranking-item.is-bronze figcaption strong {
+  color: #a44f2d;
+}
+
 .premiation-ranking-box > p {
-  margin: 0;
+  margin: 2px 0 0;
   color: #302b33;
   font-size: var(--premiation-body-size);
   font-weight: 620;
@@ -3826,8 +3838,12 @@ button {
   grid-template-columns: auto minmax(0, 1fr);
   gap: clamp(12px, 1.25vw, 18px);
   align-items: center;
-  margin-top: clamp(10px, 1.15vw, 16px);
+  margin-top: 0;
   padding: clamp(14px, 1.35vw, 20px) clamp(16px, 1.6vw, 24px);
+}
+
+.premiation-block-help + .premiation-system-note {
+  margin-top: 0;
 }
 
 .premiation-block-help svg,
@@ -3854,11 +3870,11 @@ button {
 .premiation-system-note {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: clamp(16px, 2vw, 28px);
+  gap: clamp(12px, 1.4vw, 20px);
   align-items: center;
-  max-width: 960px;
-  margin: clamp(28px, 4vw, 54px) auto 0;
-  padding: clamp(18px, 2vw, 28px) clamp(22px, 2.4vw, 34px);
+  max-width: none;
+  margin: 0;
+  padding: clamp(14px, 1.35vw, 20px) clamp(16px, 1.6vw, 24px);
 }
 
 .premiation-system-note p {
@@ -5482,6 +5498,17 @@ button {
 }
 
 @media (max-width: 1080px) {
+  .premiation-system__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .premiation-score-panel {
+    padding-right: 0;
+    padding-bottom: clamp(28px, 4vw, 42px);
+    border-right: 0;
+    border-bottom: 1px solid rgba(228, 92, 154, 0.22);
+  }
+
   .premiation-mvp__layout,
   .premiation-split-heading,
   .premiation-special__heading,
@@ -5590,6 +5617,7 @@ button {
   }
 
   .premiation-direct__stage,
+  .premiation-ranking-grid,
   .premiation-places,
   .premiation-recognition__grid,
   .premiation-special-tabs,
@@ -5601,6 +5629,11 @@ button {
 
   .premiation-special-tabs button {
     height: 134px;
+  }
+
+  .premiation-ranking-item img,
+  .premiation-ranking-item video {
+    height: clamp(174px, 50vw, 246px);
   }
 
   .premiation-special-panel {
