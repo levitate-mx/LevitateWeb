@@ -414,7 +414,7 @@ export function PremiationPage() {
                       </article>
                     ))}
                   </div>
-                  <p>Las medallas son independientes al ranking obtenido.</p>
+                  <p>El sistema de medallero es independiente al ranking obtenido.</p>
                 </div>
 
                 <aside className="premiation-block-help">

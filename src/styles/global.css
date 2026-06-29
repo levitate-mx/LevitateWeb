@@ -3578,9 +3578,9 @@ button {
 
 .premiation-system__layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.58fr);
-  gap: clamp(28px, 4vw, 70px);
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(28px, 3.4vw, 54px);
+  align-items: stretch;
 }
 
 .premiation-score-panel,
@@ -3590,8 +3590,13 @@ button {
   min-width: 0;
 }
 
+.premiation-ranking-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 .premiation-score-panel {
-  padding-right: clamp(18px, 3vw, 42px);
+  padding-right: clamp(18px, 2.4vw, 34px);
   border-right: 1px solid rgba(228, 92, 154, 0.22);
 }
 
@@ -3712,14 +3717,16 @@ button {
 
 .premiation-ranking-box {
   display: grid;
-  gap: clamp(18px, 2vw, 26px);
-  padding: clamp(18px, 2vw, 28px);
+  flex: 1 1 auto;
+  gap: clamp(14px, 1.4vw, 20px);
+  align-content: center;
+  padding: clamp(14px, 1.55vw, 22px);
 }
 
 .premiation-ranking-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(14px, 2vw, 28px);
+  gap: clamp(12px, 1.45vw, 20px);
 }
 
 .premiation-ranking-item {
@@ -3734,7 +3741,7 @@ button {
   display: block;
   color: #111017;
   font-family: var(--font-display);
-  font-size: clamp(1.35rem, 2.1vw, 2.05rem);
+  font-size: clamp(1.22rem, 1.65vw, 1.72rem);
   font-weight: 400;
   line-height: 0.9;
   letter-spacing: 0.06em;
@@ -3743,7 +3750,7 @@ button {
 
 .premiation-ranking-item figure {
   width: 100%;
-  aspect-ratio: 1.44 / 1;
+  aspect-ratio: 1.5 / 1;
   margin: 0;
   overflow: hidden;
   border: 1px solid rgba(228, 92, 154, 0.28);
@@ -3762,7 +3769,7 @@ button {
 .premiation-ranking-box > p {
   margin: 0;
   color: #302b33;
-  font-size: var(--premiation-lead-size);
+  font-size: var(--premiation-body-size);
   font-weight: 620;
   text-align: center;
 }
@@ -3770,10 +3777,10 @@ button {
 .premiation-block-help {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: clamp(14px, 1.6vw, 24px);
+  gap: clamp(12px, 1.25vw, 18px);
   align-items: center;
-  margin-top: clamp(14px, 1.6vw, 22px);
-  padding: clamp(16px, 1.6vw, 24px) clamp(18px, 2vw, 28px);
+  margin-top: clamp(10px, 1.15vw, 16px);
+  padding: clamp(14px, 1.35vw, 20px) clamp(16px, 1.6vw, 24px);
 }
 
 .premiation-block-help svg,
