@@ -1,6 +1,7 @@
 node_modules
 dist
 tmp
+generated
 .DS_Store
 levitate-homepage-full*.png
 

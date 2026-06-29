@@ -7,7 +7,11 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "db:migrate:codi": "node scripts/migrate-codi-db.mjs",
+    "db:migrate:passport": "wrangler d1 execute levitate-passport --remote --file db/passport_d1_schema.sql",
+    "db:migrate:passport:local": "wrangler d1 execute levitate-passport --local --file db/passport_d1_schema.sql",
     "db:migrate": "npm run db:migrate:codi",
+    "db:migrate:all": "npm run db:migrate:codi && npm run db:migrate:passport",
+    "passport:generate": "node scripts/generate-passport-qr.mjs",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy"
   },
@@ -22,6 +26,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "qrcode": "^1.5.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.14",
     "wrangler": "^4.94.0"

@@ -2,6 +2,13 @@ import { LevitateAuthRoute, LevitateRegistrationRoute } from "./components/admin
 import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
+import {
+  PassportAdminPage,
+  PassportCertificatePage,
+  PassportClaimPage,
+  PassportOverviewPage,
+  PassportStationPage,
+} from "./components/passport/PassportPages";
 import { PremiationPage } from "./components/premiation/PremiationPage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
@@ -19,6 +26,11 @@ export default function App() {
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
   const motionGenresMatch = window.location.pathname.match(/^\/modalidades\/levitate-motion\/generos\/?$/);
+  const passportAdminMatch = window.location.pathname.match(/^\/admin\/(?:pasaporte-colibri|passports)\/?$/);
+  const passportCertificateMatch = window.location.pathname.match(/^\/passport\/certificate\/?$/);
+  const passportClaimMatch = window.location.pathname.match(/^\/passport\/claim\/?$/);
+  const passportMatch = window.location.pathname.match(/^\/passport\/?$/);
+  const passportStationMatch = window.location.pathname.match(/^\/e\/([^/]+)\/station\/([^/]+)\/?$/);
   const sedesMatch = window.location.pathname.match(/^\/sedes\/?$/);
   const shopMatch = window.location.pathname.match(/^\/tienda\/?$/);
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
@@ -46,6 +58,26 @@ export default function App() {
 
   if (motionGenresMatch) {
     return <MotionGenresPage />;
+  }
+
+  if (passportAdminMatch) {
+    return <PassportAdminPage />;
+  }
+
+  if (passportClaimMatch) {
+    return <PassportClaimPage token={new URLSearchParams(window.location.search).get("token")} />;
+  }
+
+  if (passportCertificateMatch) {
+    return <PassportCertificatePage />;
+  }
+
+  if (passportMatch) {
+    return <PassportOverviewPage />;
+  }
+
+  if (passportStationMatch) {
+    return <PassportStationPage eventSlug={passportStationMatch[1]} stationSlug={passportStationMatch[2]} />;
   }
 
   if (evaluationsMatch) {

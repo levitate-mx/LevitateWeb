@@ -13,6 +13,13 @@
     ],
     "not_found_handling": "single-page-application"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "levitate-passport",
+      "database_id": "d4a3a9e7-70e6-4a8c-8514-5c9136b924a2"
+    }
+  ],
   "migrations": [
     {
       "tag": "v1_media_overrides_store",
