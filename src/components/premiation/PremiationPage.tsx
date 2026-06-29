@@ -75,7 +75,6 @@ const recognitionShowcase = [
 const directRanking = [
   {
     place: "1er lugar",
-    award: "Ranking",
     image: "/assets/ranking-oro.mp4",
     alt: "Escenario Levitate durante una premiación.",
     variant: "gold",
@@ -84,7 +83,6 @@ const directRanking = [
   },
   {
     place: "2do lugar",
-    award: "Ranking",
     image: "/assets/ranking-plata.png",
     alt: "Equipo Levitate con medallas de plata en escenario.",
     variant: "silver",
@@ -92,7 +90,6 @@ const directRanking = [
   },
   {
     place: "3er lugar",
-    award: "Ranking",
     image: "/assets/ranking-bronce.jpg",
     alt: "Equipo Levitate con medalla de bronce en escenario.",
     variant: "bronze",
@@ -410,7 +407,6 @@ export function PremiationPage() {
                             <img src={rank.image} alt={rank.alt} loading="lazy" />
                           )}
                           <figcaption>
-                            <span>{rank.award}</span>
                             <strong>{rank.place}</strong>
                           </figcaption>
                         </figure>
