@@ -1,8 +1,5 @@
 import {
-  BarChart3,
   CheckCircle2,
-  CircleHelp,
-  CirclePlay,
   Lightbulb,
   Megaphone,
   Music2,
@@ -11,6 +8,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Star,
+  Trophy,
   Users,
   WandSparkles,
 } from "lucide-react";
@@ -19,59 +17,34 @@ import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-const medalVideoUrl = "";
-
 const medalRules = [
   {
     label: "Oro",
-    description: "Del puntaje más alto hasta 5 puntos menos.",
+    description: "181 - 210 puntos",
     image: "/assets/medallero-oro.png",
     alt: "Medalla de oro Levitate 2026.",
     tone: "gold",
   },
   {
     label: "Plata",
-    description: "De 6 a 15 puntos por debajo del puntaje más alto.",
+    description: "161 - 180 puntos",
     image: "/assets/medallero-plata.png",
     alt: "Medalla de plata Levitate 2026.",
     tone: "silver",
   },
   {
     label: "Bronce",
-    description: "De 16 a 25 puntos por debajo del puntaje más alto.",
+    description: "141 - 160 puntos",
     image: "/assets/medallero-bronce.png",
     alt: "Medalla de bronce Levitate 2026.",
     tone: "bronze",
   },
   {
     label: "Participación",
-    description: "26 puntos o más por debajo del puntaje más alto.",
+    description: "Menor a 141 puntos",
     image: "/assets/medallero-participacion.png",
     alt: "Medalla de participación Levitate 2026.",
     tone: "pink",
-  },
-];
-
-const medalSystems = [
-  {
-    icon: SlidersHorizontal,
-    title: "Motion",
-    adjustment: "Ajuste por división",
-    options: ["Baby", "Petite", "Junior", "Teen", "Senior", "Legacy"],
-    copy: "Se aplican rangos de medalla de acuerdo con el mayor puntaje obtenido en una misma división.",
-    image: "/assets/premiation-motion-medal-system.jpg",
-    imageAlt: "Participante de Motion con vestuario folclórico sobre escenario Levitate.",
-    imageFirst: true,
-  },
-  {
-    icon: BarChart3,
-    title: "Aerial",
-    adjustment: "Ajuste por nivel",
-    options: ["Nudo", "Principiantes", "Intermedio", "Avanzado", "Elite"],
-    copy: "Se aplican rangos de medalla de acuerdo con el mayor puntaje obtenido en un mismo nivel.",
-    image: "/assets/premiation-aerial-medal-system.jpg",
-    imageAlt: "Participante de Aerial en aro durante una experiencia Levitate.",
-    imageFirst: false,
   },
 ];
 
@@ -80,15 +53,15 @@ const recognitionShowcase = [
     title: "Medallas",
     label: "Oro · Plata · Bronce · Participación",
     image: "/assets/medallero-oro.png",
-    alt: "Medalla de oro del sistema de medallero Levitate.",
-    copy: "Reconocimientos individuales diseñados para distinguir ranking, puntaje absoluto y participación dentro de cada sede.",
+    alt: "Medalla de oro del medallero por puntaje Levitate.",
+    copy: "Reconocimientos individuales que distinguen el puntaje obtenido, independientemente del ranking por bloque.",
   },
   {
     title: "Trofeos",
     label: "Dúos · Tríos · Grupales",
     image: "/assets/premiation-recognition-trophies.png",
     alt: "Escenario Levitate preparado para entrega de trofeos.",
-    copy: "Piezas de escenario para primeros lugares en formatos colectivos, acompañadas por medallas para sus integrantes.",
+    copy: "Piezas de escenario para lugares competitivos en formatos colectivos, acompañadas por medallas para sus integrantes.",
   },
   {
     title: "Premios especiales",
@@ -101,16 +74,8 @@ const recognitionShowcase = [
 
 const directRanking = [
   {
-    place: "2do lugar",
-    award: "Plata",
-    image: "/assets/ranking-plata.png",
-    alt: "Equipo Levitate con medallas de plata en escenario.",
-    variant: "silver",
-    mediaType: "image",
-  },
-  {
     place: "1er lugar",
-    award: "Oro",
+    award: "Ranking",
     image: "/assets/ranking-oro.mp4",
     alt: "Escenario Levitate durante una premiación.",
     variant: "gold",
@@ -118,8 +83,16 @@ const directRanking = [
     featured: true,
   },
   {
+    place: "2do lugar",
+    award: "Ranking",
+    image: "/assets/ranking-plata.png",
+    alt: "Equipo Levitate con medallas de plata en escenario.",
+    variant: "silver",
+    mediaType: "image",
+  },
+  {
     place: "3er lugar",
-    award: "Bronce",
+    award: "Ranking",
     image: "/assets/ranking-bronce.jpg",
     alt: "Equipo Levitate con medalla de bronce en escenario.",
     variant: "bronze",
@@ -371,161 +344,99 @@ export function PremiationPage() {
             En Levitate MX reconocemos el talento, la dedicación y el crecimiento artístico en cada paso que das.
           </p>
           <p>
-            Nuestro sistema de premiación está diseñado para reconocer el nivel real de cada participación, otorgando a
-            los participantes el mérito a su trabajo, esfuerzo y ejecución.
+            Todas las participaciones reciben medalla según su puntaje obtenido y, cuando existe competencia directa,
+            también se otorga ranking por bloque.
           </p>
         </div>
       </section>
 
       <div className="premiation-awards-flow">
-        <section className="premiation-section premiation-section--light premiation-direct">
+        <section className="premiation-section premiation-section--light premiation-system">
           <div className="premiation-section__body">
-            <div className="premiation-direct__header">
-              <p className="premiation-kicker">Sistemas de premiación</p>
+            <div className="premiation-system__header">
               <h2>
-                Competencia <strong>directa</strong>
+                <span>Sistema de </span>
+                <strong>premiación</strong>
               </h2>
               <p>
-                Cuando dos o más participaciones comparten la misma división, género, nivel y categoría, se comparan
-                entre sí y el resultado se define por ranking.
+                Todas las participaciones se rigen bajo un <strong>medallero por puntaje</strong> y, si existe
+                competencia directa, también se otorgan lugares por ranking dentro de tu bloque.
               </p>
             </div>
 
-            <div className="premiation-direct__stage" aria-label="Ranking de competencia directa">
-              {directRanking.map((rank) => (
-                <article
-                  className={`premiation-rank-card premiation-rank-card--${rank.variant}${
-                    rank.featured ? " is-featured" : ""
-                  }`}
-                  key={rank.place}
-                >
-                  <figure>
-                    {rank.mediaType === "video" ? (
-                      <video
-                        src={rank.image}
-                        aria-label={rank.alt}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                      />
-                    ) : (
-                      <img src={rank.image} alt={rank.alt} loading="lazy" />
-                    )}
-                  </figure>
-                  <div>
-                    <strong>{rank.place}</strong>
-                    <small>{rank.award}</small>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <div className="premiation-system__layout">
+              <article className="premiation-score-panel">
+                <div className="premiation-system__title-row">
+                  <span>1</span>
+                  <h3>
+                    Medallero por <strong>puntaje</strong>
+                  </h3>
+                </div>
+                <p>Todas las participaciones reciben una medalla según su puntaje obtenido.</p>
 
-            <div className="premiation-direct__note">
-              <div>
-                <strong>Ranking real por bloque.</strong>
-                <p>
-                  Si una categoría cuenta con más de tres participaciones, las coreografías restantes reciben medalla de
-                  participación.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="premiation-section premiation-section--light premiation-medals">
-          <div className="premiation-section__body">
-            <div className="premiation-medals__intro">
-              <i className="premiation-medals__rule" aria-hidden="true" />
-              <h2>
-                <span>Sistema de </span>
-                <strong>Medallero</strong>
-              </h2>
-              <div className="premiation-medals__copy">
-                <p>
-                  Así se premian las participaciones <strong>sin competencia directa.</strong>
-                </p>
-              </div>
-            </div>
-
-            <div className="premiation-medal-systems">
-              {medalSystems.map((system) => {
-                const AdjustmentIcon = system.icon;
-
-                return (
-                  <article
-                    className={`premiation-medal-system${system.imageFirst ? " premiation-medal-system--image-first" : ""}`}
-                    key={system.title}
-                  >
-                    {system.imageFirst && (
-                      <figure className="premiation-medal-system__visual">
-                        <img src={system.image} alt={system.imageAlt} loading="lazy" />
-                      </figure>
-                    )}
-                    <div className="premiation-medal-system__content">
-                      <p className="premiation-medal-system__kicker">Sistema de medallero</p>
-                      <h3>{system.title}</h3>
-                      <p className="premiation-medal-system__adjustment">
-                        <AdjustmentIcon aria-hidden="true" size={22} strokeWidth={2.6} />
-                        {system.adjustment}
-                      </p>
-                      <div className="premiation-medal-system__chips" aria-label={system.adjustment}>
-                        {system.options.map((option) => (
-                          <span key={option}>{option}</span>
-                        ))}
+                <div className="premiation-score-list">
+                  {medalRules.map((rule) => (
+                    <div className={`premiation-score-row is-${rule.tone}`} key={rule.label}>
+                      <img src={rule.image} alt={rule.alt} loading="lazy" />
+                      <div>
+                        <strong>{rule.label}</strong>
+                        <p>{rule.description}</p>
                       </div>
-                      <i aria-hidden="true" />
-                      <p className="premiation-medal-system__copy">{system.copy}</p>
                     </div>
+                  ))}
+                </div>
+              </article>
 
-                    {!system.imageFirst && (
-                      <figure className="premiation-medal-system__visual">
-                        <img src={system.image} alt={system.imageAlt} loading="lazy" />
-                      </figure>
-                    )}
-                  </article>
-                );
-              })}
+              <article className="premiation-ranking-panel">
+                <div className="premiation-system__title-row">
+                  <span>2</span>
+                  <h3>
+                    <strong>Ranking</strong> por bloque de competencia
+                  </h3>
+                </div>
+                <p>
+                  Cuando dos o más participantes comparten la misma división, género, nivel y categoría, compiten entre
+                  sí por un lugar en el ranking de su bloque.
+                </p>
+
+                <div className="premiation-ranking-box" aria-label="Ranking por bloque de competencia">
+                  <div className="premiation-ranking-grid">
+                    {directRanking.map((rank) => (
+                      <article className="premiation-ranking-item" key={rank.place}>
+                        <strong>{rank.place}</strong>
+                        <figure>
+                          {rank.mediaType === "video" ? (
+                            <video src={rank.image} aria-label={rank.alt} autoPlay loop muted playsInline />
+                          ) : (
+                            <img src={rank.image} alt={rank.alt} loading="lazy" />
+                          )}
+                        </figure>
+                      </article>
+                    ))}
+                  </div>
+                  <p>Las medallas son independientes al ranking obtenido.</p>
+                </div>
+
+                <aside className="premiation-block-help">
+                  <Users aria-hidden="true" size={54} strokeWidth={1.8} />
+                  <div>
+                    <strong>¿Qué es un bloque de competencia?</strong>
+                    <p>Se forma con participantes que comparten la misma división, género, categoría y nivel.</p>
+                  </div>
+                </aside>
+              </article>
             </div>
 
-            <article className="premiation-medal-rules" aria-label="Rangos del sistema de medallero">
-              {medalRules.map((rule) => (
-                <div className={`premiation-medal-rule is-${rule.tone}`} key={rule.label}>
-                  <img src={rule.image} alt={rule.alt} loading="lazy" />
-                  <div>
-                    <strong>{rule.label}</strong>
-                    <p>{rule.description}</p>
-                  </div>
-                </div>
-              ))}
-            </article>
-
-            <aside className="premiation-medal-help" id="video-medallero">
+            <aside className="premiation-system-note">
+              <Trophy aria-hidden="true" size={48} strokeWidth={1.9} />
               <div>
-                <span aria-hidden="true">
-                  <CircleHelp size={26} strokeWidth={2.2} />
-                </span>
-                <div>
-                  <p className="premiation-kicker">¿Tienes dudas?</p>
-                  <h3>Video explicativo del medallero</h3>
-                  <p>
-                    Mira una guía rápida para entender cómo se asignan Oro, Plata, Bronce y Participación según el
-                    puntaje de cada bloque.
-                  </p>
-                </div>
+                <strong>Importante</strong>
+                <p>
+                  El medallero reconoce tu puntaje individual. El ranking reconoce tu posición frente a tus competidores
+                  directos.
+                </p>
+                <p>Por eso puede haber un 1er lugar oro, plata, bronce o participación.</p>
               </div>
-
-              {medalVideoUrl ? (
-                <a href={medalVideoUrl} rel="noreferrer" target="_blank">
-                  <CirclePlay aria-hidden="true" size={22} strokeWidth={2.3} />
-                  Ver video explicativo
-                </a>
-              ) : (
-                <button disabled type="button">
-                  <CirclePlay aria-hidden="true" size={22} strokeWidth={2.3} />
-                  Video explicativo próximamente
-                </button>
-              )}
             </aside>
           </div>
         </section>

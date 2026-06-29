@@ -23,24 +23,24 @@ const scoreRanges = [
   { number: "01", label: "Oro", range: "181 - 210 pts", width: "100%" },
   { number: "02", label: "Plata", range: "161 - 180 pts", width: "82%" },
   { number: "03", label: "Bronce", range: "141 - 160 pts", width: "64%" },
-  { number: "04", label: "Participación", range: "≤ 140 pts", width: "46%" },
+  { number: "04", label: "Participación", range: "< 141 pts", width: "46%" },
 ];
 
 const rankingAwards = [
   {
     place: "1º lugar",
-    solo: "Medalla de oro",
-    group: "Trofeo + medallas",
+    solo: "Lugar competitivo",
+    group: "Trofeo de lugar",
   },
   {
     place: "2º lugar",
-    solo: "Medalla de plata",
-    group: "Trofeo + medallas",
+    solo: "Lugar competitivo",
+    group: "Trofeo de lugar",
   },
   {
     place: "3º lugar",
-    solo: "Medalla de bronce",
-    group: "Trofeo + medallas",
+    solo: "Lugar competitivo",
+    group: "Trofeo de lugar",
   },
 ];
 
@@ -117,7 +117,7 @@ export function VenuePage({ venue }: VenuePageProps) {
           </div>
         </section>
 
-        <KineticMarquee items={["FECHA", "BLOQUES", "AERIAL", "MOTION", "JUECES", "MEDALLERO"]} />
+        <KineticMarquee items={["FECHA", "BLOQUES", "AERIAL", "MOTION", "JUECES", "PREMIOS"]} />
 
         <section id="info-general" className="venue-section venue-section--info">
           <div className="section__inner">
@@ -333,15 +333,15 @@ export function VenuePage({ venue }: VenuePageProps) {
               <SectionEyebrow>PREMIOS · MEDALLERO</SectionEyebrow>
               <AnimatedTextReveal as="h2" lines={["Cada punto", "cuenta."]} />
               <p>
-                Levitate reconoce el desempeño por ranking competitivo y por puntaje absoluto
-                cuando una categoría no tiene competencia directa.
+                Todas las participaciones se rigen por medallero por puntaje y, si existe competencia directa, también
+                se otorgan lugares por ranking dentro de su bloque.
               </p>
             </MotionReveal>
 
             <MotionReveal className="venue-score-card" delay={90}>
               <div className="venue-score-card__heading">
                 <span>Sin competencia directa</span>
-                <h3>Sistema por puntaje absoluto</h3>
+                <h3>Medallero por puntaje</h3>
               </div>
               <div className="venue-score-ladder">
                 {scoreRanges.map((score, index) => (
@@ -367,9 +367,9 @@ export function VenuePage({ venue }: VenuePageProps) {
             <MotionReveal className="venue-ranking-card" delay={140}>
               <div className="venue-card-heading">
                 <AwardIcon />
-                <h3>Medallero con competencia directa</h3>
+                <h3>Ranking por bloque</h3>
               </div>
-              <div className="venue-ranking-table" role="table" aria-label="Medallero por ranking">
+              <div className="venue-ranking-table" role="table" aria-label="Lugar competitivo por ranking">
                 <div role="row">
                   <span role="columnheader">Lugar</span>
                   <span role="columnheader">Solos</span>
@@ -383,7 +383,9 @@ export function VenuePage({ venue }: VenuePageProps) {
                   </div>
                 ))}
               </div>
-              <p>Los participantes fuera de los tres primeros lugares reciben medalla de participación.</p>
+              <p>
+                Las medallas son independientes del ranking: puede haber 1er lugar oro, plata, bronce o participación.
+              </p>
             </MotionReveal>
 
             <MotionReveal className="venue-special-awards" delay={190}>

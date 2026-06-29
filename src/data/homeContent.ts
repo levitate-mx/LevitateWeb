@@ -25,7 +25,7 @@ export const megaMenuItems = [
     label: "Competencia",
     href: "/#eventos",
     image: assets.competition,
-    description: "Escenarios de alto nivel, bloques claros y medallero por categoría.",
+    description: "Escenarios de alto nivel, bloques claros, medallero por puntaje y ranking.",
   },
   {
     label: "Workshops",

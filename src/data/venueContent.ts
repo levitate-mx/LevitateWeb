@@ -81,8 +81,8 @@ const sharedAges = [
 
 const sharedAwards = [
   {
-    title: "Medallero por categoría",
-    description: "Oro, plata y bronce para los puntajes más altos de cada división y género.",
+    title: "Medallero por puntaje + ranking",
+    description: "Medallas según puntaje obtenido y lugares por ranking cuando existe competencia directa.",
   },
   {
     title: "Premios especiales",
@@ -153,7 +153,7 @@ export const venuePages: VenuePageData[] = [
       {
         label: "Cierre escénico",
         time: "18:00 - 21:00",
-        description: "Exhibiciones invitadas, reconocimientos especiales, medallero y fotografía de sede.",
+        description: "Exhibiciones invitadas, reconocimientos especiales, premiación y fotografía de sede.",
       },
     ],
     genreGroups: sharedGenres,
@@ -218,7 +218,7 @@ export const venuePages: VenuePageData[] = [
       {
         label: "Premiación",
         time: "17:30 - 20:30",
-        description: "Showcase aéreo, medallero por división y reconocimientos especiales.",
+        description: "Showcase aéreo, medallero por puntaje, ranking por bloque y reconocimientos especiales.",
       },
     ],
     genreGroups: sharedGenres,
@@ -253,7 +253,7 @@ export const venuePages: VenuePageData[] = [
     season: "Temporada Otoño 2026",
     heroImage: assets.community,
     intro:
-      "Una edición de cierre con bloques de competencia, medallero, boletos por experiencia y una jornada diseñada para participantes, familias y academias.",
+      "Una edición de cierre con bloques de competencia, premiación, boletos por experiencia y una jornada diseñada para participantes, familias y academias.",
     capacity: "Alta demanda",
     modality: "Competencia + Showcase",
     status: "Convocatoria próxima",
@@ -261,7 +261,7 @@ export const venuePages: VenuePageData[] = [
       {
         label: "Fecha",
         value: "04 de octubre de 2026",
-        description: "Edición de cierre con competencia, exhibiciones y medallero general.",
+        description: "Edición de cierre con competencia, exhibiciones y premiación general.",
       },
       {
         label: "Estatus",
@@ -283,7 +283,7 @@ export const venuePages: VenuePageData[] = [
       {
         label: "Final de sede",
         time: "18:00 - 21:30",
-        description: "Premios especiales, medallero general y showcase de cierre.",
+        description: "Premios especiales, medallero por puntaje, ranking por bloque y showcase de cierre.",
       },
     ],
     genreGroups: sharedGenres,
