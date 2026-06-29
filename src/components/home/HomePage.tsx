@@ -141,11 +141,9 @@ export function HomePage() {
     <main className="levitate-page">
       <section id="inicio" className={`levitate-hero${shouldRenderHeroVideo && !isHeroVideoReady ? " is-video-loading" : ""}`}>
         <div className="levitate-video-fallback" aria-hidden="true" />
-        <img className="levitate-hero__poster" src="/assets/levitate-home-hero-poster.jpg" alt="" fetchPriority="high" aria-hidden="true" />
         {shouldRenderHeroVideo ? (
           <video
             className="levitate-hero__media"
-            poster="/assets/levitate-home-hero-poster.jpg"
             autoPlay
             muted
             loop

@@ -8103,7 +8103,6 @@ button {
   opacity: 1;
 }
 
-.levitate-hero__poster,
 .levitate-hero__media {
   position: absolute;
   inset: 0;
@@ -8114,13 +8113,18 @@ button {
   transform: scale(1.015);
 }
 
-.levitate-hero__poster {
-  z-index: -5;
-}
-
 .levitate-hero__media {
   z-index: -4;
   animation: levitate-media-in 1700ms var(--ease-out) forwards;
+}
+
+.levitate-hero .levitate-video-fallback {
+  background: #050505;
+}
+
+.levitate-hero .levitate-video-fallback::before,
+.levitate-hero .levitate-video-fallback::after {
+  display: none;
 }
 
 .levitate-hero__smoke {
