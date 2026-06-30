@@ -416,14 +416,6 @@ export function PremiationPage() {
                   <p>El sistema de medallero es independiente al ranking obtenido.</p>
                 </div>
 
-                <aside className="premiation-block-help">
-                  <Users aria-hidden="true" size={54} strokeWidth={1.8} />
-                  <div>
-                    <strong>¿Qué es un bloque de competencia?</strong>
-                    <p>Se forma con participantes que comparten la misma división, género, categoría y nivel.</p>
-                  </div>
-                </aside>
-
                 <aside className="premiation-system-note">
                   <Trophy aria-hidden="true" size={48} strokeWidth={1.9} />
                   <div>
