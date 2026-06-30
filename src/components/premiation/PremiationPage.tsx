@@ -1,5 +1,6 @@
 import {
   CheckCircle2,
+  Info,
   Lightbulb,
   Megaphone,
   Music2,
@@ -75,10 +76,10 @@ const recognitionShowcase = [
 const directRanking = [
   {
     place: "1er lugar",
-    image: "/assets/ranking-oro.mp4",
-    alt: "Escenario Levitate durante una premiación.",
+    image: "/assets/ranking-oro.png",
+    alt: "Equipo Levitate celebrando primer lugar en escenario.",
     variant: "gold",
-    mediaType: "video",
+    mediaType: "image",
     featured: true,
   },
   {
@@ -413,7 +414,10 @@ export function PremiationPage() {
                       </article>
                     ))}
                   </div>
-                  <p>El sistema de medallero es independiente al ranking obtenido.</p>
+                  <p className="premiation-ranking-note">
+                    <Info aria-hidden="true" size={22} strokeWidth={2.2} />
+                    <span>El sistema de medallero es independiente al ranking obtenido.</span>
+                  </p>
                 </div>
 
                 <aside className="premiation-system-note">

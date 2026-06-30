@@ -3802,7 +3802,7 @@ button {
 
 .premiation-ranking-item figcaption strong {
   display: block;
-  color: var(--premiation-pink);
+  color: #111017;
   font-family: var(--font-display);
   font-size: clamp(1.45rem, 2.2vw, 2.3rem);
   font-weight: 400;
@@ -3812,24 +3812,21 @@ button {
   text-transform: uppercase;
 }
 
-.premiation-ranking-item.is-gold figcaption strong {
-  color: #b77a15;
-}
-
-.premiation-ranking-item.is-silver figcaption strong {
-  color: #878286;
-}
-
-.premiation-ranking-item.is-bronze figcaption strong {
-  color: #a44f2d;
-}
-
-.premiation-ranking-box > p {
+.premiation-ranking-note {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
   margin: 2px 0 0;
   color: #302b33;
   font-size: var(--premiation-body-size);
   font-weight: 620;
   text-align: center;
+}
+
+.premiation-ranking-note svg {
+  flex: 0 0 auto;
+  color: var(--premiation-pink);
 }
 
 .premiation-system-note svg {
@@ -3918,12 +3915,12 @@ button {
   }
 
   .premiation-ranking-item figure {
-    min-height: 112px;
-    aspect-ratio: 2.35 / 1;
+    min-height: 0;
+    aspect-ratio: auto;
   }
 
   .premiation-ranking-item figcaption {
-    padding: 18px;
+    padding: 8px 0 0;
   }
 
   .premiation-ranking-item figcaption strong {
