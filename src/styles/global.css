@@ -15297,6 +15297,15 @@ button {
   transform: translateY(-2px);
 }
 
+.levitate-auth-submit:disabled,
+.levitate-admin-save:disabled,
+.levitate-admin-transfer__actions button:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
 .levitate-admin-page__body {
   display: grid;
   gap: clamp(36px, 5vw, 72px);
@@ -15447,6 +15456,10 @@ button {
   justify-content: flex-start;
 }
 
+.levitate-admin-form__wide-block .levitate-auth-message + .levitate-auth-message {
+  margin-top: 10px;
+}
+
 .levitate-admin-save,
 .levitate-admin-transfer__actions button {
   display: inline-flex;
@@ -15567,6 +15580,29 @@ button {
   font-weight: 720;
 }
 
+.levitate-admin-transfer__check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.levitate-admin-transfer__check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--admin-pink);
+  flex: 0 0 auto;
+}
+
+.levitate-admin-transfer__empty {
+  justify-content: center;
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.48);
+  color: rgba(17, 16, 21, 0.52);
+  text-align: center;
+}
+
 .levitate-admin-transfer__actions {
   display: grid;
   gap: 10px;
@@ -15595,6 +15631,33 @@ button {
   font-weight: 900;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+.levitate-admin-registered-panel__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 1.2fr 0.75fr 0.75fr 1fr;
+  gap: 18px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(17, 16, 21, 0.1);
+  color: rgba(17, 16, 21, 0.82);
+  font-size: 0.92rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.levitate-admin-empty-state {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 18px 0 24px;
+  border-top: 1px solid rgba(17, 16, 21, 0.1);
+  color: rgba(17, 16, 21, 0.56);
+  font-size: 0.92rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .levitate-admin-shell {
@@ -15778,6 +15841,23 @@ button {
   text-transform: uppercase;
 }
 
+.levitate-admin-welcome-panel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.levitate-admin-welcome-panel__meta span {
+  padding: 8px 10px;
+  border: 1px solid rgba(17, 16, 21, 0.1);
+  border-radius: 7px;
+  background: rgba(231, 70, 151, 0.08);
+  color: rgba(17, 16, 21, 0.72);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
 @media (max-width: 940px) {
   .levitate-auth-shell {
     grid-template-columns: 1fr;
@@ -15894,6 +15974,10 @@ button {
     grid-template-columns: 1fr 1fr;
     padding-top: 22px;
     padding-bottom: 22px;
+  }
+
+  .levitate-admin-registered-panel__row {
+    grid-template-columns: 1fr 1fr;
   }
 
   .levitate-admin-welcome-panel {

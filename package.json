@@ -9,8 +9,10 @@
     "db:migrate:codi": "node scripts/migrate-codi-db.mjs",
     "db:migrate:passport": "wrangler d1 execute levitate-passport --remote --file db/passport_d1_schema.sql",
     "db:migrate:passport:local": "wrangler d1 execute levitate-passport --local --file db/passport_d1_schema.sql",
+    "db:migrate:registration": "wrangler d1 execute levitate-passport --remote --file db/registration_d1_schema.sql",
+    "db:migrate:registration:local": "wrangler d1 execute levitate-passport --local --file db/registration_d1_schema.sql",
     "db:migrate": "npm run db:migrate:codi",
-    "db:migrate:all": "npm run db:migrate:codi && npm run db:migrate:passport",
+    "db:migrate:all": "npm run db:migrate:codi && npm run db:migrate:passport && npm run db:migrate:registration",
     "passport:generate": "node scripts/generate-passport-qr.mjs",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy"
