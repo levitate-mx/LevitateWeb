@@ -14992,7 +14992,6 @@ button {
   .levitate-why__manifesto strong,
   .levitate-why__manifesto em,
   .levitate-why__list article,
-  .levitate-home-scroll-statement__line,
   [data-levitate-reveal] {
     animation: none !important;
     opacity: 1 !important;
@@ -15419,11 +15418,12 @@ button {
   border-left: 0;
   border-radius: 0 24px 24px 0;
   padding: 36px 42px;
-  background: rgba(226, 234, 238, 0.94);
+  background:
+    linear-gradient(145deg, rgba(198, 216, 222, 0.97), rgba(184, 205, 213, 0.95));
   box-shadow:
-    0 24px 88px rgba(0, 0, 0, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.62);
-  backdrop-filter: blur(22px) saturate(1.08);
+    0 24px 88px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(22px) saturate(1.02);
   animation: levitate-menu-subpanel-in 240ms var(--ease-out) both;
 }
 
@@ -15575,7 +15575,7 @@ button {
   max-width: 960px;
   justify-items: center;
   text-align: center;
-  transform: translateY(clamp(14px, 2.2vh, 30px));
+  transform: translateY(clamp(42px, 7vh, 76px));
 }
 
 .levitate-home-eyebrow {
@@ -15823,31 +15823,6 @@ button {
   line-height: 1.16;
 }
 
-.levitate-home-scroll-statement {
-  overflow: hidden;
-  padding: clamp(92px, 12vw, 180px) clamp(18px, 4vw, 56px);
-  background: var(--home-bg);
-}
-
-.levitate-home-scroll-statement h2 {
-  display: grid;
-  gap: clamp(2px, 0.7vw, 10px);
-  width: min(100%, 1480px);
-  margin: 0 auto;
-  font-family: var(--font-body);
-  font-size: clamp(3.8rem, 8.8vw, 10.6rem);
-  font-weight: 720;
-  letter-spacing: -0.055em;
-  line-height: 0.9;
-}
-
-.levitate-home-scroll-statement__line {
-  display: block;
-  color: rgba(42, 41, 40, var(--statement-ink, 0.34));
-  transition: color 80ms linear;
-  will-change: color;
-}
-
 .levitate-home-standard,
 .levitate-home-venues,
 .levitate-home-sponsors {
@@ -16032,11 +16007,10 @@ button {
 }
 
 .levitate-home-sponsors {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(135deg, rgba(183, 128, 153, 0.18), transparent 34%),
-    linear-gradient(180deg, #2a2928 0%, #11100f 100%);
-  color: #fff;
+  overflow: hidden;
+  border-top: 0;
+  background: var(--home-surface);
+  color: #2a2928;
 }
 
 .levitate-home-sponsors__inner {
@@ -16054,13 +16028,13 @@ button {
 }
 
 .levitate-home-sponsors__copy .levitate-home-eyebrow {
-  color: #d9a1bb;
+  color: var(--home-pink);
 }
 
 .levitate-home-sponsors__copy h2 {
   max-width: 620px;
   margin: 0;
-  color: #fff;
+  color: #2a2928;
   font-family: var(--font-body);
   font-size: clamp(3rem, 5.6vw, 6.2rem);
   font-weight: 620;
@@ -16071,7 +16045,7 @@ button {
 .levitate-home-sponsors__copy p:not(.levitate-home-eyebrow) {
   max-width: 420px;
   margin: 0;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(42, 41, 40, 0.58);
   font-size: clamp(1rem, 1.18vw, 1.14rem);
   font-weight: 520;
   line-height: 1.56;
@@ -16081,12 +16055,13 @@ button {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(42, 41, 40, 0.12);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.46);
+  backdrop-filter: blur(18px);
   box-shadow:
-    0 30px 90px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 26px 80px rgba(42, 41, 40, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
 }
 
 .levitate-home-sponsor-card {
@@ -16094,12 +16069,11 @@ button {
   min-height: clamp(150px, 15vw, 210px);
   place-items: center;
   padding: clamp(24px, 3.2vw, 42px);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.08), transparent 58%),
-    rgba(255, 255, 255, 0.03);
+  border-right: 1px solid rgba(42, 41, 40, 0.1);
+  background: rgba(255, 255, 255, 0.34);
   transition:
     background 240ms ease,
+    box-shadow 260ms var(--ease-out),
     transform 260ms var(--ease-out);
 }
 
@@ -16108,9 +16082,8 @@ button {
 }
 
 .levitate-home-sponsor-card:hover {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(217, 161, 187, 0.14), transparent 58%),
-    rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: inset 0 -3px 0 rgba(87, 189, 209, 0.62);
   transform: translateY(-2px);
 }
 
@@ -16118,6 +16091,12 @@ button {
   width: min(100%, 170px);
   max-height: 64px;
   object-fit: contain;
+}
+
+.levitate-home-sponsor-card.sponsor-electrolit img,
+.levitate-home-sponsor-card.sponsor-videoimagen img {
+  filter: invert(1) brightness(0.22) contrast(1.08);
+  opacity: 0.78;
 }
 
 .levitate-home-sponsor-card.sponsor-electrolit img {
@@ -16170,10 +16149,6 @@ button {
 
   .levitate-home-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .levitate-home-scroll-statement h2 {
-    font-size: clamp(3.4rem, 9.8vw, 7.8rem);
   }
 
   .levitate-home-sponsors__copy h2,
@@ -16282,6 +16257,10 @@ button {
     padding: 62px 18px 24px;
   }
 
+  .levitate-home-hero__copy {
+    transform: translateY(clamp(28px, 4.8vh, 44px));
+  }
+
   .levitate-home-hero h1 {
     font-size: clamp(3.45rem, 16vw, 5.2rem);
   }
@@ -16321,16 +16300,6 @@ button {
     padding: 64px 18px;
   }
 
-  .levitate-home-scroll-statement {
-    padding: 72px 18px;
-  }
-
-  .levitate-home-scroll-statement h2 {
-    gap: 8px;
-    font-size: clamp(3.05rem, 14vw, 5.2rem);
-    line-height: 0.94;
-  }
-
   .levitate-home-sponsor-grid {
     grid-template-columns: 1fr;
   }
@@ -16338,7 +16307,7 @@ button {
   .levitate-home-sponsor-card {
     min-height: 132px;
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(42, 41, 40, 0.1);
   }
 
   .levitate-home-sponsor-card:last-child {

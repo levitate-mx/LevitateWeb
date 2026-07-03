@@ -61,13 +61,6 @@ const stats = [
   { icon: Building2, value: "6", label: "sedes nacionales" },
 ];
 
-const scrollStatementLines = [
-  "Una competencia donde el talento",
-  "encuentra escenario, criterio,",
-  "comunidad y formación",
-  "para elevarse.",
-];
-
 const sponsors = [
   { name: "Electrolit", logo: "/assets/electrolit-logo.png", className: "sponsor-electrolit" },
   { name: "AEParty", logo: "/assets/sponsor-aeparty.png", className: "sponsor-aeparty" },
@@ -129,61 +122,6 @@ export function HomePage() {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const statement = document.querySelector<HTMLElement>("[data-levitate-scroll-statement]");
-    const section = statement?.closest<HTMLElement>(".levitate-home-scroll-statement");
-
-    if (!statement || !section) {
-      return;
-    }
-
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let frame = 0;
-
-    const clamp = (value: number) => Math.min(Math.max(value, 0), 1);
-    const ease = (value: number) => value * value * (3 - 2 * value);
-
-    const renderStatement = () => {
-      if (reducedMotion.matches) {
-        statement.style.setProperty("--statement-ink", "0.9");
-        return;
-      }
-
-      const rect = section.getBoundingClientRect();
-      const viewportHeight = window.innerHeight || 1;
-      const scrollProgress = ease(clamp((viewportHeight * 0.78 - rect.top) / (viewportHeight * 0.52)));
-      const ink = 0.34 + scrollProgress * 0.56;
-
-      statement.style.setProperty("--statement-ink", ink.toFixed(3));
-    };
-
-    const requestRender = () => {
-      if (frame) {
-        return;
-      }
-
-      frame = window.requestAnimationFrame(() => {
-        frame = 0;
-        renderStatement();
-      });
-    };
-
-    renderStatement();
-    window.addEventListener("scroll", requestRender, { passive: true });
-    window.addEventListener("resize", requestRender);
-    reducedMotion.addEventListener("change", requestRender);
-
-    return () => {
-      if (frame) {
-        window.cancelAnimationFrame(frame);
-      }
-
-      window.removeEventListener("scroll", requestRender);
-      window.removeEventListener("resize", requestRender);
-      reducedMotion.removeEventListener("change", requestRender);
-    };
-  }, []);
-
   return (
     <main className="levitate-page levitate-home-redesign">
       <section id="inicio" className="levitate-home-hero">
@@ -228,16 +166,6 @@ export function HomePage() {
         })}
       </section>
 
-      <section className="levitate-home-scroll-statement" aria-label="Manifiesto Levitate">
-        <h2 data-levitate-scroll-statement>
-          {scrollStatementLines.map((line) => (
-            <span className="levitate-home-scroll-statement__line" key={line}>
-              {line}
-            </span>
-          ))}
-        </h2>
-      </section>
-
       <section id="categorías" className="levitate-home-standard">
         <div className="levitate-home-section-copy" data-levitate-reveal>
           <p className="levitate-home-eyebrow">¿Por qué Levitate?</p>
@@ -260,9 +188,8 @@ export function HomePage() {
 
       <section id="convocatorias" className="levitate-home-venues">
         <div className="levitate-home-section-copy levitate-home-section-copy--split" data-levitate-reveal>
-          <p className="levitate-home-eyebrow">Siguiente edición</p>
-          <h2>La sede que marca el próximo punto de encuentro.</h2>
-          <p>Fechas, formato y convocatoria en un solo lugar. Directo, claro y sin fricción.</p>
+          <p className="levitate-home-eyebrow">Próximas ediciones</p>
+          <h2>Encuentra la sede perfecta para ti.</h2>
         </div>
 
         <div className="levitate-home-venue-grid">

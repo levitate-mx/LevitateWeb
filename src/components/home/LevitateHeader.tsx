@@ -287,6 +287,18 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
     </div>
   );
 
+  const renderPillNavItem = (item: NavItem) => (
+    <div className="levitate-nav__item" key={item.label}>
+      <a
+        className={`levitate-nav__link${item.label === activeLabel ? " is-active" : ""}`}
+        href={resolveHref(item.href, useRootLinks)}
+        onClick={() => setActiveMenu(null)}
+      >
+        {item.label}
+      </a>
+    </div>
+  );
+
   if (variant === "pill") {
     return (
       <div className="levitate-menu-shell levitate-menu-shell--pill">
@@ -313,8 +325,8 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
               <Grip aria-hidden="true" size={17} strokeWidth={2.25} />
               <span>Menú</span>
             </button>
-            <nav aria-label="Navegación principal" onMouseMove={handleNavPointer} onPointerMove={handleNavPointer}>
-              {pillNavItems.map(renderNavItem)}
+            <nav aria-label="Navegación principal">
+              {pillNavItems.map(renderPillNavItem)}
             </nav>
           </div>
 
@@ -393,7 +405,6 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
           </div>
         ) : null}
 
-        {dropdown && typeof document !== "undefined" ? createPortal(dropdown, document.body) : null}
       </div>
     );
   }
