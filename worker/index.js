@@ -292,8 +292,13 @@ async function handleRegistrationRegister(request, env) {
 
     const sessionToken = await createRegistrationSession(db, userId, request);
     const state = await getRegistrationStateByUserId(db, userId);
+    const confirmationEmail = await sendRegistrationConfirmationEmail({
+      env,
+      request,
+      session: state,
+    });
 
-    return sendJson(state, 201, {
+    return sendJson({ ...state, confirmationEmail }, 201, {
       "set-cookie": buildRegistrationSessionCookie(request, sessionToken),
     });
   } catch (error) {
@@ -613,6 +618,154 @@ function getDb(env) {
   }
 
   return env.DB;
+}
+
+async function sendRegistrationConfirmationEmail({ env, request, session }) {
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.REGISTRATION_EMAIL_FROM;
+
+  if (!apiKey || !from) {
+    return { sent: false, reason: "email_not_configured" };
+  }
+
+  const registrationUrl = `${getPublicSiteUrl(request, env)}/registro`;
+  const venueLabel = getRegistrationVenueLabel(session.academy.venue);
+  const subject = "Registro confirmado | Levitate MX";
+  const html = buildRegistrationConfirmationHtml({
+    name: session.user.name,
+    academy: session.academy.name,
+    venue: venueLabel,
+    registrationUrl,
+  });
+  const text = [
+    `Hola ${session.user.name},`,
+    "",
+    "Tu usuario del panel de registro Levitate MX ya quedó creado.",
+    `Academia: ${session.academy.name}`,
+    `Sede: ${venueLabel}`,
+    "",
+    `Puedes entrar al panel aquí: ${registrationUrl}`,
+    "",
+    "Gracias por registrarte.",
+    "Levitate MX",
+  ].join("\n");
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        "idempotency-key": `registration-${session.user.id}`,
+        "user-agent": "levitate-registration-worker/1.0",
+      },
+      body: JSON.stringify({
+        from,
+        to: [session.user.email],
+        subject,
+        html,
+        text,
+        ...(env.REGISTRATION_EMAIL_REPLY_TO ? { reply_to: env.REGISTRATION_EMAIL_REPLY_TO } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.warn("Registration confirmation email failed", {
+        status: response.status,
+        detail,
+      });
+      return { sent: false, reason: "provider_error" };
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    return { sent: true, id: payload.id || null };
+  } catch (error) {
+    console.warn("Registration confirmation email failed", {
+      message: error?.message || String(error),
+    });
+    return { sent: false, reason: "network_error" };
+  }
+}
+
+function buildRegistrationConfirmationHtml({ name, academy, venue, registrationUrl }) {
+  const safeName = escapeHtml(name);
+  const safeAcademy = escapeHtml(academy);
+  const safeVenue = escapeHtml(venue);
+  const safeRegistrationUrl = escapeHtml(registrationUrl);
+
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registro confirmado | Levitate MX</title>
+  </head>
+  <body style="margin:0;background:#050505;color:#111015;font-family:Arial,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#050505;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#fffaf4;border-radius:8px;overflow:hidden;">
+            <tr>
+              <td style="background:#111015;padding:28px 30px;color:#fffaf4;">
+                <p style="margin:0 0 10px;color:#e74697;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;">Levitate MX</p>
+                <h1 style="margin:0;font-size:34px;line-height:1.05;font-weight:700;">Registro confirmado</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:30px;color:#111015;">
+                <p style="margin:0 0 16px;font-size:17px;line-height:1.5;">Hola ${safeName},</p>
+                <p style="margin:0 0 18px;font-size:16px;line-height:1.55;">Tu usuario del panel de registro Levitate MX ya quedó creado.</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;border:1px solid rgba(17,16,21,.12);border-radius:8px;">
+                  <tr>
+                    <td style="padding:14px 16px;border-bottom:1px solid rgba(17,16,21,.1);font-size:14px;color:rgba(17,16,21,.64);">Academia</td>
+                    <td style="padding:14px 16px;border-bottom:1px solid rgba(17,16,21,.1);font-size:14px;font-weight:700;text-align:right;">${safeAcademy}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 16px;font-size:14px;color:rgba(17,16,21,.64);">Sede</td>
+                    <td style="padding:14px 16px;font-size:14px;font-weight:700;text-align:right;">${safeVenue}</td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 26px;font-size:16px;line-height:1.55;">Desde el panel puedes registrar participantes, coreógrafos y bailes.</p>
+                <p style="margin:0;">
+                  <a href="${safeRegistrationUrl}" style="display:inline-block;background:#e74697;color:#ffffff;padding:14px 18px;border-radius:7px;font-size:13px;font-weight:700;letter-spacing:.1em;text-decoration:none;text-transform:uppercase;">Ir al panel</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function getPublicSiteUrl(request, env) {
+  if (env.PUBLIC_SITE_URL) {
+    return env.PUBLIC_SITE_URL.replace(/\/$/, "");
+  }
+
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}`;
+}
+
+function getRegistrationVenueLabel(venue) {
+  const labels = {
+    cdmx: "CDMX - 29 /31 mayo 2026",
+    puebla: "Puebla - 7 junio 2026",
+    edomex: "Edo. Méx. - 13 /15 noviembre 2026",
+  };
+
+  return labels[venue] || venue;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 async function createRegistrationSession(db, userId, request) {
