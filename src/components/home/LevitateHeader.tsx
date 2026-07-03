@@ -1,12 +1,24 @@
 import { useEffect, useState } from "react";
+import type { MouseEvent, PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Download } from "lucide-react";
+import { Download, Grip, UserRound, X } from "lucide-react";
 
 type NavItem = {
   label: string;
   href: string;
   children?: NavItem[];
   download?: boolean;
+};
+
+type PillMenuLink = {
+  label: string;
+  href: string;
+};
+
+type PillMenuSection = {
+  title: string;
+  href?: string;
+  links?: PillMenuLink[];
 };
 
 const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
@@ -77,8 +89,7 @@ function resolveHref(href: string, useRootLinks: boolean) {
 export function Logo({ useRootLinks = false }: { useRootLinks?: boolean }) {
   return (
     <a className="levitate-logo" href={useRootLinks ? "/#inicio" : "#inicio"} aria-label="Levitate MX inicio">
-      <span>Levitate</span>
-      <small>MX</small>
+      <img src="/assets/levitate-logo-mx.png" alt="" aria-hidden="true" />
     </a>
   );
 }
@@ -86,13 +97,40 @@ export function Logo({ useRootLinks = false }: { useRootLinks?: boolean }) {
 type LevitateHeaderProps = {
   activeLabel?: string;
   useRootLinks?: boolean;
+  variant?: "classic" | "pill";
 };
 
-export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false }: LevitateHeaderProps) {
+const pillNavItems = navItems.filter((item) => ["Inicio", "Convocatoria", "Tienda"].includes(item.label));
+
+const pillMenuSections: PillMenuSection[] = [
+  {
+    title: "Convocatoria",
+    links: [
+      { label: "Levitate Motion", href: "/modalidades/levitate-motion/generos" },
+      { label: "Levitate Aerial", href: "/modalidades/levitate-aerial/evaluacion" },
+      { label: "Sedes", href: "/sedes" },
+      { label: "Workshops", href: "/workshops" },
+      { label: "Premiación", href: "/premiacion" },
+    ],
+  },
+  {
+    title: "Tienda",
+    href: "/tienda",
+  },
+  {
+    title: "Salón de la fama",
+    href: "/salon-de-la-fama/mvps",
+  },
+];
+
+export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, variant = "classic" }: LevitateHeaderProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [renderedMenu, setRenderedMenu] = useState<string | null>(null);
   const [isMenuClosing, setIsMenuClosing] = useState(false);
+  const [isPillMenuOpen, setIsPillMenuOpen] = useState(false);
+  const [activePillSection, setActivePillSection] = useState<string | null>(null);
   const renderedNavItem = navItems.find((item) => item.label === renderedMenu && item.children);
+  const selectedPillSection = pillMenuSections.find((section) => section.title === activePillSection && section.links);
   const dropdown = renderedNavItem ? (
     <div
       aria-hidden={isMenuClosing}
@@ -171,71 +209,205 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false }:
     };
   }, [activeMenu]);
 
+  useEffect(() => {
+    if (!isPillMenuOpen) {
+      return;
+    }
+
+    const closePillMenu = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsPillMenuOpen(false);
+        setActivePillSection(null);
+      }
+    };
+
+    window.addEventListener("keydown", closePillMenu);
+    return () => window.removeEventListener("keydown", closePillMenu);
+  }, [isPillMenuOpen]);
+
+  const handleNavPointer = (event: MouseEvent<HTMLElement> | PointerEvent<HTMLElement>) => {
+    const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("[data-nav-label]");
+    const item = navItems.find((navItem) => navItem.label === link?.dataset.navLabel);
+    setIsPillMenuOpen(false);
+    setActivePillSection(null);
+    setActiveMenu(item?.children ? item.label : null);
+  };
+
+  const closePillMenu = () => {
+    setIsPillMenuOpen(false);
+    setActivePillSection(null);
+  };
+
+  const renderNavItem = (item: NavItem) => (
+    <div className={`levitate-nav__item${activeMenu === item.label ? " is-open" : ""}`} key={item.label}>
+      <a
+        aria-expanded={item.children ? activeMenu === item.label : undefined}
+        aria-haspopup={item.children ? "true" : undefined}
+        className={`levitate-nav__link${item.label === activeLabel ? " is-active" : ""}`}
+        data-nav-label={item.label}
+        href={resolveHref(item.href, useRootLinks)}
+        onBlur={(event) => {
+          if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
+            setActiveMenu(null);
+          }
+        }}
+        onClick={(event) => {
+          if (item.children) {
+            event.preventDefault();
+            setActiveMenu((current) => (current === item.label ? null : item.label));
+          }
+        }}
+        onFocus={() => {
+          if (item.children) {
+            setActiveMenu(item.label);
+          }
+        }}
+        onMouseEnter={() => {
+          if (item.children) {
+            setActiveMenu(item.label);
+          } else {
+            setActiveMenu(null);
+          }
+        }}
+        onMouseOver={() => {
+          if (item.children) {
+            setActiveMenu(item.label);
+          }
+        }}
+        onPointerEnter={() => {
+          if (item.children) {
+            setActiveMenu(item.label);
+          } else {
+            setActiveMenu(null);
+          }
+        }}
+      >
+        {item.label}
+      </a>
+    </div>
+  );
+
+  if (variant === "pill") {
+    return (
+      <div className="levitate-menu-shell levitate-menu-shell--pill">
+        <header className="levitate-nav levitate-nav--pill">
+          <div className="levitate-nav__group levitate-nav__group--primary">
+            <button
+              aria-controls="levitate-pill-menu"
+              aria-expanded={isPillMenuOpen}
+              className="levitate-nav__menu-trigger"
+              onClick={() => {
+                setActiveMenu(null);
+                setIsPillMenuOpen((current) => {
+                  const nextState = !current;
+
+                  if (!nextState) {
+                    setActivePillSection(null);
+                  }
+
+                  return nextState;
+                });
+              }}
+              type="button"
+            >
+              <Grip aria-hidden="true" size={17} strokeWidth={2.25} />
+              <span>Menú</span>
+            </button>
+            <nav aria-label="Navegación principal" onMouseMove={handleNavPointer} onPointerMove={handleNavPointer}>
+              {pillNavItems.map(renderNavItem)}
+            </nav>
+          </div>
+
+          <Logo useRootLinks={useRootLinks} />
+
+          <a className="levitate-nav__login" href="/login" aria-label="Iniciar sesión">
+            <UserRound aria-hidden="true" size={20} strokeWidth={2.25} />
+          </a>
+        </header>
+
+        {isPillMenuOpen ? (
+          <div className={`levitate-pill-menu${selectedPillSection ? " has-submenu" : ""}`} id="levitate-pill-menu">
+            <button
+              aria-label="Cerrar menú"
+              className="levitate-pill-menu__close"
+              onClick={closePillMenu}
+              type="button"
+            >
+              <X aria-hidden="true" size={24} strokeWidth={2.2} />
+            </button>
+
+            <div className="levitate-pill-menu__content">
+              <div className="levitate-pill-menu__links">
+                {pillMenuSections.map((section) => (
+                  <section key={section.title}>
+                    {section.links ? (
+                      <button
+                        aria-controls="levitate-pill-submenu"
+                        aria-expanded={activePillSection === section.title}
+                        className={`levitate-pill-menu__heading${activePillSection === section.title ? " is-active" : ""}`}
+                        onClick={() => setActivePillSection(section.title)}
+                        type="button"
+                      >
+                        <strong>{section.title}</strong>
+                      </button>
+                    ) : (
+                      <a
+                        className="levitate-pill-menu__heading"
+                        href={resolveHref(section.href ?? "#inicio", useRootLinks)}
+                        onClick={closePillMenu}
+                      >
+                        <strong>{section.title}</strong>
+                      </a>
+                    )}
+                  </section>
+                ))}
+              </div>
+
+              {selectedPillSection?.links ? (
+                <aside className="levitate-pill-menu__submenu" id="levitate-pill-submenu" aria-label={`${selectedPillSection.title} submenu`}>
+                  {selectedPillSection.links.map((link) => (
+                    <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
+                      {link.label}
+                    </a>
+                  ))}
+                </aside>
+              ) : null}
+
+              <aside className="levitate-pill-menu__contact" aria-label="Contacto">
+                <strong>Levitate MX</strong>
+                <a className="levitate-pill-menu__email" href="mailto:info.levitatemx@gmail.com">
+                  info.levitatemx@gmail.com
+                </a>
+                <div className="levitate-pill-menu__contact-links">
+                  <a href="https://wa.me/5217774920775">WhatsApp</a>
+                  <a href="https://www.facebook.com/levitate.mx" aria-label="Facebook Levitate MX">
+                    FB
+                  </a>
+                  <a href="https://www.instagram.com/levitate.mx" aria-label="Instagram Levitate MX">
+                    IG
+                  </a>
+                  <span>@levitate.mx</span>
+                </div>
+              </aside>
+            </div>
+          </div>
+        ) : null}
+
+        {dropdown && typeof document !== "undefined" ? createPortal(dropdown, document.body) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="levitate-menu-shell">
       <header className="levitate-nav">
         <Logo useRootLinks={useRootLinks} />
         <nav
           aria-label="Navegación principal"
-          onMouseMove={(event) => {
-            const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("[data-nav-label]");
-            const item = navItems.find((navItem) => navItem.label === link?.dataset.navLabel);
-            setActiveMenu(item?.children ? item.label : null);
-          }}
-          onPointerMove={(event) => {
-            const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("[data-nav-label]");
-            const item = navItems.find((navItem) => navItem.label === link?.dataset.navLabel);
-            setActiveMenu(item?.children ? item.label : null);
-          }}
+          onMouseMove={handleNavPointer}
+          onPointerMove={handleNavPointer}
         >
-          {navItems.map((item) => (
-            <div className={`levitate-nav__item${activeMenu === item.label ? " is-open" : ""}`} key={item.label}>
-              <a
-                aria-expanded={item.children ? activeMenu === item.label : undefined}
-                aria-haspopup={item.children ? "true" : undefined}
-                className={`levitate-nav__link${item.label === activeLabel ? " is-active" : ""}`}
-                data-nav-label={item.label}
-                href={resolveHref(item.href, useRootLinks)}
-                onBlur={(event) => {
-                  if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
-                    setActiveMenu(null);
-                  }
-                }}
-                onClick={(event) => {
-                  if (item.children) {
-                    event.preventDefault();
-                    setActiveMenu((current) => (current === item.label ? null : item.label));
-                  }
-                }}
-                onFocus={() => {
-                  if (item.children) {
-                    setActiveMenu(item.label);
-                  }
-                }}
-                onMouseEnter={() => {
-                  if (item.children) {
-                    setActiveMenu(item.label);
-                  } else {
-                    setActiveMenu(null);
-                  }
-                }}
-                onMouseOver={() => {
-                  if (item.children) {
-                    setActiveMenu(item.label);
-                  }
-                }}
-                onPointerEnter={() => {
-                  if (item.children) {
-                    setActiveMenu(item.label);
-                  } else {
-                    setActiveMenu(null);
-                  }
-                }}
-              >
-                {item.label}
-              </a>
-            </div>
-          ))}
+          {navItems.map(renderNavItem)}
         </nav>
       </header>
 

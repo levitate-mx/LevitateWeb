@@ -8362,32 +8362,22 @@ button {
 .levitate-logo {
   position: relative;
   display: inline-flex;
-  align-items: flex-start;
-  width: fit-content;
+  align-items: center;
+  width: clamp(152px, 15vw, 224px);
   color: #fff;
-  font-family: var(--font-brand);
-  font-size: clamp(2.1rem, 3.4vw, 3.15rem);
-  font-weight: 500;
-  letter-spacing: -0.075em;
-  line-height: 0.86;
+  line-height: 1;
 }
 
 .levitate-logo::after {
-  position: absolute;
-  top: -0.22em;
-  right: -1.35em;
-  color: rgba(255, 255, 255, 0.9);
-  content: "✧";
-  font-size: 0.62em;
-  transform: rotate(-13deg);
+  display: none;
+  content: none;
 }
 
-.levitate-logo small {
-  margin: 0.46em 0 0 0.5em;
-  font-family: var(--font-body);
-  font-size: 0.31em;
-  font-weight: 800;
-  letter-spacing: 0.22em;
+.levitate-logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: brightness(0) invert(1);
 }
 
 .levitate-eyebrow {
@@ -10948,8 +10938,8 @@ button {
 }
 
 .levitate-footer .levitate-logo {
+  width: 214px;
   margin-bottom: 17px;
-  font-size: 2.4rem;
 }
 
 .levitate-footer p {
@@ -15029,6 +15019,1133 @@ button {
     animation: none !important;
     transform: none !important;
     transition: none !important;
+  }
+}
+
+/* Home tuning: keep the original energy, with neutral glass CTAs and cleaner image treatment. */
+.levitate-page .levitate-hero {
+  background:
+    radial-gradient(circle at 72% 26%, rgba(255, 255, 255, 0.08), transparent 20rem),
+    radial-gradient(circle at 10% 78%, rgba(255, 255, 255, 0.05), transparent 24rem),
+    #050505;
+}
+
+.levitate-page .levitate-video-fallback {
+  background:
+    radial-gradient(circle at 72% 30%, rgba(255, 255, 255, 0.08), transparent 22rem),
+    radial-gradient(circle at 16% 82%, rgba(255, 255, 255, 0.05), transparent 25rem),
+    linear-gradient(135deg, #050505 0%, #101014 58%, #050505 100%);
+}
+
+.levitate-page .levitate-video-fallback::before {
+  background:
+    linear-gradient(108deg, transparent 0 49%, rgba(255, 255, 255, 0.08) 49.08% 49.18%, transparent 49.3%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 6px);
+}
+
+.levitate-page .levitate-video-fallback::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.56), transparent);
+  opacity: 0.42;
+}
+
+.levitate-page .levitate-hero__media {
+  filter: saturate(0.68) contrast(1.02) brightness(1.24);
+}
+
+.levitate-page .levitate-hero__smoke {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.08) 48%, rgba(0, 0, 0, 0.18) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.16));
+}
+
+.levitate-page .levitate-button {
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 16px 42px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.levitate-page .levitate-button--primary {
+  border-color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.9);
+  color: #101115;
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.levitate-page .levitate-button--outline {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.levitate-page .levitate-button:hover,
+.levitate-page .levitate-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.levitate-page .levitate-button--primary:hover,
+.levitate-page .levitate-button--primary:focus-visible {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.levitate-page .levitate-venue-card img {
+  filter: saturate(0.78) contrast(1.02) brightness(1.14);
+}
+
+.levitate-page .levitate-venue-card::after {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.58) 24%,
+      rgba(0, 0, 0, 0.34) 48%,
+      rgba(0, 0, 0, 0.16) 72%,
+      rgba(0, 0, 0, 0.24) 100%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.28));
+}
+
+.levitate-page .levitate-venue-card svg,
+.levitate-page .levitate-venue-card span {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.levitate-page .levitate-why {
+  background:
+    radial-gradient(circle at 7% 16%, rgba(17, 16, 21, 0.035), transparent 18rem),
+    radial-gradient(circle at 88% 14%, rgba(17, 16, 21, 0.028), transparent 17rem),
+    radial-gradient(circle at 42% 82%, rgba(17, 16, 21, 0.025), transparent 20rem),
+    linear-gradient(90deg, #faf7f1 0%, #fffaf4 50%, #f8f4ef 100%);
+}
+
+.levitate-page .levitate-why::before {
+  background:
+    linear-gradient(100deg, transparent 0 43%, rgba(17, 16, 21, 0.07) 43.05% 43.15%, transparent 43.2%),
+    linear-gradient(0deg, transparent 0 51%, rgba(17, 16, 21, 0.07) 51.05% 51.15%, transparent 51.2%);
+  opacity: 0.34;
+}
+
+.levitate-page .levitate-why__copy .levitate-eyebrow,
+.levitate-page .levitate-why__list article > span,
+.levitate-page .levitate-why__list svg {
+  color: var(--lev-ink);
+}
+
+.levitate-page .levitate-why__copy > span,
+.levitate-page .levitate-why__list i {
+  background: var(--lev-ink);
+}
+
+.levitate-page .levitate-why__list {
+  border-top-color: rgba(17, 16, 21, 0.12);
+  border-left-color: rgba(17, 16, 21, 0.12);
+}
+
+.levitate-page .levitate-why__list article {
+  border-right-color: rgba(17, 16, 21, 0.12);
+  border-bottom-color: rgba(17, 16, 21, 0.12);
+}
+
+.levitate-page .levitate-stats svg,
+.levitate-page .levitate-stats strong {
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .levitate-page .levitate-hero {
+    background:
+      linear-gradient(90deg, rgba(0, 0, 0, 0.52) 0%, rgba(0, 0, 0, 0.16) 62%, rgba(0, 0, 0, 0.28) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.3)),
+      url("/assets/visuals/hero-stage.jpg") 58% center / cover no-repeat,
+      #050505;
+  }
+}
+
+/* Home concept: airy premium competition, inspired by editorial travel systems. */
+.levitate-home-redesign {
+  --home-bg: #f4f1eb;
+  --home-surface: #fffaf4;
+  --home-ink: #2a2928;
+  --home-soft-ink: rgba(42, 41, 40, 0.66);
+  --home-line: rgba(42, 41, 40, 0.12);
+  --home-chip: rgba(42, 41, 40, 0.08);
+  --home-chip-strong: rgba(42, 41, 40, 0.14);
+  --home-pink: #d94c8c;
+  --home-blue: #57bdd1;
+  --home-blue-deep: #0c5264;
+  --home-blue-soft: rgba(87, 189, 209, 0.2);
+  --home-sage: #dfe6dd;
+  min-height: 100vh;
+  background: var(--home-bg);
+  color: var(--home-ink);
+}
+
+.levitate-home-redesign .levitate-menu-shell--pill {
+  position: relative;
+  z-index: 20;
+}
+
+.levitate-home-redesign .levitate-nav--pill {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 16px;
+  opacity: 0;
+  transform: translateY(-10px);
+  animation: levitate-fade-down 700ms var(--ease-out) 120ms forwards;
+}
+
+.levitate-home-redesign .levitate-nav--pill .levitate-logo {
+  justify-self: center;
+  width: clamp(132px, 12vw, 178px);
+  filter: drop-shadow(0 12px 34px rgba(0, 0, 0, 0.34));
+}
+
+.levitate-home-redesign .levitate-nav--pill .levitate-logo img {
+  opacity: 0.96;
+}
+
+.levitate-home-redesign .levitate-nav__group {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 48px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(24px) saturate(1.18);
+}
+
+.levitate-home-redesign .levitate-nav__group--primary {
+  justify-self: start;
+}
+
+.levitate-home-redesign .levitate-nav__group--utility {
+  justify-self: end;
+  padding: 0 5px;
+}
+
+.levitate-home-redesign .levitate-nav__login {
+  display: inline-grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  justify-self: end;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--home-ink);
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(24px) saturate(1.18);
+  transition:
+    background 220ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-nav--pill nav {
+  display: inline-flex;
+  gap: 4px;
+  padding: 0;
+}
+
+.levitate-home-redesign .levitate-nav__menu-trigger,
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__link,
+.levitate-home-redesign .levitate-nav__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  gap: 8px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--home-ink);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 220ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-nav__menu-trigger {
+  cursor: pointer;
+}
+
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__link::after {
+  display: none;
+}
+
+.levitate-home-redesign .levitate-nav__menu-trigger:hover,
+.levitate-home-redesign .levitate-nav__menu-trigger:focus-visible,
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__link:hover,
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__link:focus-visible,
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__link.is-active,
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__item.is-open > .levitate-nav__link,
+.levitate-home-redesign .levitate-nav__more:hover,
+.levitate-home-redesign .levitate-nav__more:focus-visible,
+.levitate-home-redesign .levitate-nav__login:hover,
+.levitate-home-redesign .levitate-nav__login:focus-visible {
+  background: #fff;
+  color: var(--home-ink);
+  transform: translateY(-1px);
+}
+
+.levitate-home-redesign .levitate-pill-menu {
+  position: absolute;
+  z-index: 24;
+  top: 76px;
+  left: 16px;
+  width: min(430px, calc(100vw - 32px));
+  max-height: min(680px, calc(100svh - 96px));
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--home-ink);
+  box-shadow:
+    0 24px 88px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(28px) saturate(1.16);
+  animation: levitate-menu-panel-in 260ms var(--ease-out) both;
+}
+
+.levitate-home-redesign .levitate-pill-menu.has-submenu {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.levitate-home-redesign .levitate-pill-menu__close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(42, 41, 40, 0.06);
+  color: var(--home-ink);
+  cursor: pointer;
+  transition:
+    background 220ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-pill-menu__close:hover,
+.levitate-home-redesign .levitate-pill-menu__close:focus-visible {
+  background: rgba(42, 41, 40, 0.12);
+  transform: translateY(-1px);
+}
+
+.levitate-home-redesign .levitate-pill-menu__content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  padding: 34px;
+  padding-right: 72px;
+}
+
+.levitate-home-redesign .levitate-pill-menu__links {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.levitate-home-redesign .levitate-pill-menu__links section {
+  display: grid;
+}
+
+.levitate-home-redesign .levitate-pill-menu__heading {
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(42, 41, 40, 0.42);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    transform 180ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-pill-menu__heading strong {
+  font-size: clamp(1.7rem, 2.5vw, 2.65rem);
+  font-weight: 620;
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+}
+
+.levitate-home-redesign .levitate-pill-menu__heading:hover,
+.levitate-home-redesign .levitate-pill-menu__heading:focus-visible,
+.levitate-home-redesign .levitate-pill-menu__heading.is-active {
+  color: var(--home-ink);
+  transform: translateX(3px);
+}
+
+.levitate-home-redesign .levitate-pill-menu__submenu {
+  position: absolute;
+  top: -1px;
+  left: calc(100% - 1px);
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  width: min(470px, calc(100vw - 464px));
+  min-height: calc(100% + 2px);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-left: 0;
+  border-radius: 0 24px 24px 0;
+  padding: 36px 42px;
+  background: rgba(226, 234, 238, 0.94);
+  box-shadow:
+    0 24px 88px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(22px) saturate(1.08);
+  animation: levitate-menu-subpanel-in 240ms var(--ease-out) both;
+}
+
+.levitate-home-redesign .levitate-pill-menu__submenu a {
+  width: fit-content;
+  color: var(--home-ink);
+  font-size: clamp(1.36rem, 2vw, 2.2rem);
+  font-weight: 680;
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+  transition:
+    color 180ms ease,
+    transform 180ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-pill-menu__submenu a:hover,
+.levitate-home-redesign .levitate-pill-menu__submenu a:focus-visible {
+  color: var(--home-blue-deep);
+  transform: translateX(3px);
+}
+
+.levitate-home-redesign .levitate-pill-menu__contact {
+  display: grid;
+  gap: 10px;
+  margin-top: clamp(42px, 8vh, 88px);
+}
+
+.levitate-home-redesign .levitate-pill-menu__contact > strong {
+  color: var(--home-ink);
+  font-size: 1.02rem;
+  font-weight: 820;
+  line-height: 1.12;
+}
+
+.levitate-home-redesign .levitate-pill-menu__email {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  color: var(--home-ink);
+  font-size: clamp(1.05rem, 1.45vw, 1.42rem);
+  font-weight: 460;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.levitate-home-redesign .levitate-pill-menu__contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.levitate-home-redesign .levitate-pill-menu__contact-links a,
+.levitate-home-redesign .levitate-pill-menu__contact-links span {
+  color: rgba(42, 41, 40, 0.55);
+  font-size: 0.86rem;
+  font-weight: 720;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.levitate-home-redesign .levitate-pill-menu__contact-links a:hover,
+.levitate-home-redesign .levitate-pill-menu__contact-links a:focus-visible {
+  color: var(--home-ink);
+}
+
+.levitate-home-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  min-height: var(--levitate-hero-screen);
+  background: #050505;
+}
+
+@keyframes levitate-menu-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes levitate-menu-subpanel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.levitate-home-hero__backdrop {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  overflow: hidden;
+  background: #050505;
+}
+
+.levitate-home-hero__backdrop::after {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 82% 16%, rgba(87, 189, 209, 0.58), transparent 24rem),
+    radial-gradient(circle at 20% 76%, rgba(87, 189, 209, 0.24), transparent 20rem),
+    radial-gradient(circle at 24% 62%, rgba(217, 76, 140, 0.16), transparent 24rem),
+    linear-gradient(125deg, rgba(8, 82, 104, 0.28), transparent 46%, rgba(3, 8, 12, 0.18)),
+    linear-gradient(180deg, rgba(3, 8, 12, 0.24) 0%, rgba(3, 8, 12, 0.08) 38%, rgba(3, 8, 12, 0.42) 100%),
+    linear-gradient(90deg, rgba(3, 8, 12, 0.32), rgba(3, 8, 12, 0.04) 50%, rgba(3, 8, 12, 0.22));
+  content: "";
+}
+
+.levitate-home-hero__backdrop video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% center;
+  filter: saturate(1.24) contrast(1.08) brightness(1);
+}
+
+.levitate-home-hero__backdrop video {
+  z-index: 1;
+}
+
+.levitate-home-hero__inner {
+  display: grid;
+  width: min(100%, 1440px);
+  margin: 0 auto;
+  padding: clamp(82px, 9vw, 156px) clamp(18px, 4vw, 64px) clamp(28px, 3vw, 54px);
+  place-items: center;
+}
+
+.levitate-home-hero__copy {
+  display: grid;
+  max-width: 960px;
+  justify-items: center;
+  text-align: center;
+  transform: translateY(clamp(14px, 2.2vh, 30px));
+}
+
+.levitate-home-eyebrow {
+  margin: 0 0 18px;
+  color: var(--home-pink);
+  font-size: 0.76rem;
+  font-weight: 860;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levitate-home-hero h1,
+.levitate-home-section-copy h2 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 560;
+  letter-spacing: -0.03em;
+}
+
+.levitate-home-section-copy h2 {
+  color: var(--home-ink);
+}
+
+.levitate-home-hero h1 {
+  max-width: 1050px;
+  color: #fff;
+  font-size: clamp(4.4rem, 9.2vw, 11.2rem);
+  line-height: 0.84;
+  text-shadow: 0 22px 78px rgba(0, 0, 0, 0.34);
+}
+
+.levitate-home-hero__copy > p:not(.levitate-home-eyebrow) {
+  max-width: 650px;
+  margin: clamp(24px, 3vw, 36px) 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(1.05rem, 1.32vw, 1.34rem);
+  font-weight: 520;
+  line-height: 1.52;
+  text-shadow: 0 14px 44px rgba(0, 0, 0, 0.42);
+}
+
+.levitate-home-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.levitate-home-button {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 0 24px;
+  font-size: 0.94rem;
+  font-weight: 760;
+  text-decoration: none;
+  transition:
+    transform 240ms var(--ease-out),
+    background 220ms ease,
+    border-color 220ms ease;
+  backdrop-filter: blur(20px) saturate(1.14);
+}
+
+.levitate-home-button:hover,
+.levitate-home-button:focus-visible {
+  transform: translateY(-2px);
+}
+
+.levitate-home-button--dark {
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--home-ink);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.levitate-home-button--light {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.levitate-home-media {
+  display: grid;
+  gap: 14px;
+}
+
+.levitate-home-media__frame {
+  position: relative;
+  min-height: clamp(360px, 40vw, 500px);
+  overflow: hidden;
+  border-radius: 18px;
+  background: #111;
+  box-shadow: 0 32px 90px rgba(42, 41, 40, 0.18);
+}
+
+.levitate-home-media__frame::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.2), rgba(255, 250, 244, 0.02) 45%, rgba(42, 41, 40, 0.08)),
+    linear-gradient(105deg, rgba(223, 230, 221, 0.22), transparent 58%);
+  content: "";
+  pointer-events: none;
+}
+
+.levitate-home-media__frame img,
+.levitate-home-media__frame video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.16) contrast(1.06) brightness(1.02);
+}
+
+.levitate-home-media__frame video {
+  z-index: 1;
+}
+
+.levitate-home-media__caption {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  align-items: baseline;
+  color: var(--home-ink);
+  font-size: 0.92rem;
+}
+
+.levitate-home-media__caption span {
+  color: var(--home-soft-ink);
+}
+
+.levitate-home-media__caption strong {
+  font-weight: 850;
+}
+
+.levitate-home-media__caption p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--home-soft-ink);
+}
+
+.levitate-home-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--home-line);
+  background: var(--home-ink);
+  color: #fff;
+}
+
+.levitate-home-stats article {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 116px;
+  align-items: center;
+  padding: 18px clamp(18px, 3vw, 42px);
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.levitate-home-stats article:last-child {
+  border-right: 0;
+}
+
+.levitate-home-stats svg {
+  color: #fff;
+}
+
+.levitate-home-stats strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 3rem);
+  font-weight: 400;
+  line-height: 0.9;
+}
+
+.levitate-home-stats span {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.82rem;
+  line-height: 1.16;
+}
+
+.levitate-home-standard,
+.levitate-home-venues,
+.levitate-home-sponsors {
+  padding: clamp(76px, 9vw, 140px) clamp(18px, 5vw, 78px);
+  background: var(--home-surface);
+}
+
+.levitate-home-section-copy {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 1180px);
+  margin: 0 auto clamp(30px, 5vw, 64px);
+}
+
+.levitate-home-section-copy h2 {
+  max-width: 900px;
+  font-size: clamp(3.2rem, 6vw, 6.9rem);
+  line-height: 0.92;
+}
+
+.levitate-home-section-copy > p:not(.levitate-home-eyebrow) {
+  max-width: 560px;
+  margin: 0;
+  color: var(--home-soft-ink);
+  font-size: clamp(1rem, 1.18vw, 1.16rem);
+  font-weight: 540;
+  line-height: 1.58;
+}
+
+.levitate-home-section-copy--split {
+  grid-template-columns: minmax(0, 0.9fr) minmax(300px, 0.42fr);
+  align-items: end;
+}
+
+.levitate-home-section-copy--split .levitate-home-eyebrow {
+  grid-column: 1 / -1;
+}
+
+.levitate-home-section-copy--center {
+  justify-items: center;
+  text-align: center;
+}
+
+.levitate-home-section-copy--center h2 {
+  max-width: 720px;
+}
+
+.levitate-home-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  border-top: 1px solid var(--home-line);
+  border-left: 1px solid var(--home-line);
+}
+
+.levitate-home-card-grid article {
+  display: grid;
+  grid-template-rows: 48px minmax(118px, auto) auto;
+  min-height: 320px;
+  align-content: start;
+  gap: 16px;
+  padding: clamp(22px, 3vw, 34px);
+  border-right: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--home-line);
+  background: rgba(255, 255, 255, 0.34);
+  transition:
+    background 220ms ease,
+    transform 260ms var(--ease-out),
+    border-color 220ms ease;
+}
+
+.levitate-home-card-grid article:hover {
+  border-color: rgba(87, 189, 209, 0.28);
+  background: rgba(255, 255, 255, 0.58);
+  transform: translateY(-2px);
+}
+
+.levitate-home-card-grid svg {
+  color: var(--home-blue);
+  align-self: start;
+}
+
+.levitate-home-card-grid h3 {
+  margin: 0;
+  color: var(--home-ink);
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 3.2vw, 3.6rem);
+  font-weight: 400;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.levitate-home-card-grid p {
+  margin: 0;
+  color: var(--home-soft-ink);
+  font-size: 0.96rem;
+  font-weight: 540;
+  line-height: 1.48;
+}
+
+.levitate-home-venues {
+  background:
+    linear-gradient(180deg, var(--home-surface), var(--home-bg));
+}
+
+.levitate-home-venue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.levitate-home-venue-card {
+  position: relative;
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #111;
+  color: #fff;
+  text-decoration: none;
+}
+
+.levitate-home-venue-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.1) contrast(1.05) brightness(1.02);
+  transition: transform 700ms var(--ease-out);
+}
+
+.levitate-home-venue-card::after {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 76% 14%, rgba(87, 189, 209, 0.24), transparent 18rem),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.68)),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent);
+  content: "";
+}
+
+.levitate-home-venue-card:hover img {
+  transform: scale(1.045);
+}
+
+.levitate-home-venue-card > div {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: 420px;
+  align-content: end;
+  padding: clamp(24px, 4vw, 42px);
+}
+
+.levitate-home-venue-card h3 {
+  max-width: 420px;
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 5vw, 5.1rem);
+  font-weight: 400;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.levitate-home-venue-card p,
+.levitate-home-venue-card span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.92rem;
+  font-weight: 620;
+}
+
+.levitate-home-venue-card span {
+  margin-top: 18px;
+  color: #fff;
+  font-weight: 850;
+}
+
+.levitate-home-sponsors {
+  background: var(--home-bg);
+}
+
+.levitate-home-redesign .levitate-sponsor-row {
+  width: min(100%, 980px);
+  margin: 0 auto;
+}
+
+@media (max-width: 1120px) {
+  .levitate-home-redesign .levitate-nav--pill {
+    grid-template-columns: 1fr auto;
+  }
+
+  .levitate-home-redesign .levitate-nav--pill .levitate-logo {
+    order: -1;
+    justify-self: start;
+  }
+
+  .levitate-home-redesign .levitate-nav__login {
+    order: -1;
+    justify-self: end;
+  }
+
+  .levitate-home-redesign .levitate-nav__group--primary,
+  .levitate-home-redesign .levitate-nav__group--utility {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .levitate-home-redesign .levitate-nav__group--utility {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .levitate-home-hero__inner,
+  .levitate-home-section-copy--split,
+  .levitate-home-venue-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-home-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .levitate-home-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .levitate-home-hero__backdrop video {
+    object-position: 56% center;
+    filter: saturate(1.2) contrast(1.06) brightness(1.08);
+  }
+
+  .levitate-home-redesign .levitate-nav--pill {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .levitate-home-redesign .levitate-nav__group {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .levitate-home-redesign .levitate-nav__group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .levitate-home-redesign .levitate-nav--pill > .levitate-nav__group--utility {
+    display: none;
+  }
+
+  .levitate-home-redesign .levitate-nav__menu-trigger,
+  .levitate-home-redesign .levitate-nav--pill .levitate-nav__link,
+  .levitate-home-redesign .levitate-nav__more {
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  .levitate-home-redesign .levitate-nav__login {
+    width: 48px;
+    height: 48px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu {
+    top: 142px;
+    left: 16px;
+    width: calc(100vw - 32px);
+    max-height: calc(100svh - 158px);
+    overflow-y: auto;
+    border-radius: 22px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu.has-submenu {
+    border-radius: 22px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__close {
+    top: 18px;
+    right: 18px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    min-height: 0;
+    padding: 24px 20px 26px;
+    padding-right: 64px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__heading strong {
+    font-size: clamp(1.45rem, 7vw, 2.05rem);
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__submenu {
+    position: static;
+    width: auto;
+    min-height: 0;
+    border: 1px solid rgba(42, 41, 40, 0.08);
+    border-radius: 18px;
+    padding: 22px 24px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__submenu a {
+    font-size: clamp(1.18rem, 6vw, 1.75rem);
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__contact {
+    border-top: 1px solid var(--home-line);
+    border-left: 0;
+    padding-top: 18px;
+    padding-left: 0;
+  }
+
+  .levitate-home-hero {
+    min-height: var(--levitate-hero-screen);
+  }
+
+  .levitate-home-hero__inner {
+    padding: 62px 18px 24px;
+  }
+
+  .levitate-home-hero h1 {
+    font-size: clamp(3.45rem, 16vw, 5.2rem);
+  }
+
+  .levitate-home-hero__actions,
+  .levitate-home-stats,
+  .levitate-home-card-grid,
+  .levitate-home-venue-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-home-hero__actions {
+    display: grid;
+  }
+
+  .levitate-home-button {
+    width: 100%;
+  }
+
+  .levitate-home-media__frame {
+    min-height: 360px;
+    border-radius: 14px;
+  }
+
+  .levitate-home-stats article {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .levitate-home-stats article:last-child {
+    border-bottom: 0;
+  }
+
+  .levitate-home-standard,
+  .levitate-home-venues,
+  .levitate-home-sponsors {
+    padding: 64px 18px;
+  }
+
+  .levitate-home-section-copy h2 {
+    font-size: clamp(2.8rem, 13vw, 4.4rem);
+  }
+
+  .levitate-home-card-grid article,
+  .levitate-home-venue-card,
+  .levitate-home-venue-card > div {
+    min-height: 320px;
   }
 }
 

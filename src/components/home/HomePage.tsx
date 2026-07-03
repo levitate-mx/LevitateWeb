@@ -1,13 +1,12 @@
 import {
   ArrowRight,
+  Award,
   Building2,
   CalendarDays,
   GraduationCap,
-  Heart,
   MapPin,
-  MessageCircle,
-  Music2,
   Star,
+  Trophy,
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -31,26 +30,26 @@ const venues = [
   },
 ];
 
-const whyItems = [
+const standardCards = [
+  {
+    icon: Trophy,
+    title: "Escenario de alto nivel",
+    text: "Producción, sede y ritmo pensados para que cada presentación llegue con la presencia que merece.",
+  },
+  {
+    icon: Award,
+    title: "Criterio sin ruido",
+    text: "Evaluación clara, reconocimientos visibles y una competencia que se siente seria desde el inicio.",
+  },
   {
     icon: GraduationCap,
-    title: "Talleres que enriquecen",
-    text: "Espacios de aprendizaje para fortalecer técnica, confianza y expresión artística.",
+    title: "Formación que eleva",
+    text: "Workshops y recursos para llegar al escenario con más técnica, intención y seguridad.",
   },
   {
     icon: Users,
-    title: "Comunidad que inspira",
-    text: "Academias, participantes y artistas que se apoyan, se acompañan y celebran cada logro.",
-  },
-  {
-    icon: Music2,
-    title: "Diversidad dancística",
-    text: "Danza aérea y danza de piso conviven en una misma experiencia escénica.",
-  },
-  {
-    icon: Heart,
-    title: "Competencia con propósito",
-    text: "Más que un certamen: una plataforma para crecer, conectar y trascender.",
+    title: "Comunidad con estándar",
+    text: "Academias de distintas ciudades compartiendo una experiencia cuidada, exigente y memorable.",
   },
 ];
 
@@ -58,7 +57,7 @@ const stats = [
   { icon: Users, value: "+900", label: "participaciones" },
   { icon: Star, value: "+250", label: "academias" },
   { icon: MapPin, value: "16", label: "estados de la república" },
-  { icon: Heart, value: "90%", label: "repite la experiencia" },
+  { icon: CalendarDays, value: "90%", label: "repite la experiencia" },
   { icon: Building2, value: "6", label: "sedes nacionales" },
 ];
 
@@ -68,16 +67,7 @@ const sponsors = [
   { name: "VideoImagen Digital", logo: "/assets/sponsor-videoimagen-digital.png", className: "sponsor-videoimagen" },
 ];
 
-const announcementItems = [
-  { kind: "text", label: "¡Asegura tu lugar!" },
-  { kind: "text", label: "Conoce los precios preventa" },
-  { kind: "text", label: "Otoño 2026" },
-  { kind: "logo", label: "Levitate MX" },
-  { kind: "text", label: "¡Inscríbete ahora!" },
-] satisfies Array<{ kind: "text" | "logo"; label: string }>;
-
-const announcementHref = "#premios";
-const heroVideoMediaQuery = "(min-width: 769px) and (prefers-reduced-motion: no-preference)";
+const heroVideoMediaQuery = "(prefers-reduced-motion: no-preference)";
 
 type BrowserConnection = {
   effectiveType?: string;
@@ -103,7 +93,6 @@ function canUseHomeHeroVideo() {
 
 export function HomePage() {
   const [shouldRenderHeroVideo, setShouldRenderHeroVideo] = useState(false);
-  const [isHeroVideoReady, setIsHeroVideoReady] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(heroVideoMediaQuery);
@@ -114,10 +103,6 @@ export function HomePage() {
 
     return () => mediaQuery.removeEventListener("change", updateHeroVideoPreference);
   }, []);
-
-  useEffect(() => {
-    setIsHeroVideoReady(!shouldRenderHeroVideo);
-  }, [shouldRenderHeroVideo]);
 
   useEffect(() => {
     const items = document.querySelectorAll<HTMLElement>("[data-levitate-reveal]");
@@ -138,140 +123,40 @@ export function HomePage() {
   }, []);
 
   return (
-    <main className="levitate-page">
-      <section id="inicio" className={`levitate-hero${shouldRenderHeroVideo && !isHeroVideoReady ? " is-video-loading" : ""}`}>
-        <div className="levitate-video-fallback" aria-hidden="true" />
-        {shouldRenderHeroVideo ? (
-          <video
-            className="levitate-hero__media"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="none"
-            aria-hidden="true"
-            onCanPlay={() => setIsHeroVideoReady(true)}
-            onLoadedData={() => setIsHeroVideoReady(true)}
-          >
-            <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
-          </video>
-        ) : null}
-        <div className="levitate-hero__smoke" aria-hidden="true" />
-
-        <div className="levitate-announcement" aria-label="Avisos importantes">
-          <div className="levitate-announcement__track">
-            {[...announcementItems, ...announcementItems, ...announcementItems].map((item, index) => (
-              <a href={announcementHref} key={`${item.label}-${index}`}>
-                {item.kind === "logo" ? (
-                  <span className="levitate-announcement__logo" aria-label={item.label}>
-                    <span>Levitate</span>
-                    <small>MX</small>
-                  </span>
-                ) : (
-                  <strong>{item.label}</strong>
-                )}
-              </a>
-            ))}
-          </div>
+    <main className="levitate-page levitate-home-redesign">
+      <section id="inicio" className="levitate-home-hero">
+        <div className="levitate-home-hero__backdrop" aria-hidden="true">
+          {shouldRenderHeroVideo ? (
+            <video autoPlay muted loop playsInline preload="metadata">
+              <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
+            </video>
+          ) : null}
         </div>
+        <LevitateHeader activeLabel="Inicio" variant="pill" />
 
-        <LevitateHeader activeLabel="Inicio" />
-
-        <div className="levitate-hero__grid">
-          <div className="levitate-hero__copy" data-levitate-reveal>
-            <h1>
-              <span>Eleva tu arte</span>
-              <strong>Vive la experiencia Levitate</strong>
-            </h1>
-            <p>Un encuentro para academias, participantes y artistas que buscan inspiración, crecimiento y conexión.</p>
-            <div className="levitate-hero__actions">
-              <a className="levitate-button levitate-button--primary" href="#convocatorias">
-                Ver próximos eventos <ArrowRight aria-hidden="true" size={18} />
+        <div className="levitate-home-hero__inner">
+          <div className="levitate-home-hero__copy" data-levitate-reveal>
+            <p className="levitate-home-eyebrow">Competencia Nacional de Danza</p>
+            <h1>Competir se siente distinto.</h1>
+            <div className="levitate-home-hero__actions">
+              <a className="levitate-home-button levitate-home-button--dark" href="/sedes/estado-de-mexico">
+                Ver próxima sede <ArrowRight aria-hidden="true" size={18} />
               </a>
-              <a className="levitate-button levitate-button--outline" href="https://wa.me/5217774920775">
-                <MessageCircle aria-hidden="true" size={18} /> Contáctanos por WhatsApp
+              <a className="levitate-home-button levitate-home-button--light" href="/registro">
+                Inscribirme <ArrowRight aria-hidden="true" size={18} />
               </a>
             </div>
           </div>
         </div>
+
       </section>
 
-      <section id="convocatorias" className="levitate-venues">
-        <div className="levitate-section-title" data-levitate-reveal>
-          <span />
-          <h2>Próximas sedes</h2>
-          <span />
-        </div>
-        <div className="levitate-venue-grid">
-          {venues.map((venue) => {
-            const content = (
-              <>
-                <img src={venue.image} alt="" loading="lazy" />
-                <div>
-                  <h3>{venue.title}</h3>
-                  {venue.city ? <p><MapPin aria-hidden="true" size={16} /> {venue.city}</p> : null}
-                  {venue.date ? <p><CalendarDays aria-hidden="true" size={16} /> {venue.date}</p> : null}
-                  {venue.href ? (
-                    <span>Ver convocatoria <ArrowRight aria-hidden="true" size={16} /></span>
-                  ) : (
-                    <span>Próximamente...</span>
-                  )}
-                </div>
-              </>
-            );
-
-            return venue.href ? (
-              <a className="levitate-venue-card" href={venue.href} key={venue.title} data-levitate-reveal>
-                {content}
-              </a>
-            ) : (
-              <article className="levitate-venue-card levitate-venue-card--soon" key={venue.title} data-levitate-reveal>
-                {content}
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section id="categorías" className="levitate-why">
-        <div className="levitate-why__copy" data-levitate-reveal>
-          <p className="levitate-eyebrow">¿Por qué</p>
-          <h2>Levitate?</h2>
-          <span aria-hidden="true" />
-          <div className="levitate-why__manifesto">
-            <strong>No es solo competir.</strong>
-            <em>Es crecer.</em>
-            <strong>Aprender.</strong>
-            <em>Conectar.</em>
-            <strong>Y volar.</strong>
-          </div>
-          <p className="levitate-why__closing">
-            Cada sede se vive como una <span>experiencia artística en comunidad.</span>
-          </p>
-        </div>
-
-        <div className="levitate-why__list" data-levitate-reveal>
-          {whyItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <article key={item.title}>
-                <Icon aria-hidden="true" size={54} strokeWidth={1.7} />
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <h3>{item.title}</h3>
-                <i aria-hidden="true" />
-                <p>{item.text}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section id="premios" className="levitate-stats" aria-label="Levitate en números" data-levitate-reveal>
+      <section id="premios" className="levitate-home-stats" aria-label="Levitate en números" data-levitate-reveal>
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
             <article key={stat.label}>
-              <Icon aria-hidden="true" size={38} />
+              <Icon aria-hidden="true" size={32} />
               <div>
                 <strong>{stat.value}</strong>
                 <span>{stat.label}</span>
@@ -281,11 +166,79 @@ export function HomePage() {
         })}
       </section>
 
-      <section className="levitate-sponsors" aria-label="Sponsors">
-        <div className="levitate-section-title levitate-section-title--small" data-levitate-reveal>
-          <span />
-          <h2>Sponsors</h2>
-          <span />
+      <section id="categorías" className="levitate-home-standard">
+        <div className="levitate-home-section-copy" data-levitate-reveal>
+          <p className="levitate-home-eyebrow">¿Por qué Levitate?</p>
+          <h2>Porque el talento merece un escenario a su altura. Competir. Crecer. Elevarse.</h2>
+          <p>¡Vive la experiencia Levitate!</p>
+        </div>
+
+        <div className="levitate-home-card-grid">
+          {standardCards.map((item) => {
+            const Icon = item.icon;
+            return (
+              <article key={item.title} data-levitate-reveal>
+                <Icon aria-hidden="true" size={36} strokeWidth={1.85} />
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section id="convocatorias" className="levitate-home-venues">
+        <div className="levitate-home-section-copy levitate-home-section-copy--split" data-levitate-reveal>
+          <p className="levitate-home-eyebrow">Siguiente edición</p>
+          <h2>La sede que marca el próximo punto de encuentro.</h2>
+          <p>Fechas, formato y convocatoria en un solo lugar. Directo, claro y sin fricción.</p>
+        </div>
+
+        <div className="levitate-home-venue-grid">
+          {venues.map((venue) => {
+            const content = (
+              <>
+                <img src={venue.image} alt="" loading="lazy" />
+                <div>
+                  <h3>{venue.title}</h3>
+                  {venue.city ? (
+                    <p>
+                      <MapPin aria-hidden="true" size={16} /> {venue.city}
+                    </p>
+                  ) : null}
+                  {venue.date ? (
+                    <p>
+                      <CalendarDays aria-hidden="true" size={16} /> {venue.date}
+                    </p>
+                  ) : null}
+                  {venue.href ? (
+                    <span>
+                      Ver convocatoria <ArrowRight aria-hidden="true" size={16} />
+                    </span>
+                  ) : (
+                    <span>Próximamente</span>
+                  )}
+                </div>
+              </>
+            );
+
+            return venue.href ? (
+              <a className="levitate-home-venue-card" href={venue.href} key={venue.title} data-levitate-reveal>
+                {content}
+              </a>
+            ) : (
+              <article className="levitate-home-venue-card" key={venue.title} data-levitate-reveal>
+                {content}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="levitate-home-sponsors" aria-label="Sponsors">
+        <div className="levitate-home-section-copy levitate-home-section-copy--center" data-levitate-reveal>
+          <p className="levitate-home-eyebrow">Sponsors</p>
+          <h2>Marcas que acompañan la experiencia.</h2>
         </div>
         <div className="levitate-sponsor-row" data-levitate-reveal>
           {sponsors.map((sponsor) => (
