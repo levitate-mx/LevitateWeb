@@ -56,9 +56,16 @@ const standardCards = [
 const stats = [
   { icon: Users, value: "+900", label: "participaciones" },
   { icon: Star, value: "+250", label: "academias" },
-  { icon: MapPin, value: "16", label: "estados de la república" },
+  { icon: MapPin, value: "16", label: "Estados de la República" },
   { icon: CalendarDays, value: "90%", label: "repite la experiencia" },
   { icon: Building2, value: "6", label: "sedes nacionales" },
+];
+
+const scrollStatementLines = [
+  "Una competencia donde el talento",
+  "encuentra escenario, criterio,",
+  "comunidad y formación",
+  "para elevarse.",
 ];
 
 const sponsors = [
@@ -122,6 +129,61 @@ export function HomePage() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const statement = document.querySelector<HTMLElement>("[data-levitate-scroll-statement]");
+    const section = statement?.closest<HTMLElement>(".levitate-home-scroll-statement");
+
+    if (!statement || !section) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame = 0;
+
+    const clamp = (value: number) => Math.min(Math.max(value, 0), 1);
+    const ease = (value: number) => value * value * (3 - 2 * value);
+
+    const renderStatement = () => {
+      if (reducedMotion.matches) {
+        statement.style.setProperty("--statement-ink", "0.9");
+        return;
+      }
+
+      const rect = section.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || 1;
+      const scrollProgress = ease(clamp((viewportHeight * 0.78 - rect.top) / (viewportHeight * 0.52)));
+      const ink = 0.34 + scrollProgress * 0.56;
+
+      statement.style.setProperty("--statement-ink", ink.toFixed(3));
+    };
+
+    const requestRender = () => {
+      if (frame) {
+        return;
+      }
+
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        renderStatement();
+      });
+    };
+
+    renderStatement();
+    window.addEventListener("scroll", requestRender, { passive: true });
+    window.addEventListener("resize", requestRender);
+    reducedMotion.addEventListener("change", requestRender);
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+
+      window.removeEventListener("scroll", requestRender);
+      window.removeEventListener("resize", requestRender);
+      reducedMotion.removeEventListener("change", requestRender);
+    };
+  }, []);
+
   return (
     <main className="levitate-page levitate-home-redesign">
       <section id="inicio" className="levitate-home-hero">
@@ -164,6 +226,16 @@ export function HomePage() {
             </article>
           );
         })}
+      </section>
+
+      <section className="levitate-home-scroll-statement" aria-label="Manifiesto Levitate">
+        <h2 data-levitate-scroll-statement>
+          {scrollStatementLines.map((line) => (
+            <span className="levitate-home-scroll-statement__line" key={line}>
+              {line}
+            </span>
+          ))}
+        </h2>
       </section>
 
       <section id="categorías" className="levitate-home-standard">
@@ -235,16 +307,20 @@ export function HomePage() {
       </section>
 
       <section className="levitate-home-sponsors" aria-label="Sponsors">
-        <div className="levitate-home-section-copy levitate-home-section-copy--center" data-levitate-reveal>
-          <p className="levitate-home-eyebrow">Sponsors</p>
-          <h2>Marcas que acompañan la experiencia.</h2>
-        </div>
-        <div className="levitate-sponsor-row" data-levitate-reveal>
-          {sponsors.map((sponsor) => (
-            <strong className={`has-logo ${sponsor.className}`} key={sponsor.name}>
-              {sponsor.logo ? <img src={sponsor.logo} alt={sponsor.name} loading="lazy" /> : <span>{sponsor.name}</span>}
-            </strong>
-          ))}
+        <div className="levitate-home-sponsors__inner">
+          <div className="levitate-home-sponsors__copy" data-levitate-reveal>
+            <p className="levitate-home-eyebrow">Sponsors</p>
+            <h2>Aliados que elevan la experiencia.</h2>
+            <p>Marcas presentes en los momentos que hacen que una sede se sienta completa, cuidada y memorable.</p>
+          </div>
+
+          <div className="levitate-home-sponsor-grid" data-levitate-reveal>
+            {sponsors.map((sponsor) => (
+              <strong className={`levitate-home-sponsor-card ${sponsor.className}`} key={sponsor.name}>
+                {sponsor.logo ? <img src={sponsor.logo} alt={sponsor.name} loading="lazy" /> : <span>{sponsor.name}</span>}
+              </strong>
+            ))}
+          </div>
         </div>
       </section>
 

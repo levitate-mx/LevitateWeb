@@ -14992,6 +14992,7 @@ button {
   .levitate-why__manifesto strong,
   .levitate-why__manifesto em,
   .levitate-why__list article,
+  .levitate-home-scroll-statement__line,
   [data-levitate-reveal] {
     animation: none !important;
     opacity: 1 !important;
@@ -15170,7 +15171,7 @@ button {
 /* Home concept: airy premium competition, inspired by editorial travel systems. */
 .levitate-home-redesign {
   --home-bg: #f4f1eb;
-  --home-surface: #fffaf4;
+  --home-surface: #f4f1eb;
   --home-ink: #2a2928;
   --home-soft-ink: rgba(42, 41, 40, 0.66);
   --home-line: rgba(42, 41, 40, 0.12);
@@ -15624,21 +15625,56 @@ button {
 }
 
 .levitate-home-button {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   min-height: 52px;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  border: 0;
   border-radius: 999px;
-  padding: 0 24px;
+  padding: 0 18px 0 26px;
+  color: var(--home-button-color);
   font-size: 0.94rem;
   font-weight: 760;
   text-decoration: none;
   transition:
     transform 240ms var(--ease-out),
-    background 220ms ease,
-    border-color 220ms ease;
+    color 220ms ease;
   backdrop-filter: blur(20px) saturate(1.14);
+}
+
+.levitate-home-button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1px solid var(--home-button-border);
+  border-radius: inherit;
+  background: var(--home-button-surface);
+  box-shadow: var(--home-button-shadow);
+  content: "";
+  transition:
+    right 300ms var(--ease-out),
+    background 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.levitate-home-button svg {
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  margin-right: -8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px;
+  background: transparent;
+  transition:
+    margin 300ms var(--ease-out),
+    background 260ms ease,
+    border-color 260ms ease,
+    transform 300ms var(--ease-out);
 }
 
 .levitate-home-button:hover,
@@ -15646,22 +15682,40 @@ button {
   transform: translateY(-2px);
 }
 
+.levitate-home-button:hover::before,
+.levitate-home-button:focus-visible::before {
+  right: 48px;
+}
+
+.levitate-home-button:hover svg,
+.levitate-home-button:focus-visible svg {
+  margin-left: 12px;
+  margin-right: -4px;
+  border-color: var(--home-button-icon-border);
+  background: var(--home-button-icon-surface);
+  transform: translateX(2px);
+}
+
 .levitate-home-button--dark {
-  border: 1px solid rgba(255, 255, 255, 0.76);
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--home-ink);
-  box-shadow:
+  --home-button-border: rgba(255, 255, 255, 0.76);
+  --home-button-color: var(--home-ink);
+  --home-button-icon-border: rgba(255, 255, 255, 0.76);
+  --home-button-icon-surface: rgba(255, 255, 255, 0.88);
+  --home-button-shadow:
     0 18px 50px rgba(0, 0, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --home-button-surface: rgba(255, 255, 255, 0.88);
 }
 
 .levitate-home-button--light {
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  box-shadow:
+  --home-button-border: rgba(255, 255, 255, 0.3);
+  --home-button-color: #fff;
+  --home-button-icon-border: rgba(255, 255, 255, 0.3);
+  --home-button-icon-surface: rgba(255, 255, 255, 0.1);
+  --home-button-shadow:
     0 18px 50px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --home-button-surface: rgba(255, 255, 255, 0.1);
 }
 
 .levitate-home-media {
@@ -15769,6 +15823,31 @@ button {
   line-height: 1.16;
 }
 
+.levitate-home-scroll-statement {
+  overflow: hidden;
+  padding: clamp(92px, 12vw, 180px) clamp(18px, 4vw, 56px);
+  background: var(--home-bg);
+}
+
+.levitate-home-scroll-statement h2 {
+  display: grid;
+  gap: clamp(2px, 0.7vw, 10px);
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  font-family: var(--font-body);
+  font-size: clamp(3.8rem, 8.8vw, 10.6rem);
+  font-weight: 720;
+  letter-spacing: -0.055em;
+  line-height: 0.9;
+}
+
+.levitate-home-scroll-statement__line {
+  display: block;
+  color: rgba(42, 41, 40, var(--statement-ink, 0.34));
+  transition: color 80ms linear;
+  will-change: color;
+}
+
 .levitate-home-standard,
 .levitate-home-venues,
 .levitate-home-sponsors {
@@ -15871,8 +15950,7 @@ button {
 }
 
 .levitate-home-venues {
-  background:
-    linear-gradient(180deg, var(--home-surface), var(--home-bg));
+  background: var(--home-bg);
 }
 
 .levitate-home-venue-grid {
@@ -15954,12 +16032,107 @@ button {
 }
 
 .levitate-home-sponsors {
-  background: var(--home-bg);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(183, 128, 153, 0.18), transparent 34%),
+    linear-gradient(180deg, #2a2928 0%, #11100f 100%);
+  color: #fff;
 }
 
-.levitate-home-redesign .levitate-sponsor-row {
-  width: min(100%, 980px);
+.levitate-home-sponsors__inner {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.58fr) minmax(480px, 0.95fr);
+  gap: clamp(34px, 6vw, 92px);
+  align-items: center;
+  width: min(100%, 1180px);
   margin: 0 auto;
+}
+
+.levitate-home-sponsors__copy {
+  display: grid;
+  gap: 18px;
+}
+
+.levitate-home-sponsors__copy .levitate-home-eyebrow {
+  color: #d9a1bb;
+}
+
+.levitate-home-sponsors__copy h2 {
+  max-width: 620px;
+  margin: 0;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: clamp(3rem, 5.6vw, 6.2rem);
+  font-weight: 620;
+  letter-spacing: -0.045em;
+  line-height: 0.94;
+}
+
+.levitate-home-sponsors__copy p:not(.levitate-home-eyebrow) {
+  max-width: 420px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: clamp(1rem, 1.18vw, 1.14rem);
+  font-weight: 520;
+  line-height: 1.56;
+}
+
+.levitate-home-sponsor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.levitate-home-sponsor-card {
+  display: grid;
+  min-height: clamp(150px, 15vw, 210px);
+  place-items: center;
+  padding: clamp(24px, 3.2vw, 42px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.08), transparent 58%),
+    rgba(255, 255, 255, 0.03);
+  transition:
+    background 240ms ease,
+    transform 260ms var(--ease-out);
+}
+
+.levitate-home-sponsor-card:last-child {
+  border-right: 0;
+}
+
+.levitate-home-sponsor-card:hover {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(217, 161, 187, 0.14), transparent 58%),
+    rgba(255, 255, 255, 0.06);
+  transform: translateY(-2px);
+}
+
+.levitate-home-sponsor-card img {
+  width: min(100%, 170px);
+  max-height: 64px;
+  object-fit: contain;
+}
+
+.levitate-home-sponsor-card.sponsor-electrolit img {
+  width: min(100%, 176px);
+  max-height: 52px;
+}
+
+.levitate-home-sponsor-card.sponsor-aeparty img {
+  width: min(100%, 230px);
+  max-height: 62px;
+}
+
+.levitate-home-sponsor-card.sponsor-videoimagen img {
+  width: min(100%, 142px);
+  max-height: 86px;
 }
 
 @media (max-width: 1120px) {
@@ -15990,12 +16163,22 @@ button {
 
   .levitate-home-hero__inner,
   .levitate-home-section-copy--split,
+  .levitate-home-sponsors__inner,
   .levitate-home-venue-grid {
     grid-template-columns: 1fr;
   }
 
   .levitate-home-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .levitate-home-scroll-statement h2 {
+    font-size: clamp(3.4rem, 9.8vw, 7.8rem);
+  }
+
+  .levitate-home-sponsors__copy h2,
+  .levitate-home-sponsors__copy p:not(.levitate-home-eyebrow) {
+    max-width: 760px;
   }
 
   .levitate-home-stats {
@@ -16136,6 +16319,30 @@ button {
   .levitate-home-venues,
   .levitate-home-sponsors {
     padding: 64px 18px;
+  }
+
+  .levitate-home-scroll-statement {
+    padding: 72px 18px;
+  }
+
+  .levitate-home-scroll-statement h2 {
+    gap: 8px;
+    font-size: clamp(3.05rem, 14vw, 5.2rem);
+    line-height: 0.94;
+  }
+
+  .levitate-home-sponsor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-home-sponsor-card {
+    min-height: 132px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .levitate-home-sponsor-card:last-child {
+    border-bottom: 0;
   }
 
   .levitate-home-section-copy h2 {
