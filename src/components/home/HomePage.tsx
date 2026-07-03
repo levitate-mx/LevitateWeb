@@ -39,7 +39,7 @@ const standardCards = [
   {
     icon: Award,
     title: "Criterio sin ruido",
-    text: "Evaluación clara, reconocimientos visibles y una competencia que se siente seria desde el inicio.",
+    text: "Evaluación transparente en cada momento y una retroalimentación que te ayuda a crecer.",
   },
   {
     icon: GraduationCap,
@@ -170,7 +170,6 @@ export function HomePage() {
         <div className="levitate-home-section-copy" data-levitate-reveal>
           <p className="levitate-home-eyebrow">¿Por qué Levitate?</p>
           <h2>Porque el talento merece un escenario a su altura. Competir. Crecer. Elevarse.</h2>
-          <p>¡Vive la experiencia Levitate!</p>
         </div>
 
         <div className="levitate-home-card-grid">
