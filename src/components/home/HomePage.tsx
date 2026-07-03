@@ -48,8 +48,8 @@ const standardCards = [
   },
   {
     icon: Users,
-    title: "Comunidad con estándar",
-    text: "Academias de distintas ciudades compartiendo una experiencia cuidada, exigente y memorable.",
+    title: "Comunidad única",
+    text: "Academias y artistas nacionales e internacionales que se apoyan y comparten una experiencia inolvidable.",
   },
 ];
 
