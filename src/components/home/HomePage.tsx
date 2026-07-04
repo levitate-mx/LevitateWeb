@@ -122,6 +122,63 @@ export function HomePage() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const gradientLine = document.querySelector<HTMLElement>("[data-levitate-gradient-line]");
+    const section = gradientLine?.closest<HTMLElement>(".levitate-home-standard");
+
+    if (!gradientLine || !section) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame = 0;
+
+    const clamp = (value: number) => Math.min(Math.max(value, 0), 1);
+    const ease = (value: number) => value * value * (3 - 2 * value);
+
+    const renderGradientLine = () => {
+      if (reducedMotion.matches) {
+        gradientLine.style.setProperty("--home-gradient-progress", "100%");
+        return;
+      }
+
+      const rect = gradientLine.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || 1;
+      const triggerPoint = rect.top + rect.height * 0.25;
+      const start = viewportHeight * 0.52;
+      const finish = viewportHeight * 0.16;
+      const progress = ease(clamp((start - triggerPoint) / (start - finish)));
+
+      gradientLine.style.setProperty("--home-gradient-progress", `${(progress * 100).toFixed(2)}%`);
+    };
+
+    const requestRender = () => {
+      if (frame) {
+        return;
+      }
+
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        renderGradientLine();
+      });
+    };
+
+    renderGradientLine();
+    window.addEventListener("scroll", requestRender, { passive: true });
+    window.addEventListener("resize", requestRender);
+    reducedMotion.addEventListener("change", requestRender);
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+
+      window.removeEventListener("scroll", requestRender);
+      window.removeEventListener("resize", requestRender);
+      reducedMotion.removeEventListener("change", requestRender);
+    };
+  }, []);
+
   return (
     <main className="levitate-page levitate-home-redesign">
       <section id="inicio" className="levitate-home-hero">
@@ -167,9 +224,18 @@ export function HomePage() {
       </section>
 
       <section id="categorías" className="levitate-home-standard">
-        <div className="levitate-home-section-copy" data-levitate-reveal>
+        <div className="levitate-home-section-copy levitate-home-section-copy--wide" data-levitate-reveal>
           <p className="levitate-home-eyebrow">¿Por qué Levitate?</p>
-          <h2>Porque el talento merece un escenario a su altura. Competir. Crecer. Elevarse.</h2>
+          <h2>
+            Porque el talento merece un escenario a su altura.
+            <span
+              className="levitate-home-gradient-line"
+              data-levitate-gradient-line
+              data-text="Competir. Crecer. Elevarse."
+            >
+              Competir. Crecer. Elevarse.
+            </span>
+          </h2>
         </div>
 
         <div className="levitate-home-card-grid">

@@ -15186,12 +15186,25 @@ button {
   color: var(--home-ink);
 }
 
+.levitate-home-nav-portal.levitate-home-redesign {
+  min-height: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
 .levitate-home-redesign .levitate-menu-shell--pill {
-  position: relative;
-  z-index: 20;
+  position: fixed;
+  z-index: 2147483646;
+  top: 0;
+  right: 0;
+  left: 0;
+  isolation: isolate;
+  pointer-events: none;
 }
 
 .levitate-home-redesign .levitate-nav--pill {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
@@ -15201,12 +15214,18 @@ button {
   opacity: 0;
   transform: translateY(-10px);
   animation: levitate-fade-down 700ms var(--ease-out) 120ms forwards;
+  pointer-events: auto;
 }
 
 .levitate-home-redesign .levitate-nav--pill .levitate-logo {
   justify-self: center;
-  width: clamp(132px, 12vw, 178px);
+  width: clamp(142px, 12.7vw, 188px);
   filter: drop-shadow(0 12px 34px rgba(0, 0, 0, 0.34));
+  transform-origin: center top;
+  transition:
+    opacity 360ms var(--ease-out),
+    transform 420ms cubic-bezier(0.18, 0.88, 0.24, 1),
+    filter 360ms ease;
 }
 
 .levitate-home-redesign .levitate-nav--pill .levitate-logo img {
@@ -15220,16 +15239,21 @@ button {
   min-height: 48px;
   align-items: center;
   gap: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.52);
+  overflow: visible;
+  border: 1px solid rgba(42, 41, 40, 0.08);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: #f8f6f1;
   box-shadow:
-    0 18px 60px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(24px) saturate(1.18);
+    0 16px 46px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  transition:
+    background 260ms ease,
+    box-shadow 360ms ease,
+    transform 420ms cubic-bezier(0.18, 0.88, 0.24, 1);
 }
 
 .levitate-home-redesign .levitate-nav__group--primary {
+  z-index: 3;
   justify-self: start;
 }
 
@@ -15238,29 +15262,105 @@ button {
   padding: 0 5px;
 }
 
+.levitate-home-redesign .levitate-nav__login-wrap {
+  position: relative;
+  z-index: 28;
+  display: grid;
+  justify-self: end;
+  transform-origin: center top;
+  transition:
+    opacity 320ms var(--ease-out),
+    transform 420ms cubic-bezier(0.18, 0.88, 0.24, 1);
+}
+
 .levitate-home-redesign .levitate-nav__login {
   display: inline-grid;
   width: 52px;
   height: 52px;
   place-items: center;
   justify-self: end;
-  border: 1px solid rgba(255, 255, 255, 0.52);
+  padding: 0;
+  border: 1px solid rgba(42, 41, 40, 0.08);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: #f8f6f1;
   color: var(--home-ink);
+  cursor: pointer;
+  font: inherit;
   box-shadow:
-    0 18px 60px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(24px) saturate(1.18);
+    0 16px 46px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
   transition:
     background 220ms ease,
     transform 220ms var(--ease-out);
 }
 
-.levitate-home-redesign .levitate-nav--pill nav {
+.levitate-home-redesign .levitate-login-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  display: grid;
+  min-width: 156px;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(42, 41, 40, 0.08);
+  border-radius: 24px;
+  background: #f8f6f1;
+  box-shadow:
+    0 18px 54px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  animation: levitate-menu-panel-in 220ms var(--ease-out) both;
+}
+
+.levitate-home-redesign .levitate-login-menu a {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 15px;
+  border-radius: 999px;
+  color: var(--home-ink);
+  font-weight: 760;
+  line-height: 1;
+  text-decoration: none;
+  transition:
+    background 200ms ease,
+    color 200ms ease,
+    transform 200ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-login-menu a:hover,
+.levitate-home-redesign .levitate-login-menu a:focus-visible {
+  background: #fff;
+  color: var(--home-ink);
+  transform: translateX(2px);
+}
+
+.levitate-home-redesign .levitate-nav--pill nav,
+.levitate-home-redesign .levitate-nav__capsule {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
   padding: 0;
+}
+
+.levitate-home-redesign .levitate-nav__capsule {
+  position: relative;
+  isolation: isolate;
+  width: max-content;
+}
+
+.levitate-home-redesign .levitate-nav__capsule-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  isolation: isolate;
+  max-width: 520px;
+  opacity: 1;
+  transform-origin: left center;
+  transition:
+    max-width 460ms cubic-bezier(0.18, 0.88, 0.24, 1),
+    opacity 260ms ease,
+    transform 420ms cubic-bezier(0.18, 0.88, 0.24, 1),
+    margin 420ms cubic-bezier(0.18, 0.88, 0.24, 1);
 }
 
 .levitate-home-redesign .levitate-nav__menu-trigger,
@@ -15276,6 +15376,7 @@ button {
   border-radius: 999px;
   background: transparent;
   color: var(--home-ink);
+  cursor: pointer;
   font: inherit;
   font-size: 0.92rem;
   line-height: 1;
@@ -15296,9 +15397,12 @@ button {
 
 .levitate-home-redesign .levitate-nav__menu-trigger:hover,
 .levitate-home-redesign .levitate-nav__menu-trigger:focus-visible,
+.levitate-home-redesign .levitate-nav__menu-trigger.is-active,
 .levitate-home-redesign .levitate-nav--pill .levitate-nav__link:hover,
 .levitate-home-redesign .levitate-nav--pill .levitate-nav__link:focus-visible,
 .levitate-home-redesign .levitate-nav--pill .levitate-nav__link.is-active,
+.levitate-home-redesign .levitate-nav--pill .levitate-nav__link.is-open,
+.levitate-home-redesign .levitate-nav__capsule-item.is-open > .levitate-nav__link,
 .levitate-home-redesign .levitate-nav--pill .levitate-nav__item.is-open > .levitate-nav__link,
 .levitate-home-redesign .levitate-nav__more:hover,
 .levitate-home-redesign .levitate-nav__more:focus-visible,
@@ -15309,28 +15413,143 @@ button {
   transform: translateY(-1px);
 }
 
-.levitate-home-redesign .levitate-pill-menu {
+.levitate-home-redesign .levitate-nav__capsule-item:first-child > .levitate-nav__menu-trigger:hover,
+.levitate-home-redesign .levitate-nav__capsule-item:first-child > .levitate-nav__menu-trigger:focus-visible,
+.levitate-home-redesign .levitate-nav__capsule-item:first-child > .levitate-nav__menu-trigger.is-active {
+  background: transparent;
+}
+
+.levitate-home-redesign .levitate-nav__submenu-flow {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #dfecef;
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transform-origin: left center;
+  animation: levitate-capsule-flow-in 420ms cubic-bezier(0.18, 0.88, 0.24, 1.12) both;
+}
+
+.levitate-home-redesign .levitate-nav__submenu-flow::before {
   position: absolute;
-  z-index: 24;
-  top: 76px;
+  z-index: -1;
+  top: 50%;
+  left: -25px;
+  width: 52px;
+  height: 46px;
+  border-radius: 58% 42% 44% 56% / 50% 43% 57% 50%;
+  background: #dfecef;
+  box-shadow:
+    -10px 10px 28px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  content: "";
+  transform: translateY(-50%) scale(0.96) rotate(-3deg);
+  transform-origin: right center;
+  animation: levitate-capsule-blob-in 420ms cubic-bezier(0.18, 0.88, 0.24, 1.12) both;
+}
+
+.levitate-home-redesign .levitate-nav__submenu-flow::after {
+  position: absolute;
+  z-index: -1;
+  top: 7px;
+  bottom: 7px;
+  left: -10px;
+  width: 24px;
+  border-radius: 999px;
+  background: #dfecef;
+  content: "";
+}
+
+.levitate-home-redesign .levitate-nav__submenu-flow a {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--home-ink);
+  font-size: 0.82rem;
+  font-weight: 720;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-6px);
+  animation: levitate-capsule-link-in 260ms var(--ease-out) 170ms forwards;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-nav__submenu-flow a:hover,
+.levitate-home-redesign .levitate-nav__submenu-flow a:focus-visible {
+  background: #f8f6f1;
+  color: var(--home-blue-deep);
+  transform: translateX(2px);
+}
+
+.levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-logo,
+.levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-nav__login-wrap {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-12px) scale(0.94);
+}
+
+.levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-logo {
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.18));
+}
+
+.levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-nav__group--primary {
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  transform: translateY(-2px);
+}
+
+.levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-nav__capsule-item:not(:first-child) {
+  max-width: 0;
+  margin-left: -4px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateX(-12px) scaleX(0.72);
+}
+
+.levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-nav__menu-trigger {
+  background: transparent;
+  transform: none;
+}
+
+.levitate-home-redesign .levitate-pill-menu {
+  position: fixed;
+  z-index: 2147483647;
+  top: 84px;
   left: 16px;
-  width: min(430px, calc(100vw - 32px));
-  max-height: min(680px, calc(100svh - 96px));
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(720px, calc(100svh - 104px));
   overflow: visible;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(42, 41, 40, 0.08);
+  border-radius: 28px;
+  background: #f8f6f1;
   color: var(--home-ink);
   box-shadow:
-    0 24px 88px rgba(0, 0, 0, 0.2),
+    0 22px 72px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(28px) saturate(1.16);
   animation: levitate-menu-panel-in 260ms var(--ease-out) both;
 }
 
 .levitate-home-redesign .levitate-pill-menu.has-submenu {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-radius: 28px;
 }
 
 .levitate-home-redesign .levitate-pill-menu__close {
@@ -15360,22 +15579,35 @@ button {
 .levitate-home-redesign .levitate-pill-menu__content {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 24px;
-  padding: 34px;
-  padding-right: 72px;
+  gap: 22px;
+  min-height: min(620px, calc(100svh - 142px));
+  padding: 52px 54px 36px;
+  padding-right: 80px;
 }
 
 .levitate-home-redesign .levitate-pill-menu__links {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .levitate-home-redesign .levitate-pill-menu__links section {
   display: grid;
+  position: relative;
+}
+
+.levitate-home-redesign .levitate-pill-menu__links section.has-active-submenu {
+  z-index: 3;
+}
+
+.levitate-home-redesign .levitate-pill-menu__links section.has-active-submenu::before,
+.levitate-home-redesign .levitate-pill-menu__links section.has-active-submenu::after {
+  display: none;
 }
 
 .levitate-home-redesign .levitate-pill-menu__heading {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: baseline;
   width: 100%;
@@ -15392,7 +15624,7 @@ button {
 }
 
 .levitate-home-redesign .levitate-pill-menu__heading strong {
-  font-size: clamp(1.7rem, 2.5vw, 2.65rem);
+  font-size: clamp(1.54rem, 2.2vw, 2.38rem);
   font-weight: 620;
   line-height: 1.06;
   letter-spacing: -0.04em;
@@ -15407,41 +15639,62 @@ button {
 
 .levitate-home-redesign .levitate-pill-menu__submenu {
   position: absolute;
-  top: -1px;
-  left: calc(100% - 1px);
+  z-index: 4;
+  isolation: isolate;
+  top: 92px;
+  left: calc(100% + 16px);
   display: grid;
   align-content: start;
-  gap: 22px;
-  width: min(470px, calc(100vw - 464px));
-  min-height: calc(100% + 2px);
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-left: 0;
-  border-radius: 0 24px 24px 0;
-  padding: 36px 42px;
-  background:
-    linear-gradient(145deg, rgba(198, 216, 222, 0.97), rgba(184, 205, 213, 0.95));
+  gap: 8px;
+  width: max-content;
+  min-width: 300px;
+  max-width: 420px;
+  height: fit-content;
+  min-height: 0;
+  max-height: calc(100svh - 132px);
+  overflow: visible;
+  border: 1px solid rgba(42, 41, 40, 0.08);
+  border-radius: 30px;
+  padding: 26px 28px;
+  background: #dfecef;
   box-shadow:
-    0 24px 88px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(22px) saturate(1.02);
+    0 16px 54px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   animation: levitate-menu-subpanel-in 240ms var(--ease-out) both;
 }
 
+.levitate-home-redesign .levitate-pill-menu__submenu::before {
+  display: none;
+}
+
+.levitate-home-redesign .levitate-pill-menu__submenu::after {
+  display: none;
+}
+
 .levitate-home-redesign .levitate-pill-menu__submenu a {
-  width: fit-content;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  min-height: 50px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 18px;
   color: var(--home-ink);
-  font-size: clamp(1.36rem, 2vw, 2.2rem);
-  font-weight: 680;
-  line-height: 1.04;
-  letter-spacing: -0.045em;
+  font-size: clamp(1.14rem, 1.5vw, 1.48rem);
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: -0.025em;
   text-decoration: none;
   transition:
+    background 180ms ease,
     color 180ms ease,
     transform 180ms var(--ease-out);
 }
 
 .levitate-home-redesign .levitate-pill-menu__submenu a:hover,
 .levitate-home-redesign .levitate-pill-menu__submenu a:focus-visible {
+  background: #f7fbfc;
   color: var(--home-blue-deep);
   transform: translateX(3px);
 }
@@ -15449,7 +15702,7 @@ button {
 .levitate-home-redesign .levitate-pill-menu__contact {
   display: grid;
   gap: 10px;
-  margin-top: clamp(42px, 8vh, 88px);
+  margin-top: clamp(28px, 5.8vh, 62px);
 }
 
 .levitate-home-redesign .levitate-pill-menu__contact > strong {
@@ -15521,6 +15774,50 @@ button {
     transform: translateX(-10px);
   }
 
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes levitate-capsule-flow-in {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 88% 0 0 round 999px);
+    transform: translateX(-22px) scaleX(0.18);
+  }
+
+  56% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 999px);
+    transform: translateX(-2px) scaleX(1.045);
+  }
+
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 999px);
+    transform: translateX(0) scaleX(1);
+  }
+}
+
+@keyframes levitate-capsule-blob-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-18px) scale(0.25, 0.72) rotate(-8deg);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(1px) scale(1.12, 0.92) rotate(-4deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(0.96) rotate(-3deg);
+  }
+}
+
+@keyframes levitate-capsule-link-in {
   to {
     opacity: 1;
     transform: translateX(0);
@@ -15634,7 +15931,7 @@ button {
   gap: 10px;
   border: 0;
   border-radius: 999px;
-  padding: 0 18px 0 26px;
+  padding: 0 26px;
   color: var(--home-button-color);
   font-size: 0.94rem;
   font-weight: 760;
@@ -15655,25 +15952,16 @@ button {
   box-shadow: var(--home-button-shadow);
   content: "";
   transition:
-    right 300ms var(--ease-out),
     background 220ms ease,
     border-color 220ms ease,
     box-shadow 220ms ease;
 }
 
 .levitate-home-button svg {
-  box-sizing: border-box;
-  width: 36px;
-  height: 36px;
-  margin-right: -8px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 8px;
-  background: transparent;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
   transition:
-    margin 300ms var(--ease-out),
-    background 260ms ease,
-    border-color 260ms ease,
     transform 300ms var(--ease-out);
 }
 
@@ -15682,25 +15970,14 @@ button {
   transform: translateY(-2px);
 }
 
-.levitate-home-button:hover::before,
-.levitate-home-button:focus-visible::before {
-  right: 48px;
-}
-
 .levitate-home-button:hover svg,
 .levitate-home-button:focus-visible svg {
-  margin-left: 12px;
-  margin-right: -4px;
-  border-color: var(--home-button-icon-border);
-  background: var(--home-button-icon-surface);
-  transform: translateX(2px);
+  transform: translateX(4px);
 }
 
 .levitate-home-button--dark {
   --home-button-border: rgba(255, 255, 255, 0.76);
   --home-button-color: var(--home-ink);
-  --home-button-icon-border: rgba(255, 255, 255, 0.76);
-  --home-button-icon-surface: rgba(255, 255, 255, 0.88);
   --home-button-shadow:
     0 18px 50px rgba(0, 0, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
@@ -15710,8 +15987,6 @@ button {
 .levitate-home-button--light {
   --home-button-border: rgba(255, 255, 255, 0.3);
   --home-button-color: #fff;
-  --home-button-icon-border: rgba(255, 255, 255, 0.3);
-  --home-button-icon-surface: rgba(255, 255, 255, 0.1);
   --home-button-shadow:
     0 18px 50px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -15837,10 +16112,47 @@ button {
   margin: 0 auto clamp(30px, 5vw, 64px);
 }
 
+.levitate-home-section-copy--wide {
+  width: min(100%, 1320px);
+}
+
 .levitate-home-section-copy h2 {
   max-width: 900px;
   font-size: clamp(3.2rem, 6vw, 6.9rem);
   line-height: 0.92;
+}
+
+.levitate-home-section-copy--wide h2 {
+  max-width: 1120px;
+}
+
+.levitate-home-gradient-line {
+  --home-gradient-progress: 0%;
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0.08em;
+  color: rgba(100, 151, 162, 0.84);
+  font-size: clamp(2.9rem, 5.4vw, 5.2rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  -webkit-text-fill-color: currentColor;
+  white-space: nowrap;
+}
+
+.levitate-home-gradient-line::after {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  width: 100%;
+  color: var(--home-ink);
+  content: attr(data-text);
+  line-height: inherit;
+  clip-path: inset(0 calc(100% - var(--home-gradient-progress)) 0 0);
+  pointer-events: none;
+  -webkit-text-fill-color: currentColor;
+  white-space: inherit;
 }
 
 .levitate-home-section-copy > p:not(.levitate-home-eyebrow) {
@@ -15902,7 +16214,7 @@ button {
 }
 
 .levitate-home-card-grid svg {
-  color: var(--home-blue);
+  color: rgba(100, 151, 162, 0.98);
   align-self: start;
 }
 
@@ -16124,7 +16436,7 @@ button {
     justify-self: start;
   }
 
-  .levitate-home-redesign .levitate-nav__login {
+  .levitate-home-redesign .levitate-nav__login-wrap {
     order: -1;
     justify-self: end;
   }
@@ -16199,6 +16511,11 @@ button {
     height: 48px;
   }
 
+  .levitate-home-redesign .levitate-login-menu {
+    min-width: 144px;
+    border-radius: 22px;
+  }
+
   .levitate-home-redesign .levitate-pill-menu {
     top: 142px;
     left: 16px;
@@ -16229,13 +16546,28 @@ button {
     font-size: clamp(1.45rem, 7vw, 2.05rem);
   }
 
+  .levitate-home-redesign .levitate-pill-menu__links section.has-active-submenu::before,
+  .levitate-home-redesign .levitate-pill-menu__links section.has-active-submenu::after {
+    display: none;
+  }
+
   .levitate-home-redesign .levitate-pill-menu__submenu {
     position: static;
     width: auto;
+    min-width: 0;
+    max-width: none;
+    height: auto;
     min-height: 0;
+    max-height: none;
+    overflow: visible;
     border: 1px solid rgba(42, 41, 40, 0.08);
     border-radius: 18px;
     padding: 22px 24px;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__submenu::before,
+  .levitate-home-redesign .levitate-pill-menu__submenu::after {
+    display: none;
   }
 
   .levitate-home-redesign .levitate-pill-menu__submenu a {
@@ -16316,6 +16648,11 @@ button {
 
   .levitate-home-section-copy h2 {
     font-size: clamp(2.8rem, 13vw, 4.4rem);
+  }
+
+  .levitate-home-gradient-line {
+    font-size: clamp(2.65rem, 12.2vw, 4.2rem);
+    white-space: normal;
   }
 
   .levitate-home-card-grid article,

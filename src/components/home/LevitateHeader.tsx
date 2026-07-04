@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Download, Grip, UserRound, X } from "lucide-react";
@@ -29,17 +29,8 @@ const navItems: NavItem[] = [
     label: "Convocatoria",
     href: "#convocatorias",
     children: [
-      {
-        label: "Sedes",
-        href: "/sedes",
-        children: [
-          { label: "Ciudad de México", href: "/sedes/ciudad-de-mexico" },
-          { label: "Puebla", href: "/sedes/puebla" },
-          { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-        ],
-      },
-      { label: "Workshops", href: "/workshops" },
-      { label: "Premiación", href: "/premiacion" },
+      { label: "Estado de México", href: "/sedes/estado-de-mexico" },
+      { label: "Veracruz", href: "/sedes" },
     ],
   },
   {
@@ -50,18 +41,17 @@ const navItems: NavItem[] = [
         label: "Levitate Motion",
         href: "/modalidades/levitate-motion/generos",
         children: [
-          { label: "Clasificación", href: "/modalidades/levitate-motion/generos" },
+          { label: "Géneros", href: "/modalidades/levitate-motion/generos" },
           { label: "Evaluación", href: "/evaluaciones" },
           { label: "Reglamento", href: regulationsPdfHref, download: true },
         ],
       },
       {
         label: "Levitate Aerial",
-        href: "#categorías",
+        href: "/modalidades/levitate-aerial/evaluacion",
         children: [
-          { label: "Clasificación", href: "#categorías" },
+          { label: "Niveles", href: "/modalidades/levitate-aerial/evaluacion" },
           { label: "Evaluación", href: "/modalidades/levitate-aerial/evaluacion" },
-          { label: "Seguridad", href: "#seguridad" },
           { label: "Reglamento", href: regulationsPdfHref, download: true },
         ],
       },
@@ -100,22 +90,54 @@ type LevitateHeaderProps = {
   variant?: "classic" | "pill";
 };
 
-const pillNavItems = navItems.filter((item) => ["Inicio", "Convocatoria", "Tienda"].includes(item.label));
+const capsuleNavItems: PillMenuSection[] = [
+  {
+    title: "Menú",
+  },
+  {
+    title: "Inicio",
+    href: "#inicio",
+  },
+  {
+    title: "Convocatoria",
+    href: "#convocatorias",
+  },
+  {
+    title: "Tienda",
+    href: "/tienda",
+  },
+];
 
 const pillMenuSections: PillMenuSection[] = [
   {
     title: "Convocatoria",
     links: [
+      { label: "Estado de México", href: "/sedes/estado-de-mexico" },
+      { label: "Veracruz", href: "/sedes" },
+    ],
+  },
+  {
+    title: "Modalidades",
+    links: [
       { label: "Levitate Motion", href: "/modalidades/levitate-motion/generos" },
       { label: "Levitate Aerial", href: "/modalidades/levitate-aerial/evaluacion" },
-      { label: "Sedes", href: "/sedes" },
-      { label: "Workshops", href: "/workshops" },
-      { label: "Premiación", href: "/premiacion" },
     ],
   },
   {
     title: "Tienda",
-    href: "/tienda",
+    links: [
+      { label: "Inscripciones", href: "/tienda#inscripciones" },
+      { label: "Boletos", href: "/tienda#boletos" },
+      { label: "Fotos y video", href: "/tienda#foto-video" },
+    ],
+  },
+  {
+    title: "Workshops",
+    href: "/workshops",
+  },
+  {
+    title: "Premiación",
+    href: "/premiacion",
   },
   {
     title: "Salón de la fama",
@@ -129,6 +151,12 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
   const [isMenuClosing, setIsMenuClosing] = useState(false);
   const [isPillMenuOpen, setIsPillMenuOpen] = useState(false);
   const [activePillSection, setActivePillSection] = useState<string | null>(null);
+  const [isLoginMenuOpen, setIsLoginMenuOpen] = useState(false);
+  const [isScrollCompact, setIsScrollCompact] = useState(false);
+  const capsuleMenuRef = useRef<HTMLDivElement>(null);
+  const loginMenuRef = useRef<HTMLDivElement>(null);
+  const pillMenuRef = useRef<HTMLDivElement>(null);
+  const scrollFrameRef = useRef<number | null>(null);
   const renderedNavItem = navItems.find((item) => item.label === renderedMenu && item.children);
   const selectedPillSection = pillMenuSections.find((section) => section.title === activePillSection && section.links);
   const dropdown = renderedNavItem ? (
@@ -221,16 +249,119 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
       }
     };
 
+    const closeOnOutsideClick = (event: globalThis.PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !capsuleMenuRef.current?.contains(event.target) &&
+        !pillMenuRef.current?.contains(event.target)
+      ) {
+        setIsPillMenuOpen(false);
+        setActivePillSection(null);
+      }
+    };
+
     window.addEventListener("keydown", closePillMenu);
-    return () => window.removeEventListener("keydown", closePillMenu);
+    window.addEventListener("pointerdown", closeOnOutsideClick);
+
+    return () => {
+      window.removeEventListener("keydown", closePillMenu);
+      window.removeEventListener("pointerdown", closeOnOutsideClick);
+    };
   }, [isPillMenuOpen]);
+
+  useEffect(() => {
+    if (!isLoginMenuOpen) {
+      return;
+    }
+
+    const closeLoginMenu = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsLoginMenuOpen(false);
+      }
+    };
+
+    const closeOnOutsideClick = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !loginMenuRef.current?.contains(event.target)) {
+        setIsLoginMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeLoginMenu);
+    window.addEventListener("pointerdown", closeOnOutsideClick);
+
+    return () => {
+      window.removeEventListener("keydown", closeLoginMenu);
+      window.removeEventListener("pointerdown", closeOnOutsideClick);
+    };
+  }, [isLoginMenuOpen]);
+
+  useEffect(() => {
+    if (variant !== "pill") {
+      return;
+    }
+
+    let lastScrollY = window.scrollY;
+    let isTicking = false;
+
+    const updateNavState = () => {
+      const currentScrollY = Math.max(window.scrollY, 0);
+      const delta = currentScrollY - lastScrollY;
+
+      if (currentScrollY <= 12) {
+        setIsScrollCompact(false);
+        lastScrollY = currentScrollY;
+        isTicking = false;
+        return;
+      }
+
+      if (Math.abs(delta) >= 7) {
+        if (delta > 0) {
+          setIsScrollCompact(true);
+          setIsPillMenuOpen(false);
+          setActivePillSection(null);
+          setIsLoginMenuOpen(false);
+        } else {
+          setIsScrollCompact(false);
+        }
+
+        lastScrollY = currentScrollY;
+      }
+
+      isTicking = false;
+    };
+
+    const handleScroll = () => {
+      if (isTicking) {
+        return;
+      }
+
+      isTicking = true;
+      scrollFrameRef.current = window.requestAnimationFrame(updateNavState);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+    };
+  }, [variant]);
 
   const handleNavPointer = (event: MouseEvent<HTMLElement> | PointerEvent<HTMLElement>) => {
     const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("[data-nav-label]");
     const item = navItems.find((navItem) => navItem.label === link?.dataset.navLabel);
+    setActivePillSection(null);
+    setIsLoginMenuOpen(false);
+    setActiveMenu(item?.children ? item.label : null);
+  };
+
+  const closeCapsuleSubmenu = () => {
     setIsPillMenuOpen(false);
     setActivePillSection(null);
-    setActiveMenu(item?.children ? item.label : null);
+    setIsLoginMenuOpen(false);
   };
 
   const closePillMenu = () => {
@@ -287,58 +418,126 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
     </div>
   );
 
-  const renderPillNavItem = (item: NavItem) => (
-    <div className="levitate-nav__item" key={item.label}>
-      <a
-        className={`levitate-nav__link${item.label === activeLabel ? " is-active" : ""}`}
-        href={resolveHref(item.href, useRootLinks)}
-        onClick={() => setActiveMenu(null)}
-      >
-        {item.label}
-      </a>
-    </div>
-  );
+  const renderCapsuleNavItem = (item: PillMenuSection) => {
+    const isOpen = item.title === "Menú" ? isPillMenuOpen : activePillSection === item.title;
+    const hasSubmenu = Boolean(item.links?.length);
+    const submenuId = `levitate-capsule-submenu-${item.title.toLowerCase().replace(/\s+/g, "-")}`;
+    const itemClassName = `levitate-nav__capsule-item${isOpen ? " is-open" : ""}`;
+    const controlClassName =
+      item.title === "Menú"
+        ? `levitate-nav__menu-trigger${isOpen ? " is-active" : ""}`
+        : `levitate-nav__link${item.title === activeLabel ? " is-active" : ""}${isOpen ? " is-open" : ""}`;
+
+    return (
+      <div className={itemClassName} key={item.title}>
+        {item.title === "Menú" ? (
+          <button
+            aria-controls="levitate-pill-menu"
+            aria-expanded={isPillMenuOpen}
+            className={controlClassName}
+            onClick={() => {
+              setActiveMenu(null);
+              setIsLoginMenuOpen(false);
+              setIsPillMenuOpen((current) => {
+                const nextState = !current;
+
+                if (!nextState) {
+                  setActivePillSection(null);
+                }
+
+                return nextState;
+              });
+            }}
+            type="button"
+          >
+            <Grip aria-hidden="true" size={17} strokeWidth={2.25} />
+            <span>{item.title}</span>
+          </button>
+        ) : hasSubmenu ? (
+          <button
+            aria-controls={submenuId}
+            aria-expanded={isOpen}
+            className={controlClassName}
+            onClick={() => {
+              setActiveMenu(null);
+              setIsLoginMenuOpen(false);
+              setActivePillSection((current) => (current === item.title ? null : item.title));
+            }}
+            type="button"
+          >
+            {item.title === "Menú" ? <Grip aria-hidden="true" size={17} strokeWidth={2.25} /> : null}
+            <span>{item.title}</span>
+          </button>
+        ) : (
+          <a
+            className={controlClassName}
+            href={resolveHref(item.href ?? "#inicio", useRootLinks)}
+            onClick={closeCapsuleSubmenu}
+          >
+            {item.title}
+          </a>
+        )}
+
+        {isOpen && item.links ? (
+          <div className="levitate-nav__submenu-flow" id={submenuId} aria-label={`${item.title} submenu`}>
+            {item.links.map((link) => (
+              <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closeCapsuleSubmenu}>
+                {link.label}
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   if (variant === "pill") {
-    return (
+    const pillHeader = (
       <div className="levitate-menu-shell levitate-menu-shell--pill">
-        <header className="levitate-nav levitate-nav--pill">
-          <div className="levitate-nav__group levitate-nav__group--primary">
-            <button
-              aria-controls="levitate-pill-menu"
-              aria-expanded={isPillMenuOpen}
-              className="levitate-nav__menu-trigger"
-              onClick={() => {
-                setActiveMenu(null);
-                setIsPillMenuOpen((current) => {
-                  const nextState = !current;
-
-                  if (!nextState) {
-                    setActivePillSection(null);
-                  }
-
-                  return nextState;
-                });
-              }}
-              type="button"
-            >
-              <Grip aria-hidden="true" size={17} strokeWidth={2.25} />
-              <span>Menú</span>
-            </button>
-            <nav aria-label="Navegación principal">
-              {pillNavItems.map(renderPillNavItem)}
+        <header className={`levitate-nav levitate-nav--pill${isScrollCompact ? " is-scroll-compact" : ""}`}>
+          <div className="levitate-nav__group levitate-nav__group--primary" ref={capsuleMenuRef}>
+            <nav className="levitate-nav__capsule" aria-label="Navegación principal">
+              {capsuleNavItems.map(renderCapsuleNavItem)}
             </nav>
           </div>
 
           <Logo useRootLinks={useRootLinks} />
 
-          <a className="levitate-nav__login" href="/login" aria-label="Iniciar sesión">
-            <UserRound aria-hidden="true" size={20} strokeWidth={2.25} />
-          </a>
+          <div className="levitate-nav__login-wrap" ref={loginMenuRef}>
+            <button
+              aria-controls="levitate-login-menu"
+              aria-expanded={isLoginMenuOpen}
+              aria-label="Iniciar sesión"
+              className="levitate-nav__login"
+              onClick={() => {
+                setActiveMenu(null);
+                setActivePillSection(null);
+                setIsLoginMenuOpen((current) => !current);
+              }}
+              type="button"
+            >
+              <UserRound aria-hidden="true" size={20} strokeWidth={2.25} />
+            </button>
+
+            {isLoginMenuOpen ? (
+              <div className="levitate-login-menu" id="levitate-login-menu" role="menu">
+                <a href="/login?tipo=academia" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
+                  Academia
+                </a>
+                <a href="/login?tipo=alumno" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
+                  Alumno
+                </a>
+              </div>
+            ) : null}
+          </div>
         </header>
 
         {isPillMenuOpen ? (
-          <div className={`levitate-pill-menu${selectedPillSection ? " has-submenu" : ""}`} id="levitate-pill-menu">
+          <div
+            className={`levitate-pill-menu${selectedPillSection ? " has-submenu" : ""}`}
+            id="levitate-pill-menu"
+            ref={pillMenuRef}
+          >
             <button
               aria-label="Cerrar menú"
               className="levitate-pill-menu__close"
@@ -351,10 +550,10 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
             <div className="levitate-pill-menu__content">
               <div className="levitate-pill-menu__links">
                 {pillMenuSections.map((section) => (
-                  <section key={section.title}>
+                  <section className={activePillSection === section.title ? "has-active-submenu" : undefined} key={section.title}>
                     {section.links ? (
                       <button
-                        aria-controls="levitate-pill-submenu"
+                        aria-controls={`levitate-pill-submenu-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
                         aria-expanded={activePillSection === section.title}
                         className={`levitate-pill-menu__heading${activePillSection === section.title ? " is-active" : ""}`}
                         onClick={() => setActivePillSection(section.title)}
@@ -375,9 +574,13 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
                 ))}
               </div>
 
-              {selectedPillSection?.links ? (
-                <aside className="levitate-pill-menu__submenu" id="levitate-pill-submenu" aria-label={`${selectedPillSection.title} submenu`}>
-                  {selectedPillSection.links.map((link) => (
+              {selectedPillSection ? (
+                <aside
+                  className="levitate-pill-menu__submenu"
+                  id={`levitate-pill-submenu-${selectedPillSection.title.toLowerCase().replace(/\s+/g, "-")}`}
+                  aria-label={`${selectedPillSection.title} submenu`}
+                >
+                  {selectedPillSection.links?.map((link) => (
                     <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
                       {link.label}
                     </a>
@@ -404,9 +607,12 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
             </div>
           </div>
         ) : null}
-
       </div>
     );
+
+    const pillHeaderPortal = <div className="levitate-home-redesign levitate-home-nav-portal">{pillHeader}</div>;
+
+    return typeof document !== "undefined" ? createPortal(pillHeaderPortal, document.body) : pillHeaderPortal;
   }
 
   return (
