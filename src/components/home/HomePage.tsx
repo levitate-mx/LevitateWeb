@@ -141,10 +141,10 @@ export function HomePage() {
         return;
       }
 
-      const rect = gradientLine.getBoundingClientRect();
+      const sectionRect = section.getBoundingClientRect();
       const viewportHeight = window.innerHeight || 1;
-      const triggerPoint = rect.top + rect.height * 0.25;
-      const start = viewportHeight * 0.52;
+      const triggerPoint = sectionRect.top;
+      const start = viewportHeight * 0.48;
       const finish = viewportHeight * 0.16;
       const progress = ease(clamp((start - triggerPoint) / (start - finish)));
 
