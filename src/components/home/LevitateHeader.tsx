@@ -157,6 +157,7 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
   const capsuleMenuRef = useRef<HTMLDivElement>(null);
   const loginMenuRef = useRef<HTMLDivElement>(null);
   const pillMenuRef = useRef<HTMLDivElement>(null);
+  const pillSubmenuRef = useRef<HTMLElement>(null);
   const pillMenuSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const scrollFrameRef = useRef<number | null>(null);
   const renderedNavItem = navItems.find((item) => item.label === renderedMenu && item.children);
@@ -263,7 +264,8 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
       if (
         event.target instanceof Node &&
         !capsuleMenuRef.current?.contains(event.target) &&
-        !pillMenuRef.current?.contains(event.target)
+        !pillMenuRef.current?.contains(event.target) &&
+        !pillSubmenuRef.current?.contains(event.target)
       ) {
         setIsPillMenuOpen(false);
         setActivePillSection(null);
@@ -687,6 +689,7 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
               className="levitate-pill-menu__submenu levitate-pill-menu__submenu--side"
               id={`levitate-pill-submenu-${selectedPillSection.title.toLowerCase().replace(/\s+/g, "-")}`}
               aria-label={`${selectedPillSection.title} submenu`}
+              ref={pillSubmenuRef}
               style={pillMenuStyle}
             >
               {selectedPillSection.links?.map((link) => (

@@ -16226,6 +16226,14 @@ button {
   max-width: 1120px;
 }
 
+.levitate-home-section-copy--statement {
+  width: min(100%, 1180px);
+}
+
+.levitate-home-section-copy--statement h2 {
+  max-width: 100%;
+}
+
 .levitate-home-gradient-line {
   --home-gradient-progress: 0%;
   position: relative;

@@ -223,7 +223,10 @@ export function HomePage() {
       </section>
 
       <section id="categorías" className="levitate-home-standard">
-        <div className="levitate-home-section-copy levitate-home-section-copy--wide" data-levitate-reveal>
+        <div
+          className="levitate-home-section-copy levitate-home-section-copy--wide levitate-home-section-copy--statement"
+          data-levitate-reveal
+        >
           <p className="levitate-home-eyebrow">¿Por qué Levitate?</p>
           <h2>
             Porque el talento merece un escenario a su altura.
