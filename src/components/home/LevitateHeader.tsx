@@ -124,14 +124,6 @@ const pillMenuSections: PillMenuSection[] = [
     ],
   },
   {
-    title: "Tienda",
-    links: [
-      { label: "Inscripciones", href: "/tienda#inscripciones" },
-      { label: "Boletos", href: "/tienda#boletos" },
-      { label: "Fotos y video", href: "/tienda#foto-video" },
-    ],
-  },
-  {
     title: "Workshops",
     href: "/workshops",
   },
@@ -142,6 +134,14 @@ const pillMenuSections: PillMenuSection[] = [
   {
     title: "Salón de la fama",
     href: "/salon-de-la-fama/mvps",
+  },
+  {
+    title: "Tienda",
+    links: [
+      { label: "Inscripciones", href: "/tienda#inscripciones" },
+      { label: "Boletos", href: "/tienda#boletos" },
+      { label: "Fotos y video", href: "/tienda#foto-video" },
+    ],
   },
 ];
 
@@ -364,6 +364,13 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
     setIsLoginMenuOpen(false);
   };
 
+  const openPillMenu = (sectionTitle: string | null = null) => {
+    setActiveMenu(null);
+    setIsLoginMenuOpen(false);
+    setIsPillMenuOpen(true);
+    setActivePillSection(sectionTitle);
+  };
+
   const closePillMenu = () => {
     setIsPillMenuOpen(false);
     setActivePillSection(null);
@@ -436,17 +443,11 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
             aria-expanded={isPillMenuOpen}
             className={controlClassName}
             onClick={() => {
-              setActiveMenu(null);
-              setIsLoginMenuOpen(false);
-              setIsPillMenuOpen((current) => {
-                const nextState = !current;
-
-                if (!nextState) {
-                  setActivePillSection(null);
-                }
-
-                return nextState;
-              });
+              if (isPillMenuOpen) {
+                closePillMenu();
+              } else {
+                openPillMenu();
+              }
             }}
             type="button"
           >
@@ -556,7 +557,7 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
                         aria-controls={`levitate-pill-submenu-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
                         aria-expanded={activePillSection === section.title}
                         className={`levitate-pill-menu__heading${activePillSection === section.title ? " is-active" : ""}`}
-                        onClick={() => setActivePillSection(section.title)}
+                        onClick={() => setActivePillSection((current) => (current === section.title ? null : section.title))}
                         type="button"
                       >
                         <strong>{section.title}</strong>
@@ -589,19 +590,34 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
               ) : null}
 
               <aside className="levitate-pill-menu__contact" aria-label="Contacto">
-                <strong>Levitate MX</strong>
+                <strong>
+                  Levitate MX<sup>®</sup>
+                </strong>
                 <a className="levitate-pill-menu__email" href="mailto:info.levitatemx@gmail.com">
                   info.levitatemx@gmail.com
                 </a>
                 <div className="levitate-pill-menu__contact-links">
-                  <a href="https://wa.me/5217774920775">WhatsApp</a>
-                  <a href="https://www.facebook.com/levitate.mx" aria-label="Facebook Levitate MX">
-                    FB
+                  <a
+                    className="levitate-pill-menu__social-button"
+                    href="https://wa.me/+5217774920775"
+                    aria-label="WhatsApp Levitate MX"
+                  >
+                    <img src="/assets/icons/whatsapp.png" alt="" aria-hidden="true" />
                   </a>
-                  <a href="https://www.instagram.com/levitate.mx" aria-label="Instagram Levitate MX">
-                    IG
+                  <a
+                    className="levitate-pill-menu__social-button"
+                    href="https://www.facebook.com/mx.levitate"
+                    aria-label="Facebook Levitate MX"
+                  >
+                    <img src="/assets/icons/facebook.png" alt="" aria-hidden="true" />
                   </a>
-                  <span>@levitate.mx</span>
+                  <a
+                    className="levitate-pill-menu__social-button"
+                    href="https://www.instagram.com/levitate.mx/"
+                    aria-label="Instagram Levitate MX"
+                  >
+                    <img src="/assets/icons/instagram.png" alt="" aria-hidden="true" />
+                  </a>
                 </div>
               </aside>
             </div>

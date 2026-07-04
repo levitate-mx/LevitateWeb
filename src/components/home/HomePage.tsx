@@ -10,7 +10,6 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "./LevitateFooter";
 import { LevitateHeader } from "./LevitateHeader";
 
@@ -26,7 +25,7 @@ const venues = [
     title: "Primavera 2027",
     city: "",
     date: "",
-    image: assets.hero,
+    image: "/assets/sedes-veracruz-primavera-2027.png",
   },
 ];
 
@@ -304,7 +303,6 @@ export function HomePage() {
           <div className="levitate-home-sponsors__copy" data-levitate-reveal>
             <p className="levitate-home-eyebrow">Sponsors</p>
             <h2>Aliados que elevan la experiencia.</h2>
-            <p>Marcas presentes en los momentos que hacen que una sede se sienta completa, cuidada y memorable.</p>
           </div>
 
           <div className="levitate-home-sponsor-grid" data-levitate-reveal>
