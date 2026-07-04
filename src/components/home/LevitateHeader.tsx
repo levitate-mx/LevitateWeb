@@ -580,23 +580,23 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
                         <strong>{section.title}</strong>
                       </a>
                     )}
+
+                    {activePillSection === section.title && section.links ? (
+                      <aside
+                        className="levitate-pill-menu__submenu"
+                        id={`levitate-pill-submenu-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
+                        aria-label={`${section.title} submenu`}
+                      >
+                        {section.links.map((link) => (
+                          <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
+                            {link.label}
+                          </a>
+                        ))}
+                      </aside>
+                    ) : null}
                   </section>
                 ))}
               </div>
-
-              {selectedPillSection ? (
-                <aside
-                  className="levitate-pill-menu__submenu"
-                  id={`levitate-pill-submenu-${selectedPillSection.title.toLowerCase().replace(/\s+/g, "-")}`}
-                  aria-label={`${selectedPillSection.title} submenu`}
-                >
-                  {selectedPillSection.links?.map((link) => (
-                    <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
-                      {link.label}
-                    </a>
-                  ))}
-                </aside>
-              ) : null}
 
               <aside className="levitate-pill-menu__contact" aria-label="Contacto">
                 <strong>

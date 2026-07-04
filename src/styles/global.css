@@ -15622,6 +15622,7 @@ button {
 .levitate-home-redesign .levitate-pill-menu__links section {
   display: grid;
   position: relative;
+  width: fit-content;
 }
 
 .levitate-home-redesign .levitate-pill-menu__links section.has-active-submenu {
@@ -15674,8 +15675,8 @@ button {
   position: absolute;
   z-index: 4;
   isolation: isolate;
-  top: 92px;
-  left: calc(100% + 16px);
+  top: 50%;
+  left: calc(100% + 22px);
   display: grid;
   align-content: start;
   gap: 8px;
@@ -15693,12 +15694,26 @@ button {
   box-shadow:
     0 16px 54px rgba(0, 0, 0, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transform: translateY(-50%);
   animation: levitate-menu-subpanel-in 240ms var(--ease-out) both;
   pointer-events: auto;
 }
 
 .levitate-home-redesign .levitate-pill-menu__submenu::before {
-  display: none;
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: -10px;
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-bottom: 1px solid rgba(42, 41, 40, 0.08);
+  border-left: 1px solid rgba(42, 41, 40, 0.08);
+  border-radius: 0 0 0 6px;
+  background: #dfecef;
+  box-shadow: -10px 10px 24px rgba(0, 0, 0, 0.08);
+  content: "";
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .levitate-home-redesign .levitate-pill-menu__submenu::after {
@@ -15850,12 +15865,24 @@ button {
 @keyframes levitate-menu-subpanel-in {
   from {
     opacity: 0;
-    transform: translateX(-10px);
+    transform: translateY(-50%) translateX(-10px) scale(0.98);
   }
 
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+}
+
+@keyframes levitate-menu-subpanel-mobile-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -16618,6 +16645,10 @@ button {
     display: none;
   }
 
+  .levitate-home-redesign .levitate-pill-menu__links section {
+    width: 100%;
+  }
+
   .levitate-home-redesign .levitate-pill-menu__submenu {
     position: static;
     width: auto;
@@ -16630,6 +16661,8 @@ button {
     border: 1px solid rgba(42, 41, 40, 0.08);
     border-radius: 18px;
     padding: 22px 24px;
+    transform: none;
+    animation: levitate-menu-subpanel-mobile-in 240ms var(--ease-out) both;
   }
 
   .levitate-home-redesign .levitate-pill-menu__submenu::before,
