@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Download, Grip, UserRound, X } from "lucide-react";
 
@@ -157,9 +157,18 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
   const capsuleMenuRef = useRef<HTMLDivElement>(null);
   const loginMenuRef = useRef<HTMLDivElement>(null);
   const pillMenuRef = useRef<HTMLDivElement>(null);
+  const pillMenuSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const scrollFrameRef = useRef<number | null>(null);
   const renderedNavItem = navItems.find((item) => item.label === renderedMenu && item.children);
   const selectedPillSection = pillMenuSections.find((section) => section.title === activePillSection && section.links);
+  const [pillSubmenuLayout, setPillSubmenuLayout] = useState<{ left: number; reach: number; top: number } | null>(null);
+  const pillMenuStyle = selectedPillSection && pillSubmenuLayout
+    ? ({
+        "--levitate-pill-submenu-left": `${pillSubmenuLayout.left}px`,
+        "--levitate-pill-submenu-reach": `${pillSubmenuLayout.reach}px`,
+        "--levitate-pill-submenu-top": `${pillSubmenuLayout.top}px`,
+      } as CSSProperties)
+    : undefined;
   const dropdown = renderedNavItem ? (
     <div
       aria-hidden={isMenuClosing}
@@ -269,6 +278,41 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
       window.removeEventListener("pointerdown", closeOnOutsideClick);
     };
   }, [isPillMenuOpen]);
+
+  useEffect(() => {
+    if (!isPillMenuOpen || !selectedPillSection) {
+      setPillSubmenuLayout(null);
+      return;
+    }
+
+    const updatePillSubmenuLayout = () => {
+      const menu = pillMenuRef.current;
+      const activeSection = pillMenuSectionRefs.current[selectedPillSection.title];
+      const activeHeading = activeSection?.querySelector<HTMLElement>(".levitate-pill-menu__heading");
+
+      if (!menu || !activeHeading) {
+        return;
+      }
+
+      const menuRect = menu.getBoundingClientRect();
+      const headingRect = activeHeading.getBoundingClientRect();
+
+      setPillSubmenuLayout({
+        left: Math.round(menuRect.right - 28),
+        reach: Math.round(Math.max(headingRect.bottom - menuRect.top, 148)),
+        top: Math.round(menuRect.top + 2),
+      });
+    };
+
+    updatePillSubmenuLayout();
+    window.addEventListener("resize", updatePillSubmenuLayout);
+    window.addEventListener("scroll", updatePillSubmenuLayout, { passive: true });
+
+    return () => {
+      window.removeEventListener("resize", updatePillSubmenuLayout);
+      window.removeEventListener("scroll", updatePillSubmenuLayout);
+    };
+  }, [isPillMenuOpen, selectedPillSection]);
 
   useEffect(() => {
     if (!isLoginMenuOpen) {
@@ -543,6 +587,7 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
         </header>
 
         {isPillMenuOpen ? (
+          <>
           <div
             className={`levitate-pill-menu${selectedPillSection ? " has-submenu" : ""}`}
             id="levitate-pill-menu"
@@ -560,7 +605,13 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
             <div className="levitate-pill-menu__content">
               <div className="levitate-pill-menu__links">
                 {pillMenuSections.map((section) => (
-                  <section className={activePillSection === section.title ? "has-active-submenu" : undefined} key={section.title}>
+                  <section
+                    className={activePillSection === section.title ? "has-active-submenu" : undefined}
+                    key={section.title}
+                    ref={(node) => {
+                      pillMenuSectionRefs.current[section.title] = node;
+                    }}
+                  >
                     {section.links ? (
                       <button
                         aria-controls={`levitate-pill-submenu-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
@@ -583,8 +634,7 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
 
                     {activePillSection === section.title && section.links ? (
                       <aside
-                        className="levitate-pill-menu__submenu"
-                        id={`levitate-pill-submenu-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
+                        className="levitate-pill-menu__submenu levitate-pill-menu__submenu--inline"
                         aria-label={`${section.title} submenu`}
                       >
                         {section.links.map((link) => (
@@ -631,6 +681,22 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
               </aside>
             </div>
           </div>
+
+          {selectedPillSection ? (
+            <aside
+              className="levitate-pill-menu__submenu levitate-pill-menu__submenu--side"
+              id={`levitate-pill-submenu-${selectedPillSection.title.toLowerCase().replace(/\s+/g, "-")}`}
+              aria-label={`${selectedPillSection.title} submenu`}
+              style={pillMenuStyle}
+            >
+              {selectedPillSection.links?.map((link) => (
+                <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
+                  {link.label}
+                </a>
+              ))}
+            </aside>
+          ) : null}
+          </>
         ) : null}
       </div>
     );
