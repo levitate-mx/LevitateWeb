@@ -1,4 +1,5 @@
 import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, MapPin } from "lucide-react";
+import { useEffect } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -204,16 +205,40 @@ function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
 
 function renderBlockText(text: string) {
   const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "senior", "teen", "teens"]);
-
-  return text.split("\n").map((line) => (
-    <span className="sedes-block-line" key={line}>
-      {line.split(/\b(Baby|Junior|Legacy|Petite|Senior|Teen|Teens)\b/gi).map((part, index) => (
-        highlightedTerms.has(part.toLowerCase())
-          ? <span className="sedes-block-level" key={`${part}-${index}`}>{part}</span>
-          : part
-      ))}
-    </span>
+  const renderLevels = (line: string) => line.split(/\b(Baby|Junior|Legacy|Petite|Senior|Teen|Teens)\b/gi).map((part, index) => (
+    highlightedTerms.has(part.toLowerCase())
+      ? <span className="sedes-block-level" key={`${part}-${index}`}>{part}</span>
+      : part
   ));
+
+  return text.split("\n").map((line, lineIndex) => {
+    const modalityMatch = line.match(/^(.*?)\s+-\s+(Motion|Aerial)$/i);
+
+    return (
+      <span className="sedes-block-line" key={`${line}-${lineIndex}`}>
+        {modalityMatch ? (
+          <>
+            {renderLevels(modalityMatch[1])}
+            <span className="sedes-block-modality">{modalityMatch[2]}</span>
+          </>
+        ) : renderLevels(line)}
+      </span>
+    );
+  });
+}
+
+function buildJuryLineup(jury: JuryMember[]) {
+  const lineup = jury.slice(0, 6);
+
+  while (lineup.length < 6) {
+    lineup.push({
+      name: "Jurado por confirmar",
+      specialty: "Panel Levitate",
+      image: assets.community,
+    });
+  }
+
+  return lineup;
 }
 
 type SedesPageProps = {
@@ -222,6 +247,35 @@ type SedesPageProps = {
 
 export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
   const venue = sedesContent[venueKey] ?? sedesContent.cdmx;
+  const juryLineup = buildJuryLineup(venue.jury);
+
+  useEffect(() => {
+    const choice = document.querySelector<HTMLElement>("[data-sedes-modality-choice]");
+
+    if (!choice) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    if (reducedMotion.matches) {
+      choice.classList.add("is-choice-visible");
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          choice.classList.add("is-choice-visible");
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -22% 0px", threshold: 0.34 },
+    );
+
+    observer.observe(choice);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <main className="sedes-page">
@@ -239,8 +293,8 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
               <a className="sedes-button sedes-button--primary" href="/registro">
                 Inscribirme <ArrowRight aria-hidden="true" size={18} />
               </a>
-              <a className="sedes-button sedes-button--ghost" href={venue.mapsUrl} target="_blank" rel="noreferrer">
-                Ver ubicación <ArrowUpRight aria-hidden="true" size={18} />
+              <a className="sedes-button sedes-button--ghost" href="#convocatoria-sede">
+                Descargar convocatoria <ArrowRight aria-hidden="true" size={18} />
               </a>
             </div>
           </div>
@@ -268,9 +322,9 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
         </div>
       </section>
 
-      <div className="sedes-light-flow">
+      <div className="sedes-light-flow" id="convocatoria-sede">
         <section className="sedes-light-section sedes-genres sedes-modalities">
-          <div className="sedes-modality-choice">
+          <div className="sedes-modality-choice" data-sedes-modality-choice>
             <a
               className="sedes-modality-choice__brand sedes-modality-choice__brand--motion"
               href="/modalidades/levitate-motion/generos"
@@ -291,23 +345,14 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
             >
               <img src="/assets/levitate-aerial-logo.png" alt="Levitate Aerial" />
             </a>
-
-            <div className="sedes-modality-choice__actions" aria-label="Elegir modalidad">
-              <a className="sedes-button sedes-button--choice" href="/modalidades/levitate-motion/generos">
-                Levitate Motion <ArrowRight aria-hidden="true" size={18} />
-              </a>
-              <a className="sedes-button sedes-button--choice" href="/modalidades/levitate-aerial/evaluacion">
-                Levitate Aerial <ArrowRight aria-hidden="true" size={18} />
-              </a>
-            </div>
           </div>
         </section>
 
         <section className="sedes-light-section sedes-blocks">
-          <SectionHeading kicker="Bloques" title="de competencia" />
+          <SectionHeading kicker="Cronograma" title="Bloques de competencia." />
           <div className={`sedes-block-columns${venue.competitionBlocks.length === 1 ? " sedes-block-columns--single" : ""}`}>
             {venue.competitionBlocks.map((day) => (
-              <div className="sedes-block-day" key={day.date}>
+              <article className="sedes-block-day" key={day.date}>
                 <h3>{day.date}</h3>
                 <div>
                   {day.items.map((item) => (
@@ -317,7 +362,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
                     </article>
                   ))}
                 </div>
-              </div>
+              </article>
             ))}
           </div>
           <p className="sedes-note">*Horarios a definir. La logística puede cambiar.</p>
@@ -374,12 +419,12 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
 
       <section className="sedes-light-section sedes-jury">
         <div className="sedes-jury__header">
-          <SectionHeading kicker="Jurado" title="invitado" />
+          <SectionHeading kicker="LINEUP" title="Panel de Jurados" />
           <p>Conoce al panel de artistas y profesionales que formarán parte de esta sede.</p>
         </div>
-        <div className={`sedes-jury-grid${venue.jury.length === 4 ? " sedes-jury-grid--four" : ""}${venue.jury.length === 6 ? " sedes-jury-grid--six" : ""}`}>
-          {venue.jury.map((judge) => (
-            <article className="sedes-jury-card" key={judge.name}>
+        <div className="sedes-jury-grid sedes-jury-grid--six">
+          {juryLineup.map((judge, index) => (
+            <article className="sedes-jury-card" key={`${judge.name}-${index}`}>
               <img src={judge.image} alt="" aria-hidden="true" />
               <h3>{judge.name}</h3>
               <p>{judge.specialty}</p>
