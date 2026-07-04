@@ -18,6 +18,8 @@
 - If a new hero class is added, include it in the shared hero normalization block near the end of `src/styles/global.css`.
 - When a hero includes the main header inside the hero, use a grid layout with the header row and a stretched content row.
 - When a page has the header outside the hero, make sure the first visual section still reads as a full-screen hero and does not look shorter than the rest of the site.
+- Hero content blocks must align to the bottom of the available hero viewport with a small bottom padding, using `--levitate-hero-bottom-pad` from `src/styles/global.css`.
+- Content that belongs to the hero, including text, buttons, stats, or info cards, should share that bottom alignment instead of being vertically centered.
 - On mobile, heroes may grow beyond the viewport if their content needs more room; do not cut off text or controls to force an exact height.
 
 ## Hero Typography

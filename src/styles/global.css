@@ -31,6 +31,7 @@
   --container-pad: clamp(20px, 5vw, 72px);
   --section-space: clamp(80px, 12vw, 160px);
   --levitate-hero-screen: 100svh;
+  --levitate-hero-bottom-pad: calc(clamp(24px, 4.5vh, 52px) + env(safe-area-inset-bottom, 0px));
   --levitate-hero-title-size: 4.15rem;
   --levitate-hero-subtitle-size: 1.8rem;
   --levitate-hero-description-size: 1.04rem;
@@ -644,9 +645,9 @@ button {
 }
 
 .hero__content {
-  align-self: center;
+  align-self: end;
   width: min(100%, 920px);
-  padding: 120px var(--container-pad) 120px;
+  padding: 120px var(--container-pad) var(--levitate-hero-bottom-pad);
   opacity: var(--hero-content-opacity);
   transform: translate3d(0, var(--hero-content-y), 0);
   transition: opacity 80ms linear;
@@ -1548,11 +1549,11 @@ button {
 
 .venue-hero__content {
   display: grid;
-  align-content: center;
+  align-content: end;
   min-height: 92svh;
   width: min(100%, 1440px);
   margin: 0 auto;
-  padding: clamp(92px, 9vw, 118px) var(--container-pad) clamp(56px, 5vw, 76px);
+  padding: clamp(92px, 9vw, 118px) var(--container-pad) var(--levitate-hero-bottom-pad);
 }
 
 .venue-back {
@@ -11168,10 +11169,11 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: minmax(340px, 0.95fr) minmax(260px, 0.7fr) minmax(320px, 1.05fr);
+  align-content: end;
   align-items: center;
   min-height: 270px;
   gap: clamp(28px, 5vw, 76px);
-  padding: clamp(44px, 6vw, 72px) clamp(22px, 4.4vw, 68px) 34px;
+  padding: clamp(44px, 6vw, 72px) clamp(22px, 4.4vw, 68px) var(--levitate-hero-bottom-pad);
   overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -15941,7 +15943,8 @@ button {
   width: min(100%, 1440px);
   margin: 0 auto;
   padding: clamp(82px, 9vw, 156px) clamp(18px, 4vw, 64px) clamp(28px, 3vw, 54px);
-  place-items: center;
+  align-content: end;
+  place-items: end center;
 }
 
 .levitate-home-hero__copy {
@@ -15949,7 +15952,6 @@ button {
   max-width: 960px;
   justify-items: center;
   text-align: center;
-  transform: translateY(clamp(250px, 31vh, 330px));
 }
 
 .levitate-home-eyebrow {
@@ -16652,10 +16654,6 @@ button {
 
   .levitate-home-hero__inner {
     padding: 62px 18px 24px;
-  }
-
-  .levitate-home-hero__copy {
-    transform: translateY(clamp(128px, 16vh, 170px));
   }
 
   .levitate-home-hero h1 {
@@ -17674,7 +17672,7 @@ button {
   }
 }
 
-/* Keep all top-level page heroes at a consistent viewport scale. */
+/* Keep all top-level page heroes at a consistent viewport scale and bottom-aligned content rhythm. */
 .hero,
 .venue-hero,
 .premiation-hero,
@@ -17683,6 +17681,7 @@ button {
 .passport-hero,
 .reference-hero,
 .levitate-hero,
+.levitate-home-hero,
 .rules-hero,
 .sedes-hero,
 .shop-hero {
@@ -17695,15 +17694,25 @@ button {
 .workshops-hero,
 .motion-genres-hero,
 .passport-hero,
+.reference-hero,
 .sedes-hero,
+.levitate-home-hero,
 .shop-hero {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.venue-hero__content,
-.reference-hero__content {
+.venue-hero__content {
   min-height: var(--levitate-hero-screen);
+}
+
+.levitate-home-hero,
+.sedes-hero {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.hero__content {
+  align-self: end;
 }
 
 .levitate-hero__grid,
@@ -17711,11 +17720,24 @@ button {
 .workshops-hero__content,
 .motion-genres-hero__content,
 .passport-hero__content,
-.sedes-hero__content {
+.reference-hero__content,
+.sedes-hero__content,
+.levitate-home-hero__inner,
+.shop-hero__content {
   align-self: stretch;
   display: grid;
-  align-content: center;
+  align-content: end;
   min-height: 0;
+  padding-bottom: var(--levitate-hero-bottom-pad);
+}
+
+.reference-hero__content {
+  min-height: 0;
+}
+
+.rules-hero {
+  align-content: end;
+  padding-bottom: var(--levitate-hero-bottom-pad);
 }
 
 .levitate-hero__media,
@@ -17800,7 +17822,7 @@ button {
       "copy mark"
       "intro mark";
     grid-template-columns: minmax(0, 1fr) minmax(300px, 0.48fr);
-    align-content: center;
+    align-content: end;
   }
 
   .rules-hero__copy {
@@ -17916,7 +17938,7 @@ button {
   width: min(100%, 1440px);
   min-height: 0;
   margin: 0 auto;
-  padding: clamp(128px, 14vh, 168px) clamp(18px, 4vw, 64px) clamp(38px, 5vw, 76px);
+  padding: clamp(128px, 14vh, 168px) clamp(18px, 4vw, 64px) var(--levitate-hero-bottom-pad);
 }
 
 .sedes-hero__headline {
@@ -18827,7 +18849,7 @@ button {
   }
 
   .sedes-hero__content {
-    padding: 142px 18px 30px;
+    padding: 142px 18px var(--levitate-hero-bottom-pad);
   }
 
   .sedes-hero h1 {
