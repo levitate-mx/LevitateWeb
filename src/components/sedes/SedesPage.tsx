@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarDays, CheckCircle2, Clock3, MapPin } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, MapPin } from "lucide-react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -56,7 +56,7 @@ const defaultAerialGenres = ["Tela", "Aro", "Open"];
 
 const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   cdmx: {
-    heroTitle: "Sede CDMX",
+    heroTitle: "CDMX",
     eventName: "CAO Tiempo Nuevo",
     venueName: "CAO Tiempo Nuevo",
     heroImage: "/assets/sedes-cdmx-hero.png",
@@ -132,7 +132,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     ],
   },
   puebla: {
-    heroTitle: "Sede Puebla",
+    heroTitle: "Puebla",
     eventName: "Auditorio Daniel Forcelledo",
     venueName: "Auditorio Daniel Forcelledo",
     heroImage: "/assets/sedes-puebla-hero.png",
@@ -161,7 +161,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     ],
   },
   edomex: {
-    heroTitle: "Sede Estado de México",
+    heroTitle: "Estado de México",
     eventName: "Teatro El Gran Recinto",
     venueName: "Teatro El Gran Recinto",
     heroImage: "/assets/sedes-edomex-hero.jpg",
@@ -202,31 +202,6 @@ function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
   );
 }
 
-function GenreList({ columns = 2, items }: { columns?: 1 | 2; items: string[] }) {
-  const midpoint = Math.ceil(items.length / columns);
-  const groupedItems = columns === 1 ? [items] : [items.slice(0, midpoint), items.slice(midpoint)];
-
-  return (
-    <div className={`sedes-genre-list${columns === 1 ? " sedes-genre-list--single" : ""}`}>
-      {groupedItems.map((group, index) => (
-        <ul key={index}>
-          {group.map((genre) => {
-            const isNew = /\(nuevo!\)/i.test(genre);
-            const label = genre.replace(/\s*\(nuevo!\)/i, "");
-
-            return (
-              <li className={isNew ? "sedes-genre-item sedes-genre-item--new" : "sedes-genre-item"} key={genre}>
-                <span>{label}</span>
-                {isNew ? <em>Nuevo</em> : null}
-              </li>
-            );
-          })}
-        </ul>
-      ))}
-    </div>
-  );
-}
-
 function renderBlockText(text: string) {
   const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "senior", "teen", "teens"]);
 
@@ -251,14 +226,24 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
   return (
     <main className="sedes-page">
       <section className="sedes-hero">
-        <LevitateHeader activeLabel="Convocatoria" useRootLinks />
+        <LevitateHeader activeLabel="Convocatoria" useRootLinks variant="pill" />
         <img className={`sedes-hero__image sedes-hero__image--${venueKey}`} src={venue.heroImage} alt="" aria-hidden="true" />
         <div className="sedes-hero__shade" aria-hidden="true" />
 
         <div className="sedes-hero__content">
-          <p className="sedes-kicker">Convocatoria</p>
-          <h1>{venue.heroTitle}</h1>
-          <strong>{venue.eventName}</strong>
+          <div className="sedes-hero__headline">
+            <p className="sedes-kicker">Convocatoria nacional</p>
+            <h1>{venue.heroTitle}</h1>
+            <strong>{venue.eventName}</strong>
+            <div className="sedes-hero__actions">
+              <a className="sedes-button sedes-button--primary" href="/registro">
+                Inscribirme <ArrowRight aria-hidden="true" size={18} />
+              </a>
+              <a className="sedes-button sedes-button--ghost" href={venue.mapsUrl} target="_blank" rel="noreferrer">
+                Ver ubicación <ArrowUpRight aria-hidden="true" size={18} />
+              </a>
+            </div>
+          </div>
 
           <div className="sedes-event-info" aria-label="Información principal de la sede">
             <article>
@@ -284,31 +269,37 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       </section>
 
       <div className="sedes-light-flow">
-        <section className="sedes-light-section sedes-genres">
-          <div className="sedes-genre-grid">
-            <article className="sedes-genre-card sedes-genre-card--motion">
-              <img src={venue.motionImage ?? assets.competition} alt="Participante de Motion con vestuario rojo en escenario Levitate" />
-              <div>
-                <p className="sedes-genre-card__eyebrow">Géneros de competencia</p>
-                <h3>Motion</h3>
-                <div className="sedes-genre-card__label">
-                  <em>Géneros no aéreos</em>
-                </div>
-                <GenreList items={venue.motionGenres} />
-              </div>
-            </article>
+        <section className="sedes-light-section sedes-genres sedes-modalities">
+          <div className="sedes-modality-choice">
+            <a
+              className="sedes-modality-choice__brand sedes-modality-choice__brand--motion"
+              href="/modalidades/levitate-motion/generos"
+              aria-label="Ver Levitate Motion"
+            >
+              <img src="/assets/levitate-motion-logo.png" alt="Levitate Motion" />
+            </a>
 
-            <article className="sedes-genre-card sedes-genre-card--aerial">
-              <div>
-                <p className="sedes-genre-card__eyebrow">Géneros de competencia</p>
-                <h3>Aerial</h3>
-                <div className="sedes-genre-card__label">
-                  <em>Géneros aéreos</em>
-                </div>
-                <GenreList columns={1} items={venue.aerialGenres} />
-              </div>
-              <img src={venue.aerialImage ?? assets.hero} alt="Participante de Aerial en tela durante una presentación Levitate" />
-            </article>
+            <div className="sedes-modality-choice__center">
+              <p className="sedes-kicker">Modalidades</p>
+              <h2>Elige tu forma de competir.</h2>
+            </div>
+
+            <a
+              className="sedes-modality-choice__brand sedes-modality-choice__brand--aerial"
+              href="/modalidades/levitate-aerial/evaluacion"
+              aria-label="Ver Levitate Aerial"
+            >
+              <img src="/assets/levitate-aerial-logo.png" alt="Levitate Aerial" />
+            </a>
+
+            <div className="sedes-modality-choice__actions" aria-label="Elegir modalidad">
+              <a className="sedes-button sedes-button--choice" href="/modalidades/levitate-motion/generos">
+                Levitate Motion <ArrowRight aria-hidden="true" size={18} />
+              </a>
+              <a className="sedes-button sedes-button--choice" href="/modalidades/levitate-aerial/evaluacion">
+                Levitate Aerial <ArrowRight aria-hidden="true" size={18} />
+              </a>
+            </div>
           </div>
         </section>
 
@@ -400,21 +391,19 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       <section className="sedes-final-cta">
         <img
           className="sedes-final-cta__background"
-          src="/assets/sedes-edomex-hero.jpg"
+          src={venue.heroImage}
           alt=""
           loading="lazy"
           aria-hidden="true"
         />
-        <div className="sedes-final-cta__line" aria-hidden="true"><span>✦</span></div>
         <div className="sedes-final-cta__content">
-          <p>Convocatoria</p>
-          <span>Consulta todos los detalles de esta sede</span>
-          <h2>El vuelo te espera</h2>
-          <a href="/#convocatorias">
-            Descargar convocatoria <ArrowUpRight aria-hidden="true" size={18} />
+          <p>Siguiente paso</p>
+          <span>{venue.venueName}</span>
+          <h2>Asegura tu lugar.</h2>
+          <a href="/registro">
+            Inscribirme <ArrowRight aria-hidden="true" size={18} />
           </a>
         </div>
-        <div className="sedes-final-cta__line" aria-hidden="true"><span>✦</span></div>
       </section>
 
       <LevitateFooter useRootLinks />

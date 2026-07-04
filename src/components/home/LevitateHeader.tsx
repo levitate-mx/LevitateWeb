@@ -153,6 +153,7 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
   const [activePillSection, setActivePillSection] = useState<string | null>(null);
   const [isLoginMenuOpen, setIsLoginMenuOpen] = useState(false);
   const [isScrollCompact, setIsScrollCompact] = useState(false);
+  const [isPastHero, setIsPastHero] = useState(false);
   const capsuleMenuRef = useRef<HTMLDivElement>(null);
   const loginMenuRef = useRef<HTMLDivElement>(null);
   const pillMenuRef = useRef<HTMLDivElement>(null);
@@ -306,9 +307,13 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
     const updateNavState = () => {
       const currentScrollY = Math.max(window.scrollY, 0);
       const delta = currentScrollY - lastScrollY;
+      const pastHero = currentScrollY > window.innerHeight * 0.72;
+
+      setIsPastHero(pastHero);
 
       if (currentScrollY <= 12) {
         setIsScrollCompact(false);
+        setIsPastHero(false);
         lastScrollY = currentScrollY;
         isTicking = false;
         return;
@@ -495,7 +500,11 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
   if (variant === "pill") {
     const pillHeader = (
       <div className="levitate-menu-shell levitate-menu-shell--pill">
-        <header className={`levitate-nav levitate-nav--pill${isScrollCompact ? " is-scroll-compact" : ""}`}>
+        <header
+          className={`levitate-nav levitate-nav--pill${isScrollCompact ? " is-scroll-compact" : ""}${
+            isPastHero ? " is-past-hero" : ""
+          }`}
+        >
           <div className="levitate-nav__group levitate-nav__group--primary" ref={capsuleMenuRef}>
             <nav className="levitate-nav__capsule" aria-label="Navegación principal">
               {capsuleNavItems.map(renderCapsuleNavItem)}
