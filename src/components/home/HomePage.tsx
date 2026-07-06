@@ -25,7 +25,7 @@ const venues = [
     title: "Primavera 2027",
     city: "",
     date: "",
-    image: "/assets/sedes-veracruz-primavera-2027.png",
+    image: "/assets/sedes-primavera-2027-theater.jpeg",
   },
 ];
 
@@ -37,7 +37,7 @@ const standardCards = [
   },
   {
     icon: Award,
-    title: "Criterio sin ruido",
+    title: "Criterio de\njueceo",
     text: "Evaluación transparente en cada momento y una retroalimentación que te ayuda a crecer.",
   },
   {
@@ -198,7 +198,7 @@ export function HomePage() {
               <a className="levitate-home-button levitate-home-button--dark" href="/sedes/estado-de-mexico">
                 Ver próxima sede <ArrowRight aria-hidden="true" size={18} />
               </a>
-              <a className="levitate-home-button levitate-home-button--light" href="/registro">
+              <a className="levitate-home-button levitate-home-button--light" href="/inscripciones">
                 Inscribirme <ArrowRight aria-hidden="true" size={18} />
               </a>
             </div>

@@ -58,8 +58,8 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    label: "Tienda",
-    href: "/tienda",
+    label: "Inscripciones",
+    href: "/inscripciones",
   },
   {
     label: "Salón de la fama",
@@ -103,8 +103,8 @@ const capsuleNavItems: PillMenuSection[] = [
     href: "#convocatorias",
   },
   {
-    title: "Tienda",
-    href: "/tienda",
+    title: "Inscripciones",
+    href: "/inscripciones",
   },
 ];
 
@@ -136,11 +136,10 @@ const pillMenuSections: PillMenuSection[] = [
     href: "/salon-de-la-fama/mvps",
   },
   {
-    title: "Tienda",
+    title: "Tienda Oficial",
     links: [
-      { label: "Inscripciones", href: "/tienda#inscripciones" },
-      { label: "Boletos", href: "/tienda#boletos" },
-      { label: "Fotos y video", href: "/tienda#foto-video" },
+      { label: "Taquilla", href: "/tienda#boletos" },
+      { label: "Galería Oficial", href: "/tienda#foto-video" },
     ],
   },
 ];

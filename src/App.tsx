@@ -1,6 +1,7 @@
 import { LevitateAuthRoute, LevitateRegistrationRoute } from "./components/admin";
 import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
+import { InscripcionesPage } from "./components/inscripciones/InscripcionesPage";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
 import {
   PassportAdminPage,
@@ -23,6 +24,7 @@ export default function App() {
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const hallOfFameMvpsMatch = window.location.pathname.match(/^\/salon-de-la-fama\/mvps\/?$/);
+  const inscripcionesMatch = window.location.pathname.match(/^\/inscripciones\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
   const motionGenresMatch = window.location.pathname.match(/^\/modalidades\/levitate-motion\/generos\/?$/);
@@ -50,6 +52,10 @@ export default function App() {
 
   if (hallOfFameMvpsMatch) {
     return <HallOfFamePage />;
+  }
+
+  if (inscripcionesMatch) {
+    return <InscripcionesPage />;
   }
 
   if (premiationMatch) {

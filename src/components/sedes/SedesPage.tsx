@@ -290,7 +290,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
             <h1>{venue.heroTitle}</h1>
             <strong>{venue.eventName}</strong>
             <div className="sedes-hero__actions">
-              <a className="sedes-button sedes-button--primary" href="/registro">
+              <a className="sedes-button sedes-button--primary" href="/inscripciones">
                 Inscribirme <ArrowRight aria-hidden="true" size={18} />
               </a>
               <a className="sedes-button sedes-button--ghost" href="#convocatoria-sede">
@@ -445,7 +445,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
           <p>Siguiente paso</p>
           <span>{venue.venueName}</span>
           <h2>Asegura tu lugar.</h2>
-          <a href="/registro">
+          <a href="/inscripciones">
             Inscribirme <ArrowRight aria-hidden="true" size={18} />
           </a>
         </div>
