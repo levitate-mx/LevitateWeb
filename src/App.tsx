@@ -1,12 +1,13 @@
 import {
   LevitateAuthRoute,
+  LevitateRegistrationAdminPaymentsRoute,
   LevitateRegistrationEntryRoute,
   LevitateRegistrationRoute,
   LevitateStudentRegistrationRoute,
 } from "./components/admin";
 import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
-import { InscripcionesPage } from "./components/inscripciones/InscripcionesPage";
+import { InscripcionesConsultaPage, InscripcionesPage } from "./components/inscripciones/InscripcionesPage";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
 import {
   PassportAdminPage,
@@ -29,7 +30,9 @@ export default function App() {
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const hallOfFameMvpsMatch = window.location.pathname.match(/^\/salon-de-la-fama\/mvps\/?$/);
+  const inscripcionesConsultaMatch = window.location.pathname.match(/^\/inscripciones\/consulta-curp\/?$/);
   const inscripcionesMatch = window.location.pathname.match(/^\/inscripciones\/?$/);
+  const registrationAdminPaymentsMatch = window.location.pathname.match(/^\/admin\/inscripciones\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
   const academyRegistrationMatch = window.location.pathname.match(/^\/registro\/academias\/?$/);
@@ -48,6 +51,10 @@ export default function App() {
 
   if (adminMediaMatch) {
     return <LevitateRegistrationRoute />;
+  }
+
+  if (registrationAdminPaymentsMatch) {
+    return <LevitateRegistrationAdminPaymentsRoute />;
   }
 
   if (registrationMatch) {
@@ -76,6 +83,10 @@ export default function App() {
 
   if (hallOfFameMvpsMatch) {
     return <HallOfFamePage />;
+  }
+
+  if (inscripcionesConsultaMatch) {
+    return <InscripcionesConsultaPage />;
   }
 
   if (inscripcionesMatch) {

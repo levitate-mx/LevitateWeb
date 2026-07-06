@@ -6,6 +6,7 @@ import {
   ChevronDown,
   CircleAlert,
   ClipboardList,
+  CreditCard,
   GraduationCap,
   Home,
   KeyRound,
@@ -21,6 +22,7 @@ import {
   Save,
   Search,
   ShieldCheck,
+  ShoppingBag,
   Shirt,
   UserPlus,
   UserRoundPlus,
@@ -29,7 +31,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
-type AdminScreenId = "home" | "choreographers" | "participants" | "dance";
+type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "payments";
 type AuthMode = "login" | "register";
 type StatusTone = "success" | "error";
 
@@ -107,10 +109,58 @@ type RegistrationDance = {
   participants: RegistrationDanceRelation[];
 };
 
+type RegistrationInscriptionOrderStatus = "pending_payment" | "payment_reported" | "paid" | "rejected";
+
+type RegistrationPaymentProof = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  dataUrl: string;
+  status: string;
+  uploadedAt: string;
+};
+
+type RegistrationInscriptionOrder = {
+  id: string;
+  curp: string;
+  participantName: string;
+  academyId?: string | null;
+  academyName: string;
+  venue: string;
+  reference: string;
+  amount: number;
+  paidAmount: number;
+  status: RegistrationInscriptionOrderStatus;
+  paymentMethod: string;
+  notes?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  proof?: RegistrationPaymentProof | null;
+};
+
 type RegistrationBootstrap = RegistrationSession & {
   participants: RegistrationParticipant[];
   choreographers: RegistrationChoreographer[];
   dances: RegistrationDance[];
+  inscriptionOrders: RegistrationInscriptionOrder[];
+};
+
+type RegistrationAdminOrderTotals = {
+  amount: number;
+  count: number;
+  paid: number;
+  paidAmount: number;
+  pending: number;
+  rejected: number;
+  reported: number;
+  withProof: number;
+};
+
+type RegistrationAdminOrdersPayload = {
+  orders: RegistrationInscriptionOrder[];
+  totals: RegistrationAdminOrderTotals;
 };
 
 type StudentRegistrationRecord = {
@@ -143,7 +193,6 @@ type StudentRegistrationResource = {
 type StudentRegistrationSession = {
   user: {
     id: string;
-    username: string;
     curp: string;
   };
   registrations: StudentRegistrationRecord[];
@@ -175,6 +224,7 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar alumnos", icon: GraduationCap, screen: "participants" },
   { label: "Registrar baile", icon: Music2, screen: "dance" },
+  { label: "Pagos inscripción", icon: CreditCard, screen: "payments" },
   { label: "Reporte participante", icon: ClipboardList },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
@@ -247,14 +297,28 @@ const venueOptions: FieldOption[] = [
   { value: "edomex", label: "Edo. Méx. - 13 /15 noviembre 2026" },
 ];
 
+const inscriptionOrderStatusOptions: FieldOption[] = [
+  { value: "pending_payment", label: "Pendiente de pago" },
+  { value: "payment_reported", label: "Pago reportado" },
+  { value: "paid", label: "Pagada" },
+  { value: "rejected", label: "Rechazada" },
+];
+
 const studentPortalModules = [
   {
-    title: "Pagos",
-    text: "Inscripciones, boletos y fotografías asociadas a tu CURP.",
-    action: "Ir a pagos",
-    href: "/tienda#consulta-curp",
+    title: "Pago de inscripción",
+    text: "Orden, subtotal y comprobante de la inscripción asociada a tu CURP.",
+    action: "Ir a inscripción",
+    href: "/inscripciones/consulta-curp",
     resourceType: "payment",
-    icon: BadgeCheck,
+    icon: CreditCard,
+  },
+  {
+    title: "Tienda Levitate",
+    text: "Compra boletos y paquetes de fotografía o video por separado.",
+    action: "Ir a tienda",
+    href: "/tienda#boletos",
+    icon: ShoppingBag,
   },
   {
     title: "Hojas de jueceo",
@@ -277,7 +341,7 @@ const studentPortalModules = [
   text: string;
   action: string;
   href: string;
-  resourceType: StudentRegistrationResource["type"];
+  resourceType?: StudentRegistrationResource["type"];
   icon: LucideIcon;
 }>;
 
@@ -287,11 +351,10 @@ const demoAcademyCredentials = {
 };
 
 const demoStudentCredentials = {
-  username: "demo_alumno",
   curp: "DEMO010101MDFLVT09",
-  password: "levitate123",
 };
 const demoRegistrationSessionStorageKey = "levitate_demo_registration_session";
+const registrationAdminTokenStorageKey = "levitate-registration-admin-token";
 type DemoRegistrationSessionKind = "academy" | "student";
 
 const demoRegistrationBootstrap: RegistrationBootstrap = {
@@ -357,12 +420,31 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
       ],
     },
   ],
+  inscriptionOrders: [
+    {
+      id: "demo-inscription-order",
+      curp: demoStudentCredentials.curp,
+      participantName: "Sofia Martinez Demo",
+      academyId: "demo-academy",
+      academyName: "Academia Demo Levitate",
+      venue: "edomex",
+      reference: "LEV-EDOMEX-DEMO-VT09",
+      amount: 2300,
+      paidAmount: 0,
+      status: "pending_payment",
+      paymentMethod: "bank_transfer",
+      notes: null,
+      paidAt: null,
+      createdAt: "2026-07-04T00:00:00Z",
+      updatedAt: "2026-07-04T00:00:00Z",
+      proof: null,
+    },
+  ],
 };
 
 const demoStudentSession: StudentRegistrationSession = {
   user: {
     id: "demo-student-user",
-    username: demoStudentCredentials.username,
     curp: demoStudentCredentials.curp,
   },
   registrations: [
@@ -390,8 +472,8 @@ const demoStudentSession: StudentRegistrationSession = {
     {
       id: "demo-payment",
       type: "payment",
-      title: "Pagos demo para Sofia Martinez",
-      url: "/tienda#consulta-curp",
+      title: "Pago de inscripción demo para Sofia Martinez",
+      url: "/inscripciones/consulta-curp",
       status: "available",
     },
     {
@@ -467,6 +549,28 @@ function getOptionLabel(options: FieldOption[], value: string) {
 
 function getDanceLevelLabel(level: string | null) {
   return level ? getOptionLabel(danceLevels, level) : "No aplica";
+}
+
+const adminCurrencyFormatter = new Intl.NumberFormat("es-MX", {
+  currency: "MXN",
+  maximumFractionDigits: 0,
+  style: "currency",
+});
+
+function formatAdminCurrency(amount: number) {
+  return adminCurrencyFormatter.format(amount);
+}
+
+function formatAdminFileSize(bytes: number) {
+  if (bytes >= 1000000) {
+    return `${(bytes / 1000000).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(bytes / 1000))} KB`;
+}
+
+function getInscriptionOrderStatusLabel(status: string) {
+  return getOptionLabel(inscriptionOrderStatusOptions, status);
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -598,16 +702,16 @@ function DemoCredentialsHint({
   curp,
 }: {
   label: string;
-  username: string;
-  password: string;
+  username?: string;
+  password?: string;
   curp?: string;
 }) {
   return (
     <p className="levitate-auth-demo">
       <span>{label}</span>
-      <code>{username}</code>
+      {username ? <code>{username}</code> : null}
       {curp ? <code>{curp}</code> : null}
-      <code>{password}</code>
+      {password ? <code>{password}</code> : null}
     </p>
   );
 }
@@ -760,7 +864,7 @@ export function LevitateRegistrationEntryRoute() {
           <h1>Elige tu acceso.</h1>
           <span aria-hidden="true" />
           <strong>
-            Academias administran participantes y bailes. Alumnos consultan lo asociado a su CURP desde una cuenta propia.
+            Academias administran participantes y bailes. Alumnos consultan pagos y materiales asociados directamente a su CURP.
           </strong>
         </div>
 
@@ -774,8 +878,8 @@ export function LevitateRegistrationEntryRoute() {
           <a className="levitate-registration-choice-card" href="/registro/alumnos">
             <GraduationCap aria-hidden="true" size={28} />
             <span>Alumnos</span>
-            <h2>Crear cuenta alumno</h2>
-            <p>CURP, usuario y contraseña para pagos, hojas de jueceo y media.</p>
+            <h2>Ingresar con CURP</h2>
+            <p>Consulta pagos, hojas de jueceo, fotos y videos sin usuario ni contraseña.</p>
           </a>
         </div>
       </section>
@@ -970,27 +1074,20 @@ function LevitateStudentAuthScreen({
   onAuthenticated: (session: StudentRegistrationSession) => void;
   systemMessage?: string;
 }) {
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [loginError, setLoginError] = useState("");
-  const [registerError, setRegisterError] = useState("");
+  const [accessError, setAccessError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleAccessSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
     setIsSubmitting(true);
-    setLoginError("");
+    setAccessError("");
 
     try {
-      const identifier = getFormValue(formData, "identifier");
-      const password = getFormValue(formData, "password");
-      const normalizedIdentifier = identifier.toLowerCase();
+      const curp = getFormValue(formData, "curp").toUpperCase();
 
-      if (
-        password === demoStudentCredentials.password &&
-        (normalizedIdentifier === demoStudentCredentials.username || identifier.toUpperCase() === demoStudentCredentials.curp)
-      ) {
+      if (curp === demoStudentCredentials.curp) {
         persistDemoRegistrationSession("student");
         onAuthenticated(demoStudentSession);
         return;
@@ -999,42 +1096,14 @@ function LevitateStudentAuthScreen({
       clearPersistedDemoRegistrationSession();
       const session = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/login", {
         body: JSON.stringify({
-          identifier,
-          password,
+          curp,
         }),
         method: "POST",
       });
 
       onAuthenticated(session);
     } catch (error) {
-      setLoginError(getErrorMessage(error, "No se pudo iniciar sesión."));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    setIsSubmitting(true);
-    setRegisterError("");
-
-    try {
-      const session = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/register", {
-        body: JSON.stringify({
-          username: getFormValue(formData, "username"),
-          curp: getFormValue(formData, "curp"),
-          password: getFormValue(formData, "password"),
-        }),
-        method: "POST",
-      });
-
-      form.reset();
-      onAuthenticated(session);
-    } catch (error) {
-      setRegisterError(getErrorMessage(error, "No se pudo crear la cuenta."));
+      setAccessError(getErrorMessage(error, "No se pudo acceder al portal."));
     } finally {
       setIsSubmitting(false);
     }
@@ -1048,84 +1117,27 @@ function LevitateStudentAuthScreen({
       <section className="levitate-auth-shell levitate-student-auth-shell">
         <div className="levitate-auth-copy">
           <p>Portal de alumnos</p>
-          <h1>Tu cuenta Levitate</h1>
+          <h1>Ingresa con tu CURP.</h1>
           <span aria-hidden="true" />
           <div>
             <ShieldCheck aria-hidden="true" size={22} />
-            <strong>Usa tu CURP para consultar pagos, hojas de jueceo y material publicado por Levitate.</strong>
+            <strong>Consulta pagos, hojas de jueceo, fotos y videos asociados a la CURP registrada por tu academia.</strong>
           </div>
         </div>
 
         <section className="levitate-auth-card" aria-label="Acceso de alumno">
-          <div className="levitate-auth-tabs" role="tablist" aria-label="Acceso o registro de alumno">
-            <button
-              aria-selected={mode === "login"}
-              className={mode === "login" ? "is-active" : ""}
-              onClick={() => {
-                setMode("login");
-                setLoginError("");
-              }}
-              role="tab"
-              type="button"
-            >
-              <LogIn aria-hidden="true" size={17} />
-              Ingresar
+          <form className="levitate-auth-form" onSubmit={handleAccessSubmit}>
+            <AdminStatusMessage message={systemMessage} tone="error" />
+            <DemoCredentialsHint curp={demoStudentCredentials.curp} label="Demo alumno" />
+            <AdminField helper="La CURP debe tener 18 caracteres." icon={ClipboardList} label="CURP">
+              <input autoComplete="off" maxLength={18} minLength={18} name="curp" required type="text" />
+            </AdminField>
+            <AdminStatusMessage message={accessError} tone="error" />
+            <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
+              <LogIn aria-hidden="true" size={18} />
+              {isSubmitting ? "Ingresando..." : "Ingresar con CURP"}
             </button>
-            <button
-              aria-selected={mode === "register"}
-              className={mode === "register" ? "is-active" : ""}
-              onClick={() => {
-                setMode("register");
-                setRegisterError("");
-              }}
-              role="tab"
-              type="button"
-            >
-              <UserPlus aria-hidden="true" size={17} />
-              Crear cuenta
-            </button>
-          </div>
-
-          {mode === "login" ? (
-            <form className="levitate-auth-form" onSubmit={handleLoginSubmit}>
-              <AdminStatusMessage message={systemMessage} tone="error" />
-              <DemoCredentialsHint
-                curp={demoStudentCredentials.curp}
-                label="Demo alumno"
-                password={demoStudentCredentials.password}
-                username={demoStudentCredentials.username}
-              />
-              <AdminField icon={AtSign} label="Usuario o CURP">
-                <input autoComplete="username" name="identifier" required type="text" />
-              </AdminField>
-              <AdminField icon={KeyRound} label="Contraseña">
-                <input autoComplete="current-password" name="password" required type="password" />
-              </AdminField>
-              <AdminStatusMessage message={loginError} tone="error" />
-              <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
-                <LogIn aria-hidden="true" size={18} />
-                {isSubmitting ? "Ingresando..." : "Ingresar"}
-              </button>
-            </form>
-          ) : (
-            <form className="levitate-auth-form" onSubmit={handleRegisterSubmit}>
-              <AdminStatusMessage message={systemMessage} tone="error" />
-              <AdminField icon={AtSign} label="Usuario">
-                <input autoComplete="username" name="username" required type="text" />
-              </AdminField>
-              <AdminField helper="La CURP debe tener 18 caracteres." icon={ClipboardList} label="CURP">
-                <input maxLength={18} minLength={18} name="curp" required type="text" />
-              </AdminField>
-              <AdminField helper="Mínimo 8 caracteres." icon={KeyRound} label="Contraseña">
-                <input autoComplete="new-password" minLength={8} name="password" required type="password" />
-              </AdminField>
-              <AdminStatusMessage message={registerError} tone="error" />
-              <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
-                <UserPlus aria-hidden="true" size={18} />
-                {isSubmitting ? "Creando..." : "Crear cuenta"}
-              </button>
-            </form>
-          )}
+          </form>
         </section>
       </section>
     </main>
@@ -1147,7 +1159,7 @@ function LevitateStudentPortal({
       <section className="levitate-student-portal__hero">
         <div>
           <p>Portal de alumnos</p>
-          <h1>Hola, {session.registrations[0]?.fullName || session.user.username}.</h1>
+          <h1>Hola, {session.registrations[0]?.fullName || "alumno Levitate"}.</h1>
           <div className="levitate-student-portal__meta">
             <span>CURP: {session.user.curp}</span>
             <span>{session.registrations.length} registro(s) asociado(s)</span>
@@ -1163,7 +1175,9 @@ function LevitateStudentPortal({
       <section className="levitate-student-module-grid" aria-label="Acciones de alumno">
         {studentPortalModules.map((module) => {
           const Icon = module.icon;
-          const resource = session.resources.find((item) => item.type === module.resourceType && item.url);
+          const resource = module.resourceType
+            ? session.resources.find((item) => item.type === module.resourceType && item.url)
+            : undefined;
           const href = resource?.url || module.href;
           const isAvailable = Boolean(href);
 
@@ -1586,6 +1600,360 @@ function DanceRegistrationPanel({
   );
 }
 
+function InscriptionOrdersPanel({
+  adminToken,
+  emptyMessage = "Todavía no hay órdenes. Se crean cuando una familia consulta una CURP y presiona pagar inscripción.",
+  orders,
+  onOrderUpdated,
+}: {
+  adminToken?: string;
+  emptyMessage?: string;
+  orders: RegistrationInscriptionOrder[];
+  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+}) {
+  return (
+    <AdminPanel title="Pagos de inscripción" eyebrow="Control">
+      <div className="levitate-admin-payment-list">
+        {orders.length > 0 ? (
+          orders.map((order) => <InscriptionOrderCard adminToken={adminToken} key={order.id} onOrderUpdated={onOrderUpdated} order={order} />)
+        ) : (
+          <p className="levitate-admin-empty-state">{emptyMessage}</p>
+        )}
+      </div>
+    </AdminPanel>
+  );
+}
+
+function InscriptionOrderCard({
+  adminToken,
+  order,
+  onOrderUpdated,
+}: {
+  adminToken?: string;
+  order: RegistrationInscriptionOrder;
+  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+}) {
+  const [status, setStatus] = useState<RegistrationInscriptionOrderStatus>(order.status);
+  const [paidAmount, setPaidAmount] = useState(String(order.paidAmount || ""));
+  const [notes, setNotes] = useState(order.notes ?? "");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setStatus(order.status);
+    setPaidAmount(String(order.paidAmount || ""));
+    setNotes(order.notes ?? "");
+  }, [order]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setStatusMessage("");
+    setErrorMessage("");
+
+    const nextPaidAmount = paidAmount === "" ? null : Number(paidAmount);
+
+    try {
+      if (order.id.startsWith("demo-")) {
+        const now = new Date().toISOString();
+        const nextOrder: RegistrationInscriptionOrder = {
+          ...order,
+          status,
+          paidAmount: nextPaidAmount ?? order.paidAmount,
+          notes: notes.trim() || null,
+          paidAt: status === "paid" ? (order.paidAt ?? now) : null,
+          updatedAt: now,
+        };
+
+        onOrderUpdated(nextOrder);
+        setStatusMessage("Orden demo actualizada.");
+        return;
+      }
+
+      const isCentralAdmin = adminToken !== undefined;
+      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(
+        isCentralAdmin ? "/api/registration/admin/inscription-order/status" : "/api/registration/inscription/order/status",
+        {
+          body: JSON.stringify({
+            id: order.id,
+            notes,
+            paidAmount: nextPaidAmount,
+            status,
+          }),
+          headers: isCentralAdmin && adminToken ? { authorization: `Bearer ${adminToken}` } : {},
+          method: "POST",
+        },
+      );
+
+      onOrderUpdated(response.order);
+      setStatusMessage("Orden actualizada.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo actualizar la orden."));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <form className="levitate-admin-payment-card" onSubmit={handleSubmit}>
+      <header>
+        <div>
+          <span>{order.reference}</span>
+          <h3>{order.participantName}</h3>
+          <p>
+            {order.curp} · {getOptionLabel(venueOptions, order.venue)}
+          </p>
+        </div>
+        <strong>{formatAdminCurrency(order.amount)}</strong>
+      </header>
+
+      <dl>
+        <div>
+          <dt>Academia</dt>
+          <dd>{order.academyName}</dd>
+        </div>
+        <div>
+          <dt>Estado actual</dt>
+          <dd>{getInscriptionOrderStatusLabel(order.status)}</dd>
+        </div>
+        <div>
+          <dt>Pagado</dt>
+          <dd>{formatAdminCurrency(order.paidAmount)}</dd>
+        </div>
+        <div>
+          <dt>Comprobante</dt>
+          <dd>{order.proof ? "Recibido" : "Pendiente"}</dd>
+        </div>
+      </dl>
+
+      {order.proof ? (
+        <div className="levitate-admin-payment-proof">
+          <div>
+            <span>Comprobante</span>
+            <strong>{order.proof.fileName}</strong>
+            <p>
+              {new Date(order.proof.uploadedAt).toLocaleDateString("es-MX")} · {formatAdminFileSize(order.proof.fileSize)}
+            </p>
+          </div>
+          <a download={order.proof.fileName} href={order.proof.dataUrl}>
+            Ver comprobante
+          </a>
+        </div>
+      ) : null}
+
+      <div className="levitate-admin-payment-card__fields">
+        <AdminField icon={CreditCard} label="Estado">
+          <AdminSelect
+            id={`order-status-${order.id}`}
+            name="status"
+            onChange={(event) => setStatus(event.target.value as RegistrationInscriptionOrderStatus)}
+            options={inscriptionOrderStatusOptions}
+            value={status}
+          />
+        </AdminField>
+        <AdminField icon={CreditCard} label="Monto pagado">
+          <input min={0} onChange={(event) => setPaidAmount(event.target.value)} type="number" value={paidAmount} />
+        </AdminField>
+        <AdminField className="levitate-admin-field--wide" icon={ClipboardList} label="Notas internas">
+          <input onChange={(event) => setNotes(event.target.value)} placeholder="Ej. comprobante recibido por WhatsApp" type="text" value={notes} />
+        </AdminField>
+      </div>
+
+      <div className="levitate-admin-form__wide-block">
+        <AdminStatusMessage message={statusMessage} />
+        <AdminStatusMessage message={errorMessage} tone="error" />
+      </div>
+
+      <div className="levitate-admin-form__actions">
+        <SaveButton disabled={isSaving} isSaving={isSaving} label="Actualizar orden" />
+      </div>
+    </form>
+  );
+}
+
+function RegistrationAdminMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string | number }) {
+  return (
+    <article className="passport-admin-metric">
+      <Icon aria-hidden="true" size={22} />
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+export function LevitateRegistrationAdminPaymentsRoute() {
+  const [adminToken, setAdminToken] = useState(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    return new URLSearchParams(window.location.search).get("token") || window.localStorage.getItem(registrationAdminTokenStorageKey) || "";
+  });
+  const [tokenInput, setTokenInput] = useState(adminToken);
+  const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
+  const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [adminError, setAdminError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadAdminOrders = useCallback(
+    async (token = adminToken) => {
+      setIsLoading(true);
+      setAdminError("");
+
+      try {
+        const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders", {
+          headers: token ? { authorization: `Bearer ${token}` } : {},
+        });
+        setOrders(payload.orders);
+        setTotals(payload.totals);
+      } catch (error) {
+        setAdminError(getErrorMessage(error, "No se pudo cargar el panel de inscripciones."));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [adminToken],
+  );
+
+  useEffect(() => {
+    if (!adminToken && typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return;
+    }
+
+    void loadAdminOrders(adminToken);
+  }, [adminToken, loadAdminOrders]);
+
+  const filteredOrders = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return orders.filter((order) => {
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      const matchesQuery =
+        !normalizedQuery ||
+        [order.reference, order.curp, order.participantName, order.academyName, order.venue]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+
+      return matchesStatus && matchesQuery;
+    });
+  }, [orders, query, statusFilter]);
+
+  const handleTokenSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextToken = tokenInput.trim();
+    setAdminToken(nextToken);
+
+    if (typeof window !== "undefined") {
+      if (nextToken) {
+        window.localStorage.setItem(registrationAdminTokenStorageKey, nextToken);
+      } else {
+        window.localStorage.removeItem(registrationAdminTokenStorageKey);
+      }
+    }
+
+    void loadAdminOrders(nextToken);
+  };
+
+  const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
+    setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
+    void loadAdminOrders(adminToken);
+  };
+
+  return (
+    <main className="levitate-admin-page registration-admin-page">
+      <AdminTopBrand />
+      <div className="levitate-admin-rule" aria-hidden="true" />
+
+      <div className="levitate-admin-page__body registration-admin-body">
+        <section className="levitate-admin-panel passport-admin-panel">
+          <div className="levitate-admin-panel__heading">
+            <p>Inscripciones</p>
+            <h1>Panel admin</h1>
+          </div>
+
+          <form className="passport-admin-token" onSubmit={handleTokenSubmit}>
+            <label>
+              <span>
+                <KeyRound aria-hidden="true" size={17} />
+                Token admin
+              </span>
+              <input
+                autoComplete="off"
+                onChange={(event) => setTokenInput(event.target.value)}
+                placeholder="REGISTRATION_ADMIN_TOKEN"
+                type="password"
+                value={tokenInput}
+              />
+            </label>
+            <button className="levitate-admin-save" disabled={isLoading} type="submit">
+              <ShieldCheck aria-hidden="true" size={18} />
+              {isLoading ? "Cargando" : "Cargar panel"}
+            </button>
+            <button className="levitate-admin-save passport-admin-secondary" disabled={isLoading} onClick={() => loadAdminOrders()} type="button">
+              <Search aria-hidden="true" size={18} />
+              Actualizar
+            </button>
+          </form>
+
+          {adminError ? <p className="passport-admin-alert">{adminError}</p> : null}
+
+          <div className="passport-admin-metrics registration-admin-metrics">
+            <RegistrationAdminMetric icon={CreditCard} label="Órdenes" value={totals?.count ?? "—"} />
+            <RegistrationAdminMetric icon={CircleAlert} label="Reportadas" value={totals?.reported ?? "—"} />
+            <RegistrationAdminMetric icon={BadgeCheck} label="Pagadas" value={totals?.paid ?? "—"} />
+            <RegistrationAdminMetric icon={ClipboardList} label="Comprobantes" value={totals?.withProof ?? "—"} />
+          </div>
+
+          <div className="registration-admin-totals">
+            <div>
+              <span>Monto total</span>
+              <strong>{formatAdminCurrency(totals?.amount ?? 0)}</strong>
+            </div>
+            <div>
+              <span>Monto pagado</span>
+              <strong>{formatAdminCurrency(totals?.paidAmount ?? 0)}</strong>
+            </div>
+          </div>
+
+          <div className="registration-admin-filters">
+            <label>
+              <span>Buscar</span>
+              <input
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="CURP, referencia, participante o academia"
+                type="search"
+                value={query}
+              />
+            </label>
+            <label>
+              <span>Estado</span>
+              <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+                <option value="all">Todos</option>
+                {inscriptionOrderStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <InscriptionOrdersPanel
+          adminToken={adminToken}
+          emptyMessage={isLoading ? "Cargando órdenes..." : "No hay órdenes con esos filtros."}
+          onOrderUpdated={handleOrderUpdated}
+          orders={filteredOrders}
+        />
+      </div>
+    </main>
+  );
+}
+
 function AdminWelcomePanel({
   session,
   participantCount,
@@ -1620,18 +1988,22 @@ function getAdminScreen({
   participants,
   choreographers,
   dances,
+  inscriptionOrders,
   onParticipantCreated,
   onChoreographerCreated,
   onDanceCreated,
+  onOrderUpdated,
 }: {
   screen: AdminScreenId;
   session: RegistrationSession;
   participants: RegistrationParticipant[];
   choreographers: RegistrationChoreographer[];
   dances: RegistrationDance[];
+  inscriptionOrders: RegistrationInscriptionOrder[];
   onParticipantCreated: (participant: RegistrationParticipant) => void;
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
   onDanceCreated: (dance: RegistrationDance) => void;
+  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
   if (screen === "choreographers") {
     return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
@@ -1651,6 +2023,10 @@ function getAdminScreen({
         participants={participants}
       />
     );
+  }
+
+  if (screen === "payments") {
+    return <InscriptionOrdersPanel onOrderUpdated={onOrderUpdated} orders={inscriptionOrders} />;
   }
 
   return (
@@ -1673,6 +2049,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   const [participants, setParticipants] = useState<RegistrationParticipant[]>([]);
   const [choreographers, setChoreographers] = useState<RegistrationChoreographer[]>([]);
   const [dances, setDances] = useState<RegistrationDance[]>([]);
+  const [inscriptionOrders, setInscriptionOrders] = useState<RegistrationInscriptionOrder[]>([]);
 
   const loadRegistrationData = useCallback(async () => {
     setIsLoadingData(true);
@@ -1685,6 +2062,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
       setParticipants(demoRegistrationBootstrap.participants);
       setChoreographers(demoRegistrationBootstrap.choreographers);
       setDances(demoRegistrationBootstrap.dances);
+      setInscriptionOrders(demoRegistrationBootstrap.inscriptionOrders);
       setLoadError("");
       setIsCheckingSession(false);
       setIsLoadingData(false);
@@ -1700,12 +2078,14 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
       setParticipants(bootstrap.participants);
       setChoreographers(bootstrap.choreographers);
       setDances(bootstrap.dances);
+      setInscriptionOrders(bootstrap.inscriptionOrders ?? []);
       setLoadError("");
     } catch (error) {
       setSession(null);
       setParticipants([]);
       setChoreographers([]);
       setDances([]);
+      setInscriptionOrders([]);
 
       if (!isUnauthorizedRegistrationError(error)) {
         setLoadError(getErrorMessage(error, "No se pudo cargar el registro."));
@@ -1736,6 +2116,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
       setParticipants(nextSession.participants);
       setChoreographers(nextSession.choreographers);
       setDances(nextSession.dances);
+      setInscriptionOrders(nextSession.inscriptionOrders ?? []);
       setIsCheckingSession(false);
       setIsLoadingData(false);
       return;
@@ -1751,6 +2132,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     setParticipants([]);
     setChoreographers([]);
     setDances([]);
+    setInscriptionOrders([]);
     setIsMobileMenuOpen(false);
     setActiveScreen("home");
   };
@@ -1765,6 +2147,10 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
 
   const handleDanceCreated = (dance: RegistrationDance) => {
     setDances((current) => [dance, ...current.filter((item) => item.id !== dance.id)]);
+  };
+
+  const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
+    setInscriptionOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
   };
 
   if (isCheckingSession) {
@@ -1804,9 +2190,11 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
             participants,
             choreographers,
             dances,
+            inscriptionOrders,
             onParticipantCreated: handleParticipantCreated,
             onChoreographerCreated: handleChoreographerCreated,
             onDanceCreated: handleDanceCreated,
+            onOrderUpdated: handleOrderUpdated,
           })}
         </div>
       </section>
@@ -1835,7 +2223,7 @@ export function LevitateStudentRegistrationRoute() {
       setSession(null);
 
       if (!isUnauthorizedRegistrationError(error)) {
-        setLoadError(getErrorMessage(error, "No se pudo cargar tu cuenta de alumno."));
+        setLoadError(getErrorMessage(error, "No se pudo cargar tu portal de alumno."));
       }
     } finally {
       setIsCheckingSession(false);

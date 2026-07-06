@@ -12,6 +12,9 @@ const registrationSubgenresByGenre = {
 };
 const registrationCategories = new Set(["solo", "duo", "trio", "grupo"]);
 const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanzado", "elite"]);
+const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
+const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const maxRegistrationPaymentProofBytes = 1800000;
 
 export default {
   async fetch(request, env) {
@@ -71,6 +74,34 @@ export default {
 
     if (url.pathname === "/api/registration/student/me") {
       return handleRegistrationStudentMe(request, env);
+    }
+
+    if (url.pathname === "/api/registration/inscription/lookup") {
+      return handleRegistrationInscriptionLookup(request, env);
+    }
+
+    if (url.pathname === "/api/registration/inscription/order") {
+      return handleRegistrationInscriptionOrder(request, env);
+    }
+
+    if (url.pathname === "/api/registration/inscription/order/proof") {
+      return handleRegistrationInscriptionOrderProof(request, env);
+    }
+
+    if (url.pathname === "/api/registration/inscription/orders") {
+      return handleRegistrationInscriptionOrders(request, env);
+    }
+
+    if (url.pathname === "/api/registration/inscription/order/status") {
+      return handleRegistrationInscriptionOrderStatus(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/inscription-orders") {
+      return handleRegistrationAdminInscriptionOrders(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/inscription-order/status") {
+      return handleRegistrationAdminInscriptionOrderStatus(request, env);
     }
 
     if (url.pathname === "/api/registration/me") {
@@ -388,99 +419,30 @@ async function handleRegistrationLogout(request, env) {
 }
 
 async function handleRegistrationStudentRegister(request, env) {
+  return handleRegistrationStudentAccess(request, env, 201);
+}
+
+async function handleRegistrationStudentLogin(request, env) {
+  return handleRegistrationStudentAccess(request, env, 200);
+}
+
+async function handleRegistrationStudentAccess(request, env, status = 200) {
   try {
     assertMethod(request, ["POST"]);
 
     const body = await readJsonBody(request);
-    const username = normalizeUsername(requireString(body.username, "username"));
-    const curp = normalizeCurp(requireString(body.curp, "curp"));
-    const password = requireString(body.password, "password");
-
-    if (password.length < 8) {
-      throwHttpError("weak_password", "La contraseña debe tener al menos 8 caracteres", 400);
-    }
+    const curp = normalizeCurp(requireString(body.curp ?? body.identifier, "curp"));
 
     if (curp.length !== 18) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
     const db = getDb(env);
-    const existingUser = await db
-      .prepare(
-        `
-          SELECT id
-          FROM registration_student_users
-          WHERE username = ? OR curp = ?
-          LIMIT 1
-        `,
-      )
-      .bind(username, curp)
-      .first();
-
-    if (existingUser) {
-      throwHttpError("registration_student_exists", "Ese usuario o CURP ya tiene cuenta de alumno", 409);
-    }
-
-    const userId = crypto.randomUUID();
-    const passwordHash = await hashPassword(password);
-
-    await db
-      .prepare(
-        `
-          INSERT INTO registration_student_users (
-            id,
-            username,
-            curp,
-            password_hash
-          )
-          VALUES (?, ?, ?, ?)
-        `,
-      )
-      .bind(userId, username, curp, passwordHash)
-      .run();
-
-    const sessionToken = await createRegistrationStudentSession(db, userId, request);
-    const state = await getRegistrationStudentStateByUserId(db, userId);
-
-    return sendJson(state, 201, {
-      "set-cookie": buildRegistrationStudentSessionCookie(request, sessionToken),
-    });
-  } catch (error) {
-    return sendRegistrationError(error);
-  }
-}
-
-async function handleRegistrationStudentLogin(request, env) {
-  try {
-    assertMethod(request, ["POST"]);
-
-    const body = await readJsonBody(request);
-    const identifier = requireString(body.identifier, "identifier");
-    const normalizedIdentifier = normalizeUsername(identifier);
-    const curpIdentifier = normalizeCurp(identifier);
-    const password = requireString(body.password, "password");
-    const db = getDb(env);
-    const user = await db
-      .prepare(
-        `
-          SELECT *
-          FROM registration_student_users
-          WHERE (username = ? OR curp = ?)
-            AND status = 'active'
-          LIMIT 1
-        `,
-      )
-      .bind(normalizedIdentifier, curpIdentifier)
-      .first();
-
-    if (!user || !(await verifyPassword(password, user.password_hash))) {
-      throwHttpError("registration_student_login_invalid", "Usuario, CURP o contraseña incorrectos", 401);
-    }
-
+    const user = await ensureRegistrationStudentProfile(db, curp);
     const sessionToken = await createRegistrationStudentSession(db, user.id, request);
-    const state = await getRegistrationStudentStateByUserId(db, user.id);
+    const state = await getRegistrationStudentState(db, user);
 
-    return sendJson(state, 200, {
+    return sendJson(state, status, {
       "set-cookie": buildRegistrationStudentSessionCookie(request, sessionToken),
     });
   } catch (error) {
@@ -546,6 +508,7 @@ async function handleRegistrationBootstrap(request, env) {
       participants: await getRegistrationParticipants(db, academyId),
       choreographers: await getRegistrationChoreographers(db, academyId),
       dances: await getRegistrationDances(db, academyId),
+      inscriptionOrders: await getRegistrationInscriptionOrders(db, academyId),
     });
   } catch (error) {
     return sendRegistrationError(error);
@@ -609,6 +572,188 @@ async function handleRegistrationParticipants(request, env) {
       .first();
 
     return sendJson({ participant: serializeRegistrationParticipant(participant) }, 201);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationInscriptionLookup(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+
+    if (curp.length !== 18) {
+      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    }
+
+    const lookup = await getRegistrationInscriptionLookup(getDb(env), curp);
+    return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationInscriptionOrder(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+
+    if (curp.length !== 18) {
+      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    }
+
+    const lookup = await createOrUpdateRegistrationInscriptionOrder(getDb(env), curp);
+    return sendJson(
+      {
+        order: lookup.order ? serializePublicRegistrationInscriptionOrder(lookup.order) : null,
+        lookup: serializePublicRegistrationInscriptionLookup(lookup),
+      },
+      201,
+    );
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationInscriptionOrderProof(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const body = await readJsonBody(request);
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+    const orderId = requireString(body.orderId, "orderId");
+
+    if (curp.length !== 18) {
+      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    }
+
+    const order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    const proof = getRegistrationPaymentProofInput(body);
+
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_inscription_payment_proofs (
+            id,
+            order_id,
+            file_name,
+            content_type,
+            file_size,
+            data_url
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .bind(crypto.randomUUID(), order.id, proof.fileName, proof.contentType, proof.fileSize, proof.dataUrl)
+      .run();
+
+    await db
+      .prepare(
+        `
+          UPDATE registration_inscription_orders
+          SET status = CASE
+              WHEN status = 'paid' THEN status
+              ELSE 'payment_reported'
+            END,
+            updated_at = datetime('now')
+          WHERE id = ?
+        `,
+      )
+      .bind(order.id)
+      .run();
+
+    const updatedOrder = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, order.id, curp);
+    const serializedOrder = await serializeRegistrationInscriptionOrderWithProof(db, updatedOrder);
+
+    return sendJson({ order: serializePublicRegistrationInscriptionOrder(serializedOrder) }, 201);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationInscriptionOrders(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+
+    const db = getDb(env);
+    const session = await getRegistrationStateFromRequest({ db, request });
+    const orders = await getRegistrationInscriptionOrders(db, session.academy.id);
+
+    return sendJson({ orders });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationInscriptionOrderStatus(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const session = await getRegistrationStateFromRequest({ db, request });
+    const body = await readJsonBody(request);
+    const orderId = requireString(body.id, "id");
+    const status = requireRegistrationChoice(body.status, "status", registrationInscriptionOrderStatuses);
+    const paidAmount = optionalInteger(body.paidAmount, "paidAmount");
+    const notes = optionalString(body.notes);
+
+    await updateRegistrationInscriptionOrderStatus(db, {
+      academyId: session.academy.id,
+      notes,
+      orderId,
+      paidAmount,
+      status,
+    });
+
+    const order = await getRegistrationInscriptionOrderById(db, orderId, session.academy.id);
+    return sendJson({ order });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminInscriptionOrders(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+    requireRegistrationAdmin(request, env);
+
+    const orders = await getAllRegistrationInscriptionOrders(getDb(env));
+
+    return sendJson({
+      orders,
+      totals: getRegistrationInscriptionOrderTotals(orders),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+    requireRegistrationAdmin(request, env);
+
+    const db = getDb(env);
+    const body = await readJsonBody(request);
+    const orderId = requireString(body.id, "id");
+    const status = requireRegistrationChoice(body.status, "status", registrationInscriptionOrderStatuses);
+    const paidAmount = optionalInteger(body.paidAmount, "paidAmount");
+    const notes = optionalString(body.notes);
+
+    await updateRegistrationInscriptionOrderStatus(db, {
+      notes,
+      orderId,
+      paidAmount,
+      status,
+    });
+
+    const order = await getRegistrationInscriptionOrderRecordById(db, orderId);
+    return sendJson({ order: await serializeRegistrationInscriptionOrderWithProof(db, order) });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -972,6 +1117,42 @@ async function createRegistrationStudentSession(db, userId, request) {
   return sessionToken;
 }
 
+async function ensureRegistrationStudentProfile(db, curp) {
+  await db
+    .prepare(
+      `
+        INSERT OR IGNORE INTO registration_student_users (
+          id,
+          username,
+          curp,
+          password_hash
+        )
+        VALUES (?, ?, ?, ?)
+      `,
+    )
+    .bind(crypto.randomUUID(), normalizeUsername(curp), curp, "curp_only_access")
+    .run();
+
+  const user = await db
+    .prepare(
+      `
+        SELECT id, curp
+        FROM registration_student_users
+        WHERE curp = ?
+          AND status = 'active'
+        LIMIT 1
+      `,
+    )
+    .bind(curp)
+    .first();
+
+  if (!user) {
+    throwHttpError("registration_student_user_not_found", "No se pudo abrir el portal para esa CURP", 404);
+  }
+
+  return user;
+}
+
 async function getRegistrationStateFromRequest({ db, request }) {
   const sessionToken = readCookie(request, registrationSessionCookieName);
 
@@ -1037,7 +1218,6 @@ async function getRegistrationStudentStateFromRequest({ db, request }) {
       `
         SELECT
           registration_student_users.id,
-          registration_student_users.username,
           registration_student_users.curp
         FROM registration_student_sessions
         INNER JOIN registration_student_users
@@ -1104,7 +1284,7 @@ async function getRegistrationStudentStateByUserId(db, userId) {
   const user = await db
     .prepare(
       `
-        SELECT id, username, curp
+        SELECT id, curp
         FROM registration_student_users
         WHERE id = ?
           AND status = 'active'
@@ -1115,7 +1295,7 @@ async function getRegistrationStudentStateByUserId(db, userId) {
     .first();
 
   if (!user) {
-    throwHttpError("registration_student_user_not_found", "Usuario alumno no encontrado", 404);
+    throwHttpError("registration_student_user_not_found", "Portal de alumno no encontrado", 404);
   }
 
   return getRegistrationStudentState(db, user);
@@ -1128,6 +1308,7 @@ async function getRegistrationStudentState(db, user) {
       `
         SELECT
           registration_participants.id,
+          registration_participants.academy_id,
           registration_participants.full_name,
           registration_participants.curp,
           registration_participants.division,
@@ -1183,13 +1364,352 @@ async function getRegistrationStudentState(db, user) {
   return {
     user: {
       id: user.id,
-      username: user.username,
       curp,
     },
     registrations: registrationRows.map(serializeRegistrationStudentRecord),
     dances: danceRows.map(serializeRegistrationStudentDance),
     resources: resourceRows.map(serializeRegistrationStudentResource),
   };
+}
+
+async function getRegistrationInscriptionLookup(db, curp) {
+  const { results: registrationRows = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_participants.id,
+          registration_participants.academy_id,
+          registration_participants.full_name,
+          registration_participants.curp,
+          registration_participants.division,
+          registration_participants.shirt_size,
+          registration_academies.name AS academy_name,
+          registration_academies.venue,
+          registration_participants.created_at
+        FROM registration_participants
+        INNER JOIN registration_academies
+          ON registration_academies.id = registration_participants.academy_id
+        WHERE registration_participants.curp = ?
+        ORDER BY registration_participants.created_at DESC
+      `,
+    )
+    .bind(curp)
+    .all();
+
+  if (registrationRows.length === 0) {
+    throwHttpError("registration_inscription_not_found", "No encontramos una inscripción asociada a esa CURP", 404);
+  }
+
+  const { results: danceRows = [] } = await db
+    .prepare(
+      `
+        SELECT DISTINCT
+          registration_dances.id,
+          registration_dances.title,
+          registration_dances.genre,
+          registration_dances.subgenre,
+          registration_dances.category,
+          registration_dances.level,
+          registration_dances.venue,
+          registration_academies.name AS academy_name,
+          registration_dances.created_at
+        FROM registration_dance_participants
+        INNER JOIN registration_participants
+          ON registration_participants.id = registration_dance_participants.participant_id
+        INNER JOIN registration_dances
+          ON registration_dances.id = registration_dance_participants.dance_id
+        INNER JOIN registration_academies
+          ON registration_academies.id = registration_dances.academy_id
+        WHERE registration_participants.curp = ?
+        ORDER BY registration_dances.created_at DESC
+      `,
+    )
+    .bind(curp)
+    .all();
+  const lines = danceRows.map(serializeRegistrationInscriptionLine);
+  const subtotal = lines.reduce((total, line) => total + line.amount, 0);
+  const primaryRegistration = registrationRows[0];
+  const reference = buildRegistrationInscriptionReference(curp, primaryRegistration.venue);
+  const order = await getRegistrationInscriptionOrderByReference(db, reference);
+  const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
+
+  return {
+    curp,
+    academyId: primaryRegistration.academy_id,
+    participantName: primaryRegistration.full_name,
+    academyName: primaryRegistration.academy_name,
+    venue: primaryRegistration.venue,
+    reference,
+    registrations: registrationRows.map(serializeRegistrationStudentRecord),
+    lines,
+    subtotal,
+    order: serializedOrder,
+  };
+}
+
+async function createOrUpdateRegistrationInscriptionOrder(db, curp) {
+  const lookup = await getRegistrationInscriptionLookup(db, curp);
+  const existingOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
+  const lineItemsJson = JSON.stringify(lookup.lines);
+
+  if (existingOrder) {
+    await db
+      .prepare(
+        `
+          UPDATE registration_inscription_orders
+          SET
+            curp = ?,
+            participant_name = ?,
+            academy_id = ?,
+            academy_name = ?,
+            venue = ?,
+            amount = ?,
+            line_items_json = ?,
+            updated_at = datetime('now')
+          WHERE reference = ?
+        `,
+      )
+      .bind(
+        lookup.curp,
+        lookup.participantName,
+        lookup.academyId || null,
+        lookup.academyName,
+        lookup.venue,
+        lookup.subtotal,
+        lineItemsJson,
+        lookup.reference,
+      )
+      .run();
+  } else {
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_inscription_orders (
+            id,
+            curp,
+            participant_name,
+            academy_id,
+            academy_name,
+            venue,
+            reference,
+            amount,
+            line_items_json
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .bind(
+        crypto.randomUUID(),
+        lookup.curp,
+        lookup.participantName,
+        lookup.academyId || null,
+        lookup.academyName,
+        lookup.venue,
+        lookup.reference,
+        lookup.subtotal,
+        lineItemsJson,
+      )
+      .run();
+  }
+
+  const order = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
+  const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
+
+  return {
+    ...lookup,
+    order: serializedOrder,
+  };
+}
+
+async function getRegistrationInscriptionOrderByReference(db, reference) {
+  try {
+    return await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_inscription_orders
+          WHERE reference = ?
+          LIMIT 1
+        `,
+      )
+      .bind(reference)
+      .first();
+  } catch (error) {
+    if (isMissingRegistrationInscriptionOrdersTable(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function getRegistrationInscriptionOrderById(db, orderId, academyId) {
+  const order = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_inscription_orders
+        WHERE id = ?
+          AND academy_id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(orderId, academyId)
+    .first();
+
+  if (!order) {
+    throwHttpError("registration_inscription_order_not_found", "Orden de inscripción no encontrada", 404);
+  }
+
+  return serializeRegistrationInscriptionOrderWithProof(db, order);
+}
+
+async function getRegistrationInscriptionOrderRecordById(db, orderId) {
+  const order = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_inscription_orders
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(orderId)
+    .first();
+
+  if (!order) {
+    throwHttpError("registration_inscription_order_not_found", "Orden de inscripción no encontrada", 404);
+  }
+
+  return order;
+}
+
+async function getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp) {
+  const order = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_inscription_orders
+        WHERE id = ?
+          AND curp = ?
+        LIMIT 1
+      `,
+    )
+    .bind(orderId, curp)
+    .first();
+
+  if (!order) {
+    throwHttpError("registration_inscription_order_not_found", "Orden de inscripción no encontrada para esa CURP", 404);
+  }
+
+  return order;
+}
+
+async function updateRegistrationInscriptionOrderStatus(db, { academyId, notes, orderId, paidAmount, status }) {
+  const academyClause = academyId ? "AND academy_id = ?" : "";
+  const statement = db.prepare(
+    `
+      UPDATE registration_inscription_orders
+      SET
+        status = ?,
+        paid_amount = COALESCE(?, paid_amount),
+        notes = ?,
+        paid_at = CASE
+          WHEN ? = 'paid' THEN COALESCE(paid_at, datetime('now'))
+          ELSE NULL
+        END,
+        updated_at = datetime('now')
+      WHERE id = ?
+        ${academyClause}
+    `,
+  );
+  const bindings = academyId
+    ? [status, paidAmount, notes || null, status, orderId, academyId]
+    : [status, paidAmount, notes || null, status, orderId];
+
+  await statement.bind(...bindings).run();
+}
+
+async function getRegistrationInscriptionOrders(db, academyId) {
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_inscription_orders
+          WHERE academy_id = ?
+          ORDER BY updated_at DESC, created_at DESC
+        `,
+      )
+      .bind(academyId)
+      .all();
+
+    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithProof(db, order)));
+  } catch (error) {
+    if (isMissingRegistrationInscriptionOrdersTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+async function getAllRegistrationInscriptionOrders(db) {
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_inscription_orders
+          ORDER BY updated_at DESC, created_at DESC
+        `,
+      )
+      .all();
+
+    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithProof(db, order)));
+  } catch (error) {
+    if (isMissingRegistrationInscriptionOrdersTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+function getRegistrationInscriptionOrderTotals(orders) {
+  return orders.reduce(
+    (totals, order) => {
+      totals.count += 1;
+      totals.amount += Number(order.amount || 0);
+      totals.paidAmount += Number(order.paidAmount || 0);
+
+      if (order.proof) {
+        totals.withProof += 1;
+      }
+
+      if (order.status === "pending_payment") {
+        totals.pending += 1;
+      } else if (order.status === "payment_reported") {
+        totals.reported += 1;
+      } else if (order.status === "paid") {
+        totals.paid += 1;
+      } else if (order.status === "rejected") {
+        totals.rejected += 1;
+      }
+
+      return totals;
+    },
+    {
+      amount: 0,
+      count: 0,
+      paid: 0,
+      paidAmount: 0,
+      pending: 0,
+      rejected: 0,
+      reported: 0,
+      withProof: 0,
+    },
+  );
 }
 
 async function getRegistrationParticipants(db, academyId) {
@@ -1417,6 +1937,140 @@ function serializeRegistrationStudentDance(dance) {
   };
 }
 
+function serializeRegistrationInscriptionLine(dance) {
+  return {
+    id: dance.id,
+    title: dance.title,
+    genre: dance.genre,
+    subgenre: dance.subgenre,
+    category: dance.category,
+    level: dance.level,
+    venue: dance.venue,
+    academyName: dance.academy_name,
+    amount: getRegistrationInscriptionAmount(dance),
+  };
+}
+
+function getRegistrationInscriptionAmount(dance) {
+  if (dance.genre === "aereo") {
+    return 1500;
+  }
+
+  switch (dance.category) {
+    case "solo":
+      return 1500;
+    case "duo":
+      return 1300;
+    case "trio":
+      return 950;
+    case "grupo":
+      return 800;
+    default:
+      return 800;
+  }
+}
+
+function buildRegistrationInscriptionReference(curp, venue) {
+  const venueCode = String(venue || "sede").toUpperCase();
+  return `LEV-${venueCode}-${curp.slice(0, 4)}-${curp.slice(-4)}`;
+}
+
+function serializeRegistrationInscriptionOrder(order) {
+  return {
+    id: order.id,
+    curp: order.curp,
+    participantName: order.participant_name,
+    academyId: order.academy_id,
+    academyName: order.academy_name,
+    venue: order.venue,
+    reference: order.reference,
+    amount: Number(order.amount || 0),
+    paidAmount: Number(order.paid_amount || 0),
+    status: order.status,
+    paymentMethod: order.payment_method,
+    lineItems: parseRegistrationOrderLineItems(order.line_items_json),
+    notes: order.notes,
+    paidAt: order.paid_at,
+    createdAt: order.created_at,
+    updatedAt: order.updated_at,
+  };
+}
+
+async function serializeRegistrationInscriptionOrderWithProof(db, order) {
+  return {
+    ...serializeRegistrationInscriptionOrder(order),
+    proof: await getLatestRegistrationPaymentProof(db, order.id),
+  };
+}
+
+async function getLatestRegistrationPaymentProof(db, orderId) {
+  try {
+    const proof = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_inscription_payment_proofs
+          WHERE order_id = ?
+          ORDER BY uploaded_at DESC, created_at DESC
+          LIMIT 1
+        `,
+      )
+      .bind(orderId)
+      .first();
+
+    return proof ? serializeRegistrationPaymentProof(proof) : null;
+  } catch (error) {
+    if (isMissingRegistrationPaymentProofsTable(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function serializeRegistrationPaymentProof(proof) {
+  return {
+    id: proof.id,
+    fileName: proof.file_name,
+    contentType: proof.content_type,
+    fileSize: Number(proof.file_size || 0),
+    dataUrl: proof.data_url,
+    status: proof.status,
+    uploadedAt: proof.uploaded_at,
+  };
+}
+
+function serializePublicRegistrationInscriptionLookup(lookup) {
+  const { academyId, order, ...publicLookup } = lookup;
+
+  return {
+    ...publicLookup,
+    order: order ? serializePublicRegistrationInscriptionOrder(order) : null,
+  };
+}
+
+function serializePublicRegistrationInscriptionOrder(order) {
+  const { academyId, ...publicOrder } = order;
+  return publicOrder;
+}
+
+function parseRegistrationOrderLineItems(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function isMissingRegistrationInscriptionOrdersTable(error) {
+  return String(error?.message || error).includes("registration_inscription_orders");
+}
+
+function isMissingRegistrationPaymentProofsTable(error) {
+  return String(error?.message || error).includes("registration_inscription_payment_proofs");
+}
+
 function serializeRegistrationStudentResource(resource) {
   return {
     id: resource.id,
@@ -1467,6 +2121,40 @@ function requireRegistrationLevel(genre, value) {
   }
 
   return requireRegistrationChoice(value, "level", registrationLevels);
+}
+
+function getRegistrationPaymentProofInput(body) {
+  const fileName = requireString(body.fileName, "fileName").slice(0, 140);
+  const contentType = requireRegistrationChoice(body.contentType, "contentType", registrationPaymentProofContentTypes);
+  const dataUrl = requireString(body.dataUrl, "dataUrl");
+  const estimatedFileSize = estimateBase64DataUrlSize(dataUrl);
+  const providedFileSize = optionalInteger(body.fileSize, "fileSize");
+  const fileSize = providedFileSize || estimatedFileSize;
+
+  if (!dataUrl.startsWith(`data:${contentType};base64,`)) {
+    throwHttpError("invalid_payment_proof", "El comprobante no coincide con el tipo de archivo permitido", 400);
+  }
+
+  if (!Number.isInteger(fileSize) || fileSize <= 0 || fileSize > maxRegistrationPaymentProofBytes) {
+    throwHttpError("payment_proof_too_large", "El comprobante debe pesar menos de 1.8 MB", 400);
+  }
+
+  if (estimatedFileSize > maxRegistrationPaymentProofBytes || dataUrl.length > maxRegistrationPaymentProofBytes * 1.45) {
+    throwHttpError("payment_proof_too_large", "El comprobante debe pesar menos de 1.8 MB", 400);
+  }
+
+  return {
+    contentType,
+    dataUrl,
+    fileName,
+    fileSize,
+  };
+}
+
+function estimateBase64DataUrlSize(dataUrl) {
+  const base64 = String(dataUrl).split(",")[1] || "";
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
 }
 
 function requireStringArray(value, fieldName) {
@@ -2245,6 +2933,28 @@ function requirePassportAdmin(request, env) {
 
   if (bearerToken !== configuredToken && queryToken !== configuredToken) {
     throwHttpError("passport_admin_unauthorized", "Token admin inválido", 401);
+  }
+}
+
+function requireRegistrationAdmin(request, env) {
+  const configuredToken = env.REGISTRATION_ADMIN_TOKEN || env.PASSPORT_ADMIN_TOKEN;
+  const host = new URL(request.url).host;
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+
+  if (!configuredToken) {
+    if (isLocal) {
+      return;
+    }
+
+    throwHttpError("registration_admin_not_configured", "Configura REGISTRATION_ADMIN_TOKEN para habilitar el admin", 503);
+  }
+
+  const authorization = request.headers.get("authorization") || "";
+  const bearerToken = authorization.replace(/^Bearer\s+/i, "").trim();
+  const queryToken = new URL(request.url).searchParams.get("adminToken") || "";
+
+  if (bearerToken !== configuredToken && queryToken !== configuredToken) {
+    throwHttpError("registration_admin_unauthorized", "Token admin inválido", 401);
   }
 }
 

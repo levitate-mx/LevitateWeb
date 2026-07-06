@@ -4,6 +4,7 @@ export {
   LevitateChoreographerRegistrationScreen,
   LevitateDanceRegistrationScreen,
   LevitateParticipantRegistrationScreen,
+  LevitateRegistrationAdminPaymentsRoute,
   LevitateRegistrationEntryRoute,
   LevitateRegistrationRoute,
   LevitateStudentRegistrationRoute,

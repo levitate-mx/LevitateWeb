@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS registration_sessions (
 
 CREATE TABLE IF NOT EXISTS registration_student_users (
   id TEXT PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  username TEXT UNIQUE COLLATE NOCASE,
   curp TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  password_hash TEXT NOT NULL,
+  password_hash TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -78,6 +78,37 @@ CREATE TABLE IF NOT EXISTS registration_student_resources (
   status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'pending', 'hidden')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_inscription_orders (
+  id TEXT PRIMARY KEY,
+  curp TEXT NOT NULL COLLATE NOCASE,
+  participant_name TEXT NOT NULL,
+  academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
+  academy_name TEXT NOT NULL,
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
+  paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+  status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
+  payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+  line_items_json TEXT NOT NULL DEFAULT '[]',
+  notes TEXT,
+  paid_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_inscription_payment_proofs (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES registration_inscription_orders(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
+  file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 1800000),
+  data_url TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS registration_choreographers (
@@ -146,6 +177,10 @@ CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_expires_at ON regis
 CREATE INDEX IF NOT EXISTS idx_registration_participants_academy_id ON registration_participants(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_participants_curp ON registration_participants(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_student_resources_curp ON registration_student_resources(curp);
+CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_curp ON registration_inscription_orders(curp);
+CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_academy_id ON registration_inscription_orders(academy_id);
+CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_status ON registration_inscription_orders(status);
+CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_choreographers_academy_id ON registration_choreographers(academy_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   ON registration_choreographers(academy_id, lower(email))

@@ -1,7 +1,5 @@
 import {
   Camera,
-  ChevronRight,
-  CreditCard,
   Minus,
   PackageCheck,
   Plus,
@@ -32,38 +30,7 @@ type ShopProduct = {
   visual: "ticket" | "photo" | "icon";
 };
 
-type RegistrationCost = {
-  category: string;
-  participants: string;
-  presale: number;
-  regular: number;
-};
-
 type CartState = Record<string, number>;
-
-type ShopRegistrationSession =
-  | {
-      kind: "academy";
-      title: string;
-      detail: string;
-      href: string;
-    }
-  | {
-      kind: "student";
-      title: string;
-      detail: string;
-      href: string;
-    };
-
-type ShopAcademySessionResponse = {
-  user: { name: string };
-  academy: { name: string };
-};
-
-type ShopStudentSessionResponse = {
-  user: { username: string; curp: string };
-  registrations: Array<{ fullName: string }>;
-};
 
 const mediaPackageDetails = ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"];
 const mediaPackageHighlights = [
@@ -76,13 +43,6 @@ const mediaPackageImages = [
   "/assets/mvp-querida-yo-2024.jpg",
   "/assets/mvp-run-primavera-2026-veracruz.jpg",
   "/assets/mvp-instruction-primavera-2026-puebla.jpg",
-];
-
-const registrationCosts: RegistrationCost[] = [
-  { category: "Solo", participants: "1 bailarín", presale: 1500, regular: 1750 },
-  { category: "Dúo", participants: "2 bailarines", presale: 1300, regular: 1400 },
-  { category: "Trío", participants: "3 bailarines", presale: 950, regular: 1200 },
-  { category: "Grupos", participants: "4 o más bailarines", presale: 800, regular: 1000 },
 ];
 
 const products: ShopProduct[] = [
@@ -158,8 +118,6 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
 const discountCode = "COLIBRI26";
 const discountRate = 0.1;
 const ticketPresaleDeadline = "10 de octubre";
-const registrationPresaleDeadline = "30 de septiembre";
-const demoRegistrationSessionStorageKey = "levitate_demo_registration_session";
 
 function formatCurrency(value: number) {
   return currencyFormatter.format(value);
@@ -183,7 +141,6 @@ export function ShopPage() {
   const [activeMediaImageIndex, setActiveMediaImageIndex] = useState(0);
   const [enteredDiscountCode, setEnteredDiscountCode] = useState("");
   const [hasScrolledPastHeroTop, setHasScrolledPastHeroTop] = useState(false);
-  const [registrationSession, setRegistrationSession] = useState<ShopRegistrationSession | null>(null);
   const cartLines = useMemo(
     () =>
       products
@@ -231,71 +188,6 @@ export function ShopPage() {
     window.addEventListener("scroll", updateCartVisibility, { passive: true });
 
     return () => window.removeEventListener("scroll", updateCartVisibility);
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-    const demoSession = window.localStorage.getItem(demoRegistrationSessionStorageKey);
-
-    if (demoSession === "student") {
-      setRegistrationSession({
-        kind: "student",
-        title: "Sofia Martinez Demo",
-        detail: "CURP DEMO010101MDFLVT09",
-        href: "/registro/alumnos",
-      });
-      return;
-    }
-
-    if (demoSession === "academy") {
-      setRegistrationSession({
-        kind: "academy",
-        title: "Academia Demo Levitate",
-        detail: "Sesión de academia activa",
-        href: "/registro/academias",
-      });
-      return;
-    }
-
-    const loadRegistrationSession = async () => {
-      const studentResponse = await fetch("/api/registration/student/me", { credentials: "same-origin" }).catch(() => null);
-
-      if (studentResponse?.ok) {
-        const studentSession = (await studentResponse.json()) as ShopStudentSessionResponse;
-
-        if (isMounted) {
-          setRegistrationSession({
-            kind: "student",
-            title: studentSession.registrations[0]?.fullName || studentSession.user.username,
-            detail: `CURP ${studentSession.user.curp}`,
-            href: "/registro/alumnos",
-          });
-        }
-
-        return;
-      }
-
-      const academyResponse = await fetch("/api/registration/me", { credentials: "same-origin" }).catch(() => null);
-
-      if (academyResponse?.ok) {
-        const academySession = (await academyResponse.json()) as ShopAcademySessionResponse;
-
-        if (isMounted) {
-          setRegistrationSession({
-            kind: "academy",
-            title: academySession.academy.name,
-            detail: `Usuario ${academySession.user.name}`,
-            href: "/registro/academias",
-          });
-        }
-      }
-    };
-
-    void loadRegistrationSession();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const addProduct = (productId: string) => {
@@ -481,89 +373,6 @@ export function ShopPage() {
                 <strong>experiencia</strong>
               </h1>
             </div>
-
-            <section className="shop-registration" id="inscripciones" aria-labelledby="registration-title">
-              <div className="shop-registration__intro">
-                <div className="shop-section-number">
-                  <span>01</span>
-                  <i />
-                </div>
-                <h2 id="registration-title">Inscripción</h2>
-                <p>
-                  Registra tu participación en Levitate MX. El proceso inicia con el registro del titular de academia y
-                  después cada participante puede consultar su subtotal con CURP.
-                </p>
-              </div>
-
-              <div className="shop-registration__actions">
-                <article>
-                  <UserRound aria-hidden="true" size={48} />
-                  <div>
-                    <h3>Registro</h3>
-                    <p>Realizado por el titular de la academia.</p>
-                  </div>
-                </article>
-                <article>
-                  <CreditCard aria-hidden="true" size={48} />
-                  <div>
-                    <h3>Pago asociado al CURP</h3>
-                    <p>Ingresa tu CURP y consulta tu subtotal.</p>
-                  </div>
-                </article>
-              </div>
-
-              {registrationSession ? (
-                <div className="shop-registration-session">
-                  <PackageCheck aria-hidden="true" size={28} />
-                  <div>
-                    <span>{registrationSession.kind === "student" ? "Sesión de alumno activa" : "Sesión de academia activa"}</span>
-                    <strong>{registrationSession.title}</strong>
-                    <p>{registrationSession.detail}</p>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="shop-registration__buttons">
-                <a className="shop-primary-action" href={registrationSession ? registrationSession.href : "/registro"}>
-                  {registrationSession ? "Ir a mi portal" : "Registrarse"}
-                  <ChevronRight aria-hidden="true" size={23} />
-                </a>
-                <a className="shop-secondary-action" href={registrationSession ? "#boletos" : "#consulta-curp"}>
-                  {registrationSession ? "Continuar compra" : "Ya me registré"}
-                  <ChevronRight aria-hidden="true" size={23} />
-                </a>
-              </div>
-
-              <div className="shop-cost-table" aria-label="Categorías y costos de inscripción">
-                <div className="shop-cost-table__head">
-                  <span>Costos de inscripción</span>
-                  <h3>Categorías</h3>
-                  <p>
-                    Precios por participante según formato. Preventa de inscripción hasta el{" "}
-                    {registrationPresaleDeadline}.
-                  </p>
-                </div>
-                <div className="shop-cost-table__grid">
-                  {registrationCosts.map((cost) => (
-                    <article className="shop-cost-card" key={cost.category}>
-                      <div className="shop-cost-card__top">
-                        <span>{cost.category}</span>
-                        <small>{cost.participants}</small>
-                      </div>
-                      <div className="shop-cost-card__price">
-                        <span>Preventa</span>
-                        <strong>{formatCurrency(cost.presale)}</strong>
-                        <small>Hasta el {registrationPresaleDeadline}</small>
-                      </div>
-                      <div className="shop-cost-card__normal">
-                        <span>Normal</span>
-                        <strong>{formatCurrency(cost.regular)}</strong>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            </section>
 
             <section className="shop-product-section" id="boletos" aria-labelledby="tickets-title">
               <div className="shop-product-section__head">
