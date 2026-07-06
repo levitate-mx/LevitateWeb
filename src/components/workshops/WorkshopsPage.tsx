@@ -128,11 +128,9 @@ export function WorkshopsPage() {
         <div className="workshops-intro__layout">
           <article className="workshops-intro__copy">
             <h2>
-              Más que una clase,
-              <br />
-              una experiencia
-              <br />
-              formativa
+              <span>Más que una clase,</span>
+              <span>una experiencia</span>
+              <span>formativa.</span>
             </h2>
             <p>
               Cada workshop está diseñado para entrenar, inspirar y potenciar tu arte. Vivirás una experiencia única con
