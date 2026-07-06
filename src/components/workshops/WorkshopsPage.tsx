@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, CalendarDays, Clock3, MapPin, Sparkles, Ticket, Users } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  CircleUserRound,
+  Clock3,
+  Droplets,
+  MapPin,
+  Shirt,
+  Sparkles,
+  Ticket,
+  Users,
+} from "lucide-react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -24,7 +35,12 @@ const includedCards = [
   {
     icon: Ticket,
     title: "Público externo",
-    copy: "¿No estás inscrito en la competencia? También puedes ser parte con el acceso para el público en los workshops de algunas sedes.",
+    copy: (
+      <>
+        <strong>¿No estás inscrito en la competencia?</strong> También puedes ser parte con el acceso para el público en
+        los workshops de algunas sedes.
+      </>
+    ),
   },
   {
     icon: Sparkles,
@@ -49,17 +65,17 @@ const basics = [
   {
     title: "Agua",
     copy: "Para mantenerte hidratado durante la práctica.",
-    icon: `${workshopIconBase}/water.png`,
+    icon: Droplets,
   },
   {
     title: "Ropa cómoda",
     copy: "Que te permita moverte con libertad y seguridad en el aula.",
-    icon: `${workshopIconBase}/shirt.png`,
+    icon: Shirt,
   },
   {
     title: "Cabello recogido",
     copy: "Por tu seguridad y la de quienes entrenan a tu lado.",
-    icon: `${workshopIconBase}/hair.png`,
+    icon: CircleUserRound,
   },
 ];
 
@@ -99,21 +115,12 @@ export function WorkshopsPage() {
   }, [revealExperienceOverlay]);
 
   return (
-    <main className="workshops-page">
+    <main className="workshops-page levitate-home-redesign">
       <section className="workshops-hero" id="workshops">
-        <LevitateHeader activeLabel="Convocatoria" useRootLinks />
-        <img className="workshops-hero__image" src={assets.hero} alt="" aria-hidden="true" />
+        <LevitateHeader activeLabel="Convocatoria" useRootLinks variant="pill" />
         <div className="workshops-hero__content">
-          <h1>Workshops</h1>
-          <strong>La técnica también se entrena.</strong>
-          <p>
-            Los talleres Levitate son espacios de aprendizaje, exploración y crecimiento que complementan y enriquecen
-            tu experiencia en nuestra competencia.
-          </p>
-
-          <a className="workshops-outline-cta" href="#workshops-disponibles">
-            Ver workshops disponibles <ArrowUpRight aria-hidden="true" size={18} />
-          </a>
+          <p className="workshops-kicker">Workshops Levitate</p>
+          <h1>Entrena con intención.</h1>
         </div>
       </section>
 
@@ -147,11 +154,15 @@ export function WorkshopsPage() {
           </article>
 
           <div className="workshops-intro__disciplines">
-            <h3>Disciplinas</h3>
+            <h3>DISCIPLINAS</h3>
             <div className="workshops-disciplines" aria-label="Disciplinas de workshops">
               {disciplines.map((discipline) => (
                 <span key={discipline.label}>
-                  <img src={discipline.icon} alt="" aria-hidden="true" loading="lazy" />
+                  <span
+                    aria-hidden="true"
+                    className="workshops-discipline-icon"
+                    style={{ "--workshops-discipline-icon": `url(${discipline.icon})` } as CSSProperties}
+                  />
                   {discipline.label}
                 </span>
               ))}
@@ -174,7 +185,7 @@ export function WorkshopsPage() {
       <section className="workshops-dark-band">
         <div className="workshops-section-head">
           <p className="workshops-kicker">¿Cómo funcionan?</p>
-          <h2>Incluidos en tu experiencia Levitate</h2>
+          <h2>Incluidos en tu experiencia</h2>
         </div>
         <div className="workshops-rule-grid">
           {includedCards.map((card) => {
@@ -291,15 +302,18 @@ export function WorkshopsPage() {
           <h2>Para vivir la mejor experiencia</h2>
         </div>
         <div className="workshops-basics__grid">
-          {basics.map((basic) => (
+          {basics.map((basic) => {
+            const Icon = basic.icon;
+            return (
             <article key={basic.title}>
-              <img src={basic.icon} alt="" aria-hidden="true" loading="lazy" />
+              <Icon aria-hidden="true" size={44} strokeWidth={2.15} />
               <div>
                 <h3>{basic.title}</h3>
                 <p>{basic.copy}</p>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       </section>
 
