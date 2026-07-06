@@ -34,6 +34,26 @@ CREATE TABLE IF NOT EXISTS registration_sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS registration_student_users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  curp TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  password_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_student_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES registration_student_users(id) ON DELETE CASCADE,
+  session_token_hash TEXT NOT NULL UNIQUE,
+  user_agent TEXT,
+  last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS registration_participants (
   id TEXT PRIMARY KEY,
   academy_id TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE,
@@ -47,6 +67,17 @@ CREATE TABLE IF NOT EXISTS registration_participants (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (academy_id, curp)
+);
+
+CREATE TABLE IF NOT EXISTS registration_student_resources (
+  id TEXT PRIMARY KEY,
+  curp TEXT NOT NULL COLLATE NOCASE,
+  resource_type TEXT NOT NULL CHECK (resource_type IN ('payment', 'judge_sheet', 'media_drive')),
+  title TEXT NOT NULL,
+  url TEXT,
+  status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'pending', 'hidden')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS registration_choreographers (
@@ -64,10 +95,29 @@ CREATE TABLE IF NOT EXISTS registration_dances (
   id TEXT PRIMARY KEY,
   academy_id TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
-  genre TEXT NOT NULL CHECK (genre IN ('aereo', 'motion', 'fusion')),
-  subgenre TEXT NOT NULL CHECK (subgenre IN ('tela', 'aro', 'trapecio', 'contemporaneo')),
+  genre TEXT NOT NULL CHECK (genre IN ('aereo', 'motion')),
+  subgenre TEXT NOT NULL CHECK (
+    subgenre IN (
+      'aro',
+      'tela',
+      'trapecio',
+      'open_aerial',
+      'acrojazz',
+      'ballet',
+      'belly_dance',
+      'contemporaneo',
+      'folklore',
+      'jazz',
+      'lirico',
+      'open_motion',
+      'urbanos'
+    )
+  ),
   category TEXT NOT NULL CHECK (category IN ('solo', 'duo', 'trio', 'grupo')),
-  level TEXT NOT NULL CHECK (level IN ('nudo', 'principiante', 'intermedio', 'avanzado')),
+  level TEXT CHECK (
+    (genre = 'motion' AND level IS NULL)
+    OR (genre = 'aereo' AND level IN ('nudo', 'principiante', 'intermedio', 'avanzado', 'elite'))
+  ),
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -91,7 +141,11 @@ CREATE TABLE IF NOT EXISTS registration_dance_participants (
 CREATE INDEX IF NOT EXISTS idx_registration_users_academy_id ON registration_users(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_user_id ON registration_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_expires_at ON registration_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_user_id ON registration_student_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_expires_at ON registration_student_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_participants_academy_id ON registration_participants(academy_id);
+CREATE INDEX IF NOT EXISTS idx_registration_participants_curp ON registration_participants(curp);
+CREATE INDEX IF NOT EXISTS idx_registration_student_resources_curp ON registration_student_resources(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_choreographers_academy_id ON registration_choreographers(academy_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   ON registration_choreographers(academy_id, lower(email))

@@ -1,4 +1,9 @@
-import { LevitateAuthRoute, LevitateRegistrationRoute } from "./components/admin";
+import {
+  LevitateAuthRoute,
+  LevitateRegistrationEntryRoute,
+  LevitateRegistrationRoute,
+  LevitateStudentRegistrationRoute,
+} from "./components/admin";
 import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
 import { InscripcionesPage } from "./components/inscripciones/InscripcionesPage";
@@ -27,6 +32,8 @@ export default function App() {
   const inscripcionesMatch = window.location.pathname.match(/^\/inscripciones\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
+  const academyRegistrationMatch = window.location.pathname.match(/^\/registro\/academias\/?$/);
+  const studentRegistrationMatch = window.location.pathname.match(/^\/registro\/alumnos\/?$/);
   const motionGenresMatch = window.location.pathname.match(/^\/modalidades\/levitate-motion\/generos\/?$/);
   const passportAdminMatch = window.location.pathname.match(/^\/admin\/(?:pasaporte-colibri|passports)\/?$/);
   const passportCertificateMatch = window.location.pathname.match(/^\/passport\/certificate\/?$/);
@@ -37,16 +44,33 @@ export default function App() {
   const shopMatch = window.location.pathname.match(/^\/tienda\/?$/);
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
   const venueMatch = window.location.pathname.match(/^\/sedes\/([^/]+)\/?$/);
+  const loginType = new URLSearchParams(window.location.search).get("tipo");
 
   if (adminMediaMatch) {
     return <LevitateRegistrationRoute />;
   }
 
   if (registrationMatch) {
+    return <LevitateRegistrationEntryRoute />;
+  }
+
+  if (academyRegistrationMatch) {
     return <LevitateRegistrationRoute />;
   }
 
+  if (studentRegistrationMatch) {
+    return <LevitateStudentRegistrationRoute />;
+  }
+
   if (loginMatch) {
+    if (loginType === "alumno") {
+      return <LevitateStudentRegistrationRoute />;
+    }
+
+    if (loginType === "academia") {
+      return <LevitateRegistrationRoute />;
+    }
+
     return <LevitateAuthRoute />;
   }
 

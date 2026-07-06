@@ -13059,6 +13059,45 @@ button {
   line-height: 1.35;
 }
 
+.shop-registration-session {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 18px 20px;
+  border: 1px solid rgba(87, 189, 209, 0.28);
+  border-radius: 8px;
+  background: rgba(87, 189, 209, 0.1);
+  color: var(--lev-ink);
+}
+
+.shop-registration-session > svg {
+  color: #2d91a6;
+}
+
+.shop-registration-session span {
+  display: block;
+  color: #2d91a6;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.shop-registration-session strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.shop-registration-session p {
+  margin: 4px 0 0;
+  color: rgba(17, 16, 21, 0.62);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .shop-registration__buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -16912,6 +16951,138 @@ button {
   line-height: 1.45;
 }
 
+.levitate-registration-choice {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 0.95fr);
+  align-items: center;
+  gap: clamp(34px, 7vw, 94px);
+  width: min(calc(100% - 40px), 1180px);
+  margin: 0 auto;
+  padding: clamp(56px, 8vw, 104px) 0 clamp(70px, 9vw, 118px);
+}
+
+.levitate-registration-choice__copy {
+  display: grid;
+  min-width: 0;
+}
+
+.levitate-registration-choice__copy > p {
+  margin: 0 0 18px;
+  color: var(--admin-pink);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.levitate-registration-choice__copy h1 {
+  max-width: 620px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 8vw, 7.6rem);
+  font-weight: 400;
+  letter-spacing: 0.028em;
+  line-height: 0.88;
+  text-transform: uppercase;
+}
+
+.levitate-registration-choice__copy > span {
+  display: block;
+  width: 96px;
+  height: 3px;
+  margin: clamp(24px, 3vw, 36px) 0;
+  background: var(--admin-pink);
+}
+
+.levitate-registration-choice__copy strong {
+  max-width: 520px;
+  color: rgba(247, 243, 239, 0.82);
+  font-size: clamp(1rem, 1.45vw, 1.24rem);
+  line-height: 1.45;
+}
+
+.levitate-registration-choice__cards {
+  display: grid;
+  gap: 16px;
+}
+
+.levitate-registration-choice-card {
+  position: relative;
+  display: grid;
+  min-height: 216px;
+  align-content: end;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(247, 243, 239, 0.18);
+  border-radius: 8px;
+  padding: clamp(24px, 3vw, 34px);
+  background:
+    linear-gradient(135deg, rgba(255, 250, 244, 0.98), rgba(241, 235, 228, 0.88)),
+    var(--admin-white);
+  color: var(--admin-ink);
+  text-decoration: none;
+  box-shadow:
+    0 26px 70px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    border-color 220ms ease,
+    transform 220ms var(--ease-out),
+    box-shadow 220ms ease;
+}
+
+.levitate-registration-choice-card::before {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  width: 78px;
+  height: 78px;
+  border: 1px solid rgba(231, 70, 151, 0.22);
+  border-radius: 50%;
+  background: rgba(231, 70, 151, 0.08);
+  content: "";
+}
+
+.levitate-registration-choice-card > svg {
+  position: relative;
+  color: var(--admin-pink);
+}
+
+.levitate-registration-choice-card > span {
+  color: var(--admin-pink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.levitate-registration-choice-card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 4.4vw, 4rem);
+  font-weight: 400;
+  letter-spacing: 0.028em;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.levitate-registration-choice-card p {
+  max-width: 440px;
+  margin: 0;
+  color: rgba(17, 16, 21, 0.68);
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.levitate-registration-choice-card:hover,
+.levitate-registration-choice-card:focus-visible {
+  border-color: rgba(231, 70, 151, 0.46);
+  box-shadow:
+    0 30px 78px rgba(0, 0, 0, 0.38),
+    0 0 0 5px rgba(231, 70, 151, 0.08);
+  transform: translateY(-3px);
+}
+
 .levitate-auth-card {
   overflow: hidden;
   border: 1px solid rgba(247, 243, 239, 0.18);
@@ -16973,6 +17144,37 @@ button {
 
 .levitate-auth-form .levitate-admin-field {
   gap: 10px;
+}
+
+.levitate-auth-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed rgba(231, 70, 151, 0.34);
+  border-radius: 7px;
+  background: rgba(231, 70, 151, 0.07);
+  color: rgba(17, 16, 21, 0.72);
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.levitate-auth-demo span {
+  color: var(--admin-pink);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.levitate-auth-demo code {
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: rgba(17, 16, 21, 0.08);
+  color: rgba(17, 16, 21, 0.86);
+  font: inherit;
+  font-weight: 850;
 }
 
 .levitate-auth-message {
@@ -17586,14 +17788,203 @@ button {
   font-weight: 850;
 }
 
+.levitate-student-portal {
+  padding-bottom: clamp(64px, 8vw, 104px);
+}
+
+.levitate-student-portal__hero,
+.levitate-student-module-grid,
+.levitate-student-data-grid {
+  width: min(calc(100% - 40px), 1120px);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.levitate-student-portal__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 24px;
+  padding: clamp(46px, 7vw, 82px) 0 clamp(26px, 4vw, 42px);
+}
+
+.levitate-student-portal__hero p {
+  margin: 0 0 12px;
+  color: var(--admin-pink);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.levitate-student-portal__hero h1 {
+  max-width: 760px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(3.2rem, 7vw, 6.6rem);
+  font-weight: 400;
+  letter-spacing: 0.028em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.levitate-student-portal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.levitate-student-portal__meta span {
+  padding: 8px 10px;
+  border: 1px solid rgba(247, 243, 239, 0.16);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(247, 243, 239, 0.72);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.levitate-student-portal__logout {
+  min-width: 148px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.levitate-student-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: clamp(28px, 5vw, 58px);
+}
+
+.levitate-student-module-card {
+  display: grid;
+  min-height: 232px;
+  align-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(247, 243, 239, 0.18);
+  border-radius: 8px;
+  padding: 22px;
+  background: rgba(255, 250, 244, 0.97);
+  color: var(--admin-ink);
+  text-decoration: none;
+  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.28);
+  transition:
+    border-color 220ms ease,
+    transform 220ms var(--ease-out),
+    box-shadow 220ms ease;
+}
+
+.levitate-student-module-card > svg {
+  color: var(--admin-pink);
+}
+
+.levitate-student-module-card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.2vw, 3.1rem);
+  font-weight: 400;
+  line-height: 0.92;
+  text-transform: uppercase;
+}
+
+.levitate-student-module-card p {
+  margin: 0;
+  color: rgba(17, 16, 21, 0.66);
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.levitate-student-module-card span {
+  width: fit-content;
+  padding-bottom: 5px;
+  border-bottom: 2px solid var(--admin-pink);
+  color: var(--admin-pink);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.levitate-student-module-card:hover,
+.levitate-student-module-card:focus-visible {
+  border-color: rgba(231, 70, 151, 0.46);
+  box-shadow: 0 28px 68px rgba(0, 0, 0, 0.36);
+  transform: translateY(-3px);
+}
+
+.levitate-student-module-card.is-disabled {
+  opacity: 0.72;
+}
+
+.levitate-student-module-card.is-disabled span {
+  border-bottom-color: rgba(17, 16, 21, 0.18);
+  color: rgba(17, 16, 21, 0.48);
+}
+
+.levitate-student-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.levitate-student-list {
+  display: grid;
+  gap: 12px;
+  padding: clamp(22px, 4vw, 34px);
+}
+
+.levitate-student-list article {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid rgba(17, 16, 21, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.levitate-student-list strong {
+  color: var(--admin-ink);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.levitate-student-list span {
+  color: var(--admin-pink);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levitate-student-list p {
+  margin: 0;
+  color: rgba(17, 16, 21, 0.66);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.42;
+}
+
 @media (max-width: 940px) {
+  .levitate-registration-choice,
   .levitate-auth-shell {
     grid-template-columns: 1fr;
     padding-top: 48px;
   }
 
+  .levitate-registration-choice__copy h1,
   .levitate-auth-copy h1 {
     max-width: 760px;
+  }
+
+  .levitate-student-module-grid,
+  .levitate-student-data-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-student-portal__hero {
+    grid-template-columns: 1fr;
   }
 
   .levitate-admin-form,
@@ -17663,6 +18054,13 @@ button {
   }
 
   .levitate-auth-shell {
+    width: min(calc(100% - 28px), 1120px);
+  }
+
+  .levitate-registration-choice,
+  .levitate-student-portal__hero,
+  .levitate-student-module-grid,
+  .levitate-student-data-grid {
     width: min(calc(100% - 28px), 1120px);
   }
 

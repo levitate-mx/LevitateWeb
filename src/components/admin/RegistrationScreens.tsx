@@ -9,7 +9,6 @@ import {
   GraduationCap,
   Home,
   KeyRound,
-  LockKeyhole,
   LogIn,
   LogOut,
   Mail,
@@ -28,7 +27,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance";
 type AuthMode = "login" | "register";
@@ -101,7 +100,7 @@ type RegistrationDance = {
   genre: string;
   subgenre: string;
   category: string;
-  level: string;
+  level: string | null;
   venue: string;
   createdAt: string;
   choreographers: RegistrationDanceRelation[];
@@ -112,6 +111,44 @@ type RegistrationBootstrap = RegistrationSession & {
   participants: RegistrationParticipant[];
   choreographers: RegistrationChoreographer[];
   dances: RegistrationDance[];
+};
+
+type StudentRegistrationRecord = {
+  id: string;
+  fullName: string;
+  curp: string;
+  academyName: string;
+  venue: string;
+  division: string;
+  shirtSize: string;
+};
+
+type StudentRegistrationDance = {
+  id: string;
+  title: string;
+  category: string;
+  level: string | null;
+  venue: string;
+  academyName: string;
+};
+
+type StudentRegistrationResource = {
+  id: string;
+  type: "payment" | "judge_sheet" | "media_drive";
+  title: string;
+  url: string | null;
+  status: string;
+};
+
+type StudentRegistrationSession = {
+  user: {
+    id: string;
+    username: string;
+    curp: string;
+  };
+  registrations: StudentRegistrationRecord[];
+  dances: StudentRegistrationDance[];
+  resources: StudentRegistrationResource[];
 };
 
 type RegistrationApiErrorBody = {
@@ -138,7 +175,6 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar alumnos", icon: GraduationCap, screen: "participants" },
   { label: "Registrar baile", icon: Music2, screen: "dance" },
-  { label: "Cambiar contraseña", icon: LockKeyhole },
   { label: "Reporte participante", icon: ClipboardList },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
@@ -163,17 +199,32 @@ const shirtSizes: FieldOption[] = [
 ];
 
 const danceGenres: FieldOption[] = [
-  { value: "aereo", label: "Aéreo" },
-  { value: "motion", label: "Levitate Motion" },
-  { value: "fusion", label: "Fusión escénica" },
+  { value: "aereo", label: "Aerial" },
+  { value: "motion", label: "Motion" },
 ];
 
-const danceSubgenres: FieldOption[] = [
-  { value: "tela", label: "Tela" },
-  { value: "aro", label: "Aro" },
-  { value: "trapecio", label: "Trapecio" },
-  { value: "contemporaneo", label: "Contemporáneo" },
-];
+const danceSubgenresByGenre: Record<string, FieldOption[]> = {
+  aereo: [
+    { value: "aro", label: "ARO" },
+    { value: "tela", label: "TELA" },
+    { value: "trapecio", label: "TRAPECIO" },
+    { value: "open_aerial", label: "OPEN: AERIAL" },
+  ],
+  motion: [
+    { value: "acrojazz", label: "ACROJAZZ" },
+    { value: "ballet", label: "BALLET" },
+    { value: "belly_dance", label: "BELLY DANCE" },
+    { value: "contemporaneo", label: "CONTEMPORÁNEO" },
+    { value: "folklore", label: "FOLKLORE" },
+    { value: "jazz", label: "JAZZ" },
+    { value: "lirico", label: "LÍRICO" },
+    { value: "open_motion", label: "OPEN: MOTION" },
+    { value: "urbanos", label: "URBANOS" },
+  ],
+};
+
+const defaultDanceGenre = "aereo";
+const defaultDanceSubgenre = danceSubgenresByGenre[defaultDanceGenre][0].value;
 
 const danceCategories: FieldOption[] = [
   { value: "solo", label: "Solo" },
@@ -187,6 +238,7 @@ const danceLevels: FieldOption[] = [
   { value: "principiante", label: "Principiante" },
   { value: "intermedio", label: "Intermedio" },
   { value: "avanzado", label: "Avanzado" },
+  { value: "elite", label: "Élite" },
 ];
 
 const venueOptions: FieldOption[] = [
@@ -194,6 +246,191 @@ const venueOptions: FieldOption[] = [
   { value: "puebla", label: "Puebla - 7 junio 2026" },
   { value: "edomex", label: "Edo. Méx. - 13 /15 noviembre 2026" },
 ];
+
+const studentPortalModules = [
+  {
+    title: "Pagos",
+    text: "Inscripciones, boletos y fotografías asociadas a tu CURP.",
+    action: "Ir a pagos",
+    href: "/tienda#consulta-curp",
+    resourceType: "payment",
+    icon: BadgeCheck,
+  },
+  {
+    title: "Hojas de jueceo",
+    text: "Retroalimentación y resultados publicados por el equipo Levitate.",
+    action: "Ver hojas",
+    href: "",
+    resourceType: "judge_sheet",
+    icon: ClipboardList,
+  },
+  {
+    title: "Fotos y videos",
+    text: "Acceso al Drive del evento cuando el material esté disponible.",
+    action: "Abrir Drive",
+    href: "",
+    resourceType: "media_drive",
+    icon: Music2,
+  },
+] satisfies Array<{
+  title: string;
+  text: string;
+  action: string;
+  href: string;
+  resourceType: StudentRegistrationResource["type"];
+  icon: LucideIcon;
+}>;
+
+const demoAcademyCredentials = {
+  username: "demo_academia",
+  password: "levitate123",
+};
+
+const demoStudentCredentials = {
+  username: "demo_alumno",
+  curp: "DEMO010101MDFLVT09",
+  password: "levitate123",
+};
+const demoRegistrationSessionStorageKey = "levitate_demo_registration_session";
+type DemoRegistrationSessionKind = "academy" | "student";
+
+const demoRegistrationBootstrap: RegistrationBootstrap = {
+  user: {
+    id: "demo-academy-user",
+    name: "Demo Academia",
+    username: demoAcademyCredentials.username,
+    email: "demo.academia@levitate.mx",
+  },
+  academy: {
+    id: "demo-academy",
+    name: "Academia Demo Levitate",
+    venue: "edomex",
+    contactName: "Demo Academia",
+    email: "demo.academia@levitate.mx",
+    phone: "55 0000 0000",
+  },
+  participants: [
+    {
+      id: "demo-participant-1",
+      fullName: "Sofia Martinez Demo",
+      curp: demoStudentCredentials.curp,
+      birthDate: "2011-01-01",
+      age: 15,
+      division: "teen",
+      shirtSize: "m",
+      createdAt: "2026-07-04T00:00:00Z",
+    },
+    {
+      id: "demo-participant-2",
+      fullName: "Valentina Ruiz Demo",
+      curp: "DEMO020202MDFLVT08",
+      birthDate: "2014-02-02",
+      age: 12,
+      division: "junior",
+      shirtSize: "s",
+      createdAt: "2026-07-04T00:00:00Z",
+    },
+  ],
+  choreographers: [
+    {
+      id: "demo-choreographer-1",
+      fullName: "Camila Torres Demo",
+      email: "camila.demo@levitate.mx",
+      phone: "55 1111 1111",
+      createdAt: "2026-07-04T00:00:00Z",
+    },
+  ],
+  dances: [
+    {
+      id: "demo-dance-1",
+      title: "Elevate Demo",
+      genre: "motion",
+      subgenre: "contemporaneo",
+      category: "duo",
+      level: null,
+      venue: "edomex",
+      createdAt: "2026-07-04T00:00:00Z",
+      choreographers: [{ id: "demo-choreographer-1", fullName: "Camila Torres Demo" }],
+      participants: [
+        { id: "demo-participant-1", fullName: "Sofia Martinez Demo" },
+        { id: "demo-participant-2", fullName: "Valentina Ruiz Demo" },
+      ],
+    },
+  ],
+};
+
+const demoStudentSession: StudentRegistrationSession = {
+  user: {
+    id: "demo-student-user",
+    username: demoStudentCredentials.username,
+    curp: demoStudentCredentials.curp,
+  },
+  registrations: [
+    {
+      id: "demo-participant-1",
+      fullName: "Sofia Martinez Demo",
+      curp: demoStudentCredentials.curp,
+      academyName: "Academia Demo Levitate",
+      venue: "edomex",
+      division: "teen",
+      shirtSize: "m",
+    },
+  ],
+  dances: [
+    {
+      id: "demo-dance-1",
+      title: "Elevate Demo",
+      category: "duo",
+      level: null,
+      venue: "edomex",
+      academyName: "Academia Demo Levitate",
+    },
+  ],
+  resources: [
+    {
+      id: "demo-payment",
+      type: "payment",
+      title: "Pagos demo para Sofia Martinez",
+      url: "/tienda#consulta-curp",
+      status: "available",
+    },
+    {
+      id: "demo-judge-sheet",
+      type: "judge_sheet",
+      title: "Hoja de jueceo demo",
+      url: "/evaluaciones",
+      status: "available",
+    },
+    {
+      id: "demo-media",
+      type: "media_drive",
+      title: "Drive demo de fotos y videos",
+      url: "https://drive.google.com/",
+      status: "available",
+    },
+  ],
+};
+
+function persistDemoRegistrationSession(kind: DemoRegistrationSessionKind) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(demoRegistrationSessionStorageKey, kind);
+  }
+}
+
+function getPersistedDemoRegistrationSession() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const value = window.localStorage.getItem(demoRegistrationSessionStorageKey);
+  return value === "academy" || value === "student" ? value : null;
+}
+
+function clearPersistedDemoRegistrationSession() {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(demoRegistrationSessionStorageKey);
+  }
+}
 
 async function requestRegistrationApi<T>(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
@@ -226,6 +463,10 @@ function getFormValue(formData: FormData, name: string) {
 
 function getOptionLabel(options: FieldOption[], value: string) {
   return options.find((option) => option.value === value)?.label || value;
+}
+
+function getDanceLevelLabel(level: string | null) {
+  return level ? getOptionLabel(danceLevels, level) : "No aplica";
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -282,15 +523,26 @@ function AdminSelect({
   name,
   options,
   defaultValue,
+  value,
+  onChange,
 }: {
   id: string;
   name?: string;
   options: FieldOption[];
-  defaultValue: string;
+  defaultValue?: string;
+  value?: string;
+  onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
   return (
     <span className="levitate-admin-select">
-      <select id={id} name={name ?? id} defaultValue={defaultValue} required>
+      <select
+        defaultValue={value === undefined ? (defaultValue ?? options[0]?.value) : undefined}
+        id={id}
+        name={name ?? id}
+        onChange={onChange}
+        required
+        value={value}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -335,6 +587,27 @@ function AdminStatusMessage({ message, tone = "success" }: { message: string; to
     <p className={`levitate-auth-message${tone === "error" ? " levitate-auth-message--error" : ""}`}>
       <Icon aria-hidden="true" size={17} />
       {message}
+    </p>
+  );
+}
+
+function DemoCredentialsHint({
+  label,
+  username,
+  password,
+  curp,
+}: {
+  label: string;
+  username: string;
+  password: string;
+  curp?: string;
+}) {
+  return (
+    <p className="levitate-auth-demo">
+      <span>{label}</span>
+      <code>{username}</code>
+      {curp ? <code>{curp}</code> : null}
+      <code>{password}</code>
     </p>
   );
 }
@@ -475,11 +748,46 @@ function LoadingRegistrationScreen() {
   );
 }
 
+export function LevitateRegistrationEntryRoute() {
+  return (
+    <main className="levitate-admin-page levitate-auth-page">
+      <AdminTopBrand />
+      <div className="levitate-admin-rule" aria-hidden="true" />
+
+      <section className="levitate-registration-choice">
+        <div className="levitate-registration-choice__copy">
+          <p>Registro Levitate</p>
+          <h1>Elige tu acceso.</h1>
+          <span aria-hidden="true" />
+          <strong>
+            Academias administran participantes y bailes. Alumnos consultan lo asociado a su CURP desde una cuenta propia.
+          </strong>
+        </div>
+
+        <div className="levitate-registration-choice__cards" aria-label="Tipos de registro">
+          <a className="levitate-registration-choice-card" href="/registro/academias">
+            <Building2 aria-hidden="true" size={28} />
+            <span>Academias</span>
+            <h2>Registrar academia</h2>
+            <p>Acceso para titulares de academia: participantes, coreógrafos y bailes.</p>
+          </a>
+          <a className="levitate-registration-choice-card" href="/registro/alumnos">
+            <GraduationCap aria-hidden="true" size={28} />
+            <span>Alumnos</span>
+            <h2>Crear cuenta alumno</h2>
+            <p>CURP, usuario y contraseña para pagos, hojas de jueceo y media.</p>
+          </a>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function LevitateAuthScreen({
   onAuthenticated,
   systemMessage = "",
 }: {
-  onAuthenticated: (session: RegistrationSession) => void;
+  onAuthenticated: (session: RegistrationSession | RegistrationBootstrap) => void;
   systemMessage?: string;
 }) {
   const [mode, setMode] = useState<AuthMode>("login");
@@ -495,10 +803,20 @@ function LevitateAuthScreen({
     setLoginError("");
 
     try {
+      const username = getFormValue(formData, "username");
+      const password = getFormValue(formData, "password");
+
+      if (username.toLowerCase() === demoAcademyCredentials.username && password === demoAcademyCredentials.password) {
+        persistDemoRegistrationSession("academy");
+        onAuthenticated(demoRegistrationBootstrap);
+        return;
+      }
+
+      clearPersistedDemoRegistrationSession();
       const session = await requestRegistrationApi<RegistrationSession>("/api/registration/auth/login", {
         body: JSON.stringify({
-          username: getFormValue(formData, "username"),
-          password: getFormValue(formData, "password"),
+          username,
+          password,
         }),
         method: "POST",
       });
@@ -591,6 +909,11 @@ function LevitateAuthScreen({
           {mode === "login" ? (
             <form className="levitate-auth-form" onSubmit={handleLoginSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
+              <DemoCredentialsHint
+                label="Demo academia"
+                password={demoAcademyCredentials.password}
+                username={demoAcademyCredentials.username}
+              />
               <AdminField icon={AtSign} label="Usuario o correo">
                 <input autoComplete="username" name="username" required type="text" />
               </AdminField>
@@ -635,6 +958,269 @@ function LevitateAuthScreen({
             </form>
           )}
         </section>
+      </section>
+    </main>
+  );
+}
+
+function LevitateStudentAuthScreen({
+  onAuthenticated,
+  systemMessage = "",
+}: {
+  onAuthenticated: (session: StudentRegistrationSession) => void;
+  systemMessage?: string;
+}) {
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [loginError, setLoginError] = useState("");
+  const [registerError, setRegisterError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    setIsSubmitting(true);
+    setLoginError("");
+
+    try {
+      const identifier = getFormValue(formData, "identifier");
+      const password = getFormValue(formData, "password");
+      const normalizedIdentifier = identifier.toLowerCase();
+
+      if (
+        password === demoStudentCredentials.password &&
+        (normalizedIdentifier === demoStudentCredentials.username || identifier.toUpperCase() === demoStudentCredentials.curp)
+      ) {
+        persistDemoRegistrationSession("student");
+        onAuthenticated(demoStudentSession);
+        return;
+      }
+
+      clearPersistedDemoRegistrationSession();
+      const session = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/login", {
+        body: JSON.stringify({
+          identifier,
+          password,
+        }),
+        method: "POST",
+      });
+
+      onAuthenticated(session);
+    } catch (error) {
+      setLoginError(getErrorMessage(error, "No se pudo iniciar sesión."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setIsSubmitting(true);
+    setRegisterError("");
+
+    try {
+      const session = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/register", {
+        body: JSON.stringify({
+          username: getFormValue(formData, "username"),
+          curp: getFormValue(formData, "curp"),
+          password: getFormValue(formData, "password"),
+        }),
+        method: "POST",
+      });
+
+      form.reset();
+      onAuthenticated(session);
+    } catch (error) {
+      setRegisterError(getErrorMessage(error, "No se pudo crear la cuenta."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="levitate-admin-page levitate-auth-page">
+      <AdminTopBrand />
+      <div className="levitate-admin-rule" aria-hidden="true" />
+
+      <section className="levitate-auth-shell levitate-student-auth-shell">
+        <div className="levitate-auth-copy">
+          <p>Portal de alumnos</p>
+          <h1>Tu cuenta Levitate</h1>
+          <span aria-hidden="true" />
+          <div>
+            <ShieldCheck aria-hidden="true" size={22} />
+            <strong>Usa tu CURP para consultar pagos, hojas de jueceo y material publicado por Levitate.</strong>
+          </div>
+        </div>
+
+        <section className="levitate-auth-card" aria-label="Acceso de alumno">
+          <div className="levitate-auth-tabs" role="tablist" aria-label="Acceso o registro de alumno">
+            <button
+              aria-selected={mode === "login"}
+              className={mode === "login" ? "is-active" : ""}
+              onClick={() => {
+                setMode("login");
+                setLoginError("");
+              }}
+              role="tab"
+              type="button"
+            >
+              <LogIn aria-hidden="true" size={17} />
+              Ingresar
+            </button>
+            <button
+              aria-selected={mode === "register"}
+              className={mode === "register" ? "is-active" : ""}
+              onClick={() => {
+                setMode("register");
+                setRegisterError("");
+              }}
+              role="tab"
+              type="button"
+            >
+              <UserPlus aria-hidden="true" size={17} />
+              Crear cuenta
+            </button>
+          </div>
+
+          {mode === "login" ? (
+            <form className="levitate-auth-form" onSubmit={handleLoginSubmit}>
+              <AdminStatusMessage message={systemMessage} tone="error" />
+              <DemoCredentialsHint
+                curp={demoStudentCredentials.curp}
+                label="Demo alumno"
+                password={demoStudentCredentials.password}
+                username={demoStudentCredentials.username}
+              />
+              <AdminField icon={AtSign} label="Usuario o CURP">
+                <input autoComplete="username" name="identifier" required type="text" />
+              </AdminField>
+              <AdminField icon={KeyRound} label="Contraseña">
+                <input autoComplete="current-password" name="password" required type="password" />
+              </AdminField>
+              <AdminStatusMessage message={loginError} tone="error" />
+              <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
+                <LogIn aria-hidden="true" size={18} />
+                {isSubmitting ? "Ingresando..." : "Ingresar"}
+              </button>
+            </form>
+          ) : (
+            <form className="levitate-auth-form" onSubmit={handleRegisterSubmit}>
+              <AdminStatusMessage message={systemMessage} tone="error" />
+              <AdminField icon={AtSign} label="Usuario">
+                <input autoComplete="username" name="username" required type="text" />
+              </AdminField>
+              <AdminField helper="La CURP debe tener 18 caracteres." icon={ClipboardList} label="CURP">
+                <input maxLength={18} minLength={18} name="curp" required type="text" />
+              </AdminField>
+              <AdminField helper="Mínimo 8 caracteres." icon={KeyRound} label="Contraseña">
+                <input autoComplete="new-password" minLength={8} name="password" required type="password" />
+              </AdminField>
+              <AdminStatusMessage message={registerError} tone="error" />
+              <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
+                <UserPlus aria-hidden="true" size={18} />
+                {isSubmitting ? "Creando..." : "Crear cuenta"}
+              </button>
+            </form>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function LevitateStudentPortal({
+  session,
+  onLogout,
+}: {
+  session: StudentRegistrationSession;
+  onLogout: () => void;
+}) {
+  return (
+    <main className="levitate-admin-page levitate-student-portal">
+      <AdminTopBrand />
+      <div className="levitate-admin-rule" aria-hidden="true" />
+
+      <section className="levitate-student-portal__hero">
+        <div>
+          <p>Portal de alumnos</p>
+          <h1>Hola, {session.registrations[0]?.fullName || session.user.username}.</h1>
+          <div className="levitate-student-portal__meta">
+            <span>CURP: {session.user.curp}</span>
+            <span>{session.registrations.length} registro(s) asociado(s)</span>
+            <span>{session.dances.length} baile(s)</span>
+          </div>
+        </div>
+        <button className="levitate-admin-save levitate-student-portal__logout" onClick={onLogout} type="button">
+          <LogOut aria-hidden="true" size={18} />
+          Salir
+        </button>
+      </section>
+
+      <section className="levitate-student-module-grid" aria-label="Acciones de alumno">
+        {studentPortalModules.map((module) => {
+          const Icon = module.icon;
+          const resource = session.resources.find((item) => item.type === module.resourceType && item.url);
+          const href = resource?.url || module.href;
+          const isAvailable = Boolean(href);
+
+          return isAvailable ? (
+            <a className="levitate-student-module-card" href={href} key={module.title}>
+              <Icon aria-hidden="true" size={24} />
+              <h2>{module.title}</h2>
+              <p>{resource?.title || module.text}</p>
+              <span>{module.action}</span>
+            </a>
+          ) : (
+            <article className="levitate-student-module-card is-disabled" key={module.title}>
+              <Icon aria-hidden="true" size={24} />
+              <h2>{module.title}</h2>
+              <p>{module.text}</p>
+              <span>Próximamente</span>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="levitate-student-data-grid">
+        <AdminPanel title="Registros asociados" eyebrow="CURP">
+          <div className="levitate-student-list">
+            {session.registrations.map((registration) => (
+              <article key={registration.id}>
+                <strong>{registration.fullName}</strong>
+                <span>{registration.academyName}</span>
+                <p>
+                  {getOptionLabel(venueOptions, registration.venue)} · {getOptionLabel(divisions, registration.division)} · Playera{" "}
+                  {getOptionLabel(shirtSizes, registration.shirtSize)}
+                </p>
+              </article>
+            ))}
+            {session.registrations.length === 0 ? (
+              <p className="levitate-admin-empty-state">
+                Todavía no hay registros de academia asociados a este CURP. Cuando una academia te registre, aparecerá aquí.
+              </p>
+            ) : null}
+          </div>
+        </AdminPanel>
+
+        <AdminPanel title="Bailes" eyebrow="Competencia">
+          <div className="levitate-student-list">
+            {session.dances.map((dance) => (
+              <article key={dance.id}>
+                <strong>{dance.title}</strong>
+                <span>{dance.academyName}</span>
+                <p>
+                  {getOptionLabel(venueOptions, dance.venue)} · {getOptionLabel(danceCategories, dance.category)} ·{" "}
+                  {getDanceLevelLabel(dance.level)}
+                </p>
+              </article>
+            ))}
+            {session.dances.length === 0 ? <p className="levitate-admin-empty-state">Aún no hay bailes asociados a tu CURP.</p> : null}
+          </div>
+        </AdminPanel>
       </section>
     </main>
   );
@@ -853,9 +1439,13 @@ function DanceRegistrationPanel({
 }) {
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState(defaultDanceGenre);
+  const [selectedSubgenre, setSelectedSubgenre] = useState(defaultDanceSubgenre);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const subgenreOptions = danceSubgenresByGenre[selectedGenre] ?? danceSubgenresByGenre[defaultDanceGenre];
+  const shouldShowLevel = selectedGenre !== "motion";
   const choreographerItems = choreographers.map((choreographer) => ({
     id: choreographer.id,
     fullName: choreographer.fullName,
@@ -865,6 +1455,14 @@ function DanceRegistrationPanel({
     fullName: participant.fullName,
   }));
   const cannotSave = isSaving || choreographers.length === 0 || participants.length === 0;
+
+  const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextGenre = event.target.value;
+    const nextSubgenre = danceSubgenresByGenre[nextGenre]?.[0]?.value ?? defaultDanceSubgenre;
+
+    setSelectedGenre(nextGenre);
+    setSelectedSubgenre(nextSubgenre);
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -882,7 +1480,7 @@ function DanceRegistrationPanel({
           genre: getFormValue(formData, "genre"),
           subgenre: getFormValue(formData, "subgenre"),
           category: getFormValue(formData, "category"),
-          level: getFormValue(formData, "level"),
+          level: shouldShowLevel ? getFormValue(formData, "level") : null,
           venue: academyVenue,
           choreographerIds: selectedChoreographerIds,
           participantIds: selectedParticipantIds,
@@ -892,6 +1490,8 @@ function DanceRegistrationPanel({
 
       onDanceCreated(response.dance);
       form.reset();
+      setSelectedGenre(defaultDanceGenre);
+      setSelectedSubgenre(defaultDanceSubgenre);
       setSelectedChoreographerIds([]);
       setSelectedParticipantIds([]);
       setStatusMessage("Baile guardado en la base.");
@@ -910,17 +1510,25 @@ function DanceRegistrationPanel({
             <input name="title" required type="text" />
           </AdminField>
           <AdminField icon={Music2} label="Género de baile">
-            <AdminSelect defaultValue="aereo" id="dance-genre" name="genre" options={danceGenres} />
+            <AdminSelect id="dance-genre" name="genre" onChange={handleGenreChange} options={danceGenres} value={selectedGenre} />
           </AdminField>
           <AdminField icon={Music2} label="Subgénero">
-            <AdminSelect defaultValue="tela" id="dance-subgenre" name="subgenre" options={danceSubgenres} />
+            <AdminSelect
+              id="dance-subgenre"
+              name="subgenre"
+              onChange={(event) => setSelectedSubgenre(event.target.value)}
+              options={subgenreOptions}
+              value={selectedSubgenre}
+            />
           </AdminField>
           <AdminField icon={Users} label="Categoría">
             <AdminSelect defaultValue="solo" id="dance-category" name="category" options={danceCategories} />
           </AdminField>
-          <AdminField icon={BadgeCheck} label="Nivel">
-            <AdminSelect defaultValue="nudo" id="dance-level" name="level" options={danceLevels} />
-          </AdminField>
+          {shouldShowLevel ? (
+            <AdminField icon={BadgeCheck} label="Nivel">
+              <AdminSelect defaultValue="nudo" id="dance-level" name="level" options={danceLevels} />
+            </AdminField>
+          ) : null}
 
           <div className="levitate-admin-form__wide-block">
             <TransferList
@@ -967,7 +1575,7 @@ function DanceRegistrationPanel({
             <div className="levitate-admin-registered-panel__row" role="row" key={dance.id}>
               <span role="cell">{dance.title}</span>
               <span role="cell">{getOptionLabel(danceCategories, dance.category)}</span>
-              <span role="cell">{getOptionLabel(danceLevels, dance.level)}</span>
+              <span role="cell">{getDanceLevelLabel(dance.level)}</span>
               <span role="cell">{dance.participants.map((participant) => participant.fullName).join(", ")}</span>
             </div>
           ))}
@@ -1069,6 +1677,20 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   const loadRegistrationData = useCallback(async () => {
     setIsLoadingData(true);
 
+    if (getPersistedDemoRegistrationSession() === "academy") {
+      setSession({
+        user: demoRegistrationBootstrap.user,
+        academy: demoRegistrationBootstrap.academy,
+      });
+      setParticipants(demoRegistrationBootstrap.participants);
+      setChoreographers(demoRegistrationBootstrap.choreographers);
+      setDances(demoRegistrationBootstrap.dances);
+      setLoadError("");
+      setIsCheckingSession(false);
+      setIsLoadingData(false);
+      return;
+    }
+
     try {
       const bootstrap = await requestRegistrationApi<RegistrationBootstrap>("/api/registration/bootstrap");
       setSession({
@@ -1103,13 +1725,27 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     setIsMobileMenuOpen(false);
   };
 
-  const handleAuthenticated = (nextSession: RegistrationSession) => {
-    setSession(nextSession);
+  const handleAuthenticated = (nextSession: RegistrationSession | RegistrationBootstrap) => {
+    setSession({
+      user: nextSession.user,
+      academy: nextSession.academy,
+    });
     setLoadError("");
+
+    if ("participants" in nextSession) {
+      setParticipants(nextSession.participants);
+      setChoreographers(nextSession.choreographers);
+      setDances(nextSession.dances);
+      setIsCheckingSession(false);
+      setIsLoadingData(false);
+      return;
+    }
+
     void loadRegistrationData();
   };
 
   const handleLogout = async () => {
+    clearPersistedDemoRegistrationSession();
     await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" }).catch(() => null);
     setSession(null);
     setParticipants([]);
@@ -1178,10 +1814,64 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   );
 }
 
+export function LevitateStudentRegistrationRoute() {
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [session, setSession] = useState<StudentRegistrationSession | null>(null);
+
+  const loadStudentData = useCallback(async () => {
+    if (getPersistedDemoRegistrationSession() === "student") {
+      setSession(demoStudentSession);
+      setLoadError("");
+      setIsCheckingSession(false);
+      return;
+    }
+
+    try {
+      const studentSession = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/me");
+      setSession(studentSession);
+      setLoadError("");
+    } catch (error) {
+      setSession(null);
+
+      if (!isUnauthorizedRegistrationError(error)) {
+        setLoadError(getErrorMessage(error, "No se pudo cargar tu cuenta de alumno."));
+      }
+    } finally {
+      setIsCheckingSession(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStudentData();
+  }, [loadStudentData]);
+
+  const handleAuthenticated = (nextSession: StudentRegistrationSession) => {
+    setSession(nextSession);
+    setLoadError("");
+  };
+
+  const handleLogout = async () => {
+    clearPersistedDemoRegistrationSession();
+    await requestRegistrationApi<{ ok: boolean }>("/api/registration/student/logout", { method: "POST" }).catch(() => null);
+    setSession(null);
+  };
+
+  if (isCheckingSession) {
+    return <LoadingRegistrationScreen />;
+  }
+
+  if (!session) {
+    return <LevitateStudentAuthScreen onAuthenticated={handleAuthenticated} systemMessage={loadError} />;
+  }
+
+  return <LevitateStudentPortal onLogout={handleLogout} session={session} />;
+}
+
 export function LevitateAuthRoute() {
   const handleAuthenticated = () => {
     if (typeof window !== "undefined") {
-      window.location.assign("/registro");
+      window.location.assign("/registro/academias");
     }
   };
 

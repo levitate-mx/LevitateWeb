@@ -1,13 +1,17 @@
 const passportSessionCookieName = "levitate_passport_session";
 const registrationSessionCookieName = "levitate_registration_session";
+const registrationStudentSessionCookieName = "levitate_registration_student_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const registrationVenues = new Set(["cdmx", "puebla", "edomex"]);
 const registrationDivisions = new Set(["baby", "mini", "junior", "teen", "adulto"]);
 const registrationShirtSizes = new Set(["6", "8", "10", "12", "xs", "s", "m", "l"]);
-const registrationGenres = new Set(["aereo", "motion", "fusion"]);
-const registrationSubgenres = new Set(["tela", "aro", "trapecio", "contemporaneo"]);
+const registrationGenres = new Set(["aereo", "motion"]);
+const registrationSubgenresByGenre = {
+  aereo: new Set(["aro", "tela", "trapecio", "open_aerial"]),
+  motion: new Set(["acrojazz", "ballet", "belly_dance", "contemporaneo", "folklore", "jazz", "lirico", "open_motion", "urbanos"]),
+};
 const registrationCategories = new Set(["solo", "duo", "trio", "grupo"]);
-const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanzado"]);
+const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanzado", "elite"]);
 
 export default {
   async fetch(request, env) {
@@ -51,6 +55,22 @@ export default {
 
     if (url.pathname === "/api/registration/auth/logout") {
       return handleRegistrationLogout(request, env);
+    }
+
+    if (url.pathname === "/api/registration/student/register") {
+      return handleRegistrationStudentRegister(request, env);
+    }
+
+    if (url.pathname === "/api/registration/student/login") {
+      return handleRegistrationStudentLogin(request, env);
+    }
+
+    if (url.pathname === "/api/registration/student/logout") {
+      return handleRegistrationStudentLogout(request, env);
+    }
+
+    if (url.pathname === "/api/registration/student/me") {
+      return handleRegistrationStudentMe(request, env);
     }
 
     if (url.pathname === "/api/registration/me") {
@@ -367,6 +387,142 @@ async function handleRegistrationLogout(request, env) {
   }
 }
 
+async function handleRegistrationStudentRegister(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const username = normalizeUsername(requireString(body.username, "username"));
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+    const password = requireString(body.password, "password");
+
+    if (password.length < 8) {
+      throwHttpError("weak_password", "La contraseña debe tener al menos 8 caracteres", 400);
+    }
+
+    if (curp.length !== 18) {
+      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    }
+
+    const db = getDb(env);
+    const existingUser = await db
+      .prepare(
+        `
+          SELECT id
+          FROM registration_student_users
+          WHERE username = ? OR curp = ?
+          LIMIT 1
+        `,
+      )
+      .bind(username, curp)
+      .first();
+
+    if (existingUser) {
+      throwHttpError("registration_student_exists", "Ese usuario o CURP ya tiene cuenta de alumno", 409);
+    }
+
+    const userId = crypto.randomUUID();
+    const passwordHash = await hashPassword(password);
+
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_student_users (
+            id,
+            username,
+            curp,
+            password_hash
+          )
+          VALUES (?, ?, ?, ?)
+        `,
+      )
+      .bind(userId, username, curp, passwordHash)
+      .run();
+
+    const sessionToken = await createRegistrationStudentSession(db, userId, request);
+    const state = await getRegistrationStudentStateByUserId(db, userId);
+
+    return sendJson(state, 201, {
+      "set-cookie": buildRegistrationStudentSessionCookie(request, sessionToken),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationStudentLogin(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const identifier = requireString(body.identifier, "identifier");
+    const normalizedIdentifier = normalizeUsername(identifier);
+    const curpIdentifier = normalizeCurp(identifier);
+    const password = requireString(body.password, "password");
+    const db = getDb(env);
+    const user = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_student_users
+          WHERE (username = ? OR curp = ?)
+            AND status = 'active'
+          LIMIT 1
+        `,
+      )
+      .bind(normalizedIdentifier, curpIdentifier)
+      .first();
+
+    if (!user || !(await verifyPassword(password, user.password_hash))) {
+      throwHttpError("registration_student_login_invalid", "Usuario, CURP o contraseña incorrectos", 401);
+    }
+
+    const sessionToken = await createRegistrationStudentSession(db, user.id, request);
+    const state = await getRegistrationStudentStateByUserId(db, user.id);
+
+    return sendJson(state, 200, {
+      "set-cookie": buildRegistrationStudentSessionCookie(request, sessionToken),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationStudentLogout(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const sessionToken = readCookie(request, registrationStudentSessionCookieName);
+
+    if (sessionToken) {
+      await getDb(env)
+        .prepare("DELETE FROM registration_student_sessions WHERE session_token_hash = ?")
+        .bind(await hashToken(sessionToken))
+        .run();
+    }
+
+    return sendJson(
+      { ok: true },
+      200,
+      {
+        "set-cookie": expireRegistrationStudentSessionCookie(request),
+      },
+    );
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationStudentMe(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+    const session = await getRegistrationStudentStateFromRequest({ db: getDb(env), request });
+    return sendJson(session);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
 async function handleRegistrationMe(request, env) {
   try {
     assertMethod(request, ["GET"]);
@@ -410,7 +566,7 @@ async function handleRegistrationParticipants(request, env) {
 
     const body = await readJsonBody(request);
     const fullName = requireString(body.fullName, "fullName");
-    const curp = requireString(body.curp, "curp").toUpperCase();
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
     const birthDate = optionalString(body.birthDate);
     const age = optionalInteger(body.age, "age");
     const division = requireRegistrationChoice(body.division, "division", registrationDivisions);
@@ -526,9 +682,9 @@ async function handleRegistrationDances(request, env) {
     const body = await readJsonBody(request);
     const title = requireString(body.title, "title");
     const genre = requireRegistrationChoice(body.genre, "genre", registrationGenres);
-    const subgenre = requireRegistrationChoice(body.subgenre, "subgenre", registrationSubgenres);
+    const subgenre = requireRegistrationSubgenre(genre, body.subgenre);
     const category = requireRegistrationChoice(body.category, "category", registrationCategories);
-    const level = requireRegistrationChoice(body.level, "level", registrationLevels);
+    const level = requireRegistrationLevel(genre, body.level);
     const venue = requireRegistrationChoice(body.venue || session.academy.venue, "venue", registrationVenues);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
@@ -792,6 +948,30 @@ async function createRegistrationSession(db, userId, request) {
   return sessionToken;
 }
 
+async function createRegistrationStudentSession(db, userId, request) {
+  const sessionToken = createSessionToken();
+  const sessionTokenHash = await hashToken(sessionToken);
+  const userAgent = request.headers.get("user-agent");
+
+  await db
+    .prepare(
+      `
+        INSERT INTO registration_student_sessions (
+          id,
+          user_id,
+          session_token_hash,
+          user_agent,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?, datetime('now', '+30 days'))
+      `,
+    )
+    .bind(crypto.randomUUID(), userId, sessionTokenHash, userAgent)
+    .run();
+
+  return sessionToken;
+}
+
 async function getRegistrationStateFromRequest({ db, request }) {
   const sessionToken = readCookie(request, registrationSessionCookieName);
 
@@ -844,6 +1024,51 @@ async function getRegistrationStateFromRequest({ db, request }) {
   return serializeRegistrationSession(row);
 }
 
+async function getRegistrationStudentStateFromRequest({ db, request }) {
+  const sessionToken = readCookie(request, registrationStudentSessionCookieName);
+
+  if (!sessionToken) {
+    throwHttpError("registration_student_session_missing", "Inicia sesión para continuar", 401);
+  }
+
+  const sessionTokenHash = await hashToken(sessionToken);
+  const user = await db
+    .prepare(
+      `
+        SELECT
+          registration_student_users.id,
+          registration_student_users.username,
+          registration_student_users.curp
+        FROM registration_student_sessions
+        INNER JOIN registration_student_users
+          ON registration_student_users.id = registration_student_sessions.user_id
+        WHERE registration_student_sessions.session_token_hash = ?
+          AND registration_student_sessions.expires_at > datetime('now')
+          AND registration_student_users.status = 'active'
+        LIMIT 1
+      `,
+    )
+    .bind(sessionTokenHash)
+    .first();
+
+  if (!user) {
+    throwHttpError("registration_student_session_invalid", "Tu sesión expiró o no existe", 401);
+  }
+
+  await db
+    .prepare(
+      `
+        UPDATE registration_student_sessions
+        SET last_seen_at = datetime('now')
+        WHERE session_token_hash = ?
+      `,
+    )
+    .bind(sessionTokenHash)
+    .run();
+
+  return getRegistrationStudentState(db, user);
+}
+
 async function getRegistrationStateByUserId(db, userId) {
   const row = await db
     .prepare(
@@ -873,6 +1098,98 @@ async function getRegistrationStateByUserId(db, userId) {
   }
 
   return serializeRegistrationSession(row);
+}
+
+async function getRegistrationStudentStateByUserId(db, userId) {
+  const user = await db
+    .prepare(
+      `
+        SELECT id, username, curp
+        FROM registration_student_users
+        WHERE id = ?
+          AND status = 'active'
+        LIMIT 1
+      `,
+    )
+    .bind(userId)
+    .first();
+
+  if (!user) {
+    throwHttpError("registration_student_user_not_found", "Usuario alumno no encontrado", 404);
+  }
+
+  return getRegistrationStudentState(db, user);
+}
+
+async function getRegistrationStudentState(db, user) {
+  const curp = normalizeCurp(user.curp);
+  const { results: registrationRows = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_participants.id,
+          registration_participants.full_name,
+          registration_participants.curp,
+          registration_participants.division,
+          registration_participants.shirt_size,
+          registration_academies.name AS academy_name,
+          registration_academies.venue
+        FROM registration_participants
+        INNER JOIN registration_academies
+          ON registration_academies.id = registration_participants.academy_id
+        WHERE registration_participants.curp = ?
+        ORDER BY registration_participants.created_at DESC
+      `,
+    )
+    .bind(curp)
+    .all();
+  const { results: danceRows = [] } = await db
+    .prepare(
+      `
+        SELECT DISTINCT
+          registration_dances.id,
+          registration_dances.title,
+          registration_dances.category,
+          registration_dances.level,
+          registration_dances.venue,
+          registration_academies.name AS academy_name,
+          registration_dances.created_at
+        FROM registration_dance_participants
+        INNER JOIN registration_participants
+          ON registration_participants.id = registration_dance_participants.participant_id
+        INNER JOIN registration_dances
+          ON registration_dances.id = registration_dance_participants.dance_id
+        INNER JOIN registration_academies
+          ON registration_academies.id = registration_dances.academy_id
+        WHERE registration_participants.curp = ?
+        ORDER BY registration_dances.created_at DESC
+      `,
+    )
+    .bind(curp)
+    .all();
+  const { results: resourceRows = [] } = await db
+    .prepare(
+      `
+        SELECT id, resource_type, title, url, status
+        FROM registration_student_resources
+        WHERE curp = ?
+          AND status <> 'hidden'
+        ORDER BY created_at DESC
+      `,
+    )
+    .bind(curp)
+    .all();
+
+  return {
+    user: {
+      id: user.id,
+      username: user.username,
+      curp,
+    },
+    registrations: registrationRows.map(serializeRegistrationStudentRecord),
+    dances: danceRows.map(serializeRegistrationStudentDance),
+    resources: resourceRows.map(serializeRegistrationStudentResource),
+  };
 }
 
 async function getRegistrationParticipants(db, academyId) {
@@ -1077,6 +1394,39 @@ function serializeRegistrationParticipant(participant) {
   };
 }
 
+function serializeRegistrationStudentRecord(participant) {
+  return {
+    id: participant.id,
+    fullName: participant.full_name,
+    curp: participant.curp,
+    academyName: participant.academy_name,
+    venue: participant.venue,
+    division: participant.division,
+    shirtSize: participant.shirt_size,
+  };
+}
+
+function serializeRegistrationStudentDance(dance) {
+  return {
+    id: dance.id,
+    title: dance.title,
+    category: dance.category,
+    level: dance.level,
+    venue: dance.venue,
+    academyName: dance.academy_name,
+  };
+}
+
+function serializeRegistrationStudentResource(resource) {
+  return {
+    id: resource.id,
+    type: resource.resource_type,
+    title: resource.title,
+    url: resource.url,
+    status: resource.status,
+  };
+}
+
 function serializeRegistrationChoreographer(choreographer) {
   return {
     id: choreographer.id,
@@ -1095,6 +1445,28 @@ function requireRegistrationChoice(value, fieldName, allowedValues) {
   }
 
   return text;
+}
+
+function requireRegistrationSubgenre(genre, value) {
+  const allowedValues = registrationSubgenresByGenre[genre];
+
+  if (!allowedValues) {
+    throwHttpError("validation_error", "genre is invalid", 400);
+  }
+
+  return requireRegistrationChoice(value, "subgenre", allowedValues);
+}
+
+function requireRegistrationLevel(genre, value) {
+  if (genre === "motion") {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      throwHttpError("validation_error", "Motion no tiene niveles", 400);
+    }
+
+    return null;
+  }
+
+  return requireRegistrationChoice(value, "level", registrationLevels);
 }
 
 function requireStringArray(value, fieldName) {
@@ -1134,6 +1506,10 @@ function normalizeUsername(value) {
 
 function normalizeEmail(value) {
   return value.trim().toLowerCase();
+}
+
+function normalizeCurp(value) {
+  return value.trim().toUpperCase();
 }
 
 async function hashPassword(password) {
@@ -1222,6 +1598,20 @@ function expireRegistrationSessionCookie(request) {
   const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
   const secure = isLocal ? "" : "; Secure";
   return `${registrationSessionCookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+function buildRegistrationStudentSessionCookie(request, token) {
+  const host = new URL(request.url).host;
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const secure = isLocal ? "" : "; Secure";
+  return `${registrationStudentSessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${sessionMaxAgeSeconds}${secure}`;
+}
+
+function expireRegistrationStudentSessionCookie(request) {
+  const host = new URL(request.url).host;
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const secure = isLocal ? "" : "; Secure";
+  return `${registrationStudentSessionCookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 function sendRegistrationError(error) {

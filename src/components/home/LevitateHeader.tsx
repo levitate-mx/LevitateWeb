@@ -576,10 +576,10 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
 
             {isLoginMenuOpen ? (
               <div className="levitate-login-menu" id="levitate-login-menu" role="menu">
-                <a href="/login?tipo=academia" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
+                <a href="/registro/academias" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
                   Academia
                 </a>
-                <a href="/login?tipo=alumno" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
+                <a href="/registro/alumnos" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
                   Alumno
                 </a>
               </div>

@@ -41,6 +41,30 @@ type RegistrationCost = {
 
 type CartState = Record<string, number>;
 
+type ShopRegistrationSession =
+  | {
+      kind: "academy";
+      title: string;
+      detail: string;
+      href: string;
+    }
+  | {
+      kind: "student";
+      title: string;
+      detail: string;
+      href: string;
+    };
+
+type ShopAcademySessionResponse = {
+  user: { name: string };
+  academy: { name: string };
+};
+
+type ShopStudentSessionResponse = {
+  user: { username: string; curp: string };
+  registrations: Array<{ fullName: string }>;
+};
+
 const mediaPackageDetails = ["10 fotos de acción", "1 video de presentación", "2 fotos estudio"];
 const mediaPackageHighlights = [
   { amount: "10", icon: Camera, label: "fotos de acción" },
@@ -135,6 +159,7 @@ const discountCode = "COLIBRI26";
 const discountRate = 0.1;
 const ticketPresaleDeadline = "10 de octubre";
 const registrationPresaleDeadline = "30 de septiembre";
+const demoRegistrationSessionStorageKey = "levitate_demo_registration_session";
 
 function formatCurrency(value: number) {
   return currencyFormatter.format(value);
@@ -158,6 +183,7 @@ export function ShopPage() {
   const [activeMediaImageIndex, setActiveMediaImageIndex] = useState(0);
   const [enteredDiscountCode, setEnteredDiscountCode] = useState("");
   const [hasScrolledPastHeroTop, setHasScrolledPastHeroTop] = useState(false);
+  const [registrationSession, setRegistrationSession] = useState<ShopRegistrationSession | null>(null);
   const cartLines = useMemo(
     () =>
       products
@@ -205,6 +231,71 @@ export function ShopPage() {
     window.addEventListener("scroll", updateCartVisibility, { passive: true });
 
     return () => window.removeEventListener("scroll", updateCartVisibility);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const demoSession = window.localStorage.getItem(demoRegistrationSessionStorageKey);
+
+    if (demoSession === "student") {
+      setRegistrationSession({
+        kind: "student",
+        title: "Sofia Martinez Demo",
+        detail: "CURP DEMO010101MDFLVT09",
+        href: "/registro/alumnos",
+      });
+      return;
+    }
+
+    if (demoSession === "academy") {
+      setRegistrationSession({
+        kind: "academy",
+        title: "Academia Demo Levitate",
+        detail: "Sesión de academia activa",
+        href: "/registro/academias",
+      });
+      return;
+    }
+
+    const loadRegistrationSession = async () => {
+      const studentResponse = await fetch("/api/registration/student/me", { credentials: "same-origin" }).catch(() => null);
+
+      if (studentResponse?.ok) {
+        const studentSession = (await studentResponse.json()) as ShopStudentSessionResponse;
+
+        if (isMounted) {
+          setRegistrationSession({
+            kind: "student",
+            title: studentSession.registrations[0]?.fullName || studentSession.user.username,
+            detail: `CURP ${studentSession.user.curp}`,
+            href: "/registro/alumnos",
+          });
+        }
+
+        return;
+      }
+
+      const academyResponse = await fetch("/api/registration/me", { credentials: "same-origin" }).catch(() => null);
+
+      if (academyResponse?.ok) {
+        const academySession = (await academyResponse.json()) as ShopAcademySessionResponse;
+
+        if (isMounted) {
+          setRegistrationSession({
+            kind: "academy",
+            title: academySession.academy.name,
+            detail: `Usuario ${academySession.user.name}`,
+            href: "/registro/academias",
+          });
+        }
+      }
+    };
+
+    void loadRegistrationSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const addProduct = (productId: string) => {
@@ -421,13 +512,24 @@ export function ShopPage() {
                 </article>
               </div>
 
+              {registrationSession ? (
+                <div className="shop-registration-session">
+                  <PackageCheck aria-hidden="true" size={28} />
+                  <div>
+                    <span>{registrationSession.kind === "student" ? "Sesión de alumno activa" : "Sesión de academia activa"}</span>
+                    <strong>{registrationSession.title}</strong>
+                    <p>{registrationSession.detail}</p>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="shop-registration__buttons">
-                <a className="shop-primary-action" href="/registro">
-                  Registrarse
+                <a className="shop-primary-action" href={registrationSession ? registrationSession.href : "/registro"}>
+                  {registrationSession ? "Ir a mi portal" : "Registrarse"}
                   <ChevronRight aria-hidden="true" size={23} />
                 </a>
-                <a className="shop-secondary-action" href="#consulta-curp">
-                  Ya me registré
+                <a className="shop-secondary-action" href={registrationSession ? "#boletos" : "#consulta-curp"}>
+                  {registrationSession ? "Continuar compra" : "Ya me registré"}
                   <ChevronRight aria-hidden="true" size={23} />
                 </a>
               </div>
