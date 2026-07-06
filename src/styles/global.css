@@ -15675,7 +15675,7 @@ button {
 .levitate-home-redesign .levitate-pill-menu__submenu {
   isolation: isolate;
   display: grid;
-  align-content: end;
+  align-content: start;
   gap: 8px;
   overflow: visible;
   border: 1px solid rgba(42, 41, 40, 0.08);
