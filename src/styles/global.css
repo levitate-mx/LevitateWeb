@@ -19937,17 +19937,15 @@ button {
 }
 
 .inscripciones-access {
-  background: var(--home-surface);
+  background: transparent;
 }
 
 .inscripciones-pricing {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0)),
-    var(--home-bg);
+  background: transparent;
 }
 
 .inscripciones-choice-grid,
-.inscripciones-price-grid {
+.inscripciones-cost-grid {
   display: grid;
   width: min(100%, 1180px);
   margin: 0 auto;
@@ -19963,7 +19961,7 @@ button {
   align-content: space-between;
   min-height: clamp(320px, 31vw, 420px);
   padding: clamp(24px, 3vw, 36px);
-  border: 1px solid var(--home-line);
+  border: 1px solid transparent;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.52);
   color: var(--home-ink);
@@ -19976,23 +19974,12 @@ button {
 
 .inscripciones-route-card:hover,
 .inscripciones-route-card:focus-visible {
-  border-color: rgba(87, 189, 209, 0.42);
+  border-color: transparent;
   background: rgba(255, 255, 255, 0.82);
   transform: translateY(-3px);
 }
 
-.inscripciones-route-card__icon {
-  display: inline-grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border: 1px solid rgba(87, 189, 209, 0.3);
-  border-radius: 999px;
-  color: var(--home-blue);
-}
-
 .inscripciones-route-card__eyebrow {
-  margin-top: clamp(28px, 5vw, 64px);
   color: var(--home-pink);
   font-size: 0.78rem;
   font-weight: 900;
@@ -20039,28 +20026,36 @@ button {
   transform: translateX(4px);
 }
 
-.inscripciones-price-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.inscripciones-cost-grid {
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  align-items: stretch;
 }
 
-.inscripciones-price-card {
+.inscripciones-cost-card {
   display: grid;
-  gap: clamp(28px, 4vw, 48px);
-  min-height: 360px;
+  gap: clamp(26px, 3vw, 42px);
+  min-height: 420px;
   padding: clamp(24px, 3.2vw, 38px);
-  border: 1px solid var(--home-line);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.44);
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--home-ink);
 }
 
-.inscripciones-price-card header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
+.inscripciones-cost-table {
+  display: grid;
 }
 
-.inscripciones-price-card header span {
+.inscripciones-cost-table__head,
+.inscripciones-cost-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) repeat(2, minmax(116px, 0.62fr));
+  gap: 14px;
+  align-items: center;
+}
+
+.inscripciones-cost-table__head {
+  padding-bottom: 14px;
   color: var(--home-pink);
   font-size: 0.76rem;
   font-weight: 900;
@@ -20068,39 +20063,93 @@ button {
   text-transform: uppercase;
 }
 
-.inscripciones-price-card h3 {
-  margin: 8px 0 0;
+.inscripciones-cost-row {
+  min-height: 68px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(42, 41, 40, 0.08);
+}
+
+.inscripciones-cost-row strong {
+  font-family: var(--font-body);
+  font-size: clamp(1.45rem, 2.2vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.inscripciones-cost-row strong span {
+  display: block;
+}
+
+.inscripciones-cost-row > span {
+  color: var(--home-soft-ink);
+  font-size: clamp(1rem, 1.2vw, 1.18rem);
+  font-weight: 780;
+}
+
+.inscripciones-cost-row > span:last-child {
+  color: var(--home-blue-deep);
+}
+
+.inscripciones-cost-card--info {
+  align-content: space-between;
+}
+
+.inscripciones-cost-card__eyebrow {
+  display: block;
+  color: var(--home-pink);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.inscripciones-cost-card h3 {
+  max-width: 560px;
+  margin: 14px 0 0;
   color: var(--home-ink);
   font-family: var(--font-body);
-  font-size: clamp(3.1rem, 6vw, 6.8rem);
-  font-weight: 560;
-  letter-spacing: -0.045em;
-  line-height: 0.88;
+  font-size: clamp(2.2rem, 4.2vw, 5rem);
+  font-weight: 570;
+  letter-spacing: -0.04em;
+  line-height: 0.94;
 }
 
-.inscripciones-price-card header strong {
-  flex: 0 0 auto;
-  color: var(--home-blue);
-  font-size: clamp(1rem, 1.35vw, 1.22rem);
-  text-align: right;
+.inscripciones-cost-card p {
+  max-width: 560px;
+  margin: 18px 0 0;
+  color: var(--home-soft-ink);
+  font-size: clamp(1rem, 1.15vw, 1.16rem);
+  font-weight: 540;
+  line-height: 1.5;
 }
 
-.inscripciones-style-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: end;
-  gap: 8px;
+.inscripciones-cost-card ul {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-.inscripciones-style-list span {
-  border: 1px solid rgba(42, 41, 40, 0.12);
+.inscripciones-cost-card li {
+  position: relative;
+  padding-left: 20px;
+  color: var(--home-soft-ink);
+  font-size: clamp(1rem, 1.12vw, 1.12rem);
+  font-weight: 660;
+  line-height: 1.45;
+}
+
+.inscripciones-cost-card li::before {
+  position: absolute;
+  top: 0.66em;
+  left: 0;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
-  padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.58);
-  color: rgba(42, 41, 40, 0.72);
-  font-size: 0.78rem;
-  font-weight: 820;
-  letter-spacing: 0.04em;
+  background: var(--home-pink);
+  content: "";
 }
 
 .inscripciones-payment-grid {
@@ -20487,21 +20536,41 @@ button {
   }
 
   .inscripciones-choice-grid,
-  .inscripciones-price-grid {
+  .inscripciones-cost-grid {
     grid-template-columns: 1fr;
   }
 
   .inscripciones-route-card,
-  .inscripciones-price-card {
+  .inscripciones-cost-card {
     min-height: auto;
   }
 
-  .inscripciones-price-card header {
-    display: grid;
+  .inscripciones-cost-table__head {
+    display: none;
   }
 
-  .inscripciones-price-card header strong {
-    text-align: left;
+  .inscripciones-cost-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .inscripciones-cost-row > span::before {
+    display: inline-block;
+    width: 82px;
+    color: var(--home-pink);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .inscripciones-cost-row > span:nth-of-type(1)::before {
+    content: "Preventa";
+  }
+
+  .inscripciones-cost-row > span:nth-of-type(2)::before {
+    content: "Normal";
   }
 
   .inscripciones-section-head--lookup h1 {
@@ -20548,7 +20617,6 @@ button {
 .reference-hero,
 .sedes-hero,
 .levitate-home-hero,
-.inscripciones-hero,
 .shop-hero {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -20559,7 +20627,8 @@ button {
 }
 
 .levitate-home-hero,
-.sedes-hero {
+.sedes-hero,
+.inscripciones-hero {
   grid-template-rows: minmax(0, 1fr);
 }
 

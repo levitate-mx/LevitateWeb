@@ -1,14 +1,11 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useMemo, useState } from "react";
-import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
   BadgeCheck,
-  Building2,
   CreditCard,
   Landmark,
   Search,
-  UserRound,
 } from "lucide-react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -19,14 +16,13 @@ type RegistrationPath = {
   description: string;
   action: string;
   href: string;
-  icon: LucideIcon;
 };
 
-type PriceGroup = {
-  title: string;
-  detail: string;
-  amount: string;
-  items: string[];
+type InscriptionCost = {
+  category: string;
+  categoryLines?: string[];
+  presale: string;
+  normal: string;
 };
 
 type InscriptionLookupRecord = {
@@ -108,35 +104,31 @@ const maxProofUploadBytes = 1800000;
 const registrationPaths: RegistrationPath[] = [
   {
     eyebrow: "Academias",
-    title: "Anota alumnos y coreografías.",
-    description: "Para academias: carga participantes, coreógrafos, modalidad, categoría, sede y datos de inscripción.",
-    action: "Anotar alumnos",
+    title: "Registra tu academia, alumnos y coreografías.",
+    description: "Para poder hacer el pago de la inscripción es necesario registrarse primero.",
+    action: "Registrar alumnos",
     href: "/registro/academias",
-    icon: Building2,
   },
   {
     eyebrow: "Familias y tutores",
-    title: "Consulta CURP y paga inscripción.",
-    description: "Para madres, padres o responsables: busca la CURP del participante y paga sólo la inscripción.",
+    title: "Realiza el pago de la inscripción.",
+    description: "Para padres y madres de familia o tutores: pago asociado al CURP del participante.",
     action: "Pagar inscripción",
     href: consultationPath,
-    icon: UserRound,
   },
 ];
 
-const priceGroups: PriceGroup[] = [
-  {
-    title: "Motion",
-    detail: "Sin niveles",
-    amount: "Desde $800 MXN",
-    items: ["ACROJAZZ", "BALLET", "BELLY DANCE", "CONTEMPORÁNEO", "FOLKLORE", "JAZZ", "LÍRICO", "OPEN: MOTION", "URBANOS"],
-  },
-  {
-    title: "Aerial",
-    detail: "Niveles disponibles",
-    amount: "Desde $1,500 MXN",
-    items: ["ARO", "OPEN: AERIAL", "TELA", "TRAPECIO"],
-  },
+const inscriptionCosts: InscriptionCost[] = [
+  { category: "Solo", presale: "$1,500 MXN", normal: "$1,750 MXN" },
+  { category: "Dúo", presale: "$1,300 MXN", normal: "$1,400 MXN" },
+  { category: "Trío", presale: "$950 MXN", normal: "$1,200 MXN" },
+  { category: "Grupo", presale: "$800 MXN", normal: "$1,000 MXN" },
+  { category: "Maestros Relevé", categoryLines: ["Maestros", "Relevé"], presale: "$1,000 MXN", normal: "$1,500 MXN" },
+];
+
+const inscriptionIncludes = [
+  "Acceso a 3 talleres de la elección del participante",
+  "Kit de bienvenida Oficial LevitateMX",
 ];
 
 const demoInscriptionLookup: InscriptionLookup = {
@@ -334,17 +326,10 @@ export function InscripcionesPage() {
         <div className="inscripciones-hero__content">
           <div className="inscripciones-hero__copy">
             <p className="inscripciones-eyebrow">Inscripciones</p>
-            <h1>
-              Inscripciones
-              <strong>abiertas</strong>
-            </h1>
-            <p>
-              Las academias anotan alumnos y coreografías. Madres, padres o tutores consultan por CURP y pagan sólo la
-              inscripción, sin mezclarla con compras de tienda.
-            </p>
+            <h1>No te pierdas el vuelo.</h1>
             <div className="inscripciones-hero__actions">
               <a className="inscripciones-button inscripciones-button--light" href="/registro/academias">
-                Anotar alumnos
+                Registrar alumnos
                 <ArrowRight aria-hidden="true" size={18} />
               </a>
               <a className="inscripciones-button inscripciones-button--dark" href={consultationPath}>
@@ -357,56 +342,73 @@ export function InscripcionesPage() {
         </div>
       </section>
 
-      <section className="inscripciones-access" aria-labelledby="inscripciones-access-title">
+      <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
         <div className="inscripciones-section-head">
-          <p className="inscripciones-eyebrow">Accesos</p>
-          <h2 id="inscripciones-access-title">Dos caminos claros: registrar y pagar.</h2>
+          <p className="inscripciones-eyebrow">Inscripciones</p>
+          <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
         </div>
 
-        <div className="inscripciones-choice-grid">
-          {registrationPaths.map((path) => {
-            const Icon = path.icon;
+        <div className="inscripciones-cost-grid">
+          <article className="inscripciones-cost-card">
+            <div className="inscripciones-cost-table" aria-label="Costos por categoría">
+              <div className="inscripciones-cost-table__head" aria-hidden="true">
+                <span>Categoría</span>
+                <span>Preventa</span>
+                <span>Normal</span>
+              </div>
+              {inscriptionCosts.map((cost) => (
+                <div className="inscripciones-cost-row" key={cost.category}>
+                  <strong>
+                    {cost.categoryLines
+                      ? cost.categoryLines.map((line, index) => (
+                          <span key={line}>
+                            {line}
+                            {index < cost.categoryLines!.length - 1 ? " " : ""}
+                          </span>
+                        ))
+                      : cost.category}
+                  </strong>
+                  <span>{cost.presale}</span>
+                  <span>{cost.normal}</span>
+                </div>
+              ))}
+            </div>
+          </article>
 
-            return (
-              <a className="inscripciones-route-card" href={path.href} key={path.title}>
-                <span className="inscripciones-route-card__icon">
-                  <Icon aria-hidden="true" size={28} />
-                </span>
-                <span className="inscripciones-route-card__eyebrow">{path.eyebrow}</span>
-                <strong>{path.title}</strong>
-                <p>{path.description}</p>
-                <em>
-                  {path.action}
-                  <ArrowRight aria-hidden="true" size={18} />
-                </em>
-              </a>
-            );
-          })}
+          <article className="inscripciones-cost-card inscripciones-cost-card--info">
+            <div>
+              <span className="inscripciones-cost-card__eyebrow">Descuento</span>
+              <h3>Participaciones adicionales al 50%.</h3>
+              <p>
+                La primera participación se paga al 100%; las adicionales reciben 50% de descuento sobre la participación
+                de menor costo.
+              </p>
+            </div>
+
+            <div>
+              <span className="inscripciones-cost-card__eyebrow">¿Qué incluye la inscripción?</span>
+              <ul>
+                {inscriptionIncludes.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
-        <div className="inscripciones-section-head">
-          <p className="inscripciones-eyebrow">Modalidades</p>
-          <h2 id="inscripciones-pricing-title">Motion y Aerial, sin vueltas.</h2>
-        </div>
-
-        <div className="inscripciones-price-grid">
-          {priceGroups.map((group) => (
-            <article className="inscripciones-price-card" key={group.title}>
-              <header>
-                <div>
-                  <span>{group.detail}</span>
-                  <h3>{group.title}</h3>
-                </div>
-                <strong>{group.amount}</strong>
-              </header>
-              <div className="inscripciones-style-list" aria-label={`Géneros de ${group.title}`}>
-                {group.items.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
-            </article>
+      <section className="inscripciones-access" aria-label="Accesos de inscripción">
+        <div className="inscripciones-choice-grid">
+          {registrationPaths.map((path) => (
+            <a className="inscripciones-route-card" href={path.href} key={path.title}>
+              <span className="inscripciones-route-card__eyebrow">{path.eyebrow}</span>
+              <strong>{path.title}</strong>
+              <p>{path.description}</p>
+              <em>
+                {path.action}
+                <ArrowRight aria-hidden="true" size={18} />
+              </em>
+            </a>
           ))}
         </div>
       </section>
