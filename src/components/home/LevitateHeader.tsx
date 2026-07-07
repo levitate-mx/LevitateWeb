@@ -86,6 +86,7 @@ export function Logo({ useRootLinks = false }: { useRootLinks?: boolean }) {
 
 type LevitateHeaderProps = {
   activeLabel?: string;
+  tone?: "default" | "light";
   useRootLinks?: boolean;
   variant?: "classic" | "pill";
 };
@@ -144,17 +145,20 @@ const pillMenuSections: PillMenuSection[] = [
   },
 ];
 
-export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, variant = "classic" }: LevitateHeaderProps) {
+export function LevitateHeader({
+  activeLabel = "Inicio",
+  tone = "default",
+  useRootLinks = false,
+  variant = "classic",
+}: LevitateHeaderProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [renderedMenu, setRenderedMenu] = useState<string | null>(null);
   const [isMenuClosing, setIsMenuClosing] = useState(false);
   const [isPillMenuOpen, setIsPillMenuOpen] = useState(false);
   const [activePillSection, setActivePillSection] = useState<string | null>(null);
-  const [isLoginMenuOpen, setIsLoginMenuOpen] = useState(false);
   const [isScrollCompact, setIsScrollCompact] = useState(false);
   const [isPastHero, setIsPastHero] = useState(false);
   const capsuleMenuRef = useRef<HTMLDivElement>(null);
-  const loginMenuRef = useRef<HTMLDivElement>(null);
   const pillMenuRef = useRef<HTMLDivElement>(null);
   const pillSubmenuRef = useRef<HTMLElement>(null);
   const pillMenuSectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -316,32 +320,6 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
   }, [isPillMenuOpen, selectedPillSection]);
 
   useEffect(() => {
-    if (!isLoginMenuOpen) {
-      return;
-    }
-
-    const closeLoginMenu = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsLoginMenuOpen(false);
-      }
-    };
-
-    const closeOnOutsideClick = (event: globalThis.PointerEvent) => {
-      if (event.target instanceof Node && !loginMenuRef.current?.contains(event.target)) {
-        setIsLoginMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", closeLoginMenu);
-    window.addEventListener("pointerdown", closeOnOutsideClick);
-
-    return () => {
-      window.removeEventListener("keydown", closeLoginMenu);
-      window.removeEventListener("pointerdown", closeOnOutsideClick);
-    };
-  }, [isLoginMenuOpen]);
-
-  useEffect(() => {
     if (variant !== "pill") {
       return;
     }
@@ -369,7 +347,6 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
           setIsScrollCompact(true);
           setIsPillMenuOpen(false);
           setActivePillSection(null);
-          setIsLoginMenuOpen(false);
         } else {
           setIsScrollCompact(false);
         }
@@ -404,19 +381,16 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
     const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("[data-nav-label]");
     const item = navItems.find((navItem) => navItem.label === link?.dataset.navLabel);
     setActivePillSection(null);
-    setIsLoginMenuOpen(false);
     setActiveMenu(item?.children ? item.label : null);
   };
 
   const closeCapsuleSubmenu = () => {
     setIsPillMenuOpen(false);
     setActivePillSection(null);
-    setIsLoginMenuOpen(false);
   };
 
   const openPillMenu = (sectionTitle: string | null = null) => {
     setActiveMenu(null);
-    setIsLoginMenuOpen(false);
     setIsPillMenuOpen(true);
     setActivePillSection(sectionTitle);
   };
@@ -511,7 +485,6 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
             className={controlClassName}
             onClick={() => {
               setActiveMenu(null);
-              setIsLoginMenuOpen(false);
               setActivePillSection((current) => (current === item.title ? null : item.title));
             }}
             type="button"
@@ -546,7 +519,9 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
     const pillHeader = (
       <div className="levitate-menu-shell levitate-menu-shell--pill">
         <header
-          className={`levitate-nav levitate-nav--pill${isScrollCompact ? " is-scroll-compact" : ""}${
+          className={`levitate-nav levitate-nav--pill${tone === "light" ? " levitate-nav--light" : ""}${
+            isScrollCompact ? " is-scroll-compact" : ""
+          }${
             isPastHero ? " is-past-hero" : ""
           }`}
         >
@@ -558,32 +533,19 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
 
           <Logo useRootLinks={useRootLinks} />
 
-          <div className="levitate-nav__login-wrap" ref={loginMenuRef}>
-            <button
-              aria-controls="levitate-login-menu"
-              aria-expanded={isLoginMenuOpen}
-              aria-label="Iniciar sesión"
+          <div className="levitate-nav__login-wrap">
+            <a
+              aria-label="Ingresar al panel de academias"
               className="levitate-nav__login"
+              href="/registro/academias"
               onClick={() => {
                 setActiveMenu(null);
                 setActivePillSection(null);
-                setIsLoginMenuOpen((current) => !current);
+                setIsPillMenuOpen(false);
               }}
-              type="button"
             >
               <UserRound aria-hidden="true" size={20} strokeWidth={2.25} />
-            </button>
-
-            {isLoginMenuOpen ? (
-              <div className="levitate-login-menu" id="levitate-login-menu" role="menu">
-                <a href="/registro/academias" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
-                  Academia
-                </a>
-                <a href="/registro/alumnos" onClick={() => setIsLoginMenuOpen(false)} role="menuitem">
-                  Alumno
-                </a>
-              </div>
-            ) : null}
+            </a>
           </div>
         </header>
 
@@ -703,7 +665,15 @@ export function LevitateHeader({ activeLabel = "Inicio", useRootLinks = false, v
       </div>
     );
 
-    const pillHeaderPortal = <div className="levitate-home-redesign levitate-home-nav-portal">{pillHeader}</div>;
+    const pillHeaderPortal = (
+      <div
+        className={`levitate-home-redesign levitate-home-nav-portal${
+          tone === "light" ? " levitate-home-nav-portal--light" : ""
+        }`}
+      >
+        {pillHeader}
+      </div>
+    );
 
     return typeof document !== "undefined" ? createPortal(pillHeaderPortal, document.body) : pillHeaderPortal;
   }

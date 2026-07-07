@@ -358,14 +358,12 @@ export function InscripcionesPage() {
               </div>
               {inscriptionCosts.map((cost) => (
                 <div className="inscripciones-cost-row" key={cost.category}>
-                  <strong>
+                  <strong
+                    aria-label={cost.category}
+                    className={cost.categoryLines ? "inscripciones-cost-category--stacked" : undefined}
+                  >
                     {cost.categoryLines
-                      ? cost.categoryLines.map((line, index) => (
-                          <span key={line}>
-                            {line}
-                            {index < cost.categoryLines!.length - 1 ? " " : ""}
-                          </span>
-                        ))
+                      ? cost.categoryLines.map((line) => <span key={line}>{line}</span>)
                       : cost.category}
                   </strong>
                   <span>{cost.presale}</span>
@@ -422,12 +420,7 @@ export function InscripcionesConsultaPage() {
   return (
     <main className="levitate-home-redesign inscripciones-page inscripciones-lookup-page">
       <section className="inscripciones-hero inscripciones-lookup-hero" id="consulta-curp">
-        <div className="inscripciones-hero__backdrop" aria-hidden="true">
-          <video autoPlay muted loop playsInline preload="metadata">
-            <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
-          </video>
-        </div>
-        <LevitateHeader activeLabel="Inscripciones" useRootLinks variant="pill" />
+        <LevitateHeader activeLabel="Inscripciones" tone="light" useRootLinks variant="pill" />
 
         <div className="inscripciones-hero__content inscripciones-lookup-hero__content">
           <div className="inscripciones-section-head inscripciones-section-head--lookup">

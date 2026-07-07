@@ -16806,14 +16806,16 @@ button {
   --admin-cream: #f1ebe4;
   --admin-white: #fffaf4;
   --admin-muted: rgba(17, 16, 21, 0.68);
-  --admin-pink: #e74697;
-  --admin-pink-soft: rgba(231, 70, 151, 0.16);
+  --admin-pink: #d94c8c;
+  --admin-pink-soft: rgba(217, 76, 140, 0.14);
+  --admin-cyan-muted: #86c7d2;
+  --admin-cyan-muted-soft: rgba(134, 199, 210, 0.76);
   --admin-border: rgba(17, 16, 21, 0.13);
   --admin-dark-border: rgba(255, 255, 255, 0.14);
   min-height: 100vh;
   background:
-    linear-gradient(115deg, transparent 0 42%, rgba(231, 70, 151, 0.08) 42.05% 42.16%, transparent 42.22%),
-    linear-gradient(180deg, rgba(247, 243, 239, 0.05), transparent 24rem),
+    linear-gradient(115deg, transparent 0 42%, rgba(255, 250, 244, 0.05) 42.05% 42.16%, transparent 42.22%),
+    linear-gradient(180deg, rgba(247, 243, 239, 0.04), transparent 24rem),
     linear-gradient(180deg, #050505 0%, #090909 64%, #050505 100%);
   color: var(--admin-cream);
   font-family: var(--font-body);
@@ -16829,35 +16831,71 @@ button {
   padding: clamp(22px, 3vw, 40px) clamp(20px, 5vw, 72px) 0;
 }
 
-.levitate-admin-logo {
-  position: relative;
+.levitate-admin-topbar--with-back {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  justify-content: initial;
+}
+
+.levitate-admin-logo-link {
   display: inline-flex;
-  align-items: flex-start;
-  width: fit-content;
-  color: var(--admin-cream);
-  font-family: var(--font-brand);
-  font-size: clamp(2rem, 3vw, 3rem);
-  font-weight: 500;
-  letter-spacing: -0.075em;
-  line-height: 0.86;
+  color: inherit;
+  text-decoration: none;
 }
 
-.levitate-admin-logo::after {
-  position: absolute;
-  top: -0.22em;
-  right: -1.35em;
-  color: rgba(255, 255, 255, 0.9);
-  content: "✧";
-  font-size: 0.62em;
-  transform: rotate(-13deg);
+.levitate-admin-topbar--with-back .levitate-admin-logo-link {
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
 }
 
-.levitate-admin-logo small {
-  margin: 0.46em 0 0 0.5em;
-  font-family: var(--font-body);
-  font-size: 0.31em;
+.levitate-admin-topbar--with-back .levitate-admin-back {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.levitate-admin-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(247, 243, 239, 0.16);
+  border-radius: 999px;
+  padding: 0 16px;
+  background: rgba(247, 243, 239, 0.06);
+  color: rgba(247, 243, 239, 0.86);
+  font-size: 0.78rem;
   font-weight: 850;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  transition:
+    background 220ms ease,
+    border-color 220ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.levitate-admin-back:hover,
+.levitate-admin-back:focus-visible {
+  border-color: rgba(247, 243, 239, 0.28);
+  background: rgba(247, 243, 239, 0.12);
+  transform: translateY(-1px);
+}
+
+.levitate-admin-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(150px, 14vw, 210px);
+}
+
+.levitate-admin-logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: brightness(0) invert(1);
 }
 
 .levitate-admin-socials {
@@ -16879,23 +16917,43 @@ button {
 
 .levitate-admin-rule {
   width: min(calc(100% - 40px), 1380px);
-  height: 4px;
+  height: 1px;
   margin: clamp(28px, 3vw, 44px) auto 0;
-  background: linear-gradient(90deg, var(--admin-pink), rgba(231, 70, 151, 0.68), var(--admin-pink));
+  background: linear-gradient(90deg, rgba(247, 243, 239, 0.08), rgba(247, 243, 239, 0.24), rgba(247, 243, 239, 0.08));
 }
 
 .levitate-auth-page {
+  position: relative;
+  isolation: isolate;
   overflow-x: hidden;
+  background: #050505;
+}
+
+.levitate-auth-page::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  background:
+    linear-gradient(115deg, transparent 0 42%, rgba(247, 243, 239, 0.045) 42.05% 42.13%, transparent 42.2%),
+    linear-gradient(180deg, rgba(247, 243, 239, 0.035), transparent 22rem),
+    linear-gradient(180deg, #050505 0%, #0b0b0a 58%, #050505 100%);
+  content: "";
+  pointer-events: none;
+}
+
+.levitate-auth-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .levitate-auth-shell {
   display: grid;
-  grid-template-columns: minmax(280px, 0.92fr) minmax(360px, 0.7fr);
+  grid-template-columns: minmax(280px, 0.9fr) minmax(390px, 0.72fr);
   align-items: start;
-  gap: clamp(34px, 7vw, 94px);
-  width: min(calc(100% - 40px), 1120px);
+  gap: clamp(40px, 7vw, 108px);
+  width: min(calc(100% - 40px), 1180px);
   margin: 0 auto;
-  padding: clamp(56px, 8vw, 104px) 0 clamp(70px, 9vw, 118px);
+  padding: clamp(52px, 7vw, 92px) 0 clamp(70px, 9vw, 118px);
 }
 
 .levitate-auth-copy {
@@ -16907,29 +16965,29 @@ button {
 .levitate-auth-copy > p {
   margin: 0 0 18px;
   color: var(--admin-pink);
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.28em;
+  font-size: 0.76rem;
+  font-weight: 860;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 
 .levitate-auth-copy h1 {
   max-width: 620px;
   margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(4rem, 8vw, 7.6rem);
-  font-weight: 400;
-  letter-spacing: 0.028em;
-  line-height: 0.88;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: clamp(3.8rem, 7.2vw, 7rem);
+  font-weight: 540;
+  letter-spacing: 0;
+  line-height: 0.92;
+  text-transform: none;
 }
 
 .levitate-auth-copy > span {
   display: block;
-  width: 96px;
-  height: 3px;
+  width: 84px;
+  height: 1px;
   margin: clamp(24px, 3vw, 36px) 0;
-  background: var(--admin-pink);
+  background: rgba(134, 199, 210, 0.46);
 }
 
 .levitate-auth-copy div {
@@ -16937,17 +16995,18 @@ button {
   align-items: flex-start;
   gap: 14px;
   max-width: 520px;
-  color: rgba(247, 243, 239, 0.82);
+  color: rgba(247, 243, 239, 0.74);
 }
 
 .levitate-auth-copy svg {
-  color: var(--admin-pink);
+  color: var(--admin-cyan-muted-soft);
   flex: 0 0 auto;
   margin-top: 2px;
 }
 
 .levitate-auth-copy strong {
   font-size: clamp(1rem, 1.45vw, 1.24rem);
+  font-weight: 620;
   line-height: 1.45;
 }
 
@@ -17085,20 +17144,28 @@ button {
 
 .levitate-auth-card {
   overflow: hidden;
-  border: 1px solid rgba(247, 243, 239, 0.18);
+  border: 1px solid rgba(247, 243, 239, 0.14);
   border-radius: 8px;
-  background: rgba(255, 250, 244, 0.97);
-  color: var(--admin-ink);
+  background:
+    linear-gradient(180deg, rgba(247, 243, 239, 0.08), rgba(247, 243, 239, 0.045)),
+    rgba(8, 8, 8, 0.58);
+  color: var(--admin-cream);
   box-shadow:
-    0 28px 70px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    0 24px 68px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
 }
 
 .levitate-auth-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-bottom: 1px solid rgba(17, 16, 21, 0.11);
-  background: rgba(241, 235, 228, 0.68);
+  gap: 4px;
+  margin: clamp(18px, 2.2vw, 24px) clamp(18px, 2.8vw, 28px) 0;
+  padding: 4px;
+  border: 1px solid rgba(247, 243, 239, 0.12);
+  border-radius: 999px;
+  background: rgba(247, 243, 239, 0.045);
 }
 
 .levitate-auth-tabs button {
@@ -17106,18 +17173,19 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 60px;
+  min-height: 44px;
   border: 0;
-  border-right: 1px solid rgba(17, 16, 21, 0.11);
+  border-radius: 999px;
   background: transparent;
-  color: rgba(17, 16, 21, 0.68);
+  color: rgba(247, 243, 239, 0.62);
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 860;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   transition:
     background 220ms ease,
+    box-shadow 220ms ease,
     color 220ms ease;
 }
 
@@ -17126,8 +17194,11 @@ button {
 }
 
 .levitate-auth-tabs button.is-active {
-  background: var(--admin-ink);
-  color: var(--admin-cream);
+  background: rgba(247, 243, 239, 0.9);
+  color: var(--admin-ink);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .levitate-auth-tabs svg,
@@ -17138,43 +17209,107 @@ button {
 
 .levitate-auth-form {
   display: grid;
-  gap: 20px;
-  padding: clamp(28px, 4vw, 44px);
+  gap: 18px;
+  padding: clamp(24px, 3.4vw, 34px) clamp(18px, 2.8vw, 28px) clamp(26px, 3.8vw, 38px);
 }
 
 .levitate-auth-form .levitate-admin-field {
-  gap: 10px;
+  gap: 8px;
+}
+
+.levitate-auth-form .levitate-admin-field__label {
+  color: rgba(247, 243, 239, 0.78);
+  font-size: 0.88rem;
+  font-weight: 720;
+}
+
+.levitate-auth-form .levitate-admin-field__label svg {
+  color: var(--admin-cyan-muted-soft);
+}
+
+.levitate-auth-form .levitate-admin-field input,
+.levitate-auth-form .levitate-admin-field select {
+  height: 52px;
+  border-color: rgba(247, 243, 239, 0.13);
+  background: rgba(247, 243, 239, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  color: var(--admin-cream);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.levitate-auth-form .levitate-admin-field input:focus,
+.levitate-auth-form .levitate-admin-field select:focus {
+  border-color: rgba(134, 199, 210, 0.42);
+  background: rgba(247, 243, 239, 0.075);
+  box-shadow:
+    0 0 0 3px rgba(134, 199, 210, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  outline: 0;
+}
+
+.levitate-auth-form .levitate-admin-field small {
+  color: rgba(247, 243, 239, 0.46);
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+
+.levitate-auth-form .levitate-admin-select svg {
+  color: var(--admin-cyan-muted-soft);
+}
+
+.levitate-auth-form__section-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  color: rgba(247, 243, 239, 0.52);
+  font-size: 0.7rem;
+  font-weight: 820;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levitate-auth-form__section-label::after {
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(247, 243, 239, 0.1);
+  content: "";
 }
 
 .levitate-auth-demo {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  justify-self: start;
   margin: 0;
-  padding: 12px 14px;
-  border: 1px dashed rgba(231, 70, 151, 0.34);
-  border-radius: 7px;
-  background: rgba(231, 70, 151, 0.07);
-  color: rgba(17, 16, 21, 0.72);
-  font-size: 0.82rem;
-  font-weight: 760;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(247, 243, 239, 0.52);
+  font-size: 0.76rem;
+  font-weight: 620;
 }
 
 .levitate-auth-demo span {
-  color: var(--admin-pink);
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  color: rgba(247, 243, 239, 0.48);
+  font-weight: 820;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .levitate-auth-demo code {
-  padding: 4px 7px;
-  border-radius: 5px;
-  background: rgba(17, 16, 21, 0.08);
-  color: rgba(17, 16, 21, 0.86);
+  padding: 3px 7px;
+  border: 1px solid rgba(247, 243, 239, 0.1);
+  border-radius: 999px;
+  background: rgba(247, 243, 239, 0.075);
+  color: rgba(247, 243, 239, 0.74);
   font: inherit;
-  font-weight: 850;
+  font-weight: 720;
 }
 
 .levitate-auth-message {
@@ -17182,23 +17317,27 @@ button {
   align-items: center;
   gap: 10px;
   margin: 0;
-  padding: 12px 14px;
-  border: 1px solid rgba(17, 16, 21, 0.12);
+  padding: 11px 12px;
+  border: 1px solid rgba(247, 243, 239, 0.12);
   border-radius: 7px;
-  background: rgba(231, 70, 151, 0.08);
-  color: rgba(17, 16, 21, 0.82);
-  font-size: 0.92rem;
-  font-weight: 760;
+  background: rgba(247, 243, 239, 0.045);
+  color: rgba(247, 243, 239, 0.76);
+  font-size: 0.88rem;
+  font-weight: 640;
 }
 
 .levitate-auth-message svg {
-  color: var(--admin-pink);
+  color: var(--admin-cyan-muted-soft);
 }
 
 .levitate-auth-message--error {
-  border-color: rgba(231, 70, 151, 0.36);
-  background: rgba(231, 70, 151, 0.12);
-  color: #8e315d;
+  border-color: rgba(217, 76, 140, 0.2);
+  background: rgba(217, 76, 140, 0.08);
+  color: rgba(247, 243, 239, 0.82);
+}
+
+.levitate-auth-message--error svg {
+  color: rgba(217, 76, 140, 0.78);
 }
 
 .levitate-auth-submit {
@@ -17206,24 +17345,32 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 54px;
-  border: 0;
-  border-radius: 7px;
-  background: var(--admin-pink);
-  color: #fff;
+  min-height: 52px;
+  border: 1px solid rgba(247, 243, 239, 0.78);
+  border-radius: 999px;
+  background: rgba(247, 243, 239, 0.9);
+  color: var(--admin-ink);
   cursor: pointer;
-  font-size: 0.86rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
+  font-size: 0.8rem;
+  font-weight: 860;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  box-shadow: 0 18px 34px rgba(231, 70, 151, 0.2);
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
   transition:
+    background 220ms ease,
+    border-color 220ms ease,
     transform 220ms var(--ease-out),
     box-shadow 220ms ease;
 }
 
 .levitate-auth-submit:hover {
-  box-shadow: 0 22px 42px rgba(231, 70, 151, 0.28);
+  border-color: rgba(247, 243, 239, 0.96);
+  background: rgba(255, 250, 244, 0.96);
+  box-shadow:
+    0 20px 42px rgba(0, 0, 0, 0.3),
+    0 0 0 3px rgba(134, 199, 210, 0.08);
   transform: translateY(-2px);
 }
 
@@ -18280,6 +18427,29 @@ button {
     padding-left: 20px;
   }
 
+  .levitate-admin-topbar--with-back {
+    align-items: center;
+  }
+
+  .levitate-admin-topbar--with-back .levitate-admin-logo {
+    width: clamp(126px, 36vw, 154px);
+  }
+
+  .levitate-admin-back {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .levitate-admin-back span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   .levitate-admin-socials {
     gap: 8px;
   }
@@ -19198,6 +19368,8 @@ button {
 
 /* Inscripciones adopts the redesigned homepage ADN: airy, editorial, cream surfaces and soft motion media. */
 .inscripciones-page {
+  --inscripciones-container: min(100%, 1440px);
+  --inscripciones-gutter: clamp(18px, 4vw, 64px);
   --inscripciones-ink: var(--home-ink);
   --inscripciones-muted: var(--home-soft-ink);
   --inscripciones-paper: var(--home-bg);
@@ -19257,8 +19429,8 @@ button {
 .inscripciones-hero__content {
   grid-template-columns: minmax(0, 1fr);
   gap: clamp(28px, 5vw, 74px);
-  width: min(100%, 1440px);
-  padding: clamp(118px, 12vw, 164px) clamp(18px, 4vw, 64px) clamp(28px, 3vw, 54px);
+  width: var(--inscripciones-container);
+  padding: clamp(118px, 12vw, 164px) var(--inscripciones-gutter) clamp(28px, 3vw, 54px);
 }
 
 .inscripciones-hero__copy {
@@ -19933,7 +20105,7 @@ button {
 .inscripciones-access,
 .inscripciones-pricing,
 .inscripciones-query {
-  padding: clamp(76px, 9vw, 132px) clamp(18px, 5vw, 78px);
+  padding: clamp(76px, 9vw, 132px) 0;
 }
 
 .inscripciones-access {
@@ -19947,9 +20119,17 @@ button {
 .inscripciones-choice-grid,
 .inscripciones-cost-grid {
   display: grid;
-  width: min(100%, 1180px);
+  width: var(--inscripciones-container);
   margin: 0 auto;
+  padding-right: var(--inscripciones-gutter);
+  padding-left: var(--inscripciones-gutter);
   gap: 14px;
+}
+
+.inscripciones-pricing .inscripciones-section-head {
+  width: var(--inscripciones-container);
+  padding-right: var(--inscripciones-gutter);
+  padding-left: var(--inscripciones-gutter);
 }
 
 .inscripciones-choice-grid {
@@ -20028,17 +20208,18 @@ button {
 
 .inscripciones-cost-grid {
   grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
-  align-items: stretch;
+  align-items: start;
+  gap: clamp(30px, 5vw, 76px);
 }
 
 .inscripciones-cost-card {
   display: grid;
   gap: clamp(26px, 3vw, 42px);
-  min-height: 420px;
-  padding: clamp(24px, 3.2vw, 38px);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.52);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--home-ink);
 }
 
@@ -20056,11 +20237,20 @@ button {
 
 .inscripciones-cost-table__head {
   padding-bottom: 14px;
-  color: var(--home-pink);
+  color: var(--home-ink);
   font-size: 0.76rem;
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.inscripciones-cost-table__head span:nth-child(2) {
+  color: var(--home-pink);
+}
+
+.inscripciones-cost-table__head span:nth-child(n + 2) {
+  justify-self: center;
+  text-align: center;
 }
 
 .inscripciones-cost-row {
@@ -20081,10 +20271,17 @@ button {
   display: block;
 }
 
+.inscripciones-cost-category--stacked {
+  display: grid;
+}
+
 .inscripciones-cost-row > span {
+  justify-self: center;
   color: var(--home-soft-ink);
   font-size: clamp(1rem, 1.2vw, 1.18rem);
   font-weight: 780;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .inscripciones-cost-row > span:last-child {
@@ -20092,7 +20289,7 @@ button {
 }
 
 .inscripciones-cost-card--info {
-  align-content: space-between;
+  align-content: start;
 }
 
 .inscripciones-cost-card__eyebrow {
@@ -20148,7 +20345,7 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--home-pink);
+  background: var(--home-soft-ink);
   content: "";
 }
 
@@ -20169,6 +20366,30 @@ button {
   --inscripciones-button-shadow: none;
 }
 
+.inscripciones-lookup-page,
+.inscripciones-lookup-hero {
+  background: var(--home-bg);
+  color: var(--home-ink);
+}
+
+.inscripciones-lookup-hero {
+  overflow: visible;
+}
+
+.inscripciones-lookup-hero::before,
+.inscripciones-lookup-hero::after {
+  display: none;
+}
+
+.levitate-home-nav-portal--light .levitate-nav--pill .levitate-logo {
+  filter: none;
+}
+
+.levitate-home-nav-portal--light .levitate-nav--pill .levitate-logo img {
+  filter: none;
+  opacity: 0.92;
+}
+
 .inscripciones-lookup-hero__content {
   grid-template-columns: 1fr;
   align-content: end;
@@ -20183,24 +20404,24 @@ button {
 .inscripciones-section-head--lookup h1 {
   max-width: 960px;
   margin: 12px 0 0;
-  color: #fff;
+  color: var(--home-ink);
   font-family: var(--font-body);
   font-size: clamp(3.45rem, 7vw, 8rem);
   font-weight: 560;
   letter-spacing: -0.04em;
   line-height: 0.9;
   text-transform: none;
-  text-shadow: 0 22px 78px rgba(0, 0, 0, 0.34);
+  text-shadow: none;
 }
 
 .inscripciones-section-head--lookup > p:not(.inscripciones-eyebrow) {
   max-width: 700px;
   margin: 22px 0 0;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--home-soft-ink);
   font-size: clamp(1rem, 1.18vw, 1.16rem);
   font-weight: 540;
   line-height: 1.52;
-  text-shadow: 0 14px 44px rgba(0, 0, 0, 0.36);
+  text-shadow: none;
 }
 
 .inscripciones-lookup-hero .inscripciones-payment-grid {
@@ -20209,7 +20430,8 @@ button {
 
 .inscripciones-lookup-hero .inscripciones-curp-card,
 .inscripciones-lookup-hero .inscripciones-confirmation-card {
-  background: rgba(255, 255, 255, 0.78);
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.52);
   backdrop-filter: blur(16px) saturate(135%);
 }
 
@@ -20555,10 +20777,15 @@ button {
     align-items: start;
   }
 
+  .inscripciones-cost-row > span {
+    justify-self: start;
+    text-align: left;
+  }
+
   .inscripciones-cost-row > span::before {
     display: inline-block;
     width: 82px;
-    color: var(--home-pink);
+    color: var(--home-ink);
     font-size: 0.72rem;
     font-weight: 900;
     letter-spacing: 0.12em;
@@ -20566,6 +20793,7 @@ button {
   }
 
   .inscripciones-cost-row > span:nth-of-type(1)::before {
+    color: var(--home-pink);
     content: "Preventa";
   }
 

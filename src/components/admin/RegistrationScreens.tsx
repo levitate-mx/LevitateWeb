@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   AtSign,
   BadgeCheck,
   Building2,
@@ -584,8 +585,7 @@ function isUnauthorizedRegistrationError(error: unknown) {
 function LevitateAdminLogo() {
   return (
     <div className="levitate-admin-logo" aria-label="Levitate MX">
-      <span>Levitate</span>
-      <small>MX</small>
+      <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
     </div>
   );
 }
@@ -600,11 +600,19 @@ function AdminSocials() {
   );
 }
 
-function AdminTopBrand() {
+function AdminTopBrand({ showBack = false }: { showBack?: boolean }) {
   return (
-    <header className="levitate-admin-topbar">
-      <LevitateAdminLogo />
-      <AdminSocials />
+    <header className={`levitate-admin-topbar${showBack ? " levitate-admin-topbar--with-back" : ""}`}>
+      {showBack ? (
+        <a className="levitate-admin-back" href="/inscripciones">
+          <ArrowLeft aria-hidden="true" size={18} />
+          <span>Volver</span>
+        </a>
+      ) : null}
+      <a className="levitate-admin-logo-link" href={showBack ? "/inscripciones" : "/"} aria-label="Levitate MX inicio">
+        <LevitateAdminLogo />
+      </a>
+      {showBack ? null : <AdminSocials />}
     </header>
   );
 }
@@ -830,7 +838,7 @@ function RegistrationPageScaffold({ children }: { children: ReactNode }) {
 function LoadingRegistrationScreen() {
   return (
     <main className="levitate-admin-page levitate-auth-page">
-      <AdminTopBrand />
+      <AdminTopBrand showBack />
       <div className="levitate-admin-rule" aria-hidden="true" />
       <section className="levitate-auth-shell">
         <div className="levitate-auth-copy">
@@ -855,7 +863,7 @@ function LoadingRegistrationScreen() {
 export function LevitateRegistrationEntryRoute() {
   return (
     <main className="levitate-admin-page levitate-auth-page">
-      <AdminTopBrand />
+      <AdminTopBrand showBack />
       <div className="levitate-admin-rule" aria-hidden="true" />
 
       <section className="levitate-registration-choice">
@@ -950,7 +958,7 @@ function LevitateAuthScreen({
           password: getFormValue(formData, "password"),
           academy: getFormValue(formData, "academy"),
           phone: getFormValue(formData, "phone"),
-          venue: getFormValue(formData, "venue"),
+          venue: "cdmx",
         }),
         method: "POST",
       });
@@ -966,7 +974,7 @@ function LevitateAuthScreen({
 
   return (
     <main className="levitate-admin-page levitate-auth-page">
-      <AdminTopBrand />
+      <AdminTopBrand showBack />
       <div className="levitate-admin-rule" aria-hidden="true" />
 
       <section className="levitate-auth-shell">
@@ -976,11 +984,14 @@ function LevitateAuthScreen({
           <span aria-hidden="true" />
           <div>
             <ShieldCheck aria-hidden="true" size={22} />
-            <strong>Gestión privada para registrar participantes, coreógrafos y bailes.</strong>
+            <strong>
+              Gestión privada para titulares y responsables de academias. Registra a tus participantes, maestros y
+              coreografías.
+            </strong>
           </div>
         </div>
 
-        <section className="levitate-auth-card" aria-label="Acceso de usuario">
+        <section className={`levitate-auth-card levitate-auth-card--${mode}`} aria-label="Acceso de usuario">
           <div className="levitate-auth-tabs" role="tablist" aria-label="Acceso o registro">
             <button
               aria-selected={mode === "login"}
@@ -1011,7 +1022,7 @@ function LevitateAuthScreen({
           </div>
 
           {mode === "login" ? (
-            <form className="levitate-auth-form" onSubmit={handleLoginSubmit}>
+            <form className="levitate-auth-form levitate-auth-form--login" onSubmit={handleLoginSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
               <DemoCredentialsHint
                 label="Demo academia"
@@ -1031,9 +1042,10 @@ function LevitateAuthScreen({
               </button>
             </form>
           ) : (
-            <form className="levitate-auth-form" onSubmit={handleRegisterSubmit}>
+            <form className="levitate-auth-form levitate-auth-form--register" onSubmit={handleRegisterSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
-              <AdminField icon={Users} label="Nombre">
+              <span className="levitate-auth-form__section-label">Responsable</span>
+              <AdminField icon={Users} label="Nombre del responsable">
                 <input autoComplete="name" name="name" required type="text" />
               </AdminField>
               <AdminField icon={AtSign} label="Usuario">
@@ -1045,14 +1057,12 @@ function LevitateAuthScreen({
               <AdminField helper="Mínimo 8 caracteres." icon={KeyRound} label="Contraseña">
                 <input autoComplete="new-password" minLength={8} name="password" required type="password" />
               </AdminField>
-              <AdminField icon={Building2} label="Academia">
+              <span className="levitate-auth-form__section-label">Academia</span>
+              <AdminField icon={Building2} label="Nombre de la Academia o Escuela">
                 <input name="academy" required type="text" />
               </AdminField>
               <AdminField icon={Phone} label="Teléfono">
                 <input autoComplete="tel" name="phone" type="tel" />
-              </AdminField>
-              <AdminField icon={CalendarDays} label="Sede">
-                <AdminSelect defaultValue="cdmx" id="auth-venue" name="venue" options={venueOptions} />
               </AdminField>
               <AdminStatusMessage message={registerError} tone="error" />
               <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
@@ -1111,7 +1121,7 @@ function LevitateStudentAuthScreen({
 
   return (
     <main className="levitate-admin-page levitate-auth-page">
-      <AdminTopBrand />
+      <AdminTopBrand showBack />
       <div className="levitate-admin-rule" aria-hidden="true" />
 
       <section className="levitate-auth-shell levitate-student-auth-shell">
