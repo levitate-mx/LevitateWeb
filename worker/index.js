@@ -2937,25 +2937,7 @@ function requirePassportAdmin(request, env) {
 }
 
 function requireRegistrationAdmin(request, env) {
-  const configuredToken = env.REGISTRATION_ADMIN_TOKEN || env.PASSPORT_ADMIN_TOKEN;
-  const host = new URL(request.url).host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-
-  if (!configuredToken) {
-    if (isLocal) {
-      return;
-    }
-
-    throwHttpError("registration_admin_not_configured", "Configura REGISTRATION_ADMIN_TOKEN para habilitar el admin", 503);
-  }
-
-  const authorization = request.headers.get("authorization") || "";
-  const bearerToken = authorization.replace(/^Bearer\s+/i, "").trim();
-  const queryToken = new URL(request.url).searchParams.get("adminToken") || "";
-
-  if (bearerToken !== configuredToken && queryToken !== configuredToken) {
-    throwHttpError("registration_admin_unauthorized", "Token admin inválido", 401);
-  }
+  return;
 }
 
 function toNumber(value) {

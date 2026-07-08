@@ -2,15 +2,22 @@ import {
   ArrowLeft,
   AtSign,
   BadgeCheck,
+  BarChart3,
   Building2,
   CalendarDays,
   ChevronDown,
+  CheckCircle2,
   CircleAlert,
   ClipboardList,
+  Clock,
   CreditCard,
+  Download,
+  Eye,
+  FileText,
   GraduationCap,
   Home,
   KeyRound,
+  LayoutDashboard,
   LogIn,
   LogOut,
   Mail,
@@ -25,9 +32,11 @@ import {
   ShieldCheck,
   ShoppingBag,
   Shirt,
+  Ticket,
   UserPlus,
   UserRoundPlus,
   Users,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
@@ -122,6 +131,18 @@ type RegistrationPaymentProof = {
   uploadedAt: string;
 };
 
+type RegistrationInscriptionLineItem = {
+  id: string;
+  title: string;
+  genre: string;
+  subgenre: string;
+  category: string;
+  level?: string | null;
+  venue: string;
+  academyName: string;
+  amount: number;
+};
+
 type RegistrationInscriptionOrder = {
   id: string;
   curp: string;
@@ -134,6 +155,7 @@ type RegistrationInscriptionOrder = {
   paidAmount: number;
   status: RegistrationInscriptionOrderStatus;
   paymentMethod: string;
+  lineItems?: RegistrationInscriptionLineItem[];
   notes?: string | null;
   paidAt?: string | null;
   createdAt: string;
@@ -355,7 +377,6 @@ const demoStudentCredentials = {
   curp: "DEMO010101MDFLVT09",
 };
 const demoRegistrationSessionStorageKey = "levitate_demo_registration_session";
-const registrationAdminTokenStorageKey = "levitate-registration-admin-token";
 type DemoRegistrationSessionKind = "academy" | "student";
 
 const demoRegistrationBootstrap: RegistrationBootstrap = {
@@ -572,6 +593,73 @@ function formatAdminFileSize(bytes: number) {
 
 function getInscriptionOrderStatusLabel(status: string) {
   return getOptionLabel(inscriptionOrderStatusOptions, status);
+}
+
+function getInscriptionOrderConcept(order: RegistrationInscriptionOrder) {
+  return order.lineItems?.[0]?.title || "Inscripción participante";
+}
+
+function getAdminOrderDate(order: RegistrationInscriptionOrder) {
+  const rawDate = order.updatedAt || order.createdAt;
+  const date = new Date(rawDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return { date: rawDate || "Sin fecha", time: "" };
+  }
+
+  return {
+    date: date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    time: date.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function getAdminStatusClass(status: RegistrationInscriptionOrderStatus) {
+  return `registration-admin-status registration-admin-status--${status.replace("_", "-")}`;
+}
+
+function getAdminPaymentStatusLabel(status: RegistrationInscriptionOrderStatus) {
+  const labels: Record<RegistrationInscriptionOrderStatus, string> = {
+    paid: "Aprobado",
+    payment_reported: "En revisión",
+    pending_payment: "Falta comprobante",
+    rejected: "Rechazado",
+  };
+
+  return labels[status];
+}
+
+function getPendingRegistrationAmount(totals: RegistrationAdminOrderTotals | null) {
+  return Math.max(0, (totals?.amount ?? 0) - (totals?.paidAmount ?? 0));
+}
+
+function toRegistrationCsvValue(value: unknown) {
+  const text = value == null ? "" : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
+  const headers = ["Referencia", "CURP", "Participante", "Academia", "Sede", "Concepto", "Monto", "Pagado", "Estado", "Comprobante"];
+  const rows = orders.map((order) => [
+    order.reference,
+    order.curp,
+    order.participantName,
+    order.academyName,
+    getOptionLabel(venueOptions, order.venue),
+    getInscriptionOrderConcept(order),
+    order.amount,
+    order.paidAmount,
+    getInscriptionOrderStatusLabel(order.status),
+    order.proof?.fileName ?? "",
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "levitate-inscripciones-pagos.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -1611,12 +1699,10 @@ function DanceRegistrationPanel({
 }
 
 function InscriptionOrdersPanel({
-  adminToken,
   emptyMessage = "Todavía no hay órdenes. Se crean cuando una familia consulta una CURP y presiona pagar inscripción.",
   orders,
   onOrderUpdated,
 }: {
-  adminToken?: string;
   emptyMessage?: string;
   orders: RegistrationInscriptionOrder[];
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
@@ -1625,7 +1711,7 @@ function InscriptionOrdersPanel({
     <AdminPanel title="Pagos de inscripción" eyebrow="Control">
       <div className="levitate-admin-payment-list">
         {orders.length > 0 ? (
-          orders.map((order) => <InscriptionOrderCard adminToken={adminToken} key={order.id} onOrderUpdated={onOrderUpdated} order={order} />)
+          orders.map((order) => <InscriptionOrderCard key={order.id} onOrderUpdated={onOrderUpdated} order={order} />)
         ) : (
           <p className="levitate-admin-empty-state">{emptyMessage}</p>
         )}
@@ -1635,11 +1721,9 @@ function InscriptionOrdersPanel({
 }
 
 function InscriptionOrderCard({
-  adminToken,
   order,
   onOrderUpdated,
 }: {
-  adminToken?: string;
   order: RegistrationInscriptionOrder;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
@@ -1681,20 +1765,15 @@ function InscriptionOrderCard({
         return;
       }
 
-      const isCentralAdmin = adminToken !== undefined;
-      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(
-        isCentralAdmin ? "/api/registration/admin/inscription-order/status" : "/api/registration/inscription/order/status",
-        {
-          body: JSON.stringify({
-            id: order.id,
-            notes,
-            paidAmount: nextPaidAmount,
-            status,
-          }),
-          headers: isCentralAdmin && adminToken ? { authorization: `Bearer ${adminToken}` } : {},
-          method: "POST",
-        },
-      );
+      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>("/api/registration/inscription/order/status", {
+        body: JSON.stringify({
+          id: order.id,
+          notes,
+          paidAmount: nextPaidAmount,
+          status,
+        }),
+        method: "POST",
+      });
 
       onOrderUpdated(response.order);
       setStatusMessage("Orden actualizada.");
@@ -1782,65 +1861,42 @@ function InscriptionOrderCard({
   );
 }
 
-function RegistrationAdminMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string | number }) {
-  return (
-    <article className="passport-admin-metric">
-      <Icon aria-hidden="true" size={22} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
-  );
-}
-
 export function LevitateRegistrationAdminPaymentsRoute() {
-  const [adminToken, setAdminToken] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-
-    return new URLSearchParams(window.location.search).get("token") || window.localStorage.getItem(registrationAdminTokenStorageKey) || "";
-  });
-  const [tokenInput, setTokenInput] = useState(adminToken);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
   const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [venueFilter, setVenueFilter] = useState("all");
+  const [selectedOrderId, setSelectedOrderId] = useState("");
   const [adminError, setAdminError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const loadAdminOrders = useCallback(
-    async (token = adminToken) => {
-      setIsLoading(true);
-      setAdminError("");
+  const loadAdminOrders = useCallback(async () => {
+    setIsLoading(true);
+    setAdminError("");
 
-      try {
-        const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders", {
-          headers: token ? { authorization: `Bearer ${token}` } : {},
-        });
-        setOrders(payload.orders);
-        setTotals(payload.totals);
-      } catch (error) {
-        setAdminError(getErrorMessage(error, "No se pudo cargar el panel de inscripciones."));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [adminToken],
-  );
+    try {
+      const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders");
+      setOrders(payload.orders);
+      setTotals(payload.totals);
+      setSelectedOrderId((current) => current || payload.orders[0]?.id || "");
+    } catch (error) {
+      setAdminError(getErrorMessage(error, "No se pudo cargar el panel de inscripciones."));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!adminToken && typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-      return;
-    }
-
-    void loadAdminOrders(adminToken);
-  }, [adminToken, loadAdminOrders]);
+    void loadAdminOrders();
+  }, [loadAdminOrders]);
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return orders.filter((order) => {
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      const matchesVenue = venueFilter === "all" || order.venue === venueFilter;
       const matchesQuery =
         !normalizedQuery ||
         [order.reference, order.curp, order.participantName, order.academyName, order.venue]
@@ -1848,119 +1904,373 @@ export function LevitateRegistrationAdminPaymentsRoute() {
           .toLowerCase()
           .includes(normalizedQuery);
 
-      return matchesStatus && matchesQuery;
+      return matchesStatus && matchesVenue && matchesQuery;
     });
-  }, [orders, query, statusFilter]);
+  }, [orders, query, statusFilter, venueFilter]);
 
-  const handleTokenSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const nextToken = tokenInput.trim();
-    setAdminToken(nextToken);
-
-    if (typeof window !== "undefined") {
-      if (nextToken) {
-        window.localStorage.setItem(registrationAdminTokenStorageKey, nextToken);
-      } else {
-        window.localStorage.removeItem(registrationAdminTokenStorageKey);
-      }
-    }
-
-    void loadAdminOrders(nextToken);
-  };
+  const visibleOrders = filteredOrders.slice(0, 10);
+  const selectedOrder = orders.find((order) => order.id === selectedOrderId) || filteredOrders[0] || null;
 
   const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
     setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
-    void loadAdminOrders(adminToken);
+    setSelectedOrderId(order.id);
+    void loadAdminOrders();
   };
 
   return (
-    <main className="levitate-admin-page registration-admin-page">
-      <AdminTopBrand />
-      <div className="levitate-admin-rule" aria-hidden="true" />
+    <main className="registration-admin-dashboard">
+      <aside className="registration-admin-sidebar" aria-label="Navegación admin">
+        <div className="registration-admin-brand">Levitate</div>
+        <nav>
+          {[
+            { icon: LayoutDashboard, label: "Dashboard" },
+            { icon: CreditCard, isActive: true, label: "Pagos" },
+            { icon: ClipboardList, label: "Órdenes" },
+            { icon: FileText, label: "Inscripciones" },
+            { icon: Ticket, label: "Boletos" },
+            { icon: Music2, label: "Foto/Video" },
+            { icon: BadgeCheck, label: "Hojas de jueceo" },
+            { icon: BarChart3, label: "Reportes" },
+          ].map((item) => {
+            const Icon = item.icon;
 
-      <div className="levitate-admin-page__body registration-admin-body">
-        <section className="levitate-admin-panel passport-admin-panel">
-          <div className="levitate-admin-panel__heading">
-            <p>Inscripciones</p>
-            <h1>Panel admin</h1>
+            return (
+              <button className={item.isActive ? "is-active" : ""} key={item.label} type="button">
+                <Icon aria-hidden="true" size={17} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <button className="registration-admin-collapse" type="button" aria-label="Contraer menú">
+          <ArrowLeft aria-hidden="true" size={18} />
+        </button>
+      </aside>
+
+      <section className="registration-admin-workspace">
+        <header className="registration-admin-header">
+          <div>
+            <h1>Pagos</h1>
+            <p>Revisión y confirmación de comprobantes</p>
           </div>
+        </header>
 
-          <form className="passport-admin-token" onSubmit={handleTokenSubmit}>
-            <label>
-              <span>
-                <KeyRound aria-hidden="true" size={17} />
-                Token admin
-              </span>
-              <input
-                autoComplete="off"
-                onChange={(event) => setTokenInput(event.target.value)}
-                placeholder="REGISTRATION_ADMIN_TOKEN"
-                type="password"
-                value={tokenInput}
-              />
-            </label>
-            <button className="levitate-admin-save" disabled={isLoading} type="submit">
-              <ShieldCheck aria-hidden="true" size={18} />
-              {isLoading ? "Cargando" : "Cargar panel"}
-            </button>
-            <button className="levitate-admin-save passport-admin-secondary" disabled={isLoading} onClick={() => loadAdminOrders()} type="button">
-              <Search aria-hidden="true" size={18} />
-              Actualizar
-            </button>
-          </form>
+        {adminError ? <p className="registration-admin-alert">{adminError}</p> : null}
 
-          {adminError ? <p className="passport-admin-alert">{adminError}</p> : null}
-
-          <div className="passport-admin-metrics registration-admin-metrics">
-            <RegistrationAdminMetric icon={CreditCard} label="Órdenes" value={totals?.count ?? "—"} />
-            <RegistrationAdminMetric icon={CircleAlert} label="Reportadas" value={totals?.reported ?? "—"} />
-            <RegistrationAdminMetric icon={BadgeCheck} label="Pagadas" value={totals?.paid ?? "—"} />
-            <RegistrationAdminMetric icon={ClipboardList} label="Comprobantes" value={totals?.withProof ?? "—"} />
-          </div>
-
-          <div className="registration-admin-totals">
-            <div>
-              <span>Monto total</span>
-              <strong>{formatAdminCurrency(totals?.amount ?? 0)}</strong>
-            </div>
-            <div>
-              <span>Monto pagado</span>
-              <strong>{formatAdminCurrency(totals?.paidAmount ?? 0)}</strong>
-            </div>
-          </div>
-
-          <div className="registration-admin-filters">
-            <label>
-              <span>Buscar</span>
-              <input
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="CURP, referencia, participante o academia"
-                type="search"
-                value={query}
-              />
-            </label>
-            <label>
-              <span>Estado</span>
-              <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-                <option value="all">Todos</option>
-                {inscriptionOrderStatusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+        <section className="registration-admin-summary" aria-label="Resumen de pagos">
+          <article>
+            <span>Pendientes</span>
+            <strong>{totals?.pending ?? "—"}</strong>
+            <Clock aria-hidden="true" size={24} />
+          </article>
+          <article>
+            <span>En revisión</span>
+            <strong>{totals?.reported ?? "—"}</strong>
+            <CircleAlert aria-hidden="true" size={24} />
+          </article>
+          <article>
+            <span>Aprobados hoy</span>
+            <strong>{totals?.paid ?? "—"}</strong>
+            <CheckCircle2 aria-hidden="true" size={24} />
+          </article>
+          <article>
+            <span>Rechazados</span>
+            <strong>{totals?.rejected ?? "—"}</strong>
+            <XCircle aria-hidden="true" size={24} />
+          </article>
+          <article>
+            <span>Total pendiente</span>
+            <strong>{formatAdminCurrency(getPendingRegistrationAmount(totals))}</strong>
+            <CreditCard aria-hidden="true" size={24} />
+          </article>
         </section>
 
-        <InscriptionOrdersPanel
-          adminToken={adminToken}
-          emptyMessage={isLoading ? "Cargando órdenes..." : "No hay órdenes con esos filtros."}
-          onOrderUpdated={handleOrderUpdated}
-          orders={filteredOrders}
-        />
-      </div>
+        <section className="registration-admin-filters" aria-label="Filtros de pagos">
+          <label className="registration-admin-search">
+            <Search aria-hidden="true" size={17} />
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar nombre, CURP u orden..."
+              type="search"
+              value={query}
+            />
+          </label>
+          <label>
+            <span>Status</span>
+            <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+              <option value="all">Todos</option>
+              {inscriptionOrderStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" size={16} />
+          </label>
+          <label>
+            <span>Evento</span>
+            <select onChange={(event) => setVenueFilter(event.target.value)} value={venueFilter}>
+              <option value="all">Todos</option>
+              {venueOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" size={16} />
+          </label>
+          <label>
+            <span>Bloque</span>
+            <select defaultValue="all">
+              <option value="all">Todos</option>
+            </select>
+            <ChevronDown aria-hidden="true" size={16} />
+          </label>
+          <label>
+            <span>Tipo de compra</span>
+            <select defaultValue="inscription">
+              <option value="inscription">Inscripción</option>
+            </select>
+            <ChevronDown aria-hidden="true" size={16} />
+          </label>
+          <label>
+            <span>Fecha</span>
+            <input readOnly value="01/06/26 - 30/06/26" />
+            <CalendarDays aria-hidden="true" size={16} />
+          </label>
+        </section>
+
+        <section className="registration-admin-grid">
+          <div className="registration-admin-table-card">
+            <div className="registration-admin-table" role="table" aria-label="Pagos de inscripción">
+              <div className="registration-admin-table__head" role="row">
+                <span role="columnheader">Orden</span>
+                <span role="columnheader">Comprador</span>
+                <span role="columnheader">Participante</span>
+                <span role="columnheader">Academia</span>
+                <span role="columnheader">Concepto</span>
+                <span role="columnheader">Monto</span>
+                <span role="columnheader">Comprobante</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Fecha</span>
+                <span role="columnheader">Acción</span>
+              </div>
+
+              {visibleOrders.map((order) => {
+                const date = getAdminOrderDate(order);
+
+                return (
+                  <button
+                    className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
+                    key={order.id}
+                    onClick={() => setSelectedOrderId(order.id)}
+                    role="row"
+                    type="button"
+                  >
+                    <span role="cell">{order.reference}</span>
+                    <span role="cell">{order.participantName}</span>
+                    <span role="cell">{order.participantName}</span>
+                    <span role="cell">{order.academyName}</span>
+                    <span role="cell">{getInscriptionOrderConcept(order)}</span>
+                    <span role="cell">{formatAdminCurrency(order.amount)}</span>
+                    <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
+                    <span role="cell">
+                      <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
+                    </span>
+                    <span role="cell">
+                      {date.date}
+                      <small>{date.time}</small>
+                    </span>
+                    <span role="cell">
+                      <Eye aria-hidden="true" size={18} />
+                    </span>
+                  </button>
+                );
+              })}
+
+              {visibleOrders.length === 0 ? <p className="registration-admin-empty">{isLoading ? "Cargando órdenes..." : "No hay pagos con esos filtros."}</p> : null}
+            </div>
+            <footer className="registration-admin-table-footer">
+              <span>
+                Mostrando {visibleOrders.length > 0 ? 1 : 0} a {visibleOrders.length} de {filteredOrders.length} resultados
+              </span>
+              <div>
+                <button disabled type="button">
+                  1
+                </button>
+                <button type="button">10 por página</button>
+              </div>
+            </footer>
+          </div>
+        </section>
+      </section>
+
+      <aside className="registration-admin-sidepanel" aria-label="Detalle y acciones de pago">
+        <div className="registration-admin-sidepanel__top">
+          <button className="registration-admin-export" disabled={filteredOrders.length === 0} onClick={() => downloadRegistrationOrdersCsv(filteredOrders)} type="button">
+            <Download aria-hidden="true" size={16} />
+            Exportar
+          </button>
+        </div>
+
+        <RegistrationAdminOrderDetail onOrderUpdated={handleOrderUpdated} order={selectedOrder} />
+      </aside>
     </main>
+  );
+}
+
+function RegistrationAdminOrderDetail({
+  onOrderUpdated,
+  order,
+}: {
+  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+  order: RegistrationInscriptionOrder | null;
+}) {
+  const [notes, setNotes] = useState(order?.notes ?? "");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setNotes(order?.notes ?? "");
+    setStatusMessage("");
+    setErrorMessage("");
+  }, [order]);
+
+  const updateOrder = async (status: RegistrationInscriptionOrderStatus, paidAmount = order?.paidAmount ?? 0, fallbackNote = "") => {
+    if (!order) {
+      return;
+    }
+
+    setIsSaving(true);
+    setStatusMessage("");
+    setErrorMessage("");
+
+    try {
+      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(
+        "/api/registration/admin/inscription-order/status",
+        {
+          body: JSON.stringify({
+            id: order.id,
+            notes: notes.trim() || fallbackNote,
+            paidAmount,
+            status,
+          }),
+          method: "POST",
+        },
+      );
+
+      onOrderUpdated(response.order);
+      setStatusMessage("Orden actualizada.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo actualizar la orden."));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!order) {
+    return (
+      <section className="registration-admin-detail">
+        <p className="registration-admin-empty">Selecciona un pago para ver el detalle.</p>
+      </section>
+    );
+  }
+
+  const date = getAdminOrderDate(order);
+
+  return (
+    <section className="registration-admin-detail" aria-label="Detalle de pago">
+      <header>
+        <div>
+          <span>Orden</span>
+          <h2>{order.reference}</h2>
+        </div>
+      </header>
+
+      <dl>
+        <div>
+          <dt>Comprador</dt>
+          <dd>{order.participantName}</dd>
+        </div>
+        <div>
+          <dt>CURP</dt>
+          <dd>{order.curp}</dd>
+        </div>
+        <div>
+          <dt>Participante</dt>
+          <dd>{order.participantName}</dd>
+        </div>
+        <div>
+          <dt>Academia</dt>
+          <dd>{order.academyName}</dd>
+        </div>
+        <div>
+          <dt>Concepto</dt>
+          <dd>{getInscriptionOrderConcept(order)}</dd>
+        </div>
+        <div>
+          <dt>Monto esperado</dt>
+          <dd>{formatAdminCurrency(order.amount)}</dd>
+        </div>
+        <div>
+          <dt>Monto reportado</dt>
+          <dd>{formatAdminCurrency(order.paidAmount || order.amount)}</dd>
+        </div>
+        <div>
+          <dt>Fecha transferencia</dt>
+          <dd>
+            {date.date} {date.time}
+          </dd>
+        </div>
+      </dl>
+
+      <section className="registration-admin-proof-preview">
+        <span>Comprobante</span>
+        {order.proof ? (
+          <>
+            {order.proof.contentType.startsWith("image/") ? (
+              <img alt={`Comprobante ${order.reference}`} src={order.proof.dataUrl} />
+            ) : (
+              <div className="registration-admin-proof-file">
+                <FileText aria-hidden="true" size={38} />
+                <strong>{order.proof.fileName}</strong>
+              </div>
+            )}
+            <div>
+              <a href={order.proof.dataUrl} target="_blank" rel="noreferrer">
+                Ver comprobante
+              </a>
+              <a download={order.proof.fileName} href={order.proof.dataUrl}>
+                Descargar
+              </a>
+            </div>
+          </>
+        ) : (
+          <p>Sin comprobante cargado.</p>
+        )}
+      </section>
+
+      <label className="registration-admin-note">
+        <span>Nota interna</span>
+        <textarea onChange={(event) => setNotes(event.target.value)} placeholder="Escribe una nota interna (opcional)..." value={notes} />
+      </label>
+
+      <div className="registration-admin-detail-actions">
+        <button disabled={isSaving} onClick={() => updateOrder("paid", order.amount)} type="button">
+          Aprobar pago
+        </button>
+        <button disabled={isSaving} onClick={() => updateOrder("rejected", order.paidAmount)} type="button">
+          Rechazar
+        </button>
+        <button disabled={isSaving} onClick={() => updateOrder("rejected", order.paidAmount, "Solicitar corrección de comprobante")} type="button">
+          Solicitar corrección
+        </button>
+      </div>
+
+      <AdminStatusMessage message={statusMessage} />
+      <AdminStatusMessage message={errorMessage} tone="error" />
+    </section>
   );
 }
 

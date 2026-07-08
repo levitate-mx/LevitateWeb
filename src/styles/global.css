@@ -17894,72 +17894,737 @@ button {
   width: 100%;
 }
 
-.registration-admin-body {
-  width: min(calc(100% - 40px), 1320px);
+.registration-admin-dashboard {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 206px minmax(0, 1fr) 360px;
+  align-items: start;
+  background: #f7f7f6;
+  color: #111;
 }
 
-.registration-admin-totals {
+.registration-admin-sidebar {
+  position: sticky;
+  top: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  padding: 30px 14px 22px;
+  background: linear-gradient(180deg, #060606, #101010);
+  color: #fff;
+}
+
+.registration-admin-brand {
+  margin: 0 8px 48px;
+  color: #fff;
+  font-family: var(--font-brand);
+  font-size: 2.05rem;
+  line-height: 1;
+}
+
+.registration-admin-sidebar nav {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.registration-admin-sidebar nav button,
+.registration-admin-collapse {
+  display: flex;
+  align-items: center;
   gap: 14px;
-  padding: 0 clamp(24px, 4vw, 38px) clamp(24px, 3vw, 34px);
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 760;
+  text-align: left;
 }
 
-.registration-admin-totals div {
+.registration-admin-sidebar nav button {
+  padding: 0 14px;
+}
+
+.registration-admin-sidebar nav button.is-active,
+.registration-admin-sidebar nav button:hover,
+.registration-admin-sidebar nav button:focus-visible {
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+}
+
+.registration-admin-collapse {
+  justify-content: center;
+  justify-self: center;
+  width: 44px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.registration-admin-workspace {
   display: grid;
-  gap: 7px;
-  padding: 18px;
-  border: 1px solid rgba(17, 16, 21, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.62);
+  align-content: start;
+  gap: 26px;
+  min-width: 0;
+  padding: 28px 30px 34px;
 }
 
-.registration-admin-totals span,
+.registration-admin-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.registration-admin-header h1 {
+  margin: 0;
+  color: #111;
+  font-size: clamp(1.8rem, 3vw, 2.55rem);
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.registration-admin-header p {
+  margin: 8px 0 0;
+  color: rgba(17, 17, 17, 0.56);
+  font-size: 0.96rem;
+  font-weight: 680;
+}
+
+.registration-admin-sidepanel {
+  position: sticky;
+  top: 0;
+  display: grid;
+  align-content: start;
+  gap: 20px;
+  min-height: 100vh;
+  max-height: 100vh;
+  overflow: auto;
+  padding: 18px 16px 26px;
+  border-left: 1px solid #dedede;
+  background: #fff;
+}
+
+.registration-admin-sidepanel__top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.registration-admin-sidepanel .registration-admin-export {
+  flex: 0 0 auto;
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.registration-admin-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid #b9b9b9;
+  border-radius: 6px;
+  background: #fff;
+  color: #171717;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 840;
+}
+
+.registration-admin-export {
+  padding: 0 16px;
+}
+
+.registration-admin-alert {
+  margin: -8px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(195, 50, 88, 0.28);
+  border-radius: 6px;
+  background: rgba(195, 50, 88, 0.08);
+  color: #a9234d;
+  font-weight: 780;
+}
+
+.registration-admin-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.registration-admin-summary article {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 108px;
+  padding: 28px 26px 22px;
+  border-right: 1px solid #dedede;
+}
+
+.registration-admin-summary article:last-child {
+  border-right: 0;
+}
+
+.registration-admin-summary span,
 .registration-admin-filters span {
-  color: rgba(17, 16, 21, 0.52);
-  font-size: 0.7rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.82rem;
+  font-weight: 780;
+  line-height: 1;
 }
 
-.registration-admin-totals strong {
-  color: var(--admin-ink);
-  font-size: clamp(1.4rem, 2.6vw, 2.4rem);
-  font-weight: 900;
+.registration-admin-summary strong {
+  color: #111;
+  font-size: clamp(1.45rem, 2.4vw, 2.1rem);
+  font-weight: 920;
+  line-height: 1;
+}
+
+.registration-admin-summary svg {
+  position: absolute;
+  top: 42px;
+  right: 24px;
+  color: rgba(17, 17, 17, 0.56);
+}
+
+.registration-admin-summary article:nth-child(3) svg {
+  color: #5c8f72;
+}
+
+.registration-admin-summary article:nth-child(4) svg {
+  color: var(--admin-pink);
 }
 
 .registration-admin-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.28fr);
-  gap: 14px;
-  padding: 0 clamp(24px, 4vw, 38px) clamp(28px, 4vw, 40px);
+  grid-template-columns:
+    minmax(220px, 1.6fr)
+    minmax(106px, 0.8fr)
+    minmax(118px, 1fr)
+    minmax(106px, 0.8fr)
+    minmax(128px, 1fr)
+    minmax(145px, 1.05fr);
+  gap: 12px;
 }
 
 .registration-admin-filters label {
+  position: relative;
   display: grid;
-  gap: 9px;
+  min-width: 0;
+  min-height: 54px;
+  align-content: center;
+  gap: 2px;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.registration-admin-search {
+  display: flex !important;
+  align-items: center;
+  gap: 10px !important;
+  padding-right: 12px !important;
+}
+
+.registration-admin-search input {
+  flex: 1 1 auto;
+  height: auto !important;
+  min-width: 0;
+  padding: 0 !important;
 }
 
 .registration-admin-filters input,
 .registration-admin-filters select {
   width: 100%;
-  height: 48px;
-  border: 1px solid rgba(17, 16, 21, 0.14);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--admin-ink);
+  min-width: 0;
+  height: 22px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #171717;
   font: inherit;
-  font-size: 0.96rem;
-  font-weight: 700;
-}
-
-.registration-admin-filters input {
-  padding: 0 15px;
+  font-size: 0.86rem;
+  font-weight: 820;
+  line-height: 1.1;
+  text-overflow: ellipsis;
 }
 
 .registration-admin-filters select {
-  padding: 0 12px;
+  appearance: none;
+}
+
+.registration-admin-filters label > svg {
+  position: absolute;
+  right: 14px;
+  bottom: 18px;
+  color: rgba(17, 17, 17, 0.62);
+  pointer-events: none;
+}
+
+.registration-admin-filters .registration-admin-search > svg {
+  position: static !important;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+}
+
+.registration-admin-grid {
+  min-width: 0;
+}
+
+.registration-admin-table-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.registration-admin-table {
+  min-width: 980px;
+}
+
+.registration-admin-table-card {
+  overflow-x: auto;
+}
+
+.registration-admin-table__head,
+.registration-admin-table__row {
+  display: grid;
+  grid-template-columns: 1.12fr 1.18fr 1.18fr 0.98fr 1.18fr 0.82fr 0.9fr 1fr 0.86fr 0.58fr;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+}
+
+.registration-admin-table__head {
+  min-height: 52px;
+  border-bottom: 1px solid #dedede;
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.registration-admin-table__row {
+  width: 100%;
+  min-height: 62px;
+  border: 0;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fff;
+  color: rgba(17, 17, 17, 0.76);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 720;
+  text-align: left;
+}
+
+.registration-admin-table__row:nth-child(odd) {
+  background: #fafafa;
+}
+
+.registration-admin-table__row:hover,
+.registration-admin-table__row.is-selected {
+  background: #f2f2f2;
+}
+
+.registration-admin-table__row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registration-admin-table__row small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.76rem;
+}
+
+.registration-admin-status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #d7d7d7;
+  border-radius: 5px;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 820;
+  line-height: 1;
+}
+
+.registration-admin-status--pending-payment {
+  border-color: rgba(219, 71, 119, 0.32);
+  background: rgba(219, 71, 119, 0.08);
+  color: #b52d61;
+}
+
+.registration-admin-status--payment-reported {
+  border-color: rgba(214, 137, 46, 0.34);
+  background: rgba(214, 137, 46, 0.1);
+  color: #9e661b;
+}
+
+.registration-admin-status--paid {
+  border-color: rgba(73, 136, 97, 0.32);
+  background: rgba(73, 136, 97, 0.1);
+  color: #35734c;
+}
+
+.registration-admin-status--rejected {
+  border-color: rgba(193, 57, 79, 0.34);
+  background: rgba(193, 57, 79, 0.08);
+  color: #a62c45;
+}
+
+.registration-admin-empty {
+  margin: 0;
+  padding: 22px;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.92rem;
+  font-weight: 720;
+}
+
+.registration-admin-table-footer {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding: 0 14px;
+  border-top: 1px solid #dedede;
+  color: rgba(17, 17, 17, 0.54);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.registration-admin-table-footer div {
+  display: flex;
+  gap: 8px;
+}
+
+.registration-admin-table-footer button {
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-weight: 820;
+}
+
+.registration-admin-detail {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.registration-admin-detail header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.registration-admin-detail header span,
+.registration-admin-proof-preview > span,
+.registration-admin-note span {
+  color: rgba(17, 17, 17, 0.62);
+  font-size: 0.78rem;
+  font-weight: 860;
+}
+
+.registration-admin-detail h2 {
+  margin: 5px 0 0;
+  color: #111;
+  font-size: clamp(1.35rem, 2vw, 1.72rem);
+  font-weight: 920;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.registration-admin-detail dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.registration-admin-detail dl div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 11px 0;
+  border-top: 1px solid #ececec;
+}
+
+.registration-admin-detail dt,
+.registration-admin-detail dd {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.registration-admin-detail dt {
+  color: rgba(17, 17, 17, 0.56);
+  font-weight: 760;
+}
+
+.registration-admin-detail dd {
+  color: #171717;
+  font-weight: 840;
+  overflow-wrap: anywhere;
+}
+
+.registration-admin-proof-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.registration-admin-proof-preview img,
+.registration-admin-proof-file {
+  width: 100%;
+  min-height: 230px;
+  max-height: 260px;
+  object-fit: contain;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  background: #fbfbfb;
+}
+
+.registration-admin-proof-file {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: rgba(17, 17, 17, 0.58);
+  text-align: center;
+}
+
+.registration-admin-proof-preview div:last-child {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.registration-admin-proof-preview a {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  background: #fff;
+  color: #171717;
+  font-size: 0.82rem;
+  font-weight: 840;
+}
+
+.registration-admin-note {
+  display: grid;
+  gap: 8px;
+}
+
+.registration-admin-note textarea {
+  color-scheme: light;
+  min-height: 78px;
+  resize: vertical;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fff;
+  padding: 12px;
+  color: #111;
+  caret-color: #111;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 680;
+  -webkit-text-fill-color: #111;
+}
+
+.registration-admin-note textarea:focus {
+  border-color: #111;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.08);
+}
+
+.registration-admin-detail-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.registration-admin-detail-actions button {
+  min-height: 42px;
+  border: 1px solid #111;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 860;
+}
+
+.registration-admin-detail-actions button:first-child {
+  background: #050505;
+  color: #fff;
+}
+
+.registration-admin-detail-actions button:last-child {
+  border: 0;
+  color: var(--admin-pink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 1320px) {
+  .registration-admin-dashboard {
+    grid-template-columns: 206px minmax(0, 1fr);
+  }
+
+  .registration-admin-workspace {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  .registration-admin-sidepanel {
+    grid-column: 2;
+    position: static;
+    max-height: none;
+    min-height: 0;
+    padding: 24px;
+    border-top: 1px solid #dedede;
+    border-left: 0;
+  }
+
+  .registration-admin-filters {
+    grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .registration-admin-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-admin-sidebar {
+    position: static;
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .registration-admin-brand {
+    margin-bottom: 18px;
+  }
+
+  .registration-admin-sidebar nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .registration-admin-sidebar nav button {
+    justify-content: center;
+    padding: 0 10px;
+  }
+
+  .registration-admin-collapse {
+    display: none;
+  }
+
+  .registration-admin-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registration-admin-summary article:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .registration-admin-summary article:last-child {
+    grid-column: 1 / -1;
+    border-top: 1px solid #dedede;
+  }
+
+  .registration-admin-sidepanel {
+    grid-column: auto;
+  }
+
+  .registration-admin-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registration-admin-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .registration-admin-workspace {
+    padding: 22px 14px 28px;
+  }
+
+  .registration-admin-header,
+  .registration-admin-sidepanel__top {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .registration-admin-sidebar nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registration-admin-sidebar nav button {
+    justify-content: flex-start;
+  }
+
+  .registration-admin-summary,
+  .registration-admin-filters,
+  .registration-admin-proof-preview div:last-child {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-admin-summary article,
+  .registration-admin-summary article:nth-child(2n) {
+    border-right: 0;
+    border-bottom: 1px solid #dedede;
+  }
+
+  .registration-admin-summary article:last-child {
+    border-bottom: 0;
+  }
+
+  .registration-admin-export {
+    width: 100%;
+  }
+
+  .registration-admin-table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .registration-admin-sidepanel {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .registration-admin-detail dl div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 .levitate-admin-shell {
@@ -18514,17 +19179,6 @@ button {
 
   .levitate-admin-payment-list {
     padding: 22px 18px;
-  }
-
-  .registration-admin-body {
-    width: min(calc(100% - 28px), 1320px);
-  }
-
-  .registration-admin-totals,
-  .registration-admin-filters {
-    grid-template-columns: 1fr;
-    padding-right: 18px;
-    padding-left: 18px;
   }
 
   .levitate-admin-welcome-panel {
