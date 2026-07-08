@@ -17897,7 +17897,7 @@ button {
 .registration-admin-dashboard {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 206px minmax(0, 1fr) 360px;
+  grid-template-columns: 206px minmax(0, 1fr);
   align-items: start;
   background: #f7f7f6;
   color: #111;
@@ -17992,34 +17992,6 @@ button {
   color: rgba(17, 17, 17, 0.56);
   font-size: 0.96rem;
   font-weight: 680;
-}
-
-.registration-admin-sidepanel {
-  position: sticky;
-  top: 0;
-  display: grid;
-  align-content: start;
-  gap: 20px;
-  min-height: 100vh;
-  max-height: 100vh;
-  overflow: auto;
-  padding: 18px 16px 26px;
-  border-left: 1px solid #dedede;
-  background: #fff;
-}
-
-.registration-admin-sidepanel__top {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-height: 40px;
-}
-
-.registration-admin-sidepanel .registration-admin-export {
-  flex: 0 0 auto;
-  padding-right: 12px;
-  padding-left: 12px;
 }
 
 .registration-admin-export {
@@ -18191,7 +18163,7 @@ button {
 }
 
 .registration-admin-table {
-  min-width: 980px;
+  min-width: 1120px;
 }
 
 .registration-admin-table-card {
@@ -18337,11 +18309,63 @@ button {
   background: transparent;
 }
 
+.registration-admin-drawer {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  justify-items: end;
+  pointer-events: none;
+}
+
+.registration-admin-drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(5, 5, 5, 0.28);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.registration-admin-sidepanel {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: 16px;
+  overflow: auto;
+  padding: 22px 22px 26px;
+  border: 1px solid #dedede;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+  pointer-events: auto;
+}
+
 .registration-admin-detail header {
   display: flex;
   align-items: start;
   justify-content: space-between;
   gap: 18px;
+}
+
+.registration-admin-detail__close {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #dedede;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+}
+
+.registration-admin-detail__close:hover,
+.registration-admin-detail__close:focus-visible {
+  border-color: #111;
 }
 
 .registration-admin-detail header span,
@@ -18501,16 +18525,6 @@ button {
     padding-left: 24px;
   }
 
-  .registration-admin-sidepanel {
-    grid-column: 2;
-    position: static;
-    max-height: none;
-    min-height: 0;
-    padding: 24px;
-    border-top: 1px solid #dedede;
-    border-left: 0;
-  }
-
   .registration-admin-filters {
     grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(150px, 1fr));
   }
@@ -18557,10 +18571,6 @@ button {
     border-top: 1px solid #dedede;
   }
 
-  .registration-admin-sidepanel {
-    grid-column: auto;
-  }
-
   .registration-admin-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -18575,8 +18585,7 @@ button {
     padding: 22px 14px 28px;
   }
 
-  .registration-admin-header,
-  .registration-admin-sidepanel__top {
+  .registration-admin-header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -18617,6 +18626,9 @@ button {
   }
 
   .registration-admin-sidepanel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    margin: 10px;
     padding-right: 18px;
     padding-left: 18px;
   }

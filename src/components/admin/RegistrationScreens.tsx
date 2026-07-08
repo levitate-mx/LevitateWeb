@@ -36,6 +36,7 @@ import {
   UserPlus,
   UserRoundPlus,
   Users,
+  X,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -1879,7 +1880,7 @@ export function LevitateRegistrationAdminPaymentsRoute() {
       const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders");
       setOrders(payload.orders);
       setTotals(payload.totals);
-      setSelectedOrderId((current) => current || payload.orders[0]?.id || "");
+      setSelectedOrderId((current) => (payload.orders.some((order) => order.id === current) ? current : ""));
     } catch (error) {
       setAdminError(getErrorMessage(error, "No se pudo cargar el panel de inscripciones."));
     } finally {
@@ -1890,6 +1891,21 @@ export function LevitateRegistrationAdminPaymentsRoute() {
   useEffect(() => {
     void loadAdminOrders();
   }, [loadAdminOrders]);
+
+  useEffect(() => {
+    if (!selectedOrderId) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedOrderId("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedOrderId]);
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -1909,7 +1925,7 @@ export function LevitateRegistrationAdminPaymentsRoute() {
   }, [orders, query, statusFilter, venueFilter]);
 
   const visibleOrders = filteredOrders.slice(0, 10);
-  const selectedOrder = orders.find((order) => order.id === selectedOrderId) || filteredOrders[0] || null;
+  const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
 
   const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
     setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
@@ -1953,6 +1969,10 @@ export function LevitateRegistrationAdminPaymentsRoute() {
             <h1>Pagos</h1>
             <p>Revisión y confirmación de comprobantes</p>
           </div>
+          <button className="registration-admin-export" disabled={filteredOrders.length === 0} onClick={() => downloadRegistrationOrdersCsv(filteredOrders)} type="button">
+            <Download aria-hidden="true" size={16} />
+            Exportar
+          </button>
         </header>
 
         {adminError ? <p className="registration-admin-alert">{adminError}</p> : null}
@@ -2105,24 +2125,24 @@ export function LevitateRegistrationAdminPaymentsRoute() {
         </section>
       </section>
 
-      <aside className="registration-admin-sidepanel" aria-label="Detalle y acciones de pago">
-        <div className="registration-admin-sidepanel__top">
-          <button className="registration-admin-export" disabled={filteredOrders.length === 0} onClick={() => downloadRegistrationOrdersCsv(filteredOrders)} type="button">
-            <Download aria-hidden="true" size={16} />
-            Exportar
-          </button>
+      {selectedOrder ? (
+        <div className="registration-admin-drawer" role="dialog" aria-modal="true" aria-label={`Detalle de pago ${selectedOrder.reference}`}>
+          <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedOrderId("")} type="button" aria-label="Cerrar detalle" />
+          <aside className="registration-admin-sidepanel">
+            <RegistrationAdminOrderDetail onClose={() => setSelectedOrderId("")} onOrderUpdated={handleOrderUpdated} order={selectedOrder} />
+          </aside>
         </div>
-
-        <RegistrationAdminOrderDetail onOrderUpdated={handleOrderUpdated} order={selectedOrder} />
-      </aside>
+      ) : null}
     </main>
   );
 }
 
 function RegistrationAdminOrderDetail({
+  onClose,
   onOrderUpdated,
   order,
 }: {
+  onClose: () => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
   order: RegistrationInscriptionOrder | null;
 }) {
@@ -2186,6 +2206,9 @@ function RegistrationAdminOrderDetail({
           <span>Orden</span>
           <h2>{order.reference}</h2>
         </div>
+        <button className="registration-admin-detail__close" onClick={onClose} type="button" aria-label="Cerrar detalle">
+          <X aria-hidden="true" size={18} />
+        </button>
       </header>
 
       <dl>
