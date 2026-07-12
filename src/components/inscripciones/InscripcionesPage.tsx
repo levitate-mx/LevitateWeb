@@ -724,7 +724,15 @@ function InscriptionLookupPanel() {
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 700);
   };
 
-  const createPaymentArtwork = () => {
+  const loadPaymentArtworkImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.addEventListener("load", () => resolve(image), { once: true });
+      image.addEventListener("error", () => reject(new Error("No pudimos cargar el logo.")), { once: true });
+      image.src = src;
+    });
+
+  const createPaymentArtwork = async () => {
     if (!lookup) {
       return null;
     }
@@ -742,6 +750,7 @@ function InscriptionLookupPanel() {
     const height = contentHeight + padding;
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
+    const logo = await loadPaymentArtworkImage("/assets/levitate-logo-mx.png").catch(() => null);
 
     if (!context) {
       return null;
@@ -889,6 +898,16 @@ function InscriptionLookupPanel() {
     context.lineTo(rightX - gutter / 2, height);
     context.stroke();
 
+    if (logo) {
+      const logoWidth = 176;
+      const logoHeight = logoWidth * (logo.naturalHeight / logo.naturalWidth);
+
+      context.save();
+      context.globalAlpha = 0.92;
+      context.drawImage(logo, width - padding - logoWidth, 34, logoWidth, logoHeight);
+      context.restore();
+    }
+
     drawText("Portal de pagos", padding, 58, 16, pink, 860);
     drawWrappedText(lookup.participantName, padding, 126, leftWidth, 58, 54, ink, 560, 1);
     drawText(`${lookup.academyName} · ${getVenueLabel(lookup.venue)}`.toUpperCase(), padding, 172, 16, pink, 860);
@@ -994,7 +1013,7 @@ function InscriptionLookupPanel() {
     context.stroke();
     drawText("Total a transferir", rightX, 284, 18, muted, 540);
     drawText(getOrderStatusLabel(lookup.order?.status), rightX, 320, 17, muted, 540);
-    drawRightText(formatCurrency(visibleSubtotal), rightX + rightWidth, 306, 38, ink, 820);
+    drawRightText(formatCurrency(visibleSubtotal), rightX + rightWidth, 306, 38, pink, 820);
     context.beginPath();
     context.moveTo(rightX, 350);
     context.lineTo(rightX + rightWidth, 350);
@@ -1006,13 +1025,18 @@ function InscriptionLookupPanel() {
     paymentRows.forEach((row) => {
       const labelText = row.label.toUpperCase();
       const labelX = rightX + 24;
+      const isConceptRow = "hasInfo" in row && row.hasInfo;
 
       drawRoundRect(rightX, detailY, rightWidth, 74, 8, card, softBorder);
       drawText(labelText, labelX, detailY + 45, 16, ink, 820);
 
-      if ("hasInfo" in row && row.hasInfo) {
+      if (isConceptRow) {
         setFont(16, 820);
-        const infoX = labelX + context.measureText(labelText).width + 22;
+        const labelWidth = context.measureText(labelText).width;
+        const asteriskX = labelX + labelWidth + 8;
+        const infoX = asteriskX + 22;
+
+        drawText("*", asteriskX, detailY + 45, 17, pink, 860);
 
         context.beginPath();
         context.arc(infoX, detailY + 39, 10, 0, Math.PI * 2);
@@ -1021,7 +1045,7 @@ function InscriptionLookupPanel() {
         drawText("i", infoX - 2, detailY + 45, 14, ink, 820);
       }
 
-      drawRightFittedText(row.value, rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, 720);
+      drawRightFittedText(row.value, rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, isConceptRow ? 840 : 720);
       detailY += 88;
     });
 
@@ -1103,7 +1127,7 @@ function InscriptionLookupPanel() {
   const createPaymentPdfBlob = async () => {
     await document.fonts?.ready;
 
-    const artwork = createPaymentArtwork();
+    const artwork = await createPaymentArtwork();
 
     if (!artwork) {
       return null;
@@ -1141,7 +1165,7 @@ function InscriptionLookupPanel() {
 
     await document.fonts?.ready;
 
-    const artwork = createPaymentArtwork();
+    const artwork = await createPaymentArtwork();
 
     if (!artwork) {
       return;
@@ -1465,7 +1489,8 @@ function InscriptionLookupPanel() {
                 ))}
                 <div className="inscripciones-payment-sidepanel__concept">
                   <dt>
-                    Concepto
+                    <span>Concepto</span>
+                    <em aria-hidden="true">*</em>
                     <button
                       aria-label="Usa este concepto al realizar la transferencia para identificar tu pago."
                       data-tooltip="Usa este concepto al realizar la transferencia. Nos ayuda a identificar y validar tu pago correctamente."
@@ -1474,7 +1499,9 @@ function InscriptionLookupPanel() {
                       <Info aria-hidden="true" size={15} />
                     </button>
                   </dt>
-                  <dd>{getPaymentConcept(lookup.curp)}</dd>
+                  <dd>
+                    <strong>{getPaymentConcept(lookup.curp)}</strong>
+                  </dd>
                 </div>
               </dl>
 

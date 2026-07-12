@@ -26557,7 +26557,7 @@ button {
 }
 
 .inscripciones-payment-sidepanel__amount strong {
-  color: var(--home-ink);
+  color: var(--home-pink);
   font-size: 1.38rem;
 }
 
@@ -26619,7 +26619,21 @@ button {
   display: inline-flex;
   position: relative;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  font-weight: 880;
+}
+
+.inscripciones-payment-sidepanel__concept dt em {
+  color: var(--home-pink);
+  font-style: normal;
+  font-weight: 920;
+  line-height: 1;
+}
+
+.inscripciones-payment-sidepanel__concept dd strong {
+  color: var(--home-ink);
+  font-weight: 860;
+  letter-spacing: 0.01em;
 }
 
 .inscripciones-payment-sidepanel__concept button {
@@ -26725,6 +26739,88 @@ button {
 .inscripciones-payment-sidepanel .inscripciones-button {
   min-height: 46px;
   border-radius: 6px;
+}
+
+/* Compact payment panel so the transfer + proof flow fits in a desktop viewport. */
+.inscripciones-payment-sidepanel {
+  gap: 10px;
+  padding: 24px 38px;
+}
+
+.inscripciones-payment-sidepanel__header {
+  gap: 12px;
+}
+
+.inscripciones-payment-sidepanel__header h3 {
+  margin-top: 5px;
+  font-size: 1.72rem;
+}
+
+.inscripciones-payment-sidepanel__header p {
+  max-width: 610px;
+  margin-top: 8px;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.inscripciones-share-button,
+.inscripciones-payment-sidepanel__close {
+  width: 38px;
+  min-height: 38px;
+}
+
+.inscripciones-payment-sidepanel__amount {
+  padding: 10px 0;
+}
+
+.inscripciones-payment-sidepanel__amount strong {
+  font-size: 1.56rem;
+}
+
+.inscripciones-payment-sidepanel__details {
+  gap: 6px;
+}
+
+.inscripciones-payment-sidepanel__details div {
+  min-height: 52px;
+  padding: 11px 16px;
+}
+
+.inscripciones-payment-sidepanel__notice {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader,
+.inscripciones-payment-sidepanel .inscripciones-proof-status {
+  padding: 14px 16px;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader {
+  gap: 10px;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader > header {
+  gap: 6px;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader header svg {
+  width: 28px;
+  height: 28px;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader header strong {
+  font-size: 0.94rem;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader header span {
+  font-size: 0.76rem;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-uploader label,
+.inscripciones-payment-sidepanel .inscripciones-button {
+  min-height: 40px;
 }
 
 @media (max-width: 1180px) {
@@ -26838,6 +26934,7 @@ button {
 }
 
 .inscripciones-payment-main .inscripciones-payment-summary {
+  margin-top: 12px;
   padding-top: 20px;
 }
 
