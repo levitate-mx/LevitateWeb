@@ -21468,6 +21468,689 @@ button {
   }
 }
 
+/* Focused payment portal flow: CURP, registered choreographies, then transfer modal. */
+.inscripciones-lookup-page,
+.inscripciones-lookup-hero {
+  background: #f1f3f4;
+  overflow-anchor: none;
+}
+
+.inscripciones-lookup-hero__content {
+  width: min(100%, 1180px);
+  padding-bottom: 32px;
+}
+
+.inscripciones-lookup-shell {
+  display: block;
+  width: 100%;
+}
+
+.inscripciones-payment-portal {
+  width: 100%;
+  overflow: hidden;
+  overflow-anchor: none;
+  border: 1px solid rgba(42, 41, 40, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(31, 39, 43, 0.09);
+  color: var(--home-ink);
+}
+
+.inscripciones-payment-portal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 28px 32px 24px;
+  border-bottom: 1px solid rgba(42, 41, 40, 0.09);
+}
+
+.inscripciones-payment-portal__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  color: var(--home-pink);
+  font-size: 0.72rem;
+  font-weight: 880;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.inscripciones-payment-portal__header h2 {
+  margin: 0;
+  color: var(--home-ink);
+  font-family: var(--font-body);
+  font-size: 2rem;
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.inscripciones-payment-portal__header p {
+  max-width: 610px;
+  margin: 9px 0 0;
+  color: rgba(42, 41, 40, 0.62);
+  font-size: 0.96rem;
+  font-weight: 540;
+  line-height: 1.5;
+}
+
+.inscripciones-payment-portal__trust {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding-top: 5px;
+  color: #327485;
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.inscripciones-lookup-search {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+  padding: 24px 32px 26px;
+  border-bottom: 1px solid rgba(42, 41, 40, 0.09);
+  background: #fafbfb;
+}
+
+.inscripciones-lookup-search form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: end;
+}
+
+.inscripciones-lookup-search__field {
+  display: grid;
+  gap: 8px;
+}
+
+.inscripciones-lookup-search form .inscripciones-lookup-search__field > label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  color: var(--home-ink);
+  font-size: 0.78rem;
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+  white-space: normal;
+}
+
+.inscripciones-lookup-search__field > span {
+  color: rgba(42, 41, 40, 0.48);
+  font-size: 0.76rem;
+  font-weight: 560;
+}
+
+.inscripciones-lookup-search .inscripciones-curp-card__input {
+  position: relative;
+  display: grid;
+}
+
+.inscripciones-lookup-search .inscripciones-curp-card__input > svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 16px;
+  color: rgba(42, 41, 40, 0.42);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.inscripciones-lookup-search input {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid rgba(42, 41, 40, 0.18);
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  box-shadow: none;
+  color: var(--home-ink);
+  font: 680 0.96rem / 1 var(--font-body);
+  letter-spacing: 0.04em;
+  padding: 0 16px 0 46px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.inscripciones-lookup-search input:focus {
+  border-color: var(--home-pink);
+  box-shadow: 0 0 0 3px rgba(217, 76, 140, 0.11);
+}
+
+.inscripciones-lookup-search .inscripciones-button,
+.inscripciones-payment-summary .inscripciones-button,
+.inscripciones-payment-modal .inscripciones-button {
+  --inscripciones-button-bg: var(--home-ink);
+  --inscripciones-button-border: var(--home-ink);
+  --inscripciones-button-color: #fff;
+  --inscripciones-button-shadow: none;
+  min-height: 54px;
+  border-radius: 6px;
+  padding: 0 22px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.inscripciones-lookup-search__demo {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(42, 41, 40, 0.56);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.inscripciones-lookup-search__demo:hover,
+.inscripciones-lookup-search__demo:focus-visible {
+  color: var(--home-pink);
+}
+
+.inscripciones-lookup-search .inscripciones-query-message {
+  margin: 2px 0 0;
+}
+
+.inscripciones-lookup-concepts {
+  display: grid;
+}
+
+.inscripciones-lookup-concepts > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 32px;
+}
+
+.inscripciones-lookup-concepts > header span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--home-pink);
+  font-size: 0.7rem;
+  font-weight: 860;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.inscripciones-lookup-concepts > header h3 {
+  margin: 0;
+  color: var(--home-ink);
+  font-family: var(--font-body);
+  font-size: 1.55rem;
+  font-weight: 690;
+  letter-spacing: 0;
+  line-height: 1.12;
+}
+
+.inscripciones-lookup-concepts > header p {
+  margin: 7px 0 0;
+  color: rgba(42, 41, 40, 0.56);
+  font-size: 0.88rem;
+  font-weight: 560;
+}
+
+.inscripciones-lookup-concepts .inscripciones-lookup-concepts__count {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 5px 0 0;
+  color: #327485;
+  font-size: 0.8rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.inscripciones-lookup-concepts .inscripciones-lookup-concepts__count svg {
+  flex: 0 0 auto;
+}
+
+.inscripciones-lookup-concepts .inscripciones-choreography-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid rgba(42, 41, 40, 0.09);
+}
+
+.inscripciones-lookup-concepts .inscripciones-choreography-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 17px 32px;
+  border-top: 0;
+  border-bottom: 1px solid rgba(42, 41, 40, 0.08);
+}
+
+.inscripciones-choreography-row__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(87, 189, 209, 0.12);
+  color: #327485;
+}
+
+.inscripciones-lookup-concepts .inscripciones-choreography-row strong {
+  color: var(--home-ink);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.inscripciones-lookup-concepts .inscripciones-choreography-row > div:nth-child(2) > span {
+  margin-top: 5px;
+  color: rgba(42, 41, 40, 0.5);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+}
+
+.inscripciones-choreography-row__amount {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 9px;
+  justify-items: end;
+  min-width: 126px;
+}
+
+.inscripciones-choreography-row__amount em {
+  grid-column: 1 / -1;
+  color: var(--home-pink);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 780;
+  line-height: 1;
+}
+
+.inscripciones-choreography-row__amount del {
+  align-self: end;
+  color: rgba(42, 41, 40, 0.42);
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.inscripciones-choreography-row__amount b {
+  color: var(--home-ink);
+  font-size: 1rem;
+  font-weight: 780;
+}
+
+.inscripciones-lookup-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 42px 24px 46px;
+  border-top: 1px solid rgba(42, 41, 40, 0.09);
+  color: rgba(42, 41, 40, 0.46);
+  text-align: center;
+}
+
+.inscripciones-lookup-empty strong {
+  color: var(--home-ink);
+  font-size: 1rem;
+}
+
+.inscripciones-lookup-empty p {
+  max-width: 480px;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.inscripciones-payment-summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) max-content;
+  gap: 28px;
+  align-items: end;
+  padding: 24px 32px 28px;
+  background: #fafbfb;
+}
+
+.inscripciones-payment-summary dl {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 390px);
+  margin: 0;
+}
+
+.inscripciones-payment-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  color: rgba(42, 41, 40, 0.6);
+  font-size: 0.84rem;
+  font-weight: 620;
+}
+
+.inscripciones-payment-summary dt,
+.inscripciones-payment-summary dd {
+  margin: 0;
+}
+
+.inscripciones-payment-summary .is-discount dd {
+  color: var(--home-pink);
+  font-weight: 760;
+}
+
+.inscripciones-payment-summary .is-total {
+  margin-top: 5px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(42, 41, 40, 0.12);
+  color: var(--home-ink);
+  font-size: 1rem;
+  font-weight: 780;
+}
+
+.inscripciones-payment-summary .is-total dd {
+  color: var(--home-pink);
+  font-size: 1.42rem;
+}
+
+.inscripciones-payment-modal {
+  position: fixed;
+  z-index: 500;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 22, 23, 0.64);
+  backdrop-filter: blur(8px);
+  animation: inscripciones-modal-fade 180ms ease both;
+}
+
+.inscripciones-payment-modal__dialog {
+  width: min(100%, 620px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.3);
+  color: var(--home-ink);
+  animation: inscripciones-modal-rise 220ms var(--ease-out) both;
+}
+
+.inscripciones-payment-modal__header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: center;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(42, 41, 40, 0.09);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+}
+
+.inscripciones-payment-modal__header .inscripciones-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: rgba(217, 76, 140, 0.1);
+  color: var(--home-pink);
+}
+
+.inscripciones-payment-modal__header span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--home-pink);
+  font-size: 0.66rem;
+  font-weight: 860;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inscripciones-payment-modal__header h3 {
+  margin: 0;
+  color: var(--home-ink);
+  font-family: var(--font-body);
+  font-size: 1.32rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.inscripciones-payment-modal__header > button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: #f1f3f4;
+  color: var(--home-ink);
+  cursor: pointer;
+}
+
+.inscripciones-payment-modal__amount {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 20px;
+  align-items: end;
+  padding: 22px;
+  background: var(--home-ink);
+  color: #fff;
+}
+
+.inscripciones-payment-modal__amount span {
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.inscripciones-payment-modal__amount strong {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  color: var(--home-pink);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.inscripciones-payment-modal__amount small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.76rem;
+}
+
+.inscripciones-payment-modal__details {
+  display: grid;
+  margin: 0;
+  padding: 10px 22px 0;
+}
+
+.inscripciones-payment-modal__details div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.5fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(42, 41, 40, 0.09);
+}
+
+.inscripciones-payment-modal__details dt,
+.inscripciones-payment-modal__details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.84rem;
+}
+
+.inscripciones-payment-modal__details dt {
+  color: rgba(42, 41, 40, 0.5);
+  font-weight: 650;
+}
+
+.inscripciones-payment-modal__details dd {
+  color: var(--home-ink);
+  font-weight: 720;
+  text-align: right;
+}
+
+.inscripciones-payment-modal__notice {
+  margin: 0;
+  padding: 16px 22px 20px;
+  color: rgba(42, 41, 40, 0.58);
+  font-size: 0.82rem;
+  font-weight: 560;
+  line-height: 1.45;
+}
+
+.inscripciones-payment-modal .inscripciones-proof-status,
+.inscripciones-payment-modal .inscripciones-proof-uploader {
+  margin: 0;
+  padding: 20px 22px 22px;
+  border: 0;
+  border-top: 1px solid rgba(42, 41, 40, 0.09);
+  border-radius: 0;
+  background: #fafbfb;
+}
+
+.inscripciones-payment-modal .inscripciones-proof-uploader > header {
+  display: grid;
+  gap: 5px;
+}
+
+.inscripciones-payment-modal .inscripciones-proof-status span,
+.inscripciones-payment-modal .inscripciones-proof-uploader header span {
+  color: var(--home-pink);
+}
+
+.inscripciones-payment-modal .inscripciones-proof-status strong,
+.inscripciones-payment-modal .inscripciones-proof-uploader header strong {
+  color: var(--home-ink);
+}
+
+.inscripciones-payment-modal .inscripciones-proof-status p {
+  color: rgba(42, 41, 40, 0.56);
+}
+
+.inscripciones-payment-modal .inscripciones-proof-status a {
+  color: var(--home-ink);
+}
+
+.inscripciones-payment-modal .inscripciones-proof-uploader label {
+  min-height: 68px;
+  border-color: rgba(42, 41, 40, 0.2);
+  background: #fff;
+  color: rgba(42, 41, 40, 0.72);
+}
+
+.inscripciones-payment-modal .inscripciones-proof-uploader .inscripciones-button {
+  width: 100%;
+}
+
+@keyframes inscripciones-modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes inscripciones-modal-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 760px) {
+  .inscripciones-lookup-hero__content {
+    padding-top: 142px;
+    padding-bottom: 18px;
+  }
+
+  .inscripciones-payment-portal__header {
+    display: grid;
+    gap: 14px;
+    padding: 22px 20px 20px;
+  }
+
+  .inscripciones-payment-portal__header h2 {
+    font-size: 1.62rem;
+  }
+
+  .inscripciones-payment-portal__trust {
+    padding-top: 0;
+  }
+
+  .inscripciones-lookup-search {
+    padding: 20px;
+  }
+
+  .inscripciones-lookup-search form {
+    grid-template-columns: 1fr;
+  }
+
+  .inscripciones-lookup-search .inscripciones-button,
+  .inscripciones-payment-summary .inscripciones-button {
+    width: 100%;
+  }
+
+  .inscripciones-lookup-concepts > header {
+    display: grid;
+    gap: 12px;
+    padding: 22px 20px;
+  }
+
+  .inscripciones-lookup-concepts .inscripciones-lookup-concepts__count {
+    margin: 0;
+  }
+
+  .inscripciones-lookup-concepts .inscripciones-choreography-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+    padding: 16px 20px;
+  }
+
+  .inscripciones-choreography-row__icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .inscripciones-choreography-row__amount {
+    grid-column: 2;
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .inscripciones-payment-summary {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 22px 20px;
+  }
+
+  .inscripciones-payment-summary dl {
+    width: 100%;
+  }
+
+  .inscripciones-payment-modal {
+    align-items: end;
+    padding: 0;
+  }
+
+  .inscripciones-payment-modal__dialog {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .inscripciones-payment-modal__amount strong {
+    font-size: 1.48rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inscripciones-payment-modal,
+  .inscripciones-payment-modal__dialog {
+    animation: none;
+  }
+}
+
 /* Keep all top-level page heroes at a consistent viewport scale and bottom-aligned content rhythm. */
 .hero,
 .venue-hero,

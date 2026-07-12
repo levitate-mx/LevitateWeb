@@ -1,10 +1,15 @@
 import type { ChangeEvent, FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  CheckCircle2,
   CreditCard,
   Landmark,
+  LockKeyhole,
+  ReceiptText,
   Search,
+  ShieldCheck,
+  X,
 } from "lucide-react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -43,6 +48,10 @@ type InscriptionLookupLine = {
   level?: string | null;
   venue: string;
   academyName: string;
+  baseAmount?: number;
+  discountAmount?: number;
+  discountRate?: number;
+  pricingPosition?: number;
   amount: number;
 };
 
@@ -149,17 +158,6 @@ const demoInscriptionLookup: InscriptionLookup = {
   ],
   lines: [
     {
-      id: "demo-motion",
-      title: "Demo Motion Crew",
-      genre: "motion",
-      subgenre: "jazz",
-      category: "grupo",
-      level: null,
-      venue: "edomex",
-      academyName: "Academia Demo Levitate",
-      amount: 800,
-    },
-    {
       id: "demo-aerial",
       title: "Demo Aerial Solo",
       genre: "aereo",
@@ -168,10 +166,29 @@ const demoInscriptionLookup: InscriptionLookup = {
       level: "principiante",
       venue: "edomex",
       academyName: "Academia Demo Levitate",
+      baseAmount: 1500,
+      discountAmount: 0,
+      discountRate: 0,
+      pricingPosition: 1,
       amount: 1500,
     },
+    {
+      id: "demo-motion",
+      title: "Demo Motion Crew",
+      genre: "motion",
+      subgenre: "jazz",
+      category: "grupo",
+      level: null,
+      venue: "edomex",
+      academyName: "Academia Demo Levitate",
+      baseAmount: 800,
+      discountAmount: 400,
+      discountRate: 0.5,
+      pricingPosition: 2,
+      amount: 400,
+    },
   ],
-  subtotal: 2300,
+  subtotal: 1900,
   order: null,
 };
 
@@ -288,6 +305,16 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
+function resetLookupScroll() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ behavior: "auto", left: 0, top: 0 });
+  });
+}
+
 function buildDemoInscriptionOrder(lookup: InscriptionLookup): InscriptionOrder {
   const now = new Date().toISOString();
 
@@ -377,8 +404,9 @@ export function InscripcionesPage() {
               <span className="inscripciones-cost-card__eyebrow">Descuento</span>
               <h3>Participaciones adicionales al 50%.</h3>
               <p>
-                La primera participación se paga al 100%; las adicionales reciben 50% de descuento sobre la participación
-                de menor costo.
+                Si te registras en varias coreografías, el sistema ordenará tus inscripciones de mayor a menor costo. El
+                descuento del 50% se aplicará automáticamente a tu <strong>2ª, 4ª y 6ª inscripción</strong>. ¡Así de
+                fácil!
               </p>
             </div>
 
@@ -445,16 +473,28 @@ function InscriptionLookupPanel() {
   const [isProofUploading, setIsProofUploading] = useState(false);
   const visibleLines = lookup?.lines ?? [];
   const visibleSubtotal = lookup?.subtotal ?? 0;
-  const orderRows = useMemo(
-    () => [
-      { label: "Participante", value: lookup?.participantName ?? "Pendiente" },
-      { label: "Academia", value: lookup?.academyName ?? "Pendiente" },
-      { label: "Referencia", value: lookup?.reference ?? "Pendiente" },
-      { label: "Sede", value: lookup ? getVenueLabel(lookup.venue) : "Pendiente" },
-      { label: "Estado", value: getOrderStatusLabel(lookup?.order?.status) },
-    ],
-    [lookup],
-  );
+  const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
+  const visibleDiscount = Math.max(0, visibleOriginalSubtotal - visibleSubtotal);
+
+  useEffect(() => {
+    if (!isTransferVisible) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsTransferVisible(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isTransferVisible]);
 
   const handleCurpChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextCurp = normalizeCurp(event.target.value);
@@ -491,6 +531,7 @@ function InscriptionLookupPanel() {
 
     if (normalizedCurp === demoCurp) {
       setLookup(demoInscriptionLookup);
+      resetLookupScroll();
       return;
     }
 
@@ -514,7 +555,8 @@ function InscriptionLookupPanel() {
       }
 
       setLookup(payload);
-      setIsTransferVisible(Boolean(payload.order));
+      setIsTransferVisible(false);
+      resetLookupScroll();
     } catch (error) {
       setLookup(null);
       setLookupError(error instanceof Error ? error.message : "No pudimos consultar esa CURP.");
@@ -676,194 +718,247 @@ function InscriptionLookupPanel() {
 
   return (
     <div className="inscripciones-lookup-shell">
-      <div className="inscripciones-lookup-body">
-        <article className="inscripciones-confirmation-card inscripciones-confirmation-card--receipt">
-          <div className="inscripciones-lookup-receipt-top">
-            <header className="inscripciones-receipt-heading">
-              <h3>{lookup ? lookup.participantName : "Ingresa tu CURP"}</h3>
-              <p>
-                {lookup
-                  ? `${lookup.academyName} · ${getVenueLabel(lookup.venue)}`
-                  : "Aquí aparecerán solamente los conceptos de inscripción cargados por la academia."}
-              </p>
-            </header>
+      <article className="inscripciones-payment-portal" aria-labelledby="payment-portal-title">
+        <header className="inscripciones-payment-portal__header">
+          <div>
+            <span className="inscripciones-payment-portal__eyebrow">
+              <LockKeyhole aria-hidden="true" size={14} />
+              Portal de pagos
+            </span>
+            <h2 id="payment-portal-title">Consulta y paga tu inscripción</h2>
+            <p>Ingresa la CURP del participante para revisar los conceptos cargados por su academia.</p>
+          </div>
+          <div className="inscripciones-payment-portal__trust">
+            <ShieldCheck aria-hidden="true" size={22} />
+            <span>Consulta protegida</span>
+          </div>
+        </header>
 
-            <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
-              <div className="inscripciones-lookup-search__copy">
-                <span>Ingresa</span>
-                <strong>CURP del participante</strong>
+        <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
+          <form onSubmit={handleLookupSubmit}>
+            <div className="inscripciones-lookup-search__field">
+              <label htmlFor="inscription-curp">CURP del participante</label>
+              <div className="inscripciones-curp-card__input">
+                <Search aria-hidden="true" size={19} />
+                <input
+                  autoComplete="off"
+                  id="inscription-curp"
+                  maxLength={18}
+                  minLength={18}
+                  onChange={handleCurpChange}
+                  placeholder="Ej. DEMO010101MDFLVT09"
+                  value={curp}
+                />
               </div>
-              <form onSubmit={handleLookupSubmit}>
-                <label htmlFor="inscription-curp">CURP del participante</label>
-                <div className="inscripciones-curp-card__input">
-                  <input
-                    autoComplete="off"
-                    id="inscription-curp"
-                    maxLength={18}
-                    minLength={18}
-                    onChange={handleCurpChange}
-                    placeholder="Ingresa tu CURP"
-                    value={curp}
-                  />
-                </div>
-                <button className="inscripciones-button inscripciones-button--solid" disabled={isLookupLoading} type="submit">
-                  {isLookupLoading ? "Consultando" : "Consultar inscripción"}
-                  <ArrowRight aria-hidden="true" size={18} />
-                </button>
-              </form>
-              <p>Demo: {demoCurp}</p>
-              {lookupError ? (
-                <p className="inscripciones-query-message is-error" role="alert">
-                  {lookupError}
-                </p>
-              ) : null}
-            </section>
-          </div>
-
-          <div className="inscripciones-choreography-list" aria-label="Conceptos asociados al CURP">
-            {visibleLines.length > 0 ? (
-              visibleLines.map((line) => (
-                <div className="inscripciones-choreography-row" key={line.id}>
-                  <div>
-                    <strong>{getLineTitle(line)}</strong>
-                    <span>{getLineMeta(line)}</span>
-                  </div>
-                  <b>{formatCurrency(line.amount)}</b>
-                </div>
-              ))
-            ) : (
-              <div className="inscripciones-choreography-row inscripciones-choreography-row--empty">
-                <div>
-                  <strong>{lookup ? "Sin cargos cargados" : "Sin consulta todavía"}</strong>
-                  <span>
-                    {lookup
-                      ? "La academia todavía no vinculó coreografías pagables a esta CURP."
-                      : "Consulta una CURP para ver los cargos de inscripción."}
-                  </span>
-                </div>
-                <b>{formatCurrency(0)}</b>
-              </div>
-            )}
-          </div>
-
-          <div className="inscripciones-subtotal">
-            <span>Total de inscripción</span>
-            <strong>{formatCurrency(visibleSubtotal)}</strong>
-          </div>
-        </article>
-
-        <article className="inscripciones-order-card inscripciones-order-card--lookup" aria-labelledby="payment-order-title">
-          <header>
-            <div className="inscripciones-card-icon">
-              <Landmark aria-hidden="true" size={26} />
+              <span>18 caracteres, sin espacios.</span>
             </div>
-            <div>
-              <span>Pago separado</span>
-              <h3 id="payment-order-title">Orden de inscripción</h3>
-            </div>
-          </header>
-
-          <dl>
-            {orderRows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <div className="inscripciones-order-card__total">
-            <span>Monto</span>
-            <strong>{formatCurrency(visibleSubtotal)}</strong>
-          </div>
-
-          <p>Esta orden cubre sólo inscripción. Boletos, fotografías y videos se compran aparte en tienda.</p>
-
+            <button className="inscripciones-button inscripciones-button--solid" disabled={isLookupLoading} type="submit">
+              {isLookupLoading ? "Consultando..." : "Consultar inscripción"}
+              <ArrowRight aria-hidden="true" size={18} />
+            </button>
+          </form>
           <button
-            className="inscripciones-button inscripciones-button--solid"
-            disabled={!lookup || visibleSubtotal <= 0 || isOrderLoading}
-            onClick={handlePaymentOrder}
+            className="inscripciones-lookup-search__demo"
+            onClick={() => {
+              setCurp(demoCurp);
+              setLookup(null);
+              setLookupError("");
+              setOrderError("");
+              setProofError("");
+              setProofMessage("");
+              setSelectedProofFile(null);
+              setIsTransferVisible(false);
+            }}
             type="button"
           >
-            {isOrderLoading ? "Generando orden" : lookup?.order ? "Ver datos de pago" : "Pagar inscripción"}
-            <CreditCard aria-hidden="true" size={18} />
+            Usar CURP de demostración
           </button>
-
-          {orderError ? (
+          {lookupError ? (
             <p className="inscripciones-query-message is-error" role="alert">
-              {orderError}
+              {lookupError}
             </p>
           ) : null}
+        </section>
 
-          {isTransferVisible && lookup ? (
-            <section className="inscripciones-bank-details" aria-label="Datos bancarios para transferencia">
-              <header>
-                <span>Transferencia bancaria</span>
-                <strong>Datos para completar el pago</strong>
-              </header>
-              <dl>
-                {bankTransferRows.map((row) => (
-                  <div key={row.label}>
-                    <dt>{row.label}</dt>
-                    <dd>{row.value}</dd>
+        {lookup ? (
+          <section className="inscripciones-lookup-concepts" aria-labelledby="inscription-concepts-title">
+            <header>
+              <div>
+                <span>Participante</span>
+                <h3 id="inscription-concepts-title">{lookup.participantName}</h3>
+                <p>{lookup.academyName} · {getVenueLabel(lookup.venue)}</p>
+              </div>
+              <div className="inscripciones-lookup-concepts__count">
+                <CheckCircle2 aria-hidden="true" size={17} />
+                {visibleLines.length} {visibleLines.length === 1 ? "coreografía" : "coreografías"}
+              </div>
+            </header>
+
+            {visibleLines.length > 0 ? (
+              <div className="inscripciones-choreography-list" aria-label="Conceptos asociados al CURP">
+                {visibleLines.map((line) => (
+                  <div className="inscripciones-choreography-row" key={line.id}>
+                    <div className="inscripciones-choreography-row__icon">
+                      <ReceiptText aria-hidden="true" size={19} />
+                    </div>
+                    <div>
+                      <strong>{getLineTitle(line)}</strong>
+                      <span>{getLineMeta(line)}</span>
+                    </div>
+                    <div className="inscripciones-choreography-row__amount">
+                      {line.discountAmount ? <em>50% de descuento</em> : null}
+                      {line.discountAmount ? <del>{formatCurrency(line.baseAmount ?? line.amount)}</del> : null}
+                      <b>{formatCurrency(line.amount)}</b>
+                    </div>
                   </div>
                 ))}
-                <div>
-                  <dt>Concepto</dt>
-                  <dd>{lookup.order?.reference ?? lookup.reference}</dd>
-                </div>
-                <div>
-                  <dt>Monto exacto</dt>
-                  <dd>{formatCurrency(visibleSubtotal)}</dd>
-                </div>
-              </dl>
-              <p>Usa la referencia como concepto de transferencia para que el pago pueda validarse correctamente.</p>
+              </div>
+            ) : (
+              <div className="inscripciones-lookup-empty">
+                <ReceiptText aria-hidden="true" size={24} />
+                <strong>No hay coreografías disponibles</strong>
+                <p>La academia todavía no vinculó coreografías pagables a este participante.</p>
+              </div>
+            )}
 
-              {lookup.order?.proof ? (
-                <div className="inscripciones-proof-status">
-                  <span>Comprobante cargado</span>
-                  <strong>{lookup.order.proof.fileName}</strong>
-                  <p>
-                    Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
-                    {formatProofSize(lookup.order.proof.fileSize)}
-                  </p>
-                  <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
-                    Ver comprobante
-                  </a>
-                </div>
-              ) : null}
-
-              {lookup.order ? (
-                <div className="inscripciones-proof-uploader">
-                  <header>
-                    <span>Comprobante</span>
-                    <strong>Sube tu captura o PDF</strong>
-                  </header>
-                  <label>
-                    <input accept={proofUploadAccept} onChange={handleProofFileChange} type="file" />
-                    <span>{selectedProofFile ? selectedProofFile.name : "Seleccionar comprobante"}</span>
-                  </label>
-                  <button
-                    className="inscripciones-button inscripciones-button--ghost"
-                    disabled={!selectedProofFile || isProofUploading}
-                    onClick={handleProofUpload}
-                    type="button"
-                  >
-                    {isProofUploading ? "Subiendo..." : "Subir comprobante"}
-                    <ArrowRight aria-hidden="true" size={18} />
-                  </button>
-                  {proofError ? (
-                    <p className="inscripciones-query-message is-error" role="alert">
-                      {proofError}
-                    </p>
+            {visibleLines.length > 0 ? (
+              <div className="inscripciones-payment-summary">
+                <dl>
+                  {visibleDiscount > 0 ? (
+                    <>
+                      <div>
+                        <dt>Subtotal</dt>
+                        <dd>{formatCurrency(visibleOriginalSubtotal)}</dd>
+                      </div>
+                      <div className="is-discount">
+                        <dt>Descuento aplicado</dt>
+                        <dd>-{formatCurrency(visibleDiscount)}</dd>
+                      </div>
+                    </>
                   ) : null}
-                  {proofMessage ? <p className="inscripciones-query-message is-success">{proofMessage}</p> : null}
+                  <div className="is-total">
+                    <dt>Total a pagar</dt>
+                    <dd>{formatCurrency(visibleSubtotal)}</dd>
+                  </div>
+                </dl>
+
+                <button
+                  className="inscripciones-button inscripciones-button--solid"
+                  disabled={visibleSubtotal <= 0 || isOrderLoading}
+                  onClick={handlePaymentOrder}
+                  type="button"
+                >
+                  {isOrderLoading ? "Generando orden..." : lookup.order ? "Ver datos de transferencia" : "Pagar inscripción"}
+                  <CreditCard aria-hidden="true" size={18} />
+                </button>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {orderError ? (
+          <p className="inscripciones-query-message is-error" role="alert">
+            {orderError}
+          </p>
+        ) : null}
+      </article>
+
+      {isTransferVisible && lookup ? (
+        <div
+          className="inscripciones-payment-modal"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsTransferVisible(false);
+            }
+          }}
+          role="presentation"
+        >
+          <section
+            aria-labelledby="payment-modal-title"
+            aria-modal="true"
+            className="inscripciones-payment-modal__dialog"
+            role="dialog"
+          >
+            <header className="inscripciones-payment-modal__header">
+              <div className="inscripciones-card-icon">
+                <Landmark aria-hidden="true" size={22} />
+              </div>
+              <div>
+                <span>Transferencia bancaria</span>
+                <h3 id="payment-modal-title">Completa tu pago</h3>
+              </div>
+              <button aria-label="Cerrar datos de transferencia" onClick={() => setIsTransferVisible(false)} type="button">
+                <X aria-hidden="true" size={20} />
+              </button>
+            </header>
+
+            <div className="inscripciones-payment-modal__amount">
+              <span>Total a transferir</span>
+              <strong>{formatCurrency(visibleSubtotal)}</strong>
+              <small>{getOrderStatusLabel(lookup.order?.status)}</small>
+            </div>
+
+            <dl className="inscripciones-payment-modal__details">
+              {bankTransferRows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
                 </div>
-              ) : null}
-            </section>
-          ) : null}
-        </article>
-      </div>
+              ))}
+              <div>
+                <dt>Concepto</dt>
+                <dd>{lookup.order?.reference ?? lookup.reference}</dd>
+              </div>
+            </dl>
+
+            <p className="inscripciones-payment-modal__notice">
+              Transfiere el monto exacto y usa la referencia como concepto para que podamos validar tu pago.
+            </p>
+
+            {lookup.order?.proof ? (
+              <div className="inscripciones-proof-status">
+                <span>Comprobante cargado</span>
+                <strong>{lookup.order.proof.fileName}</strong>
+                <p>
+                  Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
+                  {formatProofSize(lookup.order.proof.fileSize)}
+                </p>
+                <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
+                  Ver comprobante
+                </a>
+              </div>
+            ) : null}
+
+            {lookup.order ? (
+              <div className="inscripciones-proof-uploader">
+                <header>
+                  <span>Comprobante</span>
+                  <strong>Sube tu captura o PDF</strong>
+                </header>
+                <label>
+                  <input accept={proofUploadAccept} onChange={handleProofFileChange} type="file" />
+                  <span>{selectedProofFile ? selectedProofFile.name : "Seleccionar comprobante"}</span>
+                </label>
+                <button
+                  className="inscripciones-button inscripciones-button--solid"
+                  disabled={!selectedProofFile || isProofUploading}
+                  onClick={handleProofUpload}
+                  type="button"
+                >
+                  {isProofUploading ? "Subiendo..." : "Subir comprobante"}
+                  <ArrowRight aria-hidden="true" size={18} />
+                </button>
+                {proofError ? (
+                  <p className="inscripciones-query-message is-error" role="alert">
+                    {proofError}
+                  </p>
+                ) : null}
+                {proofMessage ? <p className="inscripciones-query-message is-success">{proofMessage}</p> : null}
+              </div>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

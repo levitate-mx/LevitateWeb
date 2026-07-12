@@ -1426,7 +1426,7 @@ async function getRegistrationInscriptionLookup(db, curp) {
     )
     .bind(curp)
     .all();
-  const lines = danceRows.map(serializeRegistrationInscriptionLine);
+  const lines = buildRegistrationInscriptionLines(danceRows);
   const subtotal = lines.reduce((total, line) => total + line.amount, 0);
   const primaryRegistration = registrationRows[0];
   const reference = buildRegistrationInscriptionReference(curp, primaryRegistration.venue);
@@ -1938,6 +1938,8 @@ function serializeRegistrationStudentDance(dance) {
 }
 
 function serializeRegistrationInscriptionLine(dance) {
+  const baseAmount = getRegistrationInscriptionAmount(dance);
+
   return {
     id: dance.id,
     title: dance.title,
@@ -1947,8 +1949,31 @@ function serializeRegistrationInscriptionLine(dance) {
     level: dance.level,
     venue: dance.venue,
     academyName: dance.academy_name,
-    amount: getRegistrationInscriptionAmount(dance),
+    baseAmount,
+    discountAmount: 0,
+    discountRate: 0,
+    pricingPosition: 0,
+    amount: baseAmount,
   };
+}
+
+function buildRegistrationInscriptionLines(dances) {
+  return dances
+    .map(serializeRegistrationInscriptionLine)
+    .sort((firstLine, secondLine) => secondLine.baseAmount - firstLine.baseAmount)
+    .map((line, index) => {
+      const pricingPosition = index + 1;
+      const discountRate = [2, 4, 6].includes(pricingPosition) ? 0.5 : 0;
+      const discountAmount = Math.round(line.baseAmount * discountRate);
+
+      return {
+        ...line,
+        discountAmount,
+        discountRate,
+        pricingPosition,
+        amount: line.baseAmount - discountAmount,
+      };
+    });
 }
 
 function getRegistrationInscriptionAmount(dance) {
