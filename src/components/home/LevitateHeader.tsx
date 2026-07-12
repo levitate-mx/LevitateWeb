@@ -111,7 +111,7 @@ const capsuleNavItems: PillMenuSection[] = [
 
 const pillMenuSections: PillMenuSection[] = [
   {
-    title: "Convocatoria",
+    title: "Sedes",
     links: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
       { label: "Veracruz", href: "/sedes" },

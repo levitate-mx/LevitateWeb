@@ -1,8 +1,9 @@
 import type { ChangeEvent, FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
+  CircleAlert,
   Info,
   ReceiptText,
   Search,
@@ -196,7 +197,6 @@ const paymentMethodSections = [
     id: "banamex",
     title: "Banamex",
     rows: [
-      { label: "Banco", value: "Banamex" },
       { label: "A nombre de", value: "María Laura Ponce" },
       { label: "Número de cuenta", value: "26988 - Sucursal 4770" },
       { label: "CLABE interbancaria", value: "002540477000269880" },
@@ -206,7 +206,6 @@ const paymentMethodSections = [
     id: "spin",
     title: "Spin by Oxxo",
     rows: [
-      { label: "Banco", value: "Spin by Oxxo" },
       { label: "A nombre de", value: "Rodolfo Javier Serrano" },
       { label: "CLABE interbancaria", value: "728969000061103602" },
     ],
@@ -390,18 +389,8 @@ export function InscripcionesPage() {
 
       <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
         <div className="inscripciones-section-head">
-          <div>
-            <p className="inscripciones-eyebrow">Inscripciones</p>
-            <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
-          </div>
-          <aside className="inscripciones-presale-note" aria-label="Vigencia de preventa">
-            <span className="inscripciones-cost-card__eyebrow">Vigencia de preventa</span>
-            <strong>Preventa hasta el 12 de octubre de 2026.</strong>
-            <p>
-              Para pagos de inscripción, la preventa aplica hasta esa fecha. Desde el 13 de octubre de 2026 se cobrará
-              tarifa normal.
-            </p>
-          </aside>
+          <p className="inscripciones-eyebrow">Inscripciones</p>
+          <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
         </div>
 
         <div className="inscripciones-cost-grid">
@@ -450,6 +439,22 @@ export function InscripcionesPage() {
             </div>
           </article>
         </div>
+
+        <aside className="inscripciones-presale-note" aria-label="Vigencia de preventa">
+          <p>
+            <CircleAlert aria-hidden="true" size={20} />
+            <span className="inscripciones-presale-note__copy">
+              <span>
+                El precio preventa es aplicable hasta el <strong>12 de octubre de 2026.</strong> A partir del 13 de
+                octubre de 2026 se aplica el precio real.
+              </span>
+              <span>
+                El cierre de las inscripciones se realiza hasta el <strong>5 de noviembre de 2026</strong>, como fecha
+                última para realizar el pago.
+              </span>
+            </span>
+          </p>
+        </aside>
       </section>
 
       <section className="inscripciones-access" aria-label="Accesos de inscripción">
@@ -503,9 +508,9 @@ function InscriptionLookupPanel() {
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isProofUploading, setIsProofUploading] = useState(false);
-  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState(paymentMethodSections[0].id);
-  const selectedPaymentMethod =
-    paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? paymentMethodSections[0];
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
+  const proofFileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedPaymentMethod = paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? null;
   const visibleLines = lookup?.lines ?? [];
   const visibleSubtotal = lookup?.subtotal ?? 0;
   const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
@@ -519,6 +524,7 @@ function InscriptionLookupPanel() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsTransferVisible(false);
+        setSelectedPaymentMethodId("");
       }
     };
 
@@ -540,6 +546,7 @@ function InscriptionLookupPanel() {
     setProofMessage("");
     setSelectedProofFile(null);
     setIsTransferVisible(false);
+    setSelectedPaymentMethodId("");
 
     if (lookup && lookup.curp !== nextCurp) {
       setLookup(null);
@@ -559,6 +566,7 @@ function InscriptionLookupPanel() {
     setProofMessage("");
     setSelectedProofFile(null);
     setIsTransferVisible(false);
+    setSelectedPaymentMethodId("");
 
     if (normalizedCurp.length !== 18) {
       setLookup(null);
@@ -568,6 +576,7 @@ function InscriptionLookupPanel() {
 
     if (normalizedCurp === demoCurp) {
       setLookup(demoInscriptionLookup);
+      setSelectedPaymentMethodId("");
       resetLookupScroll();
       return;
     }
@@ -593,6 +602,7 @@ function InscriptionLookupPanel() {
 
       setLookup(payload);
       setIsTransferVisible(false);
+      setSelectedPaymentMethodId("");
       resetLookupScroll();
     } catch (error) {
       setLookup(null);
@@ -602,53 +612,27 @@ function InscriptionLookupPanel() {
     }
   };
 
-  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    setProofError("");
-    setProofMessage("");
-
-    if (!file) {
-      setSelectedProofFile(null);
-      return;
-    }
-
-    if (file.size > maxProofUploadBytes) {
-      setSelectedProofFile(null);
-      setProofError("El comprobante debe pesar menos de 1.8 MB.");
-      event.target.value = "";
-      return;
-    }
-
-    if (!proofUploadAccept.split(",").includes(file.type)) {
-      setSelectedProofFile(null);
-      setProofError("Sube una imagen JPG, PNG, WEBP o un PDF.");
-      event.target.value = "";
-      return;
-    }
-
-    setSelectedProofFile(file);
-  };
-
-  const handleProofUpload = async () => {
-    if (!lookup?.order || !selectedProofFile) {
+  const uploadProofFile = async (proofFile: File) => {
+    if (!lookup?.order) {
       return;
     }
 
     setProofError("");
     setProofMessage("");
+    setSelectedProofFile(proofFile);
     setIsProofUploading(true);
 
     try {
-      const dataUrl = await readFileAsDataUrl(selectedProofFile);
+      const dataUrl = await readFileAsDataUrl(proofFile);
 
       if (lookup.curp === demoCurp) {
         const now = new Date().toISOString();
         const proof: InscriptionPaymentProof = {
           id: "demo-payment-proof",
-          contentType: selectedProofFile.type,
+          contentType: proofFile.type,
           dataUrl,
-          fileName: selectedProofFile.name,
-          fileSize: selectedProofFile.size,
+          fileName: proofFile.name,
+          fileSize: proofFile.size,
           status: "submitted",
           uploadedAt: now,
         };
@@ -669,11 +653,11 @@ function InscriptionLookupPanel() {
 
       const response = await fetch("/api/registration/inscription/order/proof", {
         body: JSON.stringify({
-          contentType: selectedProofFile.type,
+          contentType: proofFile.type,
           curp: lookup.curp,
           dataUrl,
-          fileName: selectedProofFile.name,
-          fileSize: selectedProofFile.size,
+          fileName: proofFile.name,
+          fileSize: proofFile.size,
           orderId: lookup.order.id,
         }),
         headers: { "content-type": "application/json" },
@@ -697,7 +681,39 @@ function InscriptionLookupPanel() {
       setProofError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
     } finally {
       setIsProofUploading(false);
+
+      if (proofFileInputRef.current) {
+        proofFileInputRef.current.value = "";
+      }
     }
+  };
+
+  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0] ?? null;
+    setProofError("");
+    setProofMessage("");
+
+    if (!file) {
+      setSelectedProofFile(null);
+      return;
+    }
+
+    if (file.size > maxProofUploadBytes) {
+      setSelectedProofFile(null);
+      setProofError("El comprobante debe pesar menos de 1.8 MB.");
+      input.value = "";
+      return;
+    }
+
+    if (!proofUploadAccept.split(",").includes(file.type)) {
+      setSelectedProofFile(null);
+      setProofError("Sube una imagen JPG, PNG, WEBP o un PDF.");
+      input.value = "";
+      return;
+    }
+
+    void uploadProofFile(file);
   };
 
   const revealPaymentPanel = () => {
@@ -754,7 +770,7 @@ function InscriptionLookupPanel() {
     });
 
   const createPaymentArtwork = async () => {
-    if (!lookup) {
+    if (!lookup || !selectedPaymentMethod) {
       return null;
     }
 
@@ -980,14 +996,23 @@ function InscriptionLookupPanel() {
 
       const textX = padding + 92;
       const titleY = rowY + (line.discountAmount ? 36 : 42);
-      drawWrappedText(getLineTitle(line), textX, titleY, leftWidth - 280, 26, 23, ink, 760, 1);
-      drawText(getLineMeta(line).toUpperCase(), textX, titleY + 36, 16, muted, 820);
+      const titleText = getLineTitle(line);
+      const badgeWidth = 174;
+      const titleMaxWidth = line.discountAmount ? leftWidth - 280 - badgeWidth - 18 : leftWidth - 280;
+
+      drawWrappedText(titleText, textX, titleY, titleMaxWidth, 26, 23, ink, 760, 1);
 
       if (line.discountAmount) {
-        const badgeY = titleY + 58;
-        drawRoundRect(textX, badgeY, 174, 34, 17, greenSoft);
-        drawText("50% DE DESCUENTO", textX + 18, badgeY + 23, 15, green, 820);
+        setFont(23, 760);
+        const titleWidth = Math.min(context.measureText(titleText).width, titleMaxWidth);
+        const badgeX = textX + titleWidth + 16;
+        const badgeY = titleY - 22;
+
+        drawRoundRect(badgeX, badgeY, badgeWidth, 34, 17, greenSoft);
+        drawText("50% DE DESCUENTO", badgeX + 18, badgeY + 23, 15, green, 820);
       }
+
+      drawText(getLineMeta(line).toUpperCase(), textX, titleY + 36, 16, muted, 820);
 
       const amountX = padding + leftWidth - 28;
 
@@ -1030,32 +1055,20 @@ function InscriptionLookupPanel() {
 
     drawText("Datos para pago", rightX, 58, 16, ink, 840);
     drawText("Opciones de pago", rightX, 122, 42, ink, 560);
-    drawWrappedText(
-      "Elige una opción de pago y usa el concepto indicado para validar tu inscripción.",
-      rightX,
-      170,
-      rightWidth,
-      25,
-      20,
-      "rgba(42, 41, 40, 0.72)",
-      520,
-      2,
-    );
-
     context.strokeStyle = "rgba(42, 41, 40, 0.18)";
     context.beginPath();
-    context.moveTo(rightX, 236);
-    context.lineTo(rightX + rightWidth, 236);
+    context.moveTo(rightX, 178);
+    context.lineTo(rightX + rightWidth, 178);
     context.stroke();
-    drawText("Total a transferir", rightX, 284, 18, muted, 540);
-    drawText(getOrderStatusLabel(lookup.order?.status), rightX, 320, 17, muted, 540);
-    drawRightText(formatCurrency(visibleSubtotal), rightX + rightWidth, 306, 38, pink, 820);
+    drawText("Total a transferir", rightX, 226, 18, muted, 540);
+    drawText(getOrderStatusLabel(lookup.order?.status), rightX, 262, 17, muted, 540);
+    drawRightText(formatCurrency(visibleSubtotal), rightX + rightWidth, 248, 38, pink, 820);
     context.beginPath();
-    context.moveTo(rightX, 350);
-    context.lineTo(rightX + rightWidth, 350);
+    context.moveTo(rightX, 292);
+    context.lineTo(rightX + rightWidth, 292);
     context.stroke();
 
-    let detailY = 386;
+    let detailY = 328;
     const paymentTabGap = 8;
     const paymentTabHeight = 44;
     const paymentTabWidth = (rightWidth - paymentTabGap) / paymentMethodSections.length;
@@ -1078,16 +1091,24 @@ function InscriptionLookupPanel() {
 
     detailY += paymentTabHeight + 12;
 
-    const paymentCardHeight = 58 + selectedPaymentMethod.rows.length * 54;
+    const paymentCardHeight = 24 + selectedPaymentMethod.rows.length * 70;
 
     drawRoundRect(rightX, detailY, rightWidth, paymentCardHeight, 8, "rgba(255, 255, 255, 0.54)", softBorder);
-    drawText(selectedPaymentMethod.title.toUpperCase(), rightX + 24, detailY + 36, 16, pink, 860);
 
     selectedPaymentMethod.rows.forEach((row, rowIndex) => {
-      const rowY = detailY + 68 + rowIndex * 54;
+      const rowTop = detailY + 12 + rowIndex * 70;
+      const rowBaseline = rowTop + 43;
 
-      drawText(row.label.toUpperCase(), rightX + 24, rowY, 11, muted, 820);
-      drawWrappedText(row.value, rightX + 24, rowY + 26, rightWidth - 48, 19, 17, ink, 720, 1);
+      if (rowIndex > 0) {
+        context.beginPath();
+        context.strokeStyle = softBorder;
+        context.moveTo(rightX + 24, rowTop);
+        context.lineTo(rightX + rightWidth - 24, rowTop);
+        context.stroke();
+      }
+
+      drawText(row.label.toUpperCase(), rightX + 24, rowBaseline, 13, muted, 820);
+      drawRightFittedText(row.value, rightX + rightWidth - 24, rowBaseline + 1, rightWidth - 230, 21, ink, 760);
     });
 
     detailY += paymentCardHeight + 18;
@@ -1209,7 +1230,7 @@ function InscriptionLookupPanel() {
   const handleDownloadPaymentPdf = async () => {
     const shareData = getPaymentShareData();
 
-    if (!shareData) {
+    if (!shareData || !selectedPaymentMethod) {
       return;
     }
 
@@ -1223,7 +1244,7 @@ function InscriptionLookupPanel() {
   const handleDownloadPaymentImage = async () => {
     const shareData = getPaymentShareData();
 
-    if (!shareData) {
+    if (!shareData || !selectedPaymentMethod) {
       return;
     }
 
@@ -1245,7 +1266,7 @@ function InscriptionLookupPanel() {
   const handleSharePaymentDetails = async () => {
     const shareData = getPaymentShareData();
 
-    if (!shareData) {
+    if (!shareData || !selectedPaymentMethod) {
       return;
     }
 
@@ -1291,6 +1312,7 @@ function InscriptionLookupPanel() {
 
     if (lookup.curp === demoCurp) {
       setLookup({ ...lookup, order: lookup.order ?? buildDemoInscriptionOrder(lookup) });
+      setSelectedPaymentMethodId("");
       setIsTransferVisible(true);
       revealPaymentPanel();
       return;
@@ -1328,6 +1350,7 @@ function InscriptionLookupPanel() {
           order: payload.order,
         };
       });
+      setSelectedPaymentMethodId("");
       setIsTransferVisible(true);
       revealPaymentPanel();
     } catch (error) {
@@ -1382,6 +1405,7 @@ function InscriptionLookupPanel() {
                 setProofMessage("");
                 setSelectedProofFile(null);
                 setIsTransferVisible(false);
+                setSelectedPaymentMethodId("");
               }}
               type="button"
             >
@@ -1414,9 +1438,11 @@ function InscriptionLookupPanel() {
                     <div className="inscripciones-choreography-row" key={line.id}>
                       <div className="inscripciones-choreography-row__index">{index + 1}</div>
                       <div>
-                        <strong>{getLineTitle(line)}</strong>
+                        <div className="inscripciones-choreography-row__title-line">
+                          <strong>{getLineTitle(line)}</strong>
+                          {line.discountAmount ? <em className="inscripciones-choreography-row__discount">50% de descuento</em> : null}
+                        </div>
                         <span>{getLineMeta(line)}</span>
-                        {line.discountAmount ? <em className="inscripciones-choreography-row__discount">50% de descuento</em> : null}
                       </div>
                       <div className="inscripciones-choreography-row__amount">
                         <span>
@@ -1498,14 +1524,18 @@ function InscriptionLookupPanel() {
                 <div>
                   <span>Datos para pago</span>
                   <h3 id="payment-panel-title">Opciones de pago</h3>
-                  <p>Elige una opción de pago y usa el concepto indicado para validar tu inscripción.</p>
                 </div>
                 <div className="inscripciones-payment-sidepanel__actions">
                   <button
-                    aria-label="Compartir datos de pago"
+                    aria-label={
+                      selectedPaymentMethod
+                        ? "Compartir datos de pago"
+                        : "Selecciona una opción de pago para compartir los datos"
+                    }
                     className="inscripciones-share-button"
+                    disabled={!selectedPaymentMethod}
                     onClick={handleSharePaymentDetails}
-                    title={copyMessage || "Compartir datos de pago"}
+                    title={copyMessage || (selectedPaymentMethod ? "Compartir datos de pago" : "Selecciona una opción de pago")}
                     type="button"
                   >
                     <Upload aria-hidden="true" size={20} />
@@ -1516,6 +1546,7 @@ function InscriptionLookupPanel() {
                     onClick={() => {
                       setIsTransferVisible(false);
                       setIsShareFallbackVisible(false);
+                      setSelectedPaymentMethodId("");
                     }}
                     type="button"
                   >
@@ -1548,10 +1579,14 @@ function InscriptionLookupPanel() {
                 <div className="inscripciones-payment-method-tabs" role="tablist" aria-label="Selecciona una opción de pago">
                   {paymentMethodSections.map((method) => (
                     <button
-                      aria-selected={selectedPaymentMethod.id === method.id}
-                      className={selectedPaymentMethod.id === method.id ? "is-active" : ""}
+                      aria-selected={selectedPaymentMethod?.id === method.id}
+                      className={selectedPaymentMethod?.id === method.id ? "is-active" : ""}
                       key={method.id}
-                      onClick={() => setSelectedPaymentMethodId(method.id)}
+                      onClick={() => {
+                        setSelectedPaymentMethodId(method.id);
+                        setCopyMessage("");
+                        setIsShareFallbackVisible(false);
+                      }}
                       role="tab"
                       type="button"
                     >
@@ -1560,83 +1595,92 @@ function InscriptionLookupPanel() {
                   ))}
                 </div>
 
-                <section className="inscripciones-payment-method" aria-label={`Datos de ${selectedPaymentMethod.title}`} role="tabpanel">
-                  <h4>{selectedPaymentMethod.title}</h4>
-                  <dl className="inscripciones-payment-sidepanel__details inscripciones-payment-sidepanel__details--compact">
-                    {selectedPaymentMethod.rows.map((row) => (
-                      <div key={`${selectedPaymentMethod.id}-${row.label}`}>
-                        <dt>{row.label}</dt>
-                        <dd>{row.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
+                {selectedPaymentMethod ? (
+                  <>
+                    <section className="inscripciones-payment-method" aria-label={`Datos de ${selectedPaymentMethod.title}`} role="tabpanel">
+                      <dl className="inscripciones-payment-sidepanel__details inscripciones-payment-sidepanel__details--compact">
+                        {selectedPaymentMethod.rows.map((row) => (
+                          <div key={`${selectedPaymentMethod.id}-${row.label}`}>
+                            <dt>{row.label}</dt>
+                            <dd>{row.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
 
-                <dl className="inscripciones-payment-sidepanel__details inscripciones-payment-sidepanel__details--concept">
-                  <div className="inscripciones-payment-sidepanel__concept">
-                    <dt>
-                      <span>Concepto</span>
-                      <em aria-hidden="true">*</em>
-                      <button
-                        aria-label="Este concepto es personalizado e individual para cada participante."
-                        data-tooltip="Este concepto es personalizado e individual para cada participante. Inclúyelo exactamente como aparece para identificar y validar tu pago."
-                        type="button"
-                      >
-                        <Info aria-hidden="true" size={15} />
-                      </button>
-                    </dt>
-                    <dd>
-                      <strong>{getPaymentConcept(lookup.curp)}</strong>
-                    </dd>
-                  </div>
-                </dl>
+                    <dl className="inscripciones-payment-sidepanel__details inscripciones-payment-sidepanel__details--concept">
+                      <div className="inscripciones-payment-sidepanel__concept">
+                        <dt>
+                          <span>Concepto</span>
+                          <em aria-hidden="true">*</em>
+                          <button
+                            aria-label="Este concepto es personalizado e individual para cada participante."
+                            data-tooltip="Este concepto es personalizado e individual para cada participante. Inclúyelo exactamente como aparece para identificar y validar tu pago."
+                            type="button"
+                          >
+                            <Info aria-hidden="true" size={15} />
+                          </button>
+                        </dt>
+                        <dd>
+                          <strong>{getPaymentConcept(lookup.curp)}</strong>
+                        </dd>
+                      </div>
+                    </dl>
+                  </>
+                ) : null}
               </div>
 
-              <p className="inscripciones-payment-sidepanel__notice">
-                Paga el monto exacto y usa este concepto personalizado e individual para que podamos identificar y validar tu pago.
-              </p>
-
-              {lookup.order?.proof ? (
-                <div className="inscripciones-proof-status">
-                  <span>Comprobante cargado</span>
-                  <strong>{lookup.order.proof.fileName}</strong>
-                  <p>
-                    Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
-                    {formatProofSize(lookup.order.proof.fileSize)}
+              {selectedPaymentMethod ? (
+                <>
+                  <p className="inscripciones-payment-sidepanel__notice">
+                    Paga el monto exacto y usa este concepto personalizado e individual para que podamos identificar y validar tu pago.
                   </p>
-                  <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
-                    Ver comprobante
-                  </a>
-                </div>
-              ) : null}
 
-              {lookup.order ? (
-                <div className="inscripciones-proof-uploader">
-                  <header>
-                    <UploadCloud aria-hidden="true" size={34} />
-                    <strong>Subir comprobante de pago</strong>
-                    <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
-                  </header>
-                  <label>
-                    <input accept={proofUploadAccept} onChange={handleProofFileChange} type="file" />
-                    <span>{selectedProofFile ? selectedProofFile.name : "Seleccionar comprobante"}</span>
-                  </label>
-                  <button
-                    className="inscripciones-button inscripciones-button--solid"
-                    disabled={!selectedProofFile || isProofUploading}
-                    onClick={handleProofUpload}
-                    type="button"
-                  >
-                    {isProofUploading ? "Subiendo..." : "Subir comprobante"}
-                    <ArrowRight aria-hidden="true" size={18} />
-                  </button>
-                  {proofError ? (
-                    <p className="inscripciones-query-message is-error" role="alert">
-                      {proofError}
-                    </p>
+                  {lookup.order?.proof ? (
+                    <div className="inscripciones-proof-status">
+                      <span>Comprobante cargado</span>
+                      <strong>{lookup.order.proof.fileName}</strong>
+                      <p>
+                        Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
+                        {formatProofSize(lookup.order.proof.fileSize)}
+                      </p>
+                      <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
+                        Ver comprobante
+                      </a>
+                    </div>
                   ) : null}
-                  {proofMessage ? <p className="inscripciones-query-message is-success">{proofMessage}</p> : null}
-                </div>
+
+                  {lookup.order ? (
+                    <div className="inscripciones-proof-uploader">
+                      <header>
+                        <UploadCloud aria-hidden="true" size={34} />
+                        <strong>Subir comprobante de pago</strong>
+                        <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
+                      </header>
+                      <input
+                        accept={proofUploadAccept}
+                        onChange={handleProofFileChange}
+                        ref={proofFileInputRef}
+                        type="file"
+                      />
+                      <button
+                        className="inscripciones-button inscripciones-button--solid"
+                        disabled={isProofUploading}
+                        onClick={() => proofFileInputRef.current?.click()}
+                        type="button"
+                      >
+                        {isProofUploading ? "Subiendo..." : "Subir comprobante"}
+                        <ArrowRight aria-hidden="true" size={18} />
+                      </button>
+                      {proofError ? (
+                        <p className="inscripciones-query-message is-error" role="alert">
+                          {proofError}
+                        </p>
+                      ) : null}
+                      {proofMessage ? <p className="inscripciones-query-message is-success">{proofMessage}</p> : null}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </section>
           ) : null}

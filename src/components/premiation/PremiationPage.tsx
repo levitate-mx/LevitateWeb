@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   CheckCircle2,
   Info,
   Lightbulb,
@@ -310,7 +311,7 @@ function renderHighlightedCopy(copy: string, highlights: string[] = []) {
   );
 }
 
-export function PremiationPage() {
+export function PremiationLegacyPage() {
   const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
   const [isHeroVideoReady, setIsHeroVideoReady] = useState(false);
   const activeSpecialAward = specialAwards.find((award) => award.id === activeSpecialAwardId) ?? specialAwards[0];
@@ -606,6 +607,258 @@ export function PremiationPage() {
         </section>
 
       </div>
+
+      <LevitateFooter useRootLinks />
+    </main>
+  );
+}
+
+export function PremiationPage() {
+  const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
+  const activeSpecialAward = specialAwards.find((award) => award.id === activeSpecialAwardId) ?? specialAwards[0];
+
+  return (
+    <main className="premiation-page premiation-page--modern levitate-home-redesign">
+      <section className="premiation-hero" id="inicio">
+        <img
+          className="premiation-hero__image"
+          src="/assets/ranking-oro.png"
+          alt="Participantes celebrando un reconocimiento en el escenario Levitate."
+          fetchPriority="high"
+        />
+        <div className="premiation-hero__shade" aria-hidden="true" />
+        <LevitateHeader activeLabel="Premiación" useRootLinks variant="pill" />
+        <div className="premiation-hero__content">
+          <p className="premiation-eyebrow">Premiación Levitate</p>
+          <h1>El talento también se reconoce.</h1>
+          <div className="premiation-hero__footer">
+            <p>
+              Cada participación recibe una medalla por su puntaje. Cuando existe competencia directa, también se
+              reconoce su posición dentro del bloque.
+            </p>
+            <a href="#sistema">
+              Conoce el sistema <ArrowRight aria-hidden="true" size={18} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="premiation-modern-intro" id="sistema">
+        <div className="premiation-modern-shell premiation-modern-intro__grid">
+          <p className="premiation-eyebrow">Cómo funciona</p>
+          <h2>
+            Dos formas de reconocer <span>cada resultado.</span>
+          </h2>
+          <p>
+            El puntaje obtenido y la posición dentro del bloque cuentan historias distintas. Por eso, en Levitate se
+            reconocen por separado.
+          </p>
+        </div>
+      </section>
+
+      <section className="premiation-modern-system">
+        <div className="premiation-modern-shell premiation-modern-system__grid">
+          <article className="premiation-modern-medals">
+            <header className="premiation-modern-section-head">
+              <span>01</span>
+              <div>
+                <p className="premiation-eyebrow">Todas las participaciones</p>
+                <h2>Medallero por puntaje</h2>
+                <p>Cada rutina recibe una medalla de acuerdo con el puntaje final obtenido.</p>
+              </div>
+            </header>
+
+            <div className="premiation-modern-medal-list">
+              {medalRules.map((rule) => (
+                <div className={`premiation-modern-medal-row is-${rule.tone}`} key={rule.label}>
+                  <img src={rule.image} alt={rule.alt} loading="lazy" />
+                  <strong>{rule.label}</strong>
+                  <span>{rule.description}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="premiation-modern-ranking">
+            <header className="premiation-modern-section-head">
+              <span>02</span>
+              <div>
+                <p className="premiation-eyebrow">Cuando hay competencia directa</p>
+                <h2>Ranking por bloque</h2>
+                <p>
+                  Si dos o más participantes comparten división, género, nivel y categoría, compiten por una posición
+                  dentro de su bloque.
+                </p>
+              </div>
+            </header>
+
+            <div className="premiation-modern-ranking__visuals" aria-label="Lugares del ranking por bloque">
+              {directRanking.map((rank) => (
+                <figure className={`is-${rank.variant}`} key={rank.place}>
+                  <img src={rank.image} alt={rank.alt} loading="lazy" />
+                  <figcaption>{rank.place}</figcaption>
+                </figure>
+              ))}
+            </div>
+
+            <aside className="premiation-modern-ranking__note">
+              <Info aria-hidden="true" size={22} />
+              <p>
+                El medallero es independiente del ranking. Por eso puede existir un primer lugar con medalla de oro,
+                plata, bronce o participación.
+              </p>
+            </aside>
+          </article>
+        </div>
+      </section>
+
+      <section className="premiation-modern-recognition">
+        <div className="premiation-modern-shell">
+          <header className="premiation-modern-heading">
+            <div>
+              <p className="premiation-eyebrow">Reconocimientos Levitate</p>
+              <h2>Lo que se entrega en escena.</h2>
+            </div>
+            <p>Reconocimientos que celebran el resultado, el trabajo colectivo y la propuesta artística.</p>
+          </header>
+
+          <div className="premiation-modern-recognition__grid">
+            {recognitionShowcase.map((item, index) => (
+              <article key={item.title}>
+                <figure>
+                  <img src={item.image} alt={item.alt} loading="lazy" />
+                  <span>0{index + 1}</span>
+                </figure>
+                <div>
+                  <p>{item.label}</p>
+                  <h3>{item.title}</h3>
+                  <span>{item.copy}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="premiation-modern-special" id="premios-especiales">
+        <div className="premiation-modern-shell">
+          <header className="premiation-modern-heading">
+            <div>
+              <p className="premiation-eyebrow">Criterios de selección</p>
+              <h2>Premios especiales por bloque.</h2>
+            </div>
+            <p>Explora cada premio para conocer qué observa el equipo técnico y cómo se elige cada reconocimiento.</p>
+          </header>
+
+          <div className="premiation-modern-special__tabs" role="tablist" aria-label="Premios especiales por bloque">
+            {specialAwards.map((award) => {
+              const Icon = award.icon;
+              const isActive = award.id === activeSpecialAward.id;
+
+              return (
+                <button
+                  aria-controls="premiation-special-panel"
+                  aria-selected={isActive}
+                  className={isActive ? "is-active" : undefined}
+                  id={`premiation-special-tab-${award.id}`}
+                  key={award.id}
+                  onClick={() => setActiveSpecialAwardId(award.id)}
+                  role="tab"
+                  type="button"
+                >
+                  <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
+                  <span>{award.title}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <article
+            aria-labelledby={`premiation-special-tab-${activeSpecialAward.id}`}
+            className="premiation-modern-special__panel"
+            id="premiation-special-panel"
+            role="tabpanel"
+          >
+            <figure>
+              <img src={activeSpecialAward.image} alt={activeSpecialAward.imageAlt} loading="lazy" />
+              <figcaption>
+                <p className="premiation-eyebrow">Premio especial</p>
+                <h3>{activeSpecialAward.title}</h3>
+                <span>{activeSpecialAward.summary}</span>
+              </figcaption>
+            </figure>
+
+            <div className="premiation-modern-special__criteria">
+              <p className="premiation-eyebrow">Qué se evalúa</p>
+              <div>
+                {activeSpecialAward.criteria.map((criterion, index) => {
+                  const CriterionIcon = criterion.icon;
+
+                  return (
+                    <article key={criterion.title}>
+                      <span>0{index + 1}</span>
+                      <CriterionIcon aria-hidden="true" size={24} strokeWidth={1.7} />
+                      <div>
+                        <strong>{criterion.title}</strong>
+                        <p>{renderHighlightedCopy(criterion.copy, criterion.highlights)}</p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+
+            <aside>
+              <Info aria-hidden="true" size={20} />
+              <p>{activeSpecialAward.note}</p>
+            </aside>
+          </article>
+        </div>
+      </section>
+
+      <section className="premiation-modern-mvp">
+        <div className="premiation-modern-shell premiation-modern-mvp__grid">
+          <div>
+            <p className="premiation-eyebrow">MVP Levitate</p>
+            <h2>El puntaje más alto del evento.</h2>
+            <p>
+              Se concede a la rutina con el puntaje más alto de toda la competencia, sin importar nivel, división o
+              categoría.
+            </p>
+          </div>
+          <div className="premiation-modern-mvp__awards">
+            {mvpAwards.map((award) => (
+              <article key={award.title}>
+                <Trophy aria-hidden="true" size={24} />
+                <h3>{award.title}</h3>
+                <p>{award.copy}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="premiation-modern-closing">
+        <div className="premiation-modern-shell premiation-modern-closing__grid">
+          <div>
+            <p className="premiation-eyebrow">Antes de la ceremonia</p>
+            <h2>Consideraciones importantes.</h2>
+          </div>
+          <div>
+            <ul>
+              {considerations.map((item) => (
+                <li key={item}>
+                  <CheckCircle2 aria-hidden="true" size={20} />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <a href="/evaluaciones">
+              Consultar resultados <ArrowRight aria-hidden="true" size={18} />
+            </a>
+          </div>
+        </div>
+      </section>
 
       <LevitateFooter useRootLinks />
     </main>
