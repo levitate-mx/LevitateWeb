@@ -16987,7 +16987,7 @@ button {
   width: 84px;
   height: 1px;
   margin: clamp(24px, 3vw, 36px) 0;
-  background: rgba(134, 199, 210, 0.46);
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .levitate-auth-copy div {
@@ -21063,38 +21063,10 @@ button {
   width: min(100%, 1360px);
 }
 
-.inscripciones-section-head--lookup {
-  margin-bottom: 0;
-}
-
-.inscripciones-section-head--lookup h1 {
-  max-width: 960px;
-  margin: 12px 0 0;
-  color: var(--home-ink);
-  font-family: var(--font-body);
-  font-size: clamp(3.45rem, 7vw, 8rem);
-  font-weight: 560;
-  letter-spacing: -0.04em;
-  line-height: 0.9;
-  text-transform: none;
-  text-shadow: none;
-}
-
-.inscripciones-section-head--lookup > p:not(.inscripciones-eyebrow) {
-  max-width: 700px;
-  margin: 22px 0 0;
-  color: var(--home-soft-ink);
-  font-size: clamp(1rem, 1.18vw, 1.16rem);
-  font-weight: 540;
-  line-height: 1.52;
-  text-shadow: none;
-}
-
 .inscripciones-lookup-hero .inscripciones-payment-grid {
   width: 100%;
 }
 
-.inscripciones-lookup-hero .inscripciones-curp-card,
 .inscripciones-lookup-hero .inscripciones-confirmation-card {
   border-color: transparent;
   background: rgba(255, 255, 255, 0.52);
@@ -21109,19 +21081,17 @@ button {
 
 .inscripciones-lookup-search {
   display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(360px, 1.45fr) max-content;
-  align-items: center;
-  gap: clamp(16px, 2.4vw, 34px);
-  padding: clamp(16px, 2vw, 22px);
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.7)),
-    rgba(255, 255, 255, 0.76);
+  width: min(100%, 650px);
+  justify-self: end;
+  align-self: start;
+  gap: 10px;
+  padding: 0;
+  background: transparent;
 }
 
 .inscripciones-lookup-search__copy {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -21136,9 +21106,8 @@ button {
 
 .inscripciones-lookup-search__copy strong {
   display: block;
-  margin-top: 4px;
   color: var(--home-ink);
-  font-size: clamp(1.2rem, 1.8vw, 1.7rem);
+  font-size: clamp(1.15rem, 1.55vw, 1.5rem);
   font-weight: 720;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -21207,20 +21176,31 @@ button {
   padding: clamp(24px, 3vw, 38px);
 }
 
-.inscripciones-confirmation-card--receipt header {
-  align-items: center;
+.inscripciones-lookup-receipt-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.72fr);
+  gap: clamp(20px, 4vw, 72px);
+  align-items: start;
+}
+
+.inscripciones-confirmation-card--receipt .inscripciones-receipt-heading {
+  display: block;
+  min-width: 0;
 }
 
 .inscripciones-confirmation-card--receipt h3 {
   max-width: 720px;
+  margin-top: 0;
   font-size: clamp(2.1rem, 4vw, 4.6rem);
 }
 
 .inscripciones-confirmation-card--receipt .inscripciones-choreography-list {
+  grid-column: 1 / -1;
   margin-top: 0;
 }
 
 .inscripciones-confirmation-card--receipt .inscripciones-subtotal {
+  grid-column: 1 / -1;
   margin-top: 0;
   padding-top: clamp(18px, 2.2vw, 26px);
 }
@@ -21392,9 +21372,15 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .inscripciones-lookup-receipt-top,
   .inscripciones-lookup-search,
   .inscripciones-lookup-body {
     grid-template-columns: 1fr;
+  }
+
+  .inscripciones-lookup-search {
+    width: 100%;
+    justify-self: stretch;
   }
 
   .inscripciones-order-card--lookup {
@@ -21467,10 +21453,6 @@ button {
     content: "Normal";
   }
 
-  .inscripciones-section-head--lookup h1 {
-    font-size: clamp(2.8rem, 13vw, 4.6rem);
-  }
-
   .inscripciones-lookup-hero__content {
     padding-top: 152px;
   }
@@ -21479,6 +21461,7 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .inscripciones-lookup-search .inscripciones-button,
   .inscripciones-curp-card .inscripciones-button,
   .inscripciones-order-card .inscripciones-button {
     width: 100%;

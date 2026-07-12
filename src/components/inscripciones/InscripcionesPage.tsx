@@ -2,7 +2,6 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useMemo, useState } from "react";
 import {
   ArrowRight,
-  BadgeCheck,
   CreditCard,
   Landmark,
   Search,
@@ -423,15 +422,6 @@ export function InscripcionesConsultaPage() {
         <LevitateHeader activeLabel="Inscripciones" tone="light" useRootLinks variant="pill" />
 
         <div className="inscripciones-hero__content inscripciones-lookup-hero__content">
-          <div className="inscripciones-section-head inscripciones-section-head--lookup">
-            <p className="inscripciones-eyebrow">Consulta y pago</p>
-            <h1>Consulta tu inscripción por CURP.</h1>
-            <p>
-              Revisa los conceptos cargados por tu academia y abre los datos bancarios para transferir sólo la
-              inscripción.
-            </p>
-          </div>
-
           <InscriptionLookupPanel />
         </div>
       </section>
@@ -686,58 +676,49 @@ function InscriptionLookupPanel() {
 
   return (
     <div className="inscripciones-lookup-shell">
-      <article className="inscripciones-curp-card inscripciones-lookup-search">
-        <div className="inscripciones-lookup-search__copy">
-          <div className="inscripciones-card-icon">
-            <Search aria-hidden="true" size={26} />
-          </div>
-          <div>
-            <span>Consulta rápida</span>
-            <strong>CURP del participante</strong>
-          </div>
-        </div>
-        <form onSubmit={handleLookupSubmit}>
-          <label htmlFor="inscription-curp">CURP del participante</label>
-          <div className="inscripciones-curp-card__input">
-            <input
-              autoComplete="off"
-              id="inscription-curp"
-              maxLength={18}
-              minLength={18}
-              onChange={handleCurpChange}
-              placeholder="Ingresa tu CURP"
-              value={curp}
-            />
-          </div>
-          <button className="inscripciones-button inscripciones-button--solid" disabled={isLookupLoading} type="submit">
-            {isLookupLoading ? "Consultando" : "Consultar inscripción"}
-            <ArrowRight aria-hidden="true" size={18} />
-          </button>
-        </form>
-        <p>Demo: {demoCurp}</p>
-        {lookupError ? (
-          <p className="inscripciones-query-message is-error" role="alert">
-            {lookupError}
-          </p>
-        ) : null}
-      </article>
-
       <div className="inscripciones-lookup-body">
         <article className="inscripciones-confirmation-card inscripciones-confirmation-card--receipt">
-          <header>
-            <div className="inscripciones-card-icon">
-              <BadgeCheck aria-hidden="true" size={26} />
-            </div>
-            <div>
-              <span>{lookup ? "Registro encontrado" : "Consulta pendiente"}</span>
+          <div className="inscripciones-lookup-receipt-top">
+            <header className="inscripciones-receipt-heading">
               <h3>{lookup ? lookup.participantName : "Ingresa tu CURP"}</h3>
               <p>
                 {lookup
                   ? `${lookup.academyName} · ${getVenueLabel(lookup.venue)}`
                   : "Aquí aparecerán solamente los conceptos de inscripción cargados por la academia."}
               </p>
-            </div>
-          </header>
+            </header>
+
+            <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
+              <div className="inscripciones-lookup-search__copy">
+                <span>Ingresa</span>
+                <strong>CURP del participante</strong>
+              </div>
+              <form onSubmit={handleLookupSubmit}>
+                <label htmlFor="inscription-curp">CURP del participante</label>
+                <div className="inscripciones-curp-card__input">
+                  <input
+                    autoComplete="off"
+                    id="inscription-curp"
+                    maxLength={18}
+                    minLength={18}
+                    onChange={handleCurpChange}
+                    placeholder="Ingresa tu CURP"
+                    value={curp}
+                  />
+                </div>
+                <button className="inscripciones-button inscripciones-button--solid" disabled={isLookupLoading} type="submit">
+                  {isLookupLoading ? "Consultando" : "Consultar inscripción"}
+                  <ArrowRight aria-hidden="true" size={18} />
+                </button>
+              </form>
+              <p>Demo: {demoCurp}</p>
+              {lookupError ? (
+                <p className="inscripciones-query-message is-error" role="alert">
+                  {lookupError}
+                </p>
+              ) : null}
+            </section>
+          </div>
 
           <div className="inscripciones-choreography-list" aria-label="Conceptos asociados al CURP">
             {visibleLines.length > 0 ? (
