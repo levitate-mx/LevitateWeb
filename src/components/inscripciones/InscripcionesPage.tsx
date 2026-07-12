@@ -191,12 +191,29 @@ const demoInscriptionLookup: InscriptionLookup = {
   order: null,
 };
 
-const bankTransferRows = [
-  { label: "Banco", value: "BBVA" },
-  { label: "A nombre de", value: "Levitate MX" },
-  { label: "Número de cuenta", value: "0000 0000 0000" },
-  { label: "CLABE interbancaria", value: "012 180 00000000000 0" },
+const paymentMethodSections = [
+  {
+    id: "banamex",
+    title: "Banamex",
+    rows: [
+      { label: "Banco", value: "Banamex" },
+      { label: "A nombre de", value: "María Laura Ponce" },
+      { label: "Número de cuenta", value: "26988 - Sucursal 4770" },
+      { label: "CLABE interbancaria", value: "002540477000269880" },
+    ],
+  },
+  {
+    id: "spin",
+    title: "Spin by Oxxo",
+    rows: [
+      { label: "Banco", value: "Spin by Oxxo" },
+      { label: "A nombre de", value: "Rodolfo Javier Serrano" },
+      { label: "CLABE interbancaria", value: "728969000061103602" },
+    ],
+  },
 ];
+
+const paymentConceptLabel = "Concepto";
 
 const genreLabels: Record<string, string> = {
   aereo: "Aerial",
@@ -373,8 +390,18 @@ export function InscripcionesPage() {
 
       <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
         <div className="inscripciones-section-head">
-          <p className="inscripciones-eyebrow">Inscripciones</p>
-          <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
+          <div>
+            <p className="inscripciones-eyebrow">Inscripciones</p>
+            <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
+          </div>
+          <aside className="inscripciones-presale-note" aria-label="Vigencia de preventa">
+            <span className="inscripciones-cost-card__eyebrow">Vigencia de preventa</span>
+            <strong>Preventa hasta el 12 de octubre de 2026.</strong>
+            <p>
+              Para pagos de inscripción, la preventa aplica hasta esa fecha. Desde el 13 de octubre de 2026 se cobrará
+              tarifa normal.
+            </p>
+          </aside>
         </div>
 
         <div className="inscripciones-cost-grid">
@@ -403,15 +430,6 @@ export function InscripcionesPage() {
           </article>
 
           <article className="inscripciones-cost-card inscripciones-cost-card--info">
-            <div className="inscripciones-cost-card__notice">
-              <span className="inscripciones-cost-card__eyebrow">Vigencia de preventa</span>
-              <h3>Preventa hasta el 12 de octubre de 2026.</h3>
-              <p>
-                Para los pagos de inscripción, el precio de preventa aplica únicamente hasta esa fecha. A partir del 13
-                de octubre de 2026 se cobrará la tarifa normal.
-              </p>
-            </div>
-
             <div>
               <span className="inscripciones-cost-card__eyebrow">Descuento</span>
               <h3>Participaciones adicionales al 50%.</h3>
@@ -485,6 +503,9 @@ function InscriptionLookupPanel() {
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isProofUploading, setIsProofUploading] = useState(false);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState(paymentMethodSections[0].id);
+  const selectedPaymentMethod =
+    paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? paymentMethodSections[0];
   const visibleLines = lookup?.lines ?? [];
   const visibleSubtotal = lookup?.subtotal ?? 0;
   const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
@@ -888,6 +909,21 @@ function InscriptionLookupPanel() {
       context.textAlign = "left";
     };
 
+    const drawCenteredText = (text: string, x: number, y: number, maxWidth: number, size: number, color = ink, weight = 760) => {
+      setFont(size, weight);
+      context.fillStyle = color;
+
+      let renderedText = text;
+
+      while (context.measureText(renderedText).width > maxWidth && renderedText.length > 4) {
+        renderedText = `${renderedText.slice(0, -4).trim()}...`;
+      }
+
+      context.textAlign = "center";
+      context.fillText(renderedText, x, y);
+      context.textAlign = "left";
+    };
+
     context.fillStyle = paper;
     context.fillRect(0, 0, width, height);
 
@@ -993,9 +1029,9 @@ function InscriptionLookupPanel() {
     drawRightText(formatCurrency(visibleSubtotal), padding + leftWidth - 54, summaryY + 142, 42, ink, 820);
 
     drawText("Datos para pago", rightX, 58, 16, ink, 840);
-    drawText("Transferencia bancaria", rightX, 122, 42, ink, 560);
+    drawText("Opciones de pago", rightX, 122, 42, ink, 560);
     drawWrappedText(
-      "Realiza tu pago por transferencia o depósito con los siguientes datos.",
+      "Elige una opción de pago y usa el concepto indicado para validar tu inscripción.",
       rightX,
       170,
       rightWidth,
@@ -1019,38 +1055,66 @@ function InscriptionLookupPanel() {
     context.lineTo(rightX + rightWidth, 350);
     context.stroke();
 
-    const paymentRows = [...bankTransferRows, { label: "Concepto", value: getPaymentConcept(lookup.curp), hasInfo: true }];
-
     let detailY = 386;
-    paymentRows.forEach((row) => {
-      const labelText = row.label.toUpperCase();
-      const labelX = rightX + 24;
-      const isConceptRow = "hasInfo" in row && row.hasInfo;
+    const paymentTabGap = 8;
+    const paymentTabHeight = 44;
+    const paymentTabWidth = (rightWidth - paymentTabGap) / paymentMethodSections.length;
 
-      drawRoundRect(rightX, detailY, rightWidth, 74, 8, card, softBorder);
-      drawText(labelText, labelX, detailY + 45, 16, ink, 820);
+    paymentMethodSections.forEach((method, methodIndex) => {
+      const tabX = rightX + methodIndex * (paymentTabWidth + paymentTabGap);
+      const isActive = method.id === selectedPaymentMethod.id;
 
-      if (isConceptRow) {
-        setFont(16, 820);
-        const labelWidth = context.measureText(labelText).width;
-        const asteriskX = labelX + labelWidth + 8;
-        const infoX = asteriskX + 22;
-
-        drawText("*", asteriskX, detailY + 45, 17, pink, 860);
-
-        context.beginPath();
-        context.arc(infoX, detailY + 39, 10, 0, Math.PI * 2);
-        context.strokeStyle = "rgba(42, 41, 40, 0.42)";
-        context.stroke();
-        drawText("i", infoX - 2, detailY + 45, 14, ink, 820);
-      }
-
-      drawRightFittedText(row.value, rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, isConceptRow ? 840 : 720);
-      detailY += 88;
+      drawRoundRect(
+        tabX,
+        detailY,
+        paymentTabWidth,
+        paymentTabHeight,
+        8,
+        isActive ? ink : "rgba(255, 255, 255, 0.54)",
+        isActive ? "rgba(42, 41, 40, 0.24)" : softBorder,
+      );
+      drawCenteredText(method.title, tabX + paymentTabWidth / 2, detailY + 29, paymentTabWidth - 28, 16, isActive ? "#fff" : ink, 820);
     });
 
+    detailY += paymentTabHeight + 12;
+
+    const paymentCardHeight = 58 + selectedPaymentMethod.rows.length * 54;
+
+    drawRoundRect(rightX, detailY, rightWidth, paymentCardHeight, 8, "rgba(255, 255, 255, 0.54)", softBorder);
+    drawText(selectedPaymentMethod.title.toUpperCase(), rightX + 24, detailY + 36, 16, pink, 860);
+
+    selectedPaymentMethod.rows.forEach((row, rowIndex) => {
+      const rowY = detailY + 68 + rowIndex * 54;
+
+      drawText(row.label.toUpperCase(), rightX + 24, rowY, 11, muted, 820);
+      drawWrappedText(row.value, rightX + 24, rowY + 26, rightWidth - 48, 19, 17, ink, 720, 1);
+    });
+
+    detailY += paymentCardHeight + 18;
+
+    const conceptLabel = paymentConceptLabel.toUpperCase();
+    const conceptLabelX = rightX + 24;
+
+    drawRoundRect(rightX, detailY, rightWidth, 74, 8, card, softBorder);
+    drawText(conceptLabel, conceptLabelX, detailY + 45, 16, ink, 820);
+    setFont(16, 820);
+
+    const conceptLabelWidth = context.measureText(conceptLabel).width;
+    const asteriskX = conceptLabelX + conceptLabelWidth + 8;
+    const infoX = asteriskX + 22;
+
+    drawText("*", asteriskX, detailY + 45, 17, pink, 860);
+
+    context.beginPath();
+    context.arc(infoX, detailY + 39, 10, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(42, 41, 40, 0.42)";
+    context.stroke();
+    drawText("i", infoX - 2, detailY + 45, 14, ink, 820);
+    drawRightFittedText(getPaymentConcept(lookup.curp), rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, 840);
+    detailY += 88;
+
     drawWrappedText(
-      "Usa este concepto al realizar la transferencia para que podamos identificar y validar tu pago.",
+      "Este concepto es personalizado e individual para cada participante. Úsalo exactamente como aparece para validar el pago.",
       rightX,
       detailY + 22,
       rightWidth,
@@ -1340,7 +1404,7 @@ function InscriptionLookupPanel() {
               <div className="inscripciones-checkout-subhead">
                 <span>
                   <CheckCircle2 aria-hidden="true" size={17} />
-                  {visibleLines.length} {visibleLines.length === 1 ? "coreografía" : "coreografías"}
+                  Precio preventa respetado
                 </span>
               </div>
 
@@ -1433,8 +1497,8 @@ function InscriptionLookupPanel() {
               <header className="inscripciones-payment-sidepanel__header">
                 <div>
                   <span>Datos para pago</span>
-                  <h3 id="payment-panel-title">Transferencia bancaria</h3>
-                  <p>Realiza tu pago por transferencia o depósito con los siguientes datos.</p>
+                  <h3 id="payment-panel-title">Opciones de pago</h3>
+                  <p>Elige una opción de pago y usa el concepto indicado para validar tu inscripción.</p>
                 </div>
                 <div className="inscripciones-payment-sidepanel__actions">
                   <button
@@ -1480,33 +1544,56 @@ function InscriptionLookupPanel() {
                 </div>
               ) : null}
 
-              <dl className="inscripciones-payment-sidepanel__details">
-                {bankTransferRows.map((row) => (
-                  <div key={row.label}>
-                    <dt>{row.label}</dt>
-                    <dd>{row.value}</dd>
-                  </div>
-                ))}
-                <div className="inscripciones-payment-sidepanel__concept">
-                  <dt>
-                    <span>Concepto</span>
-                    <em aria-hidden="true">*</em>
+              <div className="inscripciones-payment-methods" aria-label="Opciones disponibles para pagar">
+                <div className="inscripciones-payment-method-tabs" role="tablist" aria-label="Selecciona una opción de pago">
+                  {paymentMethodSections.map((method) => (
                     <button
-                      aria-label="Usa este concepto al realizar la transferencia para identificar tu pago."
-                      data-tooltip="Usa este concepto al realizar la transferencia. Nos ayuda a identificar y validar tu pago correctamente."
+                      aria-selected={selectedPaymentMethod.id === method.id}
+                      className={selectedPaymentMethod.id === method.id ? "is-active" : ""}
+                      key={method.id}
+                      onClick={() => setSelectedPaymentMethodId(method.id)}
+                      role="tab"
                       type="button"
                     >
-                      <Info aria-hidden="true" size={15} />
+                      {method.title}
                     </button>
-                  </dt>
-                  <dd>
-                    <strong>{getPaymentConcept(lookup.curp)}</strong>
-                  </dd>
+                  ))}
                 </div>
-              </dl>
+
+                <section className="inscripciones-payment-method" aria-label={`Datos de ${selectedPaymentMethod.title}`} role="tabpanel">
+                  <h4>{selectedPaymentMethod.title}</h4>
+                  <dl className="inscripciones-payment-sidepanel__details inscripciones-payment-sidepanel__details--compact">
+                    {selectedPaymentMethod.rows.map((row) => (
+                      <div key={`${selectedPaymentMethod.id}-${row.label}`}>
+                        <dt>{row.label}</dt>
+                        <dd>{row.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+
+                <dl className="inscripciones-payment-sidepanel__details inscripciones-payment-sidepanel__details--concept">
+                  <div className="inscripciones-payment-sidepanel__concept">
+                    <dt>
+                      <span>Concepto</span>
+                      <em aria-hidden="true">*</em>
+                      <button
+                        aria-label="Este concepto es personalizado e individual para cada participante."
+                        data-tooltip="Este concepto es personalizado e individual para cada participante. Inclúyelo exactamente como aparece para identificar y validar tu pago."
+                        type="button"
+                      >
+                        <Info aria-hidden="true" size={15} />
+                      </button>
+                    </dt>
+                    <dd>
+                      <strong>{getPaymentConcept(lookup.curp)}</strong>
+                    </dd>
+                  </div>
+                </dl>
+              </div>
 
               <p className="inscripciones-payment-sidepanel__notice">
-                Transfiere el monto exacto y usa este concepto para que podamos identificar y validar tu pago.
+                Paga el monto exacto y usa este concepto personalizado e individual para que podamos identificar y validar tu pago.
               </p>
 
               {lookup.order?.proof ? (
