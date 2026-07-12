@@ -3,12 +3,11 @@ import { useEffect, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
-  CreditCard,
-  Landmark,
-  LockKeyhole,
+  Info,
   ReceiptText,
   Search,
-  ShieldCheck,
+  Upload,
+  UploadCloud,
   X,
 } from "lucide-react";
 import { LevitateFooter } from "../home/LevitateFooter";
@@ -193,10 +192,10 @@ const demoInscriptionLookup: InscriptionLookup = {
 };
 
 const bankTransferRows = [
-  { label: "Beneficiario", value: "Levitate MX" },
   { label: "Banco", value: "BBVA" },
-  { label: "CLABE", value: "012 180 00000000000 0" },
-  { label: "Cuenta", value: "0000 0000 0000" },
+  { label: "A nombre de", value: "Levitate MX" },
+  { label: "Número de cuenta", value: "0000 0000 0000" },
+  { label: "CLABE interbancaria", value: "012 180 00000000000 0" },
 ];
 
 const genreLabels: Record<string, string> = {
@@ -260,6 +259,12 @@ function formatCurrency(amount: number) {
 
 function normalizeCurp(value: string) {
   return value.replace(/\s+/g, "").toUpperCase().slice(0, 18);
+}
+
+function getPaymentConcept(curp: string) {
+  const curpPrefix = normalizeCurp(curp).slice(0, 4) || "CURP";
+
+  return `LEVITATE-${curpPrefix}-26`;
 }
 
 function getVenueLabel(venue?: string | null) {
@@ -343,9 +348,7 @@ export function InscripcionesPage() {
     <main className="levitate-home-redesign inscripciones-page">
       <section className="inscripciones-hero" id="inicio">
         <div className="inscripciones-hero__backdrop" aria-hidden="true">
-          <video autoPlay muted loop playsInline preload="metadata">
-            <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
-          </video>
+          <img alt="" src="/assets/inscripciones-hero-color-4.png" />
         </div>
         <LevitateHeader activeLabel="Inscripciones" useRootLinks variant="pill" />
 
@@ -400,6 +403,15 @@ export function InscripcionesPage() {
           </article>
 
           <article className="inscripciones-cost-card inscripciones-cost-card--info">
+            <div className="inscripciones-cost-card__notice">
+              <span className="inscripciones-cost-card__eyebrow">Vigencia de preventa</span>
+              <h3>Preventa hasta el 12 de octubre de 2026.</h3>
+              <p>
+                Para los pagos de inscripción, el precio de preventa aplica únicamente hasta esa fecha. A partir del 13
+                de octubre de 2026 se cobrará la tarifa normal.
+              </p>
+            </div>
+
             <div>
               <span className="inscripciones-cost-card__eyebrow">Descuento</span>
               <h3>Participaciones adicionales al 50%.</h3>
@@ -446,10 +458,10 @@ export function InscripcionesPage() {
 export function InscripcionesConsultaPage() {
   return (
     <main className="levitate-home-redesign inscripciones-page inscripciones-lookup-page">
-      <section className="inscripciones-hero inscripciones-lookup-hero" id="consulta-curp">
+      <section className="inscripciones-payment-screen" id="consulta-curp">
         <LevitateHeader activeLabel="Inscripciones" tone="light" useRootLinks variant="pill" />
 
-        <div className="inscripciones-hero__content inscripciones-lookup-hero__content">
+        <div className="inscripciones-payment-screen__content">
           <InscriptionLookupPanel />
         </div>
       </section>
@@ -464,6 +476,8 @@ function InscriptionLookupPanel() {
   const [lookup, setLookup] = useState<InscriptionLookup | null>(null);
   const [lookupError, setLookupError] = useState("");
   const [orderError, setOrderError] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
+  const [isShareFallbackVisible, setIsShareFallbackVisible] = useState(false);
   const [proofError, setProofError] = useState("");
   const [proofMessage, setProofMessage] = useState("");
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
@@ -487,11 +501,9 @@ function InscriptionLookupPanel() {
       }
     };
 
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isTransferVisible]);
@@ -501,6 +513,8 @@ function InscriptionLookupPanel() {
     setCurp(nextCurp);
     setLookupError("");
     setOrderError("");
+    setCopyMessage("");
+    setIsShareFallbackVisible(false);
     setProofError("");
     setProofMessage("");
     setSelectedProofFile(null);
@@ -518,6 +532,8 @@ function InscriptionLookupPanel() {
     setCurp(normalizedCurp);
     setLookupError("");
     setOrderError("");
+    setCopyMessage("");
+    setIsShareFallbackVisible(false);
     setProofError("");
     setProofMessage("");
     setSelectedProofFile(null);
@@ -663,6 +679,521 @@ function InscriptionLookupPanel() {
     }
   };
 
+  const revealPaymentPanel = () => {
+    window.requestAnimationFrame(() => {
+      const visualPanel = document.querySelector<HTMLElement>(".inscripciones-payment-visual");
+
+      if (!visualPanel) {
+        return;
+      }
+
+      const panelBounds = visualPanel.getBoundingClientRect();
+
+      if (panelBounds.top >= 92 && panelBounds.top <= 124) {
+        return;
+      }
+
+      visualPanel.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  };
+
+  const getPaymentShareData = () => {
+    if (!lookup) {
+      return null;
+    }
+
+    const concept = getPaymentConcept(lookup.curp);
+
+    return {
+      concept,
+      fileName: `datos-pago-${concept.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
+    };
+  };
+
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 700);
+  };
+
+  const createPaymentArtwork = () => {
+    if (!lookup) {
+      return null;
+    }
+
+    const scale = 2;
+    const width = 1440;
+    const leftWidth = 760;
+    const gutter = 54;
+    const padding = 56;
+    const rightX = padding + leftWidth + gutter;
+    const rightWidth = width - rightX - padding;
+    const rowHeights = visibleLines.map((line) => (line.discountAmount ? 124 : 98));
+    const listHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
+    const contentHeight = Math.max(1010, padding + 164 + listHeight + 260);
+    const height = contentHeight + padding;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return null;
+    }
+
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    context.scale(scale, scale);
+
+    const ink = "#2a2928";
+    const muted = "rgba(42, 41, 40, 0.58)";
+    const border = "rgba(42, 41, 40, 0.14)";
+    const softBorder = "rgba(42, 41, 40, 0.1)";
+    const paper = "#f8f6f1";
+    const card = "rgba(255, 255, 255, 0.46)";
+    const pink = "#df4f95";
+    const green = "#2f7b4d";
+    const greenSoft = "rgba(53, 134, 82, 0.12)";
+
+    const setFont = (size: number, weight = 560) => {
+      context.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+    };
+
+    const drawRoundRect = (
+      x: number,
+      y: number,
+      rectWidth: number,
+      rectHeight: number,
+      radius: number,
+      fillStyle?: string,
+      strokeStyle?: string,
+    ) => {
+      const nextRadius = Math.min(radius, rectWidth / 2, rectHeight / 2);
+
+      context.beginPath();
+      context.moveTo(x + nextRadius, y);
+      context.lineTo(x + rectWidth - nextRadius, y);
+      context.quadraticCurveTo(x + rectWidth, y, x + rectWidth, y + nextRadius);
+      context.lineTo(x + rectWidth, y + rectHeight - nextRadius);
+      context.quadraticCurveTo(x + rectWidth, y + rectHeight, x + rectWidth - nextRadius, y + rectHeight);
+      context.lineTo(x + nextRadius, y + rectHeight);
+      context.quadraticCurveTo(x, y + rectHeight, x, y + rectHeight - nextRadius);
+      context.lineTo(x, y + nextRadius);
+      context.quadraticCurveTo(x, y, x + nextRadius, y);
+      context.closePath();
+
+      if (fillStyle) {
+        context.fillStyle = fillStyle;
+        context.fill();
+      }
+
+      if (strokeStyle) {
+        context.strokeStyle = strokeStyle;
+        context.lineWidth = 1;
+        context.stroke();
+      }
+    };
+
+    const drawText = (text: string, x: number, y: number, size: number, color = ink, weight = 560) => {
+      setFont(size, weight);
+      context.fillStyle = color;
+      context.fillText(text, x, y);
+    };
+
+    const drawRightText = (text: string, x: number, y: number, size: number, color = ink, weight = 680) => {
+      setFont(size, weight);
+      context.fillStyle = color;
+      context.textAlign = "right";
+      context.fillText(text, x, y);
+      context.textAlign = "left";
+    };
+
+    const drawWrappedText = (
+      text: string,
+      x: number,
+      y: number,
+      maxWidth: number,
+      lineHeight: number,
+      size: number,
+      color = ink,
+      weight = 560,
+      maxLines = 2,
+    ) => {
+      setFont(size, weight);
+      context.fillStyle = color;
+
+      const words = text.split(" ");
+      const lines: string[] = [];
+      let currentLine = "";
+
+      words.forEach((word) => {
+        const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+        if (context.measureText(candidate).width <= maxWidth || !currentLine) {
+          currentLine = candidate;
+          return;
+        }
+
+        lines.push(currentLine);
+        currentLine = word;
+      });
+
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      lines.slice(0, maxLines).forEach((line, index) => {
+        const renderedLine = index === maxLines - 1 && lines.length > maxLines ? `${line.replace(/\s+\S*$/, "")}...` : line;
+        context.fillText(renderedLine, x, y + index * lineHeight);
+      });
+
+      return y + Math.min(lines.length, maxLines) * lineHeight;
+    };
+
+    const drawRightFittedText = (
+      text: string,
+      x: number,
+      y: number,
+      maxWidth: number,
+      size: number,
+      color = ink,
+      weight = 680,
+    ) => {
+      setFont(size, weight);
+      context.fillStyle = color;
+
+      let renderedText = text;
+
+      while (context.measureText(renderedText).width > maxWidth && renderedText.length > 4) {
+        renderedText = `${renderedText.slice(0, -4).trim()}...`;
+      }
+
+      context.textAlign = "right";
+      context.fillText(renderedText, x, y);
+      context.textAlign = "left";
+    };
+
+    context.fillStyle = paper;
+    context.fillRect(0, 0, width, height);
+
+    context.strokeStyle = "rgba(42, 41, 40, 0.08)";
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(rightX - gutter / 2, 0);
+    context.lineTo(rightX - gutter / 2, height);
+    context.stroke();
+
+    drawText("Portal de pagos", padding, 58, 16, pink, 860);
+    drawWrappedText(lookup.participantName, padding, 126, leftWidth, 58, 54, ink, 560, 1);
+    drawText(`${lookup.academyName} · ${getVenueLabel(lookup.venue)}`.toUpperCase(), padding, 172, 16, pink, 860);
+    drawRightText(
+      `${visibleLines.length} ${visibleLines.length === 1 ? "coreografía" : "coreografías"}`,
+      padding + leftWidth,
+      172,
+      18,
+      muted,
+      720,
+    );
+
+    const listY = 216;
+    drawRoundRect(padding, listY, leftWidth, listHeight, 8, card, border);
+
+    let rowY = listY;
+    visibleLines.forEach((line, index) => {
+      const rowHeight = rowHeights[index];
+      const rowCenter = rowY + rowHeight / 2;
+
+      if (index > 0) {
+        context.strokeStyle = softBorder;
+        context.beginPath();
+        context.moveTo(padding, rowY);
+        context.lineTo(padding + leftWidth, rowY);
+        context.stroke();
+      }
+
+      context.beginPath();
+      context.arc(padding + 42, rowCenter, 24, 0, Math.PI * 2);
+      context.fillStyle = ink;
+      context.fill();
+      drawRightText(String(index + 1), padding + 49, rowCenter + 7, 20, "#fff", 780);
+
+      const textX = padding + 92;
+      const titleY = rowY + (line.discountAmount ? 36 : 42);
+      drawWrappedText(getLineTitle(line), textX, titleY, leftWidth - 280, 26, 23, ink, 760, 1);
+      drawText(getLineMeta(line).toUpperCase(), textX, titleY + 36, 16, muted, 820);
+
+      if (line.discountAmount) {
+        const badgeY = titleY + 58;
+        drawRoundRect(textX, badgeY, 174, 34, 17, greenSoft);
+        drawText("50% DE DESCUENTO", textX + 18, badgeY + 23, 15, green, 820);
+      }
+
+      const amountX = padding + leftWidth - 28;
+
+      if (line.discountAmount) {
+        const original = formatCurrency(line.baseAmount ?? line.amount);
+
+        drawRightText(original, amountX, rowCenter - 10, 20, "rgba(42, 41, 40, 0.48)", 660);
+        context.strokeStyle = "rgba(42, 41, 40, 0.48)";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(amountX - context.measureText(original).width, rowCenter - 17);
+        context.lineTo(amountX, rowCenter - 17);
+        context.stroke();
+        drawRightText(formatCurrency(line.amount), amountX, rowCenter + 28, 29, ink, 820);
+      } else {
+        drawRightText(formatCurrency(line.amount), amountX, rowCenter + 10, 27, ink, 820);
+      }
+
+      rowY += rowHeight;
+    });
+
+    const summaryY = listY + listHeight + 38;
+    drawText("Subtotal", padding, summaryY, 23, ink, 820);
+    drawRightText(formatCurrency(visibleOriginalSubtotal), padding + leftWidth, summaryY, 23, ink, 760);
+
+    if (visibleDiscount > 0) {
+      drawText("Descuentos", padding, summaryY + 48, 23, green, 820);
+      drawRightText(`-${formatCurrency(visibleDiscount)}`, padding + leftWidth, summaryY + 48, 23, green, 760);
+    }
+
+    context.strokeStyle = "rgba(42, 41, 40, 0.62)";
+    context.beginPath();
+    context.moveTo(padding, summaryY + 88);
+    context.lineTo(padding + leftWidth, summaryY + 88);
+    context.stroke();
+
+    drawText("Total a pagar", padding, summaryY + 142, 24, ink, 840);
+    drawRightText("MXN", padding + leftWidth, summaryY + 142, 21, ink, 820);
+    drawRightText(formatCurrency(visibleSubtotal), padding + leftWidth - 54, summaryY + 142, 42, ink, 820);
+
+    drawText("Datos para pago", rightX, 58, 16, ink, 840);
+    drawText("Transferencia bancaria", rightX, 122, 42, ink, 560);
+    drawWrappedText(
+      "Realiza tu pago por transferencia o depósito con los siguientes datos.",
+      rightX,
+      170,
+      rightWidth,
+      25,
+      20,
+      "rgba(42, 41, 40, 0.72)",
+      520,
+      2,
+    );
+
+    context.strokeStyle = "rgba(42, 41, 40, 0.18)";
+    context.beginPath();
+    context.moveTo(rightX, 236);
+    context.lineTo(rightX + rightWidth, 236);
+    context.stroke();
+    drawText("Total a transferir", rightX, 284, 18, muted, 540);
+    drawText(getOrderStatusLabel(lookup.order?.status), rightX, 320, 17, muted, 540);
+    drawRightText(formatCurrency(visibleSubtotal), rightX + rightWidth, 306, 38, ink, 820);
+    context.beginPath();
+    context.moveTo(rightX, 350);
+    context.lineTo(rightX + rightWidth, 350);
+    context.stroke();
+
+    const paymentRows = [...bankTransferRows, { label: "Concepto", value: getPaymentConcept(lookup.curp), hasInfo: true }];
+
+    let detailY = 386;
+    paymentRows.forEach((row) => {
+      const labelText = row.label.toUpperCase();
+      const labelX = rightX + 24;
+
+      drawRoundRect(rightX, detailY, rightWidth, 74, 8, card, softBorder);
+      drawText(labelText, labelX, detailY + 45, 16, ink, 820);
+
+      if ("hasInfo" in row && row.hasInfo) {
+        setFont(16, 820);
+        const infoX = labelX + context.measureText(labelText).width + 22;
+
+        context.beginPath();
+        context.arc(infoX, detailY + 39, 10, 0, Math.PI * 2);
+        context.strokeStyle = "rgba(42, 41, 40, 0.42)";
+        context.stroke();
+        drawText("i", infoX - 2, detailY + 45, 14, ink, 820);
+      }
+
+      drawRightFittedText(row.value, rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, 720);
+      detailY += 88;
+    });
+
+    drawWrappedText(
+      "Usa este concepto al realizar la transferencia para que podamos identificar y validar tu pago.",
+      rightX,
+      detailY + 22,
+      rightWidth,
+      26,
+      20,
+      "rgba(42, 41, 40, 0.62)",
+      520,
+      3,
+    );
+
+    return { canvas, height, width };
+  };
+
+  const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
+    new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, type, quality);
+    });
+
+  const createImagePdfBlob = async (imageBlob: Blob, pageWidth: number, pageHeight: number) => {
+    const imageBytes = new Uint8Array(await imageBlob.arrayBuffer());
+    const contentStream = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/PaymentCapture Do\nQ\n`;
+    const encoder = new TextEncoder();
+    const chunks: BlobPart[] = [];
+    const offsets = [0];
+    let offset = 0;
+
+    const toBlobPart = (bytes: Uint8Array) =>
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+
+    const writeText = (text: string) => {
+      const bytes = encoder.encode(text);
+      chunks.push(toBlobPart(bytes));
+      offset += bytes.length;
+    };
+
+    const writeBytes = (bytes: Uint8Array) => {
+      chunks.push(toBlobPart(bytes));
+      offset += bytes.length;
+    };
+
+    const startObject = (objectNumber: number) => {
+      offsets[objectNumber] = offset;
+      writeText(`${objectNumber} 0 obj\n`);
+    };
+
+    writeText("%PDF-1.4\n");
+    startObject(1);
+    writeText("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    startObject(2);
+    writeText("<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    startObject(3);
+    writeText(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /PaymentCapture 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`,
+    );
+    startObject(4);
+    writeText(
+      `<< /Type /XObject /Subtype /Image /Width ${pageWidth * 2} /Height ${pageHeight * 2} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`,
+    );
+    writeBytes(imageBytes);
+    writeText("\nendstream\nendobj\n");
+    startObject(5);
+    writeText(`<< /Length ${encoder.encode(contentStream).length} >>\nstream\n${contentStream}endstream\nendobj\n`);
+
+    const xrefOffset = offset;
+    writeText("xref\n0 6\n0000000000 65535 f \n");
+    [1, 2, 3, 4, 5].forEach((objectNumber) => {
+      writeText(`${String(offsets[objectNumber]).padStart(10, "0")} 00000 n \n`);
+    });
+    writeText(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+    return new Blob(chunks, { type: "application/pdf" });
+  };
+
+  const createPaymentPdfBlob = async () => {
+    await document.fonts?.ready;
+
+    const artwork = createPaymentArtwork();
+
+    if (!artwork) {
+      return null;
+    }
+
+    const imageBlob = await canvasToBlob(artwork.canvas, "image/jpeg", 0.94);
+
+    if (!imageBlob) {
+      return null;
+    }
+
+    return createImagePdfBlob(imageBlob, artwork.width, artwork.height);
+  };
+
+  const handleDownloadPaymentPdf = async () => {
+    const shareData = getPaymentShareData();
+
+    if (!shareData) {
+      return;
+    }
+
+    const paymentPdf = await createPaymentPdfBlob();
+
+    if (paymentPdf) {
+      downloadBlob(paymentPdf, `${shareData.fileName}.pdf`);
+    }
+  };
+
+  const handleDownloadPaymentImage = async () => {
+    const shareData = getPaymentShareData();
+
+    if (!shareData) {
+      return;
+    }
+
+    await document.fonts?.ready;
+
+    const artwork = createPaymentArtwork();
+
+    if (!artwork) {
+      return;
+    }
+
+    const imageBlob = await canvasToBlob(artwork.canvas, "image/png");
+
+    if (imageBlob) {
+      downloadBlob(imageBlob, `${shareData.fileName}.png`);
+    }
+  };
+
+  const handleSharePaymentDetails = async () => {
+    const shareData = getPaymentShareData();
+
+    if (!shareData) {
+      return;
+    }
+
+    setIsShareFallbackVisible(false);
+    setCopyMessage("");
+
+    try {
+      const paymentPdf = await createPaymentPdfBlob();
+
+      if (!paymentPdf) {
+        setIsShareFallbackVisible(true);
+        return;
+      }
+
+      const paymentFile = new File([paymentPdf], `${shareData.fileName}.pdf`, { type: "application/pdf" });
+
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [paymentFile] }))) {
+        await navigator.share({
+          files: [paymentFile],
+          text: "PDF con el resumen y datos de transferencia para inscripción Levitate MX.",
+          title: "Datos de pago Levitate MX",
+        });
+        setCopyMessage("Compartido");
+        return;
+      }
+
+      setIsShareFallbackVisible(true);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      setIsShareFallbackVisible(true);
+    }
+  };
+
   const handlePaymentOrder = async () => {
     if (!lookup || visibleSubtotal <= 0) {
       return;
@@ -673,6 +1204,7 @@ function InscriptionLookupPanel() {
     if (lookup.curp === demoCurp) {
       setLookup({ ...lookup, order: lookup.order ?? buildDemoInscriptionOrder(lookup) });
       setIsTransferVisible(true);
+      revealPaymentPanel();
       return;
     }
 
@@ -709,6 +1241,7 @@ function InscriptionLookupPanel() {
         };
       });
       setIsTransferVisible(true);
+      revealPaymentPanel();
     } catch (error) {
       setOrderError(error instanceof Error ? error.message : "No pudimos generar la orden de inscripción.");
     } finally {
@@ -718,247 +1251,283 @@ function InscriptionLookupPanel() {
 
   return (
     <div className="inscripciones-lookup-shell">
-      <article className="inscripciones-payment-portal" aria-labelledby="payment-portal-title">
-        <header className="inscripciones-payment-portal__header">
-          <div>
-            <span className="inscripciones-payment-portal__eyebrow">
-              <LockKeyhole aria-hidden="true" size={14} />
-              Portal de pagos
-            </span>
-            <h2 id="payment-portal-title">Consulta y paga tu inscripción</h2>
-            <p>Ingresa la CURP del participante para revisar los conceptos cargados por su academia.</p>
-          </div>
-          <div className="inscripciones-payment-portal__trust">
-            <ShieldCheck aria-hidden="true" size={22} />
-            <span>Consulta protegida</span>
-          </div>
-        </header>
-
-        <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
-          <form onSubmit={handleLookupSubmit}>
-            <div className="inscripciones-lookup-search__field">
-              <label htmlFor="inscription-curp">CURP del participante</label>
-              <div className="inscripciones-curp-card__input">
-                <Search aria-hidden="true" size={19} />
-                <input
-                  autoComplete="off"
-                  id="inscription-curp"
-                  maxLength={18}
-                  minLength={18}
-                  onChange={handleCurpChange}
-                  placeholder="Ej. DEMO010101MDFLVT09"
-                  value={curp}
-                />
+      <article
+        className={`inscripciones-payment-portal${isTransferVisible && lookup ? " is-payment-open" : ""}`}
+        aria-label="Portal de pagos de inscripción"
+      >
+        <section className="inscripciones-payment-main">
+          <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
+            <form onSubmit={handleLookupSubmit}>
+              <div className="inscripciones-lookup-search__field">
+                <label htmlFor="inscription-curp">Buscar por CURP</label>
+                <div className="inscripciones-curp-card__input">
+                  <input
+                    autoComplete="off"
+                    id="inscription-curp"
+                    maxLength={18}
+                    minLength={18}
+                    onChange={handleCurpChange}
+                    placeholder="Ej. DEMO010101MDFLVT09"
+                    value={curp}
+                  />
+                  <button
+                    aria-label={isLookupLoading ? "Consultando inscripción" : "Consultar inscripción"}
+                    className="inscripciones-lookup-search__submit"
+                    disabled={isLookupLoading}
+                    type="submit"
+                  >
+                    <Search aria-hidden="true" size={23} />
+                  </button>
+                </div>
               </div>
-              <span>18 caracteres, sin espacios.</span>
-            </div>
-            <button className="inscripciones-button inscripciones-button--solid" disabled={isLookupLoading} type="submit">
-              {isLookupLoading ? "Consultando..." : "Consultar inscripción"}
-              <ArrowRight aria-hidden="true" size={18} />
+            </form>
+            <button
+              className="inscripciones-lookup-search__demo"
+              onClick={() => {
+                setCurp(demoCurp);
+                setLookup(null);
+                setLookupError("");
+                setOrderError("");
+                setCopyMessage("");
+                setIsShareFallbackVisible(false);
+                setProofError("");
+                setProofMessage("");
+                setSelectedProofFile(null);
+                setIsTransferVisible(false);
+              }}
+              type="button"
+            >
+              Usar CURP de demostración
             </button>
-          </form>
-          <button
-            className="inscripciones-lookup-search__demo"
-            onClick={() => {
-              setCurp(demoCurp);
-              setLookup(null);
-              setLookupError("");
-              setOrderError("");
-              setProofError("");
-              setProofMessage("");
-              setSelectedProofFile(null);
-              setIsTransferVisible(false);
-            }}
-            type="button"
-          >
-            Usar CURP de demostración
-          </button>
-          {lookupError ? (
+            {lookupError ? (
+              <p className="inscripciones-query-message is-error" role="alert">
+                {lookupError}
+              </p>
+            ) : null}
+          </section>
+
+          {lookup ? (
+            <section className="inscripciones-lookup-concepts" aria-labelledby="inscription-concepts-title">
+              <header className="inscripciones-checkout-participant">
+                <h2 id="inscription-concepts-title">{lookup.participantName}</h2>
+                <span>{lookup.academyName} · {getVenueLabel(lookup.venue)}</span>
+              </header>
+
+              <div className="inscripciones-checkout-subhead">
+                <span>
+                  <CheckCircle2 aria-hidden="true" size={17} />
+                  {visibleLines.length} {visibleLines.length === 1 ? "coreografía" : "coreografías"}
+                </span>
+              </div>
+
+              {visibleLines.length > 0 ? (
+                <div className="inscripciones-choreography-list" aria-label="Conceptos asociados al CURP">
+                  {visibleLines.map((line, index) => (
+                    <div className="inscripciones-choreography-row" key={line.id}>
+                      <div className="inscripciones-choreography-row__index">{index + 1}</div>
+                      <div>
+                        <strong>{getLineTitle(line)}</strong>
+                        <span>{getLineMeta(line)}</span>
+                        {line.discountAmount ? <em className="inscripciones-choreography-row__discount">50% de descuento</em> : null}
+                      </div>
+                      <div className="inscripciones-choreography-row__amount">
+                        <span>
+                          {line.discountAmount ? <del>{formatCurrency(line.baseAmount ?? line.amount)}</del> : null}
+                          <b>{formatCurrency(line.amount)}</b>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="inscripciones-lookup-empty">
+                  <ReceiptText aria-hidden="true" size={24} />
+                  <strong>No hay coreografías disponibles</strong>
+                  <p>La academia todavía no vinculó coreografías pagables a este participante.</p>
+                </div>
+              )}
+
+              {visibleLines.length > 0 ? (
+                <div className="inscripciones-payment-summary">
+                  <dl>
+                    <div>
+                      <dt>Subtotal</dt>
+                      <dd>{formatCurrency(visibleOriginalSubtotal)}</dd>
+                    </div>
+                    {visibleDiscount > 0 ? (
+                      <div className="is-discount">
+                        <dt>Descuentos</dt>
+                        <dd>-{formatCurrency(visibleDiscount)}</dd>
+                      </div>
+                    ) : null}
+                    <div className="is-total">
+                      <dt>Total a pagar</dt>
+                      <dd>
+                        <strong>{formatCurrency(visibleSubtotal)}</strong>
+                        <span>MXN</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : null}
+            </section>
+          ) : (
+            <section className="inscripciones-lookup-preview" aria-label="Estado de consulta">
+              <ReceiptText aria-hidden="true" size={24} />
+              <strong>Sin consulta todavía.</strong>
+              <p>Ingresa el CURP para ver participante, coreografías y monto final.</p>
+            </section>
+          )}
+
+          {orderError ? (
             <p className="inscripciones-query-message is-error" role="alert">
-              {lookupError}
+              {orderError}
             </p>
           ) : null}
         </section>
 
-        {lookup ? (
-          <section className="inscripciones-lookup-concepts" aria-labelledby="inscription-concepts-title">
-            <header>
-              <div>
-                <span>Participante</span>
-                <h3 id="inscription-concepts-title">{lookup.participantName}</h3>
-                <p>{lookup.academyName} · {getVenueLabel(lookup.venue)}</p>
-              </div>
-              <div className="inscripciones-lookup-concepts__count">
-                <CheckCircle2 aria-hidden="true" size={17} />
-                {visibleLines.length} {visibleLines.length === 1 ? "coreografía" : "coreografías"}
-              </div>
-            </header>
+        <aside
+          className={`inscripciones-payment-visual${isTransferVisible && lookup ? " is-payment-open" : ""}`}
+          aria-label="Momento Levitate"
+        >
+          <img alt="" src="/assets/inscripciones-payment-moment.jpg" />
 
-            {visibleLines.length > 0 ? (
-              <div className="inscripciones-choreography-list" aria-label="Conceptos asociados al CURP">
-                {visibleLines.map((line) => (
-                  <div className="inscripciones-choreography-row" key={line.id}>
-                    <div className="inscripciones-choreography-row__icon">
-                      <ReceiptText aria-hidden="true" size={19} />
-                    </div>
-                    <div>
-                      <strong>{getLineTitle(line)}</strong>
-                      <span>{getLineMeta(line)}</span>
-                    </div>
-                    <div className="inscripciones-choreography-row__amount">
-                      {line.discountAmount ? <em>50% de descuento</em> : null}
-                      {line.discountAmount ? <del>{formatCurrency(line.baseAmount ?? line.amount)}</del> : null}
-                      <b>{formatCurrency(line.amount)}</b>
-                    </div>
+          {lookup && visibleLines.length > 0 && !isTransferVisible ? (
+            <button
+              className="inscripciones-photo-payment-button"
+              disabled={visibleSubtotal <= 0 || isOrderLoading}
+              onClick={handlePaymentOrder}
+              type="button"
+            >
+              <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : "Datos de pago"}</span>
+              <ArrowRight aria-hidden="true" size={22} />
+            </button>
+          ) : null}
+
+          {isTransferVisible && lookup ? (
+            <section className="inscripciones-payment-sidepanel" aria-labelledby="payment-panel-title">
+              <header className="inscripciones-payment-sidepanel__header">
+                <div>
+                  <span>Datos para pago</span>
+                  <h3 id="payment-panel-title">Transferencia bancaria</h3>
+                  <p>Realiza tu pago por transferencia o depósito con los siguientes datos.</p>
+                </div>
+                <div className="inscripciones-payment-sidepanel__actions">
+                  <button
+                    aria-label="Compartir datos de pago"
+                    className="inscripciones-share-button"
+                    onClick={handleSharePaymentDetails}
+                    title={copyMessage || "Compartir datos de pago"}
+                    type="button"
+                  >
+                    <Upload aria-hidden="true" size={20} />
+                  </button>
+                  <button
+                    aria-label="Cerrar datos de transferencia"
+                    className="inscripciones-payment-sidepanel__close"
+                    onClick={() => {
+                      setIsTransferVisible(false);
+                      setIsShareFallbackVisible(false);
+                    }}
+                    type="button"
+                  >
+                    <X aria-hidden="true" size={20} />
+                  </button>
+                </div>
+              </header>
+
+              <div className="inscripciones-payment-sidepanel__amount">
+                <span>Total a transferir</span>
+                <strong>{formatCurrency(visibleSubtotal)}</strong>
+                <small>{getOrderStatusLabel(lookup.order?.status)}</small>
+              </div>
+
+              {isShareFallbackVisible ? (
+                <div className="inscripciones-share-fallback" role="status">
+                  <p>Tu navegador no abrió compartir. Guarda los datos para tenerlos a mano.</p>
+                  <div>
+                    <button onClick={handleDownloadPaymentPdf} type="button">
+                      Descargar PDF
+                    </button>
+                    <button onClick={handleDownloadPaymentImage} type="button">
+                      Guardar imagen
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <dl className="inscripciones-payment-sidepanel__details">
+                {bankTransferRows.map((row) => (
+                  <div key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="inscripciones-lookup-empty">
-                <ReceiptText aria-hidden="true" size={24} />
-                <strong>No hay coreografías disponibles</strong>
-                <p>La academia todavía no vinculó coreografías pagables a este participante.</p>
-              </div>
-            )}
-
-            {visibleLines.length > 0 ? (
-              <div className="inscripciones-payment-summary">
-                <dl>
-                  {visibleDiscount > 0 ? (
-                    <>
-                      <div>
-                        <dt>Subtotal</dt>
-                        <dd>{formatCurrency(visibleOriginalSubtotal)}</dd>
-                      </div>
-                      <div className="is-discount">
-                        <dt>Descuento aplicado</dt>
-                        <dd>-{formatCurrency(visibleDiscount)}</dd>
-                      </div>
-                    </>
-                  ) : null}
-                  <div className="is-total">
-                    <dt>Total a pagar</dt>
-                    <dd>{formatCurrency(visibleSubtotal)}</dd>
-                  </div>
-                </dl>
-
-                <button
-                  className="inscripciones-button inscripciones-button--solid"
-                  disabled={visibleSubtotal <= 0 || isOrderLoading}
-                  onClick={handlePaymentOrder}
-                  type="button"
-                >
-                  {isOrderLoading ? "Generando orden..." : lookup.order ? "Ver datos de transferencia" : "Pagar inscripción"}
-                  <CreditCard aria-hidden="true" size={18} />
-                </button>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        {orderError ? (
-          <p className="inscripciones-query-message is-error" role="alert">
-            {orderError}
-          </p>
-        ) : null}
-      </article>
-
-      {isTransferVisible && lookup ? (
-        <div
-          className="inscripciones-payment-modal"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsTransferVisible(false);
-            }
-          }}
-          role="presentation"
-        >
-          <section
-            aria-labelledby="payment-modal-title"
-            aria-modal="true"
-            className="inscripciones-payment-modal__dialog"
-            role="dialog"
-          >
-            <header className="inscripciones-payment-modal__header">
-              <div className="inscripciones-card-icon">
-                <Landmark aria-hidden="true" size={22} />
-              </div>
-              <div>
-                <span>Transferencia bancaria</span>
-                <h3 id="payment-modal-title">Completa tu pago</h3>
-              </div>
-              <button aria-label="Cerrar datos de transferencia" onClick={() => setIsTransferVisible(false)} type="button">
-                <X aria-hidden="true" size={20} />
-              </button>
-            </header>
-
-            <div className="inscripciones-payment-modal__amount">
-              <span>Total a transferir</span>
-              <strong>{formatCurrency(visibleSubtotal)}</strong>
-              <small>{getOrderStatusLabel(lookup.order?.status)}</small>
-            </div>
-
-            <dl className="inscripciones-payment-modal__details">
-              {bankTransferRows.map((row) => (
-                <div key={row.label}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
+                <div className="inscripciones-payment-sidepanel__concept">
+                  <dt>
+                    Concepto
+                    <button
+                      aria-label="Usa este concepto al realizar la transferencia para identificar tu pago."
+                      data-tooltip="Usa este concepto al realizar la transferencia. Nos ayuda a identificar y validar tu pago correctamente."
+                      type="button"
+                    >
+                      <Info aria-hidden="true" size={15} />
+                    </button>
+                  </dt>
+                  <dd>{getPaymentConcept(lookup.curp)}</dd>
                 </div>
-              ))}
-              <div>
-                <dt>Concepto</dt>
-                <dd>{lookup.order?.reference ?? lookup.reference}</dd>
-              </div>
-            </dl>
+              </dl>
 
-            <p className="inscripciones-payment-modal__notice">
-              Transfiere el monto exacto y usa la referencia como concepto para que podamos validar tu pago.
-            </p>
+              <p className="inscripciones-payment-sidepanel__notice">
+                Transfiere el monto exacto y usa este concepto para que podamos identificar y validar tu pago.
+              </p>
 
-            {lookup.order?.proof ? (
-              <div className="inscripciones-proof-status">
-                <span>Comprobante cargado</span>
-                <strong>{lookup.order.proof.fileName}</strong>
-                <p>
-                  Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
-                  {formatProofSize(lookup.order.proof.fileSize)}
-                </p>
-                <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
-                  Ver comprobante
-                </a>
-              </div>
-            ) : null}
-
-            {lookup.order ? (
-              <div className="inscripciones-proof-uploader">
-                <header>
-                  <span>Comprobante</span>
-                  <strong>Sube tu captura o PDF</strong>
-                </header>
-                <label>
-                  <input accept={proofUploadAccept} onChange={handleProofFileChange} type="file" />
-                  <span>{selectedProofFile ? selectedProofFile.name : "Seleccionar comprobante"}</span>
-                </label>
-                <button
-                  className="inscripciones-button inscripciones-button--solid"
-                  disabled={!selectedProofFile || isProofUploading}
-                  onClick={handleProofUpload}
-                  type="button"
-                >
-                  {isProofUploading ? "Subiendo..." : "Subir comprobante"}
-                  <ArrowRight aria-hidden="true" size={18} />
-                </button>
-                {proofError ? (
-                  <p className="inscripciones-query-message is-error" role="alert">
-                    {proofError}
+              {lookup.order?.proof ? (
+                <div className="inscripciones-proof-status">
+                  <span>Comprobante cargado</span>
+                  <strong>{lookup.order.proof.fileName}</strong>
+                  <p>
+                    Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
+                    {formatProofSize(lookup.order.proof.fileSize)}
                   </p>
-                ) : null}
-                {proofMessage ? <p className="inscripciones-query-message is-success">{proofMessage}</p> : null}
-              </div>
-            ) : null}
-          </section>
-        </div>
-      ) : null}
+                  <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
+                    Ver comprobante
+                  </a>
+                </div>
+              ) : null}
+
+              {lookup.order ? (
+                <div className="inscripciones-proof-uploader">
+                  <header>
+                    <UploadCloud aria-hidden="true" size={34} />
+                    <strong>Subir comprobante de pago</strong>
+                    <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
+                  </header>
+                  <label>
+                    <input accept={proofUploadAccept} onChange={handleProofFileChange} type="file" />
+                    <span>{selectedProofFile ? selectedProofFile.name : "Seleccionar comprobante"}</span>
+                  </label>
+                  <button
+                    className="inscripciones-button inscripciones-button--solid"
+                    disabled={!selectedProofFile || isProofUploading}
+                    onClick={handleProofUpload}
+                    type="button"
+                  >
+                    {isProofUploading ? "Subiendo..." : "Subir comprobante"}
+                    <ArrowRight aria-hidden="true" size={18} />
+                  </button>
+                  {proofError ? (
+                    <p className="inscripciones-query-message is-error" role="alert">
+                      {proofError}
+                    </p>
+                  ) : null}
+                  {proofMessage ? <p className="inscripciones-query-message is-success">{proofMessage}</p> : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+        </aside>
+      </article>
     </div>
   );
 }

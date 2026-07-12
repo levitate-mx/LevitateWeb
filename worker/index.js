@@ -15,6 +15,21 @@ const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanz
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const maxRegistrationPaymentProofBytes = 1800000;
+const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
+const registrationInscriptionPrices = {
+  normal: {
+    duo: 1400,
+    grupo: 1000,
+    solo: 1750,
+    trio: 1200,
+  },
+  presale: {
+    duo: 1300,
+    grupo: 800,
+    solo: 1500,
+    trio: 950,
+  },
+};
 
 export default {
   async fetch(request, env) {
@@ -1977,22 +1992,15 @@ function buildRegistrationInscriptionLines(dances) {
 }
 
 function getRegistrationInscriptionAmount(dance) {
+  const prices = Date.now() < registrationInscriptionPresaleEndsAt
+    ? registrationInscriptionPrices.presale
+    : registrationInscriptionPrices.normal;
+
   if (dance.genre === "aereo") {
-    return 1500;
+    return prices.solo;
   }
 
-  switch (dance.category) {
-    case "solo":
-      return 1500;
-    case "duo":
-      return 1300;
-    case "trio":
-      return 950;
-    case "grupo":
-      return 800;
-    default:
-      return 800;
-  }
+  return prices[dance.category] ?? prices.grupo;
 }
 
 function buildRegistrationInscriptionReference(curp, venue) {
