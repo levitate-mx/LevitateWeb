@@ -92,9 +92,16 @@ CREATE TABLE IF NOT EXISTS registration_inscription_orders (
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
   payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+  buyer_phone_country_code TEXT,
+  buyer_phone_number TEXT,
+  buyer_phone TEXT,
   line_items_json TEXT NOT NULL DEFAULT '[]',
   notes TEXT,
   paid_at TEXT,
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  rejection_reason TEXT,
+  rejection_message TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -109,6 +116,23 @@ CREATE TABLE IF NOT EXISTS registration_inscription_payment_proofs (
   status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
   uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_event_tickets (
+  id TEXT PRIMARY KEY,
+  source_order_type TEXT NOT NULL DEFAULT 'registration' CHECK (source_order_type IN ('registration', 'shop')),
+  source_order_id TEXT NOT NULL,
+  ticket_code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  ticket_number INTEGER NOT NULL CHECK (ticket_number > 0),
+  ticket_label TEXT NOT NULL,
+  holder_name TEXT,
+  qr_payload TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'used', 'cancelled')),
+  used_at TEXT,
+  used_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (source_order_type, source_order_id, ticket_number)
 );
 
 CREATE TABLE IF NOT EXISTS registration_choreographers (
@@ -181,6 +205,9 @@ CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_curp ON registrat
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_academy_id ON registration_inscription_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_status ON registration_inscription_orders(status);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id);
+CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_source_order ON registration_event_tickets(source_order_type, source_order_id);
+CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_ticket_code ON registration_event_tickets(ticket_code);
+CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_status ON registration_event_tickets(status);
 CREATE INDEX IF NOT EXISTS idx_registration_choreographers_academy_id ON registration_choreographers(academy_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   ON registration_choreographers(academy_id, lower(email))

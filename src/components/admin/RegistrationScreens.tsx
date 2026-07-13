@@ -40,6 +40,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "payments";
@@ -121,6 +122,7 @@ type RegistrationDance = {
 };
 
 type RegistrationInscriptionOrderStatus = "pending_payment" | "payment_reported" | "paid" | "rejected";
+type RegistrationPaymentRejectionReason = "missing_proof" | "incomplete_amount" | "payment_not_found" | "invalid_or_unreadable_proof";
 
 type RegistrationPaymentProof = {
   id: string;
@@ -130,6 +132,24 @@ type RegistrationPaymentProof = {
   dataUrl: string;
   status: string;
   uploadedAt: string;
+};
+
+type RegistrationEventTicketStatus = "active" | "used" | "cancelled";
+
+type RegistrationEventTicket = {
+  id: string;
+  sourceOrderType: string;
+  sourceOrderId: string;
+  ticketCode: string;
+  ticketNumber: number;
+  ticketLabel: string;
+  holderName?: string | null;
+  qrPayload: string;
+  status: RegistrationEventTicketStatus;
+  usedAt?: string | null;
+  usedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type RegistrationInscriptionLineItem = {
@@ -157,11 +177,19 @@ type RegistrationInscriptionOrder = {
   status: RegistrationInscriptionOrderStatus;
   paymentMethod: string;
   lineItems?: RegistrationInscriptionLineItem[];
+  buyerPhoneCountryCode?: string | null;
+  buyerPhoneNumber?: string | null;
+  buyerPhone?: string | null;
   notes?: string | null;
   paidAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: RegistrationPaymentRejectionReason | null;
+  rejectionMessage?: string | null;
   createdAt: string;
   updatedAt: string;
   proof?: RegistrationPaymentProof | null;
+  tickets?: RegistrationEventTicket[];
 };
 
 type RegistrationBootstrap = RegistrationSession & {
@@ -323,9 +351,16 @@ const venueOptions: FieldOption[] = [
 
 const inscriptionOrderStatusOptions: FieldOption[] = [
   { value: "pending_payment", label: "Pendiente de pago" },
-  { value: "payment_reported", label: "Pago reportado" },
+  { value: "payment_reported", label: "Pendiente de confirmación" },
   { value: "paid", label: "Pagada" },
   { value: "rejected", label: "Rechazada" },
+];
+
+const paymentRejectionReasonOptions: Array<FieldOption & { value: RegistrationPaymentRejectionReason }> = [
+  { value: "missing_proof", label: "No subieron comprobante" },
+  { value: "incomplete_amount", label: "Pagaron un monto incompleto" },
+  { value: "payment_not_found", label: "No se encontró el pago" },
+  { value: "invalid_or_unreadable_proof", label: "Comprobante incorrecto o ilegible" },
 ];
 
 const studentPortalModules = [
@@ -458,6 +493,10 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
       paymentMethod: "bank_transfer",
       notes: null,
       paidAt: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      rejectionReason: null,
+      rejectionMessage: null,
       createdAt: "2026-07-04T00:00:00Z",
       updatedAt: "2026-07-04T00:00:00Z",
       proof: null,
@@ -621,12 +660,322 @@ function getAdminStatusClass(status: RegistrationInscriptionOrderStatus) {
 function getAdminPaymentStatusLabel(status: RegistrationInscriptionOrderStatus) {
   const labels: Record<RegistrationInscriptionOrderStatus, string> = {
     paid: "Aprobado",
-    payment_reported: "En revisión",
+    payment_reported: "Pendiente de confirmación",
     pending_payment: "Falta comprobante",
     rejected: "Rechazado",
   };
 
   return labels[status];
+}
+
+function getPaymentRejectionReasonLabel(reason?: string | null) {
+  return getOptionLabel(paymentRejectionReasonOptions, reason || "");
+}
+
+function getDefaultPaymentRejectionReason(order: RegistrationInscriptionOrder): RegistrationPaymentRejectionReason {
+  if (!order.proof) {
+    return "missing_proof";
+  }
+
+  if (order.paidAmount > 0 && order.paidAmount < order.amount) {
+    return "incomplete_amount";
+  }
+
+  return "invalid_or_unreadable_proof";
+}
+
+function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reason: RegistrationPaymentRejectionReason) {
+  const amount = formatAdminCurrency(order.amount);
+
+  const messages: Record<RegistrationPaymentRejectionReason, string> = {
+    incomplete_amount: `No pudimos aprobar tu pago porque el monto recibido no cubre el total de la orden ${order.reference}. El total correcto es ${amount}. Te reenviamos los datos de transferencia para completar el pago y volver a subir tu comprobante.`,
+    invalid_or_unreadable_proof: `No pudimos aprobar tu pago porque el comprobante de la orden ${order.reference} no es legible o no corresponde al pago. Te reenviamos los datos de transferencia para que puedas revisar la operación y subir el comprobante correcto.`,
+    missing_proof: `No pudimos aprobar tu pago porque falta subir el comprobante de la orden ${order.reference}. Te reenviamos los datos de transferencia para que puedas realizar o confirmar el pago y cargar el comprobante.`,
+    payment_not_found: `No pudimos aprobar tu pago porque no encontramos una transferencia asociada a la referencia ${order.reference}. Te reenviamos los datos de transferencia para que puedas realizar el pago y subir el comprobante.`,
+  };
+
+  return messages[reason];
+}
+
+function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
+  const labels: Record<RegistrationEventTicketStatus, string> = {
+    active: "Activo",
+    cancelled: "Cancelado",
+    used: "Usado",
+  };
+
+  return labels[status] ?? status;
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = objectUrl;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 700);
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, type, quality);
+  });
+}
+
+function loadAdminImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+
+    image.addEventListener("load", () => resolve(image), { once: true });
+    image.addEventListener("error", () => reject(new Error("No se pudo cargar la imagen.")), { once: true });
+    image.src = src;
+  });
+}
+
+async function createTicketArtwork(order: RegistrationInscriptionOrder, ticket: RegistrationEventTicket) {
+  const scale = 2;
+  const width = 842;
+  const height = 1191;
+  const padding = 64;
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  const [logo, qrImage] = await Promise.all([
+    loadAdminImage("/assets/levitate-logo-mx.png").catch(() => null),
+    QRCode.toDataURL(ticket.qrPayload, {
+      color: { dark: "#050505", light: "#fffaf4" },
+      errorCorrectionLevel: "H",
+      margin: 1,
+      width: 520,
+    }).then(loadAdminImage),
+  ]);
+
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  context.scale(scale, scale);
+
+  const ink = "#111111";
+  const muted = "rgba(17,17,17,0.58)";
+  const paper = "#fffaf4";
+  const pink = "#df4f95";
+  const cyan = "#57bdd1";
+  const line = "rgba(17,17,17,0.14)";
+
+  const setFont = (size: number, weight = 650) => {
+    context.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+  };
+
+  const drawText = (text: string, x: number, y: number, size: number, color = ink, weight = 650) => {
+    setFont(size, weight);
+    context.fillStyle = color;
+    context.fillText(text, x, y);
+  };
+
+  const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, size: number, lineHeight: number, color = ink, weight = 650) => {
+    setFont(size, weight);
+    context.fillStyle = color;
+
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let currentLine = "";
+
+    words.forEach((word) => {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+      if (context.measureText(candidate).width <= maxWidth || !currentLine) {
+        currentLine = candidate;
+        return;
+      }
+
+      lines.push(currentLine);
+      currentLine = word;
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    lines.slice(0, 4).forEach((lineText, index) => {
+      context.fillText(lineText, x, y + index * lineHeight);
+    });
+  };
+
+  const drawRoundRect = (x: number, y: number, rectWidth: number, rectHeight: number, radius: number, fillStyle?: string, strokeStyle?: string) => {
+    const nextRadius = Math.min(radius, rectWidth / 2, rectHeight / 2);
+
+    context.beginPath();
+    context.moveTo(x + nextRadius, y);
+    context.lineTo(x + rectWidth - nextRadius, y);
+    context.quadraticCurveTo(x + rectWidth, y, x + rectWidth, y + nextRadius);
+    context.lineTo(x + rectWidth, y + rectHeight - nextRadius);
+    context.quadraticCurveTo(x + rectWidth, y + rectHeight, x + rectWidth - nextRadius, y + rectHeight);
+    context.lineTo(x + nextRadius, y + rectHeight);
+    context.quadraticCurveTo(x, y + rectHeight, x, y + rectHeight - nextRadius);
+    context.lineTo(x, y + nextRadius);
+    context.quadraticCurveTo(x, y, x + nextRadius, y);
+    context.closePath();
+
+    if (fillStyle) {
+      context.fillStyle = fillStyle;
+      context.fill();
+    }
+
+    if (strokeStyle) {
+      context.strokeStyle = strokeStyle;
+      context.lineWidth = 1;
+      context.stroke();
+    }
+  };
+
+  context.fillStyle = paper;
+  context.fillRect(0, 0, width, height);
+
+  context.strokeStyle = line;
+  context.lineWidth = 1;
+  context.strokeRect(28, 28, width - 56, height - 56);
+
+  if (logo) {
+    const logoWidth = 172;
+    const logoHeight = logoWidth * (logo.naturalHeight / logo.naturalWidth);
+    context.drawImage(logo, padding, 54, logoWidth, logoHeight);
+  } else {
+    drawText("Levitate", padding, 92, 34, ink, 820);
+  }
+
+  drawText("BOLETO DE ENTRADA", padding, 184, 18, pink, 880);
+  drawWrappedText(ticket.ticketLabel, padding, 258, width - padding * 2, 64, 66, ink, 760);
+
+  drawRoundRect(padding, 404, width - padding * 2, 424, 12, "rgba(255,255,255,0.62)", line);
+  context.drawImage(qrImage, padding + 64, 458, 312, 312);
+
+  drawText("Código", padding + 430, 506, 16, muted, 780);
+  drawText(ticket.ticketCode, padding + 430, 548, 34, ink, 860);
+  drawText("Estado", padding + 430, 614, 16, muted, 780);
+  drawText(getTicketStatusLabel(ticket.status), padding + 430, 654, 30, ticket.status === "active" ? "#35734c" : "#a62c45", 820);
+  drawText("Orden", padding + 430, 720, 16, muted, 780);
+  drawWrappedText(order.reference, padding + 430, 760, width - padding * 2 - 430, 24, 28, ink, 780);
+
+  const detailsY = 900;
+  drawText("Comprador / Participante", padding, detailsY, 16, muted, 780);
+  drawWrappedText(ticket.holderName || order.participantName, padding, detailsY + 42, width - padding * 2, 32, 38, ink, 780);
+  drawText("Academia", padding, detailsY + 128, 16, muted, 780);
+  drawWrappedText(order.academyName, padding, detailsY + 168, width - padding * 2, 28, 34, ink, 720);
+
+  context.fillStyle = cyan;
+  context.fillRect(padding, height - 104, width - padding * 2, 3);
+  drawText("QR individual. Válido para una sola entrada. No compartir captura.", padding, height - 60, 18, muted, 720);
+
+  return { canvas, height, width };
+}
+
+async function createMultiImagePdfBlob(pages: Array<{ canvas: HTMLCanvasElement; height: number; width: number }>) {
+  const encodedPages = await Promise.all(
+    pages.map(async (page) => {
+      const imageBlob = await canvasToBlob(page.canvas, "image/jpeg", 0.94);
+
+      if (!imageBlob) {
+        throw new Error("No pudimos preparar una página del PDF.");
+      }
+
+      return {
+        bytes: new Uint8Array(await imageBlob.arrayBuffer()),
+        canvasHeight: page.canvas.height,
+        canvasWidth: page.canvas.width,
+        height: page.height,
+        width: page.width,
+      };
+    }),
+  );
+  const encoder = new TextEncoder();
+  const chunks: BlobPart[] = [];
+  const offsets = [0];
+  let offset = 0;
+
+  const toBlobPart = (bytes: Uint8Array) =>
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+
+  const writeText = (text: string) => {
+    const bytes = encoder.encode(text);
+    chunks.push(toBlobPart(bytes));
+    offset += bytes.length;
+  };
+
+  const writeBytes = (bytes: Uint8Array) => {
+    chunks.push(toBlobPart(bytes));
+    offset += bytes.length;
+  };
+
+  const startObject = (objectNumber: number) => {
+    offsets[objectNumber] = offset;
+    writeText(`${objectNumber} 0 obj\n`);
+  };
+
+  writeText("%PDF-1.4\n");
+  startObject(1);
+  writeText("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  startObject(2);
+  const kids = encodedPages.map((_, index) => `${3 + index * 3} 0 R`).join(" ");
+  writeText(`<< /Type /Pages /Kids [${kids}] /Count ${encodedPages.length} >>\nendobj\n`);
+
+  encodedPages.forEach((page, index) => {
+    const pageObject = 3 + index * 3;
+    const imageObject = pageObject + 1;
+    const contentObject = pageObject + 2;
+    const imageName = `Ticket${index + 1}`;
+    const contentStream = `q\n${page.width} 0 0 ${page.height} 0 0 cm\n/${imageName} Do\nQ\n`;
+
+    startObject(pageObject);
+    writeText(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /XObject << /${imageName} ${imageObject} 0 R >> >> /Contents ${contentObject} 0 R >>\nendobj\n`,
+    );
+    startObject(imageObject);
+    writeText(
+      `<< /Type /XObject /Subtype /Image /Width ${page.canvasWidth} /Height ${page.canvasHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.bytes.length} >>\nstream\n`,
+    );
+    writeBytes(page.bytes);
+    writeText("\nendstream\nendobj\n");
+    startObject(contentObject);
+    writeText(`<< /Length ${encoder.encode(contentStream).length} >>\nstream\n${contentStream}endstream\nendobj\n`);
+  });
+
+  const totalObjects = 2 + encodedPages.length * 3;
+  const xrefOffset = offset;
+  writeText(`xref\n0 ${totalObjects + 1}\n0000000000 65535 f \n`);
+
+  for (let objectNumber = 1; objectNumber <= totalObjects; objectNumber += 1) {
+    writeText(`${String(offsets[objectNumber]).padStart(10, "0")} 00000 n \n`);
+  }
+
+  writeText(`trailer\n<< /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  return new Blob(chunks, { type: "application/pdf" });
+}
+
+async function createTicketsPdfBlob(order: RegistrationInscriptionOrder) {
+  const tickets = order.tickets ?? [];
+
+  if (tickets.length === 0) {
+    return null;
+  }
+
+  await document.fonts?.ready;
+
+  const pages = (
+    await Promise.all(tickets.map((ticket) => createTicketArtwork(order, ticket)))
+  ).filter((page): page is { canvas: HTMLCanvasElement; height: number; width: number } => Boolean(page));
+
+  if (pages.length === 0) {
+    return null;
+  }
+
+  return createMultiImagePdfBlob(pages);
 }
 
 function getPendingRegistrationAmount(totals: RegistrationAdminOrderTotals | null) {
@@ -639,10 +988,28 @@ function toRegistrationCsvValue(value: unknown) {
 }
 
 function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
-  const headers = ["Referencia", "CURP", "Participante", "Academia", "Sede", "Concepto", "Monto", "Pagado", "Estado", "Comprobante"];
+  const headers = [
+    "Referencia",
+    "CURP",
+    "WhatsApp",
+    "Participante",
+    "Academia",
+    "Sede",
+    "Concepto",
+    "Monto",
+    "Pagado",
+    "Estado",
+    "Comprobante",
+    "Boletos QR",
+    "Revisado por",
+    "Revisado el",
+    "Motivo rechazo",
+    "Mensaje rechazo",
+  ];
   const rows = orders.map((order) => [
     order.reference,
     order.curp,
+    order.buyerPhone ?? "",
     order.participantName,
     order.academyName,
     getOptionLabel(venueOptions, order.venue),
@@ -651,6 +1018,11 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     order.paidAmount,
     getInscriptionOrderStatusLabel(order.status),
     order.proof?.fileName ?? "",
+    order.tickets?.length ?? 0,
+    order.reviewedBy ?? "",
+    order.reviewedAt ?? "",
+    getPaymentRejectionReasonLabel(order.rejectionReason),
+    order.rejectionMessage ?? "",
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -1984,7 +2356,7 @@ export function LevitateRegistrationAdminPaymentsRoute() {
             <Clock aria-hidden="true" size={24} />
           </article>
           <article>
-            <span>En revisión</span>
+            <span>Pend. confirmación</span>
             <strong>{totals?.reported ?? "—"}</strong>
             <CircleAlert aria-hidden="true" size={24} />
           </article>
@@ -2147,18 +2519,42 @@ function RegistrationAdminOrderDetail({
   order: RegistrationInscriptionOrder | null;
 }) {
   const [notes, setNotes] = useState(order?.notes ?? "");
+  const [rejectionReason, setRejectionReason] = useState<RegistrationPaymentRejectionReason>(
+    order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof"),
+  );
+  const [rejectionMessage, setRejectionMessage] = useState(
+    order ? order.rejectionMessage ?? buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order)) : "",
+  );
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isTicketPdfLoading, setIsTicketPdfLoading] = useState(false);
 
   useEffect(() => {
+    const nextRejectionReason = order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof");
+
     setNotes(order?.notes ?? "");
+    setRejectionReason(nextRejectionReason);
+    setRejectionMessage(order ? order.rejectionMessage ?? buildPaymentRejectionMessage(order, nextRejectionReason) : "");
     setStatusMessage("");
     setErrorMessage("");
+    setIsTicketPdfLoading(false);
   }, [order]);
 
-  const updateOrder = async (status: RegistrationInscriptionOrderStatus, paidAmount = order?.paidAmount ?? 0, fallbackNote = "") => {
+  const updateOrder = async (
+    status: RegistrationInscriptionOrderStatus,
+    paidAmount = order?.paidAmount ?? 0,
+    review?: {
+      rejectionMessage?: string;
+      rejectionReason?: RegistrationPaymentRejectionReason;
+    },
+  ) => {
     if (!order) {
+      return;
+    }
+
+    if (status === "rejected" && !review?.rejectionMessage?.trim()) {
+      setErrorMessage("Escribe qué debe corregir la familia para aprobar el pago.");
       return;
     }
 
@@ -2172,8 +2568,11 @@ function RegistrationAdminOrderDetail({
         {
           body: JSON.stringify({
             id: order.id,
-            notes: notes.trim() || fallbackNote,
+            notes: notes.trim(),
             paidAmount,
+            rejectionMessage: status === "rejected" ? review?.rejectionMessage?.trim() : undefined,
+            rejectionReason: status === "rejected" ? review?.rejectionReason : undefined,
+            reviewedBy: "Admin",
             status,
           }),
           method: "POST",
@@ -2181,11 +2580,45 @@ function RegistrationAdminOrderDetail({
       );
 
       onOrderUpdated(response.order);
-      setStatusMessage("Orden actualizada.");
+      setStatusMessage(status === "paid" ? "Pago aprobado. La orden quedó lista para confirmar por WhatsApp." : "Pago rechazado. El mensaje de corrección quedó guardado.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo actualizar la orden."));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRejectionReasonChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextReason = event.target.value as RegistrationPaymentRejectionReason;
+    setRejectionReason(nextReason);
+
+    if (order) {
+      setRejectionMessage(buildPaymentRejectionMessage(order, nextReason));
+    }
+  };
+
+  const handleDownloadTicketsPdf = async () => {
+    if (!order || !order.tickets?.length) {
+      return;
+    }
+
+    setIsTicketPdfLoading(true);
+    setErrorMessage("");
+    setStatusMessage("");
+
+    try {
+      const pdf = await createTicketsPdfBlob(order);
+
+      if (!pdf) {
+        throw new Error("No pudimos generar el PDF de boletos.");
+      }
+
+      downloadBlob(pdf, `boletos-${order.reference.toLowerCase()}.pdf`);
+      setStatusMessage("PDF de boletos generado.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No pudimos generar el PDF de boletos."));
+    } finally {
+      setIsTicketPdfLoading(false);
     }
   };
 
@@ -2221,6 +2654,10 @@ function RegistrationAdminOrderDetail({
           <dd>{order.curp}</dd>
         </div>
         <div>
+          <dt>WhatsApp</dt>
+          <dd>{order.buyerPhone || "Sin teléfono"}</dd>
+        </div>
+        <div>
           <dt>Participante</dt>
           <dd>{order.participantName}</dd>
         </div>
@@ -2238,7 +2675,7 @@ function RegistrationAdminOrderDetail({
         </div>
         <div>
           <dt>Monto reportado</dt>
-          <dd>{formatAdminCurrency(order.paidAmount || order.amount)}</dd>
+          <dd>{order.paidAmount > 0 ? formatAdminCurrency(order.paidAmount) : "Sin reportar"}</dd>
         </div>
         <div>
           <dt>Fecha transferencia</dt>
@@ -2246,6 +2683,20 @@ function RegistrationAdminOrderDetail({
             {date.date} {date.time}
           </dd>
         </div>
+        <div>
+          <dt>Revisión</dt>
+          <dd>
+            {order.reviewedAt
+              ? `${order.reviewedBy || "Admin"} · ${getAdminOrderDate({ ...order, updatedAt: order.reviewedAt, createdAt: order.reviewedAt }).date}`
+              : "Sin revisar"}
+          </dd>
+        </div>
+        {order.rejectionReason ? (
+          <div>
+            <dt>Motivo rechazo</dt>
+            <dd>{getPaymentRejectionReasonLabel(order.rejectionReason)}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <section className="registration-admin-proof-preview">
@@ -2274,20 +2725,71 @@ function RegistrationAdminOrderDetail({
         )}
       </section>
 
+      {order.tickets?.length ? (
+        <section className="registration-admin-ticket-pack" aria-label="Boletos QR">
+          <header>
+            <div>
+              <span>Boletos QR</span>
+              <strong>
+                {order.tickets.length} {order.tickets.length === 1 ? "boleto generado" : "boletos generados"}
+              </strong>
+            </div>
+            <button disabled={isTicketPdfLoading} onClick={handleDownloadTicketsPdf} type="button">
+              {isTicketPdfLoading ? "Generando..." : "Descargar PDF"}
+            </button>
+          </header>
+          <div>
+            {order.tickets.map((ticket) => (
+              <article key={ticket.id}>
+                <Ticket aria-hidden="true" size={18} />
+                <span>
+                  <strong>{ticket.ticketCode}</strong>
+                  <small>
+                    {ticket.ticketLabel} · {getTicketStatusLabel(ticket.status)}
+                  </small>
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <label className="registration-admin-note">
         <span>Nota interna</span>
         <textarea onChange={(event) => setNotes(event.target.value)} placeholder="Escribe una nota interna (opcional)..." value={notes} />
       </label>
 
+      <section className="registration-admin-review-panel" aria-label="Datos de rechazo">
+        <label>
+          <span>Motivo de rechazo</span>
+          <select onChange={handleRejectionReasonChange} value={rejectionReason}>
+            {paymentRejectionReasonOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Mensaje para WhatsApp</span>
+          <textarea
+            onChange={(event) => setRejectionMessage(event.target.value)}
+            placeholder="Explica qué debe corregir la familia para aprobar el pago."
+            value={rejectionMessage}
+          />
+        </label>
+      </section>
+
       <div className="registration-admin-detail-actions">
         <button disabled={isSaving} onClick={() => updateOrder("paid", order.amount)} type="button">
           Aprobar pago
         </button>
-        <button disabled={isSaving} onClick={() => updateOrder("rejected", order.paidAmount)} type="button">
+        <button
+          disabled={isSaving}
+          onClick={() => updateOrder("rejected", order.paidAmount, { rejectionMessage, rejectionReason })}
+          type="button"
+        >
           Rechazar
-        </button>
-        <button disabled={isSaving} onClick={() => updateOrder("rejected", order.paidAmount, "Solicitar corrección de comprobante")} type="button">
-          Solicitar corrección
         </button>
       </div>
 

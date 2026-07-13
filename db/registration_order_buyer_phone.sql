@@ -1,0 +1,3 @@
+ALTER TABLE registration_inscription_orders ADD COLUMN buyer_phone_country_code TEXT;
+ALTER TABLE registration_inscription_orders ADD COLUMN buyer_phone_number TEXT;
+ALTER TABLE registration_inscription_orders ADD COLUMN buyer_phone TEXT;

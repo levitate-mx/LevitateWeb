@@ -79,8 +79,15 @@ type InscriptionOrder = {
   paidAmount: number;
   status: InscriptionOrderStatus;
   paymentMethod: string;
+  buyerPhoneCountryCode?: string | null;
+  buyerPhoneNumber?: string | null;
+  buyerPhone?: string | null;
   notes?: string | null;
   paidAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  rejectionMessage?: string | null;
   createdAt: string;
   updatedAt: string;
   proof?: InscriptionPaymentProof | null;
@@ -108,6 +115,29 @@ const consultationPath = "/inscripciones/consulta-curp";
 const demoCurp = "DEMO010101MDFLVT09";
 const proofUploadAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const maxProofUploadBytes = 1800000;
+const defaultPhoneCountryCode = "+52";
+
+const phoneCountryOptions = [
+  { code: "+52", country: "México" },
+  { code: "+1", country: "Estados Unidos / Canadá / Rep. Dominicana" },
+  { code: "+54", country: "Argentina" },
+  { code: "+591", country: "Bolivia" },
+  { code: "+55", country: "Brasil" },
+  { code: "+56", country: "Chile" },
+  { code: "+57", country: "Colombia" },
+  { code: "+506", country: "Costa Rica" },
+  { code: "+593", country: "Ecuador" },
+  { code: "+503", country: "El Salvador" },
+  { code: "+34", country: "España" },
+  { code: "+502", country: "Guatemala" },
+  { code: "+504", country: "Honduras" },
+  { code: "+505", country: "Nicaragua" },
+  { code: "+507", country: "Panamá" },
+  { code: "+595", country: "Paraguay" },
+  { code: "+51", country: "Perú" },
+  { code: "+598", country: "Uruguay" },
+  { code: "+58", country: "Venezuela" },
+];
 
 const registrationPaths: RegistrationPath[] = [
   {
@@ -264,7 +294,7 @@ const currencyFormatter = new Intl.NumberFormat("es-MX", {
 
 const orderStatusLabels: Record<InscriptionOrderStatus, string> = {
   paid: "Pagada",
-  payment_reported: "Pago reportado",
+  payment_reported: "Pendiente de confirmación",
   pending_payment: "Pendiente de pago",
   rejected: "Rechazada",
 };
@@ -275,6 +305,25 @@ function formatCurrency(amount: number) {
 
 function normalizeCurp(value: string) {
   return value.replace(/\s+/g, "").toUpperCase().slice(0, 18);
+}
+
+function normalizePhoneNumber(value: string) {
+  return value.replace(/\D/g, "").slice(0, 15);
+}
+
+function normalizePhoneCountryCode(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? `+${digits.slice(0, 4)}` : defaultPhoneCountryCode;
+}
+
+function buildBuyerPhone(countryCode: string, phoneNumber: string) {
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  return normalizedPhoneNumber ? `${normalizePhoneCountryCode(countryCode)}${normalizedPhoneNumber}` : "";
+}
+
+function isPhoneNumberValid(phoneNumber: string) {
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  return normalizedPhoneNumber.length >= 7 && normalizedPhoneNumber.length <= 15;
 }
 
 function getPaymentConcept(curp: string) {
@@ -336,8 +385,9 @@ function resetLookupScroll() {
   });
 }
 
-function buildDemoInscriptionOrder(lookup: InscriptionLookup): InscriptionOrder {
+function buildDemoInscriptionOrder(lookup: InscriptionLookup, buyerPhoneCountryCode = defaultPhoneCountryCode, buyerPhoneNumber = "5512345678"): InscriptionOrder {
   const now = new Date().toISOString();
+  const normalizedPhoneNumber = normalizePhoneNumber(buyerPhoneNumber);
 
   return {
     id: "demo-inscription-order",
@@ -351,8 +401,15 @@ function buildDemoInscriptionOrder(lookup: InscriptionLookup): InscriptionOrder 
     paidAmount: 0,
     status: "pending_payment",
     paymentMethod: "bank_transfer",
+    buyerPhoneCountryCode,
+    buyerPhoneNumber: normalizedPhoneNumber,
+    buyerPhone: buildBuyerPhone(buyerPhoneCountryCode, normalizedPhoneNumber),
     notes: null,
     paidAt: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    rejectionReason: null,
+    rejectionMessage: null,
     createdAt: now,
     updatedAt: now,
     proof: null,
@@ -499,6 +556,8 @@ function InscriptionLookupPanel() {
   const [lookup, setLookup] = useState<InscriptionLookup | null>(null);
   const [lookupError, setLookupError] = useState("");
   const [orderError, setOrderError] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState(defaultPhoneCountryCode);
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [isShareFallbackVisible, setIsShareFallbackVisible] = useState(false);
   const [proofError, setProofError] = useState("");
@@ -553,11 +612,19 @@ function InscriptionLookupPanel() {
     }
   };
 
+  const handlePhoneNumberChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setPhoneNumber(normalizePhoneNumber(event.target.value));
+    setLookupError("");
+    setOrderError("");
+  };
+
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const normalizedCurp = normalizeCurp(curp);
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
     setCurp(normalizedCurp);
+    setPhoneNumber(normalizedPhoneNumber);
     setLookupError("");
     setOrderError("");
     setCopyMessage("");
@@ -574,8 +641,24 @@ function InscriptionLookupPanel() {
       return;
     }
 
+    if (!isPhoneNumberValid(normalizedPhoneNumber)) {
+      setLookup(null);
+      setLookupError("Ingresa un número de WhatsApp válido para avisarte sobre tu pago.");
+      return;
+    }
+
     if (normalizedCurp === demoCurp) {
-      setLookup(demoInscriptionLookup);
+      setLookup({
+        ...demoInscriptionLookup,
+        order: demoInscriptionLookup.order
+          ? {
+              ...demoInscriptionLookup.order,
+              buyerPhoneCountryCode: phoneCountryCode,
+              buyerPhoneNumber: normalizedPhoneNumber,
+              buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
+            }
+          : null,
+      });
       setSelectedPaymentMethodId("");
       resetLookupScroll();
       return;
@@ -585,7 +668,12 @@ function InscriptionLookupPanel() {
 
     try {
       const response = await fetch("/api/registration/inscription/lookup", {
-        body: JSON.stringify({ curp: normalizedCurp }),
+        body: JSON.stringify({
+          buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
+          buyerPhoneCountryCode: phoneCountryCode,
+          buyerPhoneNumber: normalizedPhoneNumber,
+          curp: normalizedCurp,
+        }),
         headers: { "content-type": "application/json" },
         method: "POST",
       });
@@ -676,7 +764,7 @@ function InscriptionLookupPanel() {
 
       setLookup((currentLookup) => (currentLookup ? { ...currentLookup, order: payload.order } : currentLookup));
       setSelectedProofFile(null);
-      setProofMessage("Comprobante recibido. Tu orden quedó como pago reportado.");
+      setProofMessage("Comprobante recibido. Tu orden quedó pendiente de confirmación.");
     } catch (error) {
       setProofError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
     } finally {
@@ -1308,10 +1396,17 @@ function InscriptionLookupPanel() {
       return;
     }
 
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+    setPhoneNumber(normalizedPhoneNumber);
     setOrderError("");
 
+    if (!isPhoneNumberValid(normalizedPhoneNumber)) {
+      setOrderError("Ingresa un número de WhatsApp válido para generar la orden.");
+      return;
+    }
+
     if (lookup.curp === demoCurp) {
-      setLookup({ ...lookup, order: lookup.order ?? buildDemoInscriptionOrder(lookup) });
+      setLookup({ ...lookup, order: lookup.order ?? buildDemoInscriptionOrder(lookup, phoneCountryCode, normalizedPhoneNumber) });
       setSelectedPaymentMethodId("");
       setIsTransferVisible(true);
       revealPaymentPanel();
@@ -1322,7 +1417,12 @@ function InscriptionLookupPanel() {
 
     try {
       const response = await fetch("/api/registration/inscription/order", {
-        body: JSON.stringify({ curp: lookup.curp }),
+        body: JSON.stringify({
+          buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
+          buyerPhoneCountryCode: phoneCountryCode,
+          buyerPhoneNumber: normalizedPhoneNumber,
+          curp: lookup.curp,
+        }),
         headers: { "content-type": "application/json" },
         method: "POST",
       });
@@ -1374,6 +1474,7 @@ function InscriptionLookupPanel() {
                 <div className="inscripciones-curp-card__input">
                   <input
                     autoComplete="off"
+                    className="inscripciones-lookup-search__curp-input"
                     id="inscription-curp"
                     maxLength={18}
                     minLength={18}
@@ -1391,11 +1492,41 @@ function InscriptionLookupPanel() {
                   </button>
                 </div>
               </div>
+              <div className="inscripciones-lookup-search__field">
+                <label htmlFor="inscription-phone-number">WhatsApp para avisos</label>
+                <div className="inscripciones-phone-card__input">
+                  <select
+                    aria-label="País del número de WhatsApp"
+                    id="inscription-phone-country"
+                    onChange={(event) => setPhoneCountryCode(event.target.value)}
+                    value={phoneCountryCode}
+                  >
+                    {phoneCountryOptions.map((option) => (
+                      <option key={`${option.country}-${option.code}`} value={option.code}>
+                        {option.country} {option.code}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    autoComplete="tel-national"
+                    id="inscription-phone-number"
+                    inputMode="tel"
+                    maxLength={15}
+                    onChange={handlePhoneNumberChange}
+                    placeholder="Número sin prefijo"
+                    type="tel"
+                    value={phoneNumber}
+                  />
+                </div>
+                <span>Lo usaremos para confirmar o corregir el pago por WhatsApp.</span>
+              </div>
             </form>
             <button
               className="inscripciones-lookup-search__demo"
               onClick={() => {
                 setCurp(demoCurp);
+                setPhoneCountryCode(defaultPhoneCountryCode);
+                setPhoneNumber("5512345678");
                 setLookup(null);
                 setLookupError("");
                 setOrderError("");
@@ -1647,6 +1778,14 @@ function InscriptionLookupPanel() {
                       <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
                         Ver comprobante
                       </a>
+                    </div>
+                  ) : null}
+
+                  {lookup.order?.status === "rejected" && lookup.order.rejectionMessage ? (
+                    <div className="inscripciones-proof-status inscripciones-proof-status--rejected">
+                      <span>Pago no aprobado</span>
+                      <strong>Hay que corregir el pago</strong>
+                      <p>{lookup.order.rejectionMessage}</p>
                     </div>
                   ) : null}
 

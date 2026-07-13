@@ -13,6 +13,7 @@ const registrationSubgenresByGenre = {
 const registrationCategories = new Set(["solo", "duo", "trio", "grupo"]);
 const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanzado", "elite"]);
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
+const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
@@ -616,12 +617,13 @@ async function handleRegistrationInscriptionOrder(request, env) {
 
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
+    const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
 
     if (curp.length !== 18) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
-    const lookup = await createOrUpdateRegistrationInscriptionOrder(getDb(env), curp);
+    const lookup = await createOrUpdateRegistrationInscriptionOrder(getDb(env), curp, buyerPhoneContact);
     return sendJson(
       {
         order: lookup.order ? serializePublicRegistrationInscriptionOrder(lookup.order) : null,
@@ -667,20 +669,57 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
       .bind(crypto.randomUUID(), order.id, proof.fileName, proof.contentType, proof.fileSize, proof.dataUrl)
       .run();
 
-    await db
-      .prepare(
-        `
-          UPDATE registration_inscription_orders
-          SET status = CASE
-              WHEN status = 'paid' THEN status
-              ELSE 'payment_reported'
-            END,
-            updated_at = datetime('now')
-          WHERE id = ?
-        `,
-      )
-      .bind(order.id)
-      .run();
+    try {
+      await db
+        .prepare(
+          `
+            UPDATE registration_inscription_orders
+            SET status = CASE
+                WHEN status = 'paid' THEN status
+                ELSE 'payment_reported'
+              END,
+              reviewed_by = CASE
+                WHEN status = 'paid' THEN reviewed_by
+                ELSE NULL
+              END,
+              reviewed_at = CASE
+                WHEN status = 'paid' THEN reviewed_at
+                ELSE NULL
+              END,
+              rejection_reason = CASE
+                WHEN status = 'paid' THEN rejection_reason
+                ELSE NULL
+              END,
+              rejection_message = CASE
+                WHEN status = 'paid' THEN rejection_message
+                ELSE NULL
+              END,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `,
+        )
+        .bind(order.id)
+        .run();
+    } catch (error) {
+      if (!isMissingRegistrationInscriptionOrderReviewColumns(error)) {
+        throw error;
+      }
+
+      await db
+        .prepare(
+          `
+            UPDATE registration_inscription_orders
+            SET status = CASE
+                WHEN status = 'paid' THEN status
+                ELSE 'payment_reported'
+              END,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `,
+        )
+        .bind(order.id)
+        .run();
+    }
 
     const updatedOrder = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, order.id, curp);
     const serializedOrder = await serializeRegistrationInscriptionOrderWithProof(db, updatedOrder);
@@ -759,15 +798,26 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
     const status = requireRegistrationChoice(body.status, "status", registrationInscriptionOrderStatuses);
     const paidAmount = optionalInteger(body.paidAmount, "paidAmount");
     const notes = optionalString(body.notes);
+    const rejectionReason = optionalRegistrationChoice(body.rejectionReason, registrationPaymentRejectionReasons);
+    const rejectionMessage = optionalString(body.rejectionMessage);
+    const reviewedBy = optionalString(body.reviewedBy) || "Admin";
 
     await updateRegistrationInscriptionOrderStatus(db, {
       notes,
       orderId,
       paidAmount,
+      rejectionMessage,
+      rejectionReason,
+      reviewedBy,
       status,
     });
 
     const order = await getRegistrationInscriptionOrderRecordById(db, orderId);
+
+    if (order.status === "paid") {
+      await ensureRegistrationEventTicketsForOrder(db, order);
+    }
+
     return sendJson({ order: await serializeRegistrationInscriptionOrderWithProof(db, order) });
   } catch (error) {
     return sendRegistrationError(error);
@@ -1462,69 +1512,155 @@ async function getRegistrationInscriptionLookup(db, curp) {
   };
 }
 
-async function createOrUpdateRegistrationInscriptionOrder(db, curp) {
+async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null) {
   const lookup = await getRegistrationInscriptionLookup(db, curp);
   const existingOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
   const lineItemsJson = JSON.stringify(lookup.lines);
+  const buyerPhoneCountryCode = buyerPhoneContact?.countryCode || null;
+  const buyerPhoneNumber = buyerPhoneContact?.number || null;
+  const buyerPhone = buyerPhoneContact?.phone || null;
 
   if (existingOrder) {
-    await db
-      .prepare(
-        `
-          UPDATE registration_inscription_orders
-          SET
-            curp = ?,
-            participant_name = ?,
-            academy_id = ?,
-            academy_name = ?,
-            venue = ?,
-            amount = ?,
-            line_items_json = ?,
-            updated_at = datetime('now')
-          WHERE reference = ?
-        `,
-      )
-      .bind(
-        lookup.curp,
-        lookup.participantName,
-        lookup.academyId || null,
-        lookup.academyName,
-        lookup.venue,
-        lookup.subtotal,
-        lineItemsJson,
-        lookup.reference,
-      )
-      .run();
+    try {
+      await db
+        .prepare(
+          `
+            UPDATE registration_inscription_orders
+            SET
+              curp = ?,
+              participant_name = ?,
+              academy_id = ?,
+              academy_name = ?,
+              venue = ?,
+              amount = ?,
+              line_items_json = ?,
+              buyer_phone_country_code = COALESCE(?, buyer_phone_country_code),
+              buyer_phone_number = COALESCE(?, buyer_phone_number),
+              buyer_phone = COALESCE(?, buyer_phone),
+              updated_at = datetime('now')
+            WHERE reference = ?
+          `,
+        )
+        .bind(
+          lookup.curp,
+          lookup.participantName,
+          lookup.academyId || null,
+          lookup.academyName,
+          lookup.venue,
+          lookup.subtotal,
+          lineItemsJson,
+          buyerPhoneCountryCode,
+          buyerPhoneNumber,
+          buyerPhone,
+          lookup.reference,
+        )
+        .run();
+    } catch (error) {
+      if (!isMissingRegistrationInscriptionOrderBuyerPhoneColumns(error)) {
+        throw error;
+      }
+
+      await db
+        .prepare(
+          `
+            UPDATE registration_inscription_orders
+            SET
+              curp = ?,
+              participant_name = ?,
+              academy_id = ?,
+              academy_name = ?,
+              venue = ?,
+              amount = ?,
+              line_items_json = ?,
+              updated_at = datetime('now')
+            WHERE reference = ?
+          `,
+        )
+        .bind(
+          lookup.curp,
+          lookup.participantName,
+          lookup.academyId || null,
+          lookup.academyName,
+          lookup.venue,
+          lookup.subtotal,
+          lineItemsJson,
+          lookup.reference,
+        )
+        .run();
+    }
   } else {
-    await db
-      .prepare(
-        `
-          INSERT INTO registration_inscription_orders (
-            id,
-            curp,
-            participant_name,
-            academy_id,
-            academy_name,
-            venue,
-            reference,
-            amount,
-            line_items_json
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-      )
-      .bind(
-        crypto.randomUUID(),
-        lookup.curp,
-        lookup.participantName,
-        lookup.academyId || null,
-        lookup.academyName,
-        lookup.venue,
-        lookup.reference,
-        lookup.subtotal,
-        lineItemsJson,
-      )
-      .run();
+    try {
+      await db
+        .prepare(
+          `
+            INSERT INTO registration_inscription_orders (
+              id,
+              curp,
+              participant_name,
+              academy_id,
+              academy_name,
+              venue,
+              reference,
+              amount,
+              payment_method,
+              buyer_phone_country_code,
+              buyer_phone_number,
+              buyer_phone,
+              line_items_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?)
+          `,
+        )
+        .bind(
+          crypto.randomUUID(),
+          lookup.curp,
+          lookup.participantName,
+          lookup.academyId || null,
+          lookup.academyName,
+          lookup.venue,
+          lookup.reference,
+          lookup.subtotal,
+          buyerPhoneCountryCode,
+          buyerPhoneNumber,
+          buyerPhone,
+          lineItemsJson,
+        )
+        .run();
+    } catch (error) {
+      if (!isMissingRegistrationInscriptionOrderBuyerPhoneColumns(error)) {
+        throw error;
+      }
+
+      await db
+        .prepare(
+          `
+            INSERT INTO registration_inscription_orders (
+              id,
+              curp,
+              participant_name,
+              academy_id,
+              academy_name,
+              venue,
+              reference,
+              amount,
+              line_items_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+        )
+        .bind(
+          crypto.randomUUID(),
+          lookup.curp,
+          lookup.participantName,
+          lookup.academyId || null,
+          lookup.academyName,
+          lookup.venue,
+          lookup.reference,
+          lookup.subtotal,
+          lineItemsJson,
+        )
+        .run();
+    }
   }
 
   const order = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
@@ -1620,29 +1756,273 @@ async function getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, cur
   return order;
 }
 
-async function updateRegistrationInscriptionOrderStatus(db, { academyId, notes, orderId, paidAmount, status }) {
-  const academyClause = academyId ? "AND academy_id = ?" : "";
-  const statement = db.prepare(
-    `
-      UPDATE registration_inscription_orders
-      SET
-        status = ?,
-        paid_amount = COALESCE(?, paid_amount),
-        notes = ?,
-        paid_at = CASE
-          WHEN ? = 'paid' THEN COALESCE(paid_at, datetime('now'))
-          ELSE NULL
-        END,
-        updated_at = datetime('now')
-      WHERE id = ?
-        ${academyClause}
-    `,
-  );
-  const bindings = academyId
-    ? [status, paidAmount, notes || null, status, orderId, academyId]
-    : [status, paidAmount, notes || null, status, orderId];
+async function updateRegistrationInscriptionOrderStatus(db, {
+  academyId,
+  notes,
+  orderId,
+  paidAmount,
+  rejectionMessage,
+  rejectionReason,
+  reviewedBy,
+  status,
+}) {
+  const existingOrder = await getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId, academyId);
+  const nextPaidAmount = paidAmount == null ? Number(existingOrder.paid_amount || 0) : paidAmount;
+  const hasProof = Boolean(await getLatestRegistrationPaymentProof(db, orderId));
+  const nextReviewedBy = reviewedBy || "Admin";
+  const nextRejectionReason = status === "rejected" ? rejectionReason : "";
+  const nextRejectionMessage = status === "rejected" ? optionalString(rejectionMessage) : "";
 
-  await statement.bind(...bindings).run();
+  if (status === "paid") {
+    if (!hasProof) {
+      throwHttpError("payment_proof_required", "No se puede aprobar una orden sin comprobante.", 400);
+    }
+
+    if (nextPaidAmount < Number(existingOrder.amount || 0)) {
+      throwHttpError("payment_amount_incomplete", "No se puede aprobar un pago menor al monto esperado.", 400);
+    }
+  }
+
+  if (status === "rejected") {
+    if (!nextRejectionReason) {
+      throwHttpError("rejection_reason_required", "Selecciona el motivo del rechazo.", 400);
+    }
+
+    if (!nextRejectionMessage) {
+      throwHttpError("rejection_message_required", "Escribe qué debe corregir la familia para aprobar el pago.", 400);
+    }
+  }
+
+  const academyClause = academyId ? "AND academy_id = ?" : "";
+  const bindings = [
+    status,
+    nextPaidAmount,
+    notes || null,
+    status,
+    status,
+    status === "paid" || status === "rejected" ? nextReviewedBy : null,
+    status,
+    status === "rejected" ? nextRejectionReason : null,
+    status === "rejected" ? nextRejectionMessage : null,
+    orderId,
+  ];
+
+  if (academyId) {
+    bindings.push(academyId);
+  }
+
+  await db
+    .prepare(
+      `
+        UPDATE registration_inscription_orders
+        SET
+          status = ?,
+          paid_amount = ?,
+          notes = ?,
+          paid_at = CASE
+            WHEN ? = 'paid' THEN COALESCE(paid_at, datetime('now'))
+            ELSE NULL
+          END,
+          reviewed_at = CASE
+            WHEN ? IN ('paid', 'rejected') THEN datetime('now')
+            ELSE NULL
+          END,
+          reviewed_by = ?,
+          rejection_reason = CASE
+            WHEN ? = 'rejected' THEN ?
+            ELSE NULL
+          END,
+          rejection_message = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+          ${academyClause}
+      `,
+    )
+    .bind(...bindings)
+    .run();
+}
+
+async function getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId, academyId) {
+  const academyClause = academyId ? "AND academy_id = ?" : "";
+  const bindings = academyId ? [orderId, academyId] : [orderId];
+  const order = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_inscription_orders
+        WHERE id = ?
+          ${academyClause}
+        LIMIT 1
+      `,
+    )
+    .bind(...bindings)
+    .first();
+
+  if (!order) {
+    throwHttpError("registration_inscription_order_not_found", "Orden de inscripción no encontrada", 404);
+  }
+
+  return order;
+}
+
+async function ensureRegistrationEventTicketsForOrder(db, order) {
+  const ticketSpecs = getRegistrationEventTicketSpecs(order);
+
+  if (ticketSpecs.length === 0) {
+    return [];
+  }
+
+  try {
+    const existingTickets = await getRegistrationEventTicketsForSource(db, "registration", order.id);
+
+    if (existingTickets.length >= ticketSpecs.length) {
+      return existingTickets;
+    }
+
+    for (let index = existingTickets.length; index < ticketSpecs.length; index += 1) {
+      const ticketSpec = ticketSpecs[index];
+      const ticketCode = await createRegistrationEventTicketCode(db);
+
+      await db
+        .prepare(
+          `
+            INSERT INTO registration_event_tickets (
+              id,
+              source_order_type,
+              source_order_id,
+              ticket_code,
+              ticket_number,
+              ticket_label,
+              holder_name,
+              qr_payload
+            )
+            VALUES (?, 'registration', ?, ?, ?, ?, ?, ?)
+          `,
+        )
+        .bind(
+          crypto.randomUUID(),
+          order.id,
+          ticketCode,
+          index + 1,
+          ticketSpec.label,
+          order.participant_name,
+          buildRegistrationTicketQrPayload(ticketCode),
+        )
+        .run();
+    }
+
+    return getRegistrationEventTicketsForSource(db, "registration", order.id);
+  } catch (error) {
+    if (isMissingRegistrationEventTicketsTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+function getRegistrationEventTicketSpecs(order) {
+  return parseRegistrationOrderLineItems(order.line_items_json).flatMap((lineItem) => {
+    if (!isRegistrationTicketLineItem(lineItem)) {
+      return [];
+    }
+
+    const quantity = getRegistrationTicketLineQuantity(lineItem);
+    const label = lineItem.title || lineItem.name || lineItem.productName || "Boleto Levitate";
+
+    return Array.from({ length: quantity }, () => ({ label }));
+  });
+}
+
+function isRegistrationTicketLineItem(lineItem) {
+  const category = String(lineItem.productCategory || lineItem.category || "").toLowerCase();
+  const itemType = String(lineItem.itemType || lineItem.type || "").toLowerCase();
+  const visual = String(lineItem.visual || "").toLowerCase();
+  const productId = String(lineItem.productId || lineItem.id || "").toLowerCase();
+
+  return category === "boletos" || category === "tickets" || itemType === "ticket" || visual === "ticket" || productId.startsWith("ticket-");
+}
+
+function getRegistrationTicketLineQuantity(lineItem) {
+  const quantity = Number(lineItem.quantity ?? lineItem.qty ?? lineItem.count ?? 1);
+
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    return 1;
+  }
+
+  return Math.min(100, Math.floor(quantity));
+}
+
+async function createRegistrationEventTicketCode(db) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = `LV-${randomRegistrationTicketSegment(4)}-${randomRegistrationTicketSegment(4)}`;
+    const existingTicket = await getRegistrationEventTicketByCode(db, code);
+
+    if (!existingTicket) {
+      return code;
+    }
+  }
+
+  return `LV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+function randomRegistrationTicketSegment(size) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(size);
+  crypto.getRandomValues(bytes);
+
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+}
+
+async function getRegistrationEventTicketByCode(db, ticketCode) {
+  try {
+    return await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_event_tickets
+          WHERE ticket_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(ticketCode)
+      .first();
+  } catch (error) {
+    if (isMissingRegistrationEventTicketsTable(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function buildRegistrationTicketQrPayload(ticketCode) {
+  return `LEVITATE:TICKET:${ticketCode}`;
+}
+
+async function getRegistrationEventTicketsForSource(db, sourceOrderType, sourceOrderId) {
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_event_tickets
+          WHERE source_order_type = ?
+            AND source_order_id = ?
+          ORDER BY ticket_number ASC, created_at ASC
+        `,
+      )
+      .bind(sourceOrderType, sourceOrderId)
+      .all();
+
+    return results.map(serializeRegistrationEventTicket);
+  } catch (error) {
+    if (isMissingRegistrationEventTicketsTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 async function getRegistrationInscriptionOrders(db, academyId) {
@@ -2008,6 +2388,44 @@ function buildRegistrationInscriptionReference(curp, venue) {
   return `LEV-${venueCode}-${curp.slice(0, 4)}-${curp.slice(-4)}`;
 }
 
+function getRegistrationBuyerPhoneContact(body) {
+  const countryCode = normalizePhoneCountryCode(
+    optionalString(body.buyerPhoneCountryCode ?? body.phoneCountryCode ?? body.countryCode),
+  );
+  const explicitPhone = normalizePhoneNumber(optionalString(body.buyerPhone));
+  const countryDigits = countryCode.replace(/\D/g, "");
+  let number = normalizePhoneNumber(optionalString(body.buyerPhoneNumber ?? body.phoneNumber ?? body.phone));
+
+  if (!number && explicitPhone) {
+    number = explicitPhone.startsWith(countryDigits) ? explicitPhone.slice(countryDigits.length) : explicitPhone;
+  }
+
+  if (!number) {
+    throwHttpError("invalid_buyer_phone", "Ingresa un número de WhatsApp para avisos de pago", 400);
+  }
+
+  const phoneDigits = `${countryDigits}${number}`;
+
+  if (number.length < 7 || phoneDigits.length < 8 || phoneDigits.length > 15) {
+    throwHttpError("invalid_buyer_phone", "Ingresa un número de WhatsApp válido", 400);
+  }
+
+  return {
+    countryCode,
+    number,
+    phone: `${countryCode}${number}`,
+  };
+}
+
+function normalizePhoneCountryCode(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits ? `+${digits.slice(0, 4)}` : "+52";
+}
+
+function normalizePhoneNumber(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 15);
+}
+
 function serializeRegistrationInscriptionOrder(order) {
   return {
     id: order.id,
@@ -2022,8 +2440,15 @@ function serializeRegistrationInscriptionOrder(order) {
     status: order.status,
     paymentMethod: order.payment_method,
     lineItems: parseRegistrationOrderLineItems(order.line_items_json),
+    buyerPhoneCountryCode: order.buyer_phone_country_code,
+    buyerPhoneNumber: order.buyer_phone_number,
+    buyerPhone: order.buyer_phone,
     notes: order.notes,
     paidAt: order.paid_at,
+    reviewedBy: order.reviewed_by,
+    reviewedAt: order.reviewed_at,
+    rejectionReason: order.rejection_reason,
+    rejectionMessage: order.rejection_message,
     createdAt: order.created_at,
     updatedAt: order.updated_at,
   };
@@ -2033,6 +2458,25 @@ async function serializeRegistrationInscriptionOrderWithProof(db, order) {
   return {
     ...serializeRegistrationInscriptionOrder(order),
     proof: await getLatestRegistrationPaymentProof(db, order.id),
+    tickets: await getRegistrationEventTicketsForSource(db, "registration", order.id),
+  };
+}
+
+function serializeRegistrationEventTicket(ticket) {
+  return {
+    id: ticket.id,
+    sourceOrderType: ticket.source_order_type,
+    sourceOrderId: ticket.source_order_id,
+    ticketCode: ticket.ticket_code,
+    ticketNumber: Number(ticket.ticket_number || 0),
+    ticketLabel: ticket.ticket_label,
+    holderName: ticket.holder_name,
+    qrPayload: ticket.qr_payload,
+    status: ticket.status,
+    usedAt: ticket.used_at,
+    usedBy: ticket.used_by,
+    createdAt: ticket.created_at,
+    updatedAt: ticket.updated_at,
   };
 }
 
@@ -2100,6 +2544,20 @@ function isMissingRegistrationInscriptionOrdersTable(error) {
   return String(error?.message || error).includes("registration_inscription_orders");
 }
 
+function isMissingRegistrationInscriptionOrderBuyerPhoneColumns(error) {
+  const message = String(error?.message || error);
+  return message.includes("buyer_phone");
+}
+
+function isMissingRegistrationInscriptionOrderReviewColumns(error) {
+  const message = String(error?.message || error);
+  return ["reviewed_by", "reviewed_at", "rejection_reason", "rejection_message"].some((column) => message.includes(column));
+}
+
+function isMissingRegistrationEventTicketsTable(error) {
+  return String(error?.message || error).includes("registration_event_tickets");
+}
+
 function isMissingRegistrationPaymentProofsTable(error) {
   return String(error?.message || error).includes("registration_inscription_payment_proofs");
 }
@@ -2129,6 +2587,20 @@ function requireRegistrationChoice(value, fieldName, allowedValues) {
 
   if (!allowedValues.has(text)) {
     throwHttpError("validation_error", `${fieldName} is invalid`, 400);
+  }
+
+  return text;
+}
+
+function optionalRegistrationChoice(value, allowedValues) {
+  const text = optionalString(value);
+
+  if (!text) {
+    return "";
+  }
+
+  if (!allowedValues.has(text)) {
+    throwHttpError("validation_error", "rejectionReason is invalid", 400);
   }
 
   return text;
