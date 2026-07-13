@@ -22,6 +22,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  MessageCircle,
   Minus,
   Music2,
   PanelLeftOpen,
@@ -695,6 +696,92 @@ function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reaso
   };
 
   return messages[reason];
+}
+
+function getRegistrationOrderWhatsAppPhone(order: RegistrationInscriptionOrder) {
+  const rawPhone = order.buyerPhone || `${order.buyerPhoneCountryCode ?? ""}${order.buyerPhoneNumber ?? ""}`;
+  const phone = rawPhone.replace(/\D/g, "");
+
+  if (phone.startsWith("00")) {
+    return phone.slice(2);
+  }
+
+  return phone.length >= 8 ? phone : "";
+}
+
+function buildWhatsAppUrl(phone: string, message: string) {
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+}
+
+function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
+  const amount = formatAdminCurrency(order.paidAmount || order.amount);
+  const ticketCount = order.tickets?.length ?? 0;
+  const ticketLine =
+    ticketCount > 0
+      ? `Tus boletos ya quedaron generados. Te enviaremos ${ticketCount === 1 ? "1 boleto" : `${ticketCount} boletos`} en PDF por este chat.`
+      : "Tu inscripción ya quedó confirmada.";
+
+  return [
+    `Hola, te confirmamos que el pago de inscripción de ${order.participantName} fue aprobado.`,
+    "",
+    `Orden: ${order.reference}`,
+    `Monto confirmado: ${amount}`,
+    `Academia: ${order.academyName}`,
+    "",
+    ticketLine,
+    "",
+    "Gracias por formar parte de Levitate MX.",
+  ].join("\n");
+}
+
+function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrder, correctionMessage: string) {
+  const message =
+    (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
+
+  return [
+    `Hola, necesitamos corregir el pago de inscripción de ${order.participantName}.`,
+    "",
+    message,
+    "",
+    `Orden: ${order.reference}`,
+    `Monto esperado: ${formatAdminCurrency(order.amount)}`,
+    `Concepto para transferencia: ${order.reference}`,
+    "",
+    "Cuando tengas el comprobante correcto, vuelve a entrar a Inscripciones con la CURP y súbelo nuevamente.",
+  ].join("\n");
+}
+
+function getPaymentWhatsAppAction(order: RegistrationInscriptionOrder, correctionMessage: string) {
+  const phone = getRegistrationOrderWhatsAppPhone(order);
+
+  if (order.status === "paid") {
+    const message = buildPaymentApprovalWhatsAppMessage(order);
+
+    return {
+      href: phone ? buildWhatsAppUrl(phone, message) : "",
+      label: "Enviar confirmación",
+      message,
+      title: "Pago aprobado",
+    };
+  }
+
+  if (order.status === "rejected") {
+    const message = buildPaymentCorrectionWhatsAppMessage(order, correctionMessage);
+
+    return {
+      href: phone ? buildWhatsAppUrl(phone, message) : "",
+      label: "Enviar corrección",
+      message,
+      title: "Pago rechazado",
+    };
+  }
+
+  return {
+    href: "",
+    label: "WhatsApp no disponible",
+    message: "Aprueba o rechaza el pago para generar el mensaje de WhatsApp.",
+    title: "Pendiente de revisión",
+  };
 }
 
 function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
@@ -2631,6 +2718,9 @@ function RegistrationAdminOrderDetail({
   }
 
   const date = getAdminOrderDate(order);
+  const whatsappPhone = getRegistrationOrderWhatsAppPhone(order);
+  const whatsappAction = getPaymentWhatsAppAction(order, rejectionMessage);
+  const whatsappDisabledReason = whatsappPhone ? "Primero aprueba o rechaza el pago." : "Esta orden no tiene WhatsApp cargado.";
 
   return (
     <section className="registration-admin-detail" aria-label="Detalle de pago">
@@ -2753,6 +2843,27 @@ function RegistrationAdminOrderDetail({
           </div>
         </section>
       ) : null}
+
+      <section className="registration-admin-whatsapp-panel" aria-label="Mensaje de WhatsApp">
+        <header>
+          <div>
+            <span>WhatsApp</span>
+            <strong>{whatsappAction.title}</strong>
+          </div>
+          <MessageCircle aria-hidden="true" size={20} />
+        </header>
+        <textarea readOnly value={whatsappAction.message} aria-label="Mensaje preparado para WhatsApp" />
+        {whatsappAction.href ? (
+          <a href={whatsappAction.href} target="_blank" rel="noreferrer">
+            <MessageCircle aria-hidden="true" size={17} />
+            {whatsappAction.label}
+          </a>
+        ) : (
+          <button disabled type="button">
+            {whatsappDisabledReason}
+          </button>
+        )}
+      </section>
 
       <label className="registration-admin-note">
         <span>Nota interna</span>
