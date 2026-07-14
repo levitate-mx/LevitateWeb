@@ -77,25 +77,15 @@ const recognitionShowcase = [
 const directRanking = [
   {
     place: "1er lugar",
-    image: "/assets/ranking-oro.png",
-    alt: "Equipo Levitate celebrando primer lugar en escenario.",
     variant: "gold",
-    mediaType: "image",
-    featured: true,
   },
   {
     place: "2do lugar",
-    image: "/assets/ranking-plata.png",
-    alt: "Equipo Levitate con medallas de plata en escenario.",
     variant: "silver",
-    mediaType: "image",
   },
   {
     place: "3er lugar",
-    image: "/assets/ranking-bronce.jpg",
-    alt: "Equipo Levitate con medalla de bronce en escenario.",
     variant: "bronze",
-    mediaType: "image",
   },
 ];
 
@@ -400,18 +390,11 @@ export function PremiationLegacyPage() {
 
                 <div className="premiation-ranking-box" aria-label="Ranking por bloque de competencia">
                   <div className="premiation-ranking-grid">
-                    {directRanking.map((rank) => (
+                    {directRanking.map((rank, index) => (
                       <article className={`premiation-ranking-item is-${rank.variant}`} key={rank.place}>
-                        <figure>
-                          {rank.mediaType === "video" ? (
-                            <video src={rank.image} aria-label={rank.alt} autoPlay loop muted playsInline />
-                          ) : (
-                            <img src={rank.image} alt={rank.alt} loading="lazy" />
-                          )}
-                          <figcaption>
-                            <strong>{rank.place}</strong>
-                          </figcaption>
-                        </figure>
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <strong>{rank.place}</strong>
+                        <p>Posición competitiva dentro del bloque.</p>
                       </article>
                     ))}
                   </div>
@@ -635,6 +618,7 @@ export function PremiationPage() {
         <div className="premiation-hero__shade" aria-hidden="true" />
         <LevitateHeader activeLabel="Premiación" useRootLinks variant="pill" />
         <div className="premiation-hero__content">
+          <p className="premiation-eyebrow">Premiación</p>
           <h1>Reconocemos tu talento.</h1>
         </div>
       </section>
@@ -690,12 +674,13 @@ export function PremiationPage() {
               </div>
             </header>
 
-            <div className="premiation-modern-ranking__visuals" aria-label="Lugares del ranking por bloque">
-              {directRanking.map((rank) => (
-                <figure className={`is-${rank.variant}`} key={rank.place}>
-                  <img src={rank.image} alt={rank.alt} loading="lazy" />
-                  <figcaption>{rank.place}</figcaption>
-                </figure>
+            <div className="premiation-modern-ranking__list" aria-label="Lugares del ranking por bloque">
+              {directRanking.map((rank, index) => (
+                <article className={`is-${rank.variant}`} key={rank.place}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{rank.place}</strong>
+                  <p>Posición competitiva dentro del bloque.</p>
+                </article>
               ))}
             </div>
 
@@ -721,11 +706,10 @@ export function PremiationPage() {
           </header>
 
           <div className="premiation-modern-recognition__grid">
-            {recognitionShowcase.map((item, index) => (
+            {recognitionShowcase.map((item) => (
               <article key={item.title}>
                 <figure>
                   <img src={item.image} alt={item.alt} loading="lazy" />
-                  <span>0{index + 1}</span>
                 </figure>
                 <div>
                   <p>{item.label}</p>
@@ -779,11 +763,6 @@ export function PremiationPage() {
           >
             <figure>
               <img src={activeSpecialAward.image} alt={activeSpecialAward.imageAlt} loading="lazy" />
-              <figcaption>
-                <p className="premiation-eyebrow">Premio especial</p>
-                <h3>{activeSpecialAward.title}</h3>
-                <span>{activeSpecialAward.summary}</span>
-              </figcaption>
             </figure>
 
             <div className="premiation-modern-special__criteria">
@@ -805,11 +784,6 @@ export function PremiationPage() {
                 })}
               </div>
             </div>
-
-            <aside>
-              <Info aria-hidden="true" size={20} />
-              <p>{activeSpecialAward.note}</p>
-            </aside>
           </article>
         </div>
       </section>

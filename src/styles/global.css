@@ -3733,76 +3733,26 @@ button {
 }
 
 .premiation-ranking-item {
-  min-width: 0;
-}
-
-.premiation-ranking-item figure {
-  position: relative;
   display: grid;
   gap: 10px;
-  width: 100%;
-  min-height: 0;
-  margin: 0;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  isolation: isolate;
-}
-
-.premiation-ranking-item figure::before,
-.premiation-ranking-item figure::after {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  content: "";
-  pointer-events: none;
-}
-
-.premiation-ranking-item figure::before {
-  display: none;
-}
-
-.premiation-ranking-item figure::after {
-  display: none;
-}
-
-.premiation-ranking-item.is-gold figure::after {
-  background: linear-gradient(90deg, #d49424, var(--premiation-pink));
-}
-
-.premiation-ranking-item.is-silver figure::after {
-  background: linear-gradient(90deg, #b6b1b7, var(--premiation-pink));
-}
-
-.premiation-ranking-item.is-bronze figure::after {
-  background: linear-gradient(90deg, #b4623c, var(--premiation-pink));
-}
-
-.premiation-ranking-item img,
-.premiation-ranking-item video {
-  display: block;
-  width: 100%;
-  height: clamp(132px, 11vw, 176px);
-  object-fit: cover;
-  overflow: hidden;
-  border: 1px solid rgba(228, 92, 154, 0.24);
+  min-width: 0;
+  min-height: 160px;
+  align-content: space-between;
+  padding: clamp(18px, 2vw, 26px);
+  border: 1px solid rgba(228, 92, 154, 0.18);
   border-radius: 8px;
-  box-shadow: 0 16px 34px rgba(23, 20, 27, 0.12);
-  filter: saturate(1.08) contrast(1.02);
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
-.premiation-ranking-item figcaption {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  text-align: center;
+.premiation-ranking-item > span {
+  color: rgba(48, 43, 51, 0.48);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
 }
 
-.premiation-ranking-item figcaption strong {
-  display: block;
+.premiation-ranking-item > strong {
   color: #111017;
   font-family: var(--font-display);
   font-size: clamp(1.45rem, 2.2vw, 2.3rem);
@@ -3811,6 +3761,23 @@ button {
   letter-spacing: 0.06em;
   text-shadow: none;
   text-transform: uppercase;
+}
+
+.premiation-ranking-item.is-gold > strong {
+  color: #9a6d17;
+}
+
+.premiation-ranking-item.is-bronze > strong {
+  color: #9c5739;
+}
+
+.premiation-ranking-item > p {
+  max-width: 180px;
+  margin: 0;
+  color: rgba(48, 43, 51, 0.68);
+  font-size: 0.86rem;
+  font-weight: 560;
+  line-height: 1.35;
 }
 
 .premiation-ranking-note {
@@ -3915,16 +3882,11 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .premiation-ranking-item figure {
+  .premiation-ranking-item {
     min-height: 0;
-    aspect-ratio: auto;
   }
 
-  .premiation-ranking-item figcaption {
-    padding: 8px 0 0;
-  }
-
-  .premiation-ranking-item figcaption strong {
+  .premiation-ranking-item > strong {
     font-size: clamp(2rem, 12vw, 2.75rem);
   }
 
@@ -5604,11 +5566,6 @@ button {
 
   .premiation-special-tabs button {
     height: 134px;
-  }
-
-  .premiation-ranking-item img,
-  .premiation-ranking-item video {
-    height: clamp(174px, 50vw, 246px);
   }
 
   .premiation-special-panel {
@@ -23524,9 +23481,9 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 68% 46%;
+  object-position: 50% 42%;
   opacity: 1;
-  filter: saturate(1.08) contrast(1.06) brightness(0.76);
+  filter: saturate(0.96) contrast(1.08) brightness(0.56);
 }
 
 .sedes-final-cta::before,
@@ -23539,12 +23496,12 @@ button {
 
 .sedes-final-cta::before {
   background:
-    linear-gradient(90deg, rgba(3, 8, 12, 0.84), rgba(3, 8, 12, 0.38) 56%, rgba(3, 8, 12, 0.64)),
-    linear-gradient(180deg, rgba(3, 8, 12, 0.08), rgba(3, 8, 12, 0.78));
+    linear-gradient(90deg, rgba(3, 8, 12, 0.88), rgba(3, 8, 12, 0.52) 58%, rgba(3, 8, 12, 0.76)),
+    linear-gradient(180deg, rgba(3, 8, 12, 0.1), rgba(3, 8, 12, 0.84));
 }
 
 .sedes-final-cta::after {
-  background: linear-gradient(125deg, rgba(87, 189, 209, 0.24), transparent 42%, rgba(217, 76, 140, 0.16));
+  background: linear-gradient(125deg, rgba(87, 189, 209, 0.2), transparent 42%, rgba(217, 76, 140, 0.1));
 }
 
 .sedes-final-cta__line {
@@ -27867,12 +27824,16 @@ button {
 /* Premiacion 2026: modern editorial system aligned with the current homepage. */
 .premiation-page--modern {
   --premiation-modern-bg: #f4f1eb;
-  --premiation-modern-surface: #fbfaf7;
+  --premiation-modern-surface: var(--premiation-modern-bg);
   --premiation-modern-ink: #2a2928;
   --premiation-modern-muted: rgba(42, 41, 40, 0.64);
   --premiation-modern-line: rgba(42, 41, 40, 0.14);
   --premiation-modern-pink: #d94c8c;
   --premiation-modern-blue: #57bdd1;
+  --premiation-modern-blue-muted: #6aa4ad;
+  --premiation-rank-first: #4f98a3;
+  --premiation-rank-second: #72aeb6;
+  --premiation-rank-third: #a3c8ce;
   overflow: clip;
   background: var(--premiation-modern-bg);
   color: var(--premiation-modern-ink);
@@ -28054,7 +28015,7 @@ button {
 
 .premiation-page--modern .premiation-modern-system__grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-top: 1px solid var(--premiation-modern-line);
   border-bottom: 1px solid var(--premiation-modern-line);
 }
@@ -28108,37 +28069,76 @@ button {
 
 .premiation-page--modern .premiation-modern-medal-list {
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(8px, 0.9vw, 12px);
   margin-top: clamp(30px, 4vw, 52px);
-  border-top: 1px solid var(--premiation-modern-line);
 }
 
 .premiation-page--modern .premiation-modern-medal-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 18px;
-  min-height: 92px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--premiation-modern-line);
+  min-height: clamp(150px, 13vw, 188px);
+  align-content: end;
+  gap: 8px;
+  overflow: hidden;
+  padding: clamp(14px, 1.4vw, 20px);
+  border: 1px solid var(--premiation-modern-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 24px 70px rgba(42, 41, 40, 0.08);
+  isolation: isolate;
+  transition: border-color 240ms ease, box-shadow 240ms ease, transform 240ms var(--ease-out);
+}
+
+.premiation-page--modern .premiation-modern-medal-row::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.42)),
+    rgba(244, 241, 235, 0.18);
+  backdrop-filter: blur(12px) saturate(1.08);
+  content: "";
+  pointer-events: none;
+  transition: opacity 260ms ease;
 }
 
 .premiation-page--modern .premiation-modern-medal-row img {
-  width: 60px;
-  height: 72px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: min(82%, 152px);
+  height: min(82%, 152px);
   object-fit: contain;
+  opacity: 0.42;
+  filter: blur(5px) saturate(0.92) contrast(0.96);
+  transform: translate(-50%, -50%) scale(1.08);
+  transition:
+    filter 280ms ease,
+    opacity 260ms ease,
+    transform 320ms var(--ease-out);
 }
 
 .premiation-page--modern .premiation-modern-medal-row strong {
+  position: relative;
+  z-index: 2;
   color: var(--premiation-modern-ink);
-  font-size: clamp(1.2rem, 1.5vw, 1.48rem);
+  font-size: clamp(1rem, 1.15vw, 1.26rem);
   font-weight: 740;
+  transition: opacity 220ms ease, transform 260ms var(--ease-out);
 }
 
 .premiation-page--modern .premiation-modern-medal-row span {
+  position: relative;
+  z-index: 2;
   color: var(--premiation-modern-muted);
-  font-size: 0.84rem;
+  font-size: clamp(0.68rem, 0.72vw, 0.8rem);
   font-weight: 680;
-  white-space: nowrap;
+  line-height: 1.25;
+  transition: opacity 220ms ease, transform 260ms var(--ease-out);
 }
 
 .premiation-page--modern .premiation-modern-medal-row.is-gold strong {
@@ -28153,49 +28153,87 @@ button {
   color: var(--premiation-modern-pink);
 }
 
-.premiation-page--modern .premiation-modern-ranking__visuals {
+.premiation-page--modern .premiation-modern-medal-row:hover,
+.premiation-page--modern .premiation-modern-medal-row:focus-within {
+  border-color: rgba(106, 164, 173, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 30px 76px rgba(42, 41, 40, 0.12);
+  transform: translateY(-2px);
+}
+
+.premiation-page--modern .premiation-modern-medal-row:hover::before,
+.premiation-page--modern .premiation-modern-medal-row:focus-within::before {
+  opacity: 0;
+}
+
+.premiation-page--modern .premiation-modern-medal-row:hover img,
+.premiation-page--modern .premiation-modern-medal-row:focus-within img {
+  opacity: 1;
+  filter: blur(0) saturate(1) contrast(1);
+  transform: translate(-50%, -50%) scale(1.02);
+}
+
+.premiation-page--modern .premiation-modern-medal-row:hover strong,
+.premiation-page--modern .premiation-modern-medal-row:hover span,
+.premiation-page--modern .premiation-modern-medal-row:focus-within strong,
+.premiation-page--modern .premiation-modern-medal-row:focus-within span {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.premiation-page--modern .premiation-modern-ranking__list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: clamp(10px, 1vw, 14px);
   margin-top: clamp(30px, 4vw, 52px);
 }
 
-.premiation-page--modern .premiation-modern-ranking__visuals figure {
-  position: relative;
-  min-width: 0;
-  aspect-ratio: 4 / 5;
+.premiation-page--modern .premiation-modern-ranking__list article {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 0.62fr) minmax(130px, 0.38fr);
+  min-height: clamp(78px, 7.5vw, 104px);
+  align-content: center;
+  align-items: center;
+  gap: clamp(12px, 1.6vw, 22px);
+  padding: clamp(14px, 1.4vw, 20px);
+  border: 1px solid var(--premiation-modern-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.premiation-page--modern .premiation-modern-ranking__list article > span {
+  color: var(--premiation-modern-muted);
+  font-size: 0.78rem;
+  font-weight: 820;
+  letter-spacing: 0.12em;
+}
+
+.premiation-page--modern .premiation-modern-ranking__list strong {
+  color: var(--premiation-modern-ink);
+  font-size: clamp(1.45rem, 2.2vw, 2.45rem);
+  font-weight: 680;
+  line-height: 0.98;
+}
+
+.premiation-page--modern .premiation-modern-ranking__list p {
+  max-width: 170px;
   margin: 0;
-  overflow: hidden;
-  border-radius: 4px;
-  background: #ddd8d1;
+  color: var(--premiation-modern-muted);
+  font-size: 0.84rem;
+  font-weight: 560;
+  line-height: 1.34;
 }
 
-.premiation-page--modern .premiation-modern-ranking__visuals img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 520ms var(--ease-out);
+.premiation-page--modern .premiation-modern-ranking__list .is-gold strong {
+  color: var(--premiation-rank-first);
 }
 
-.premiation-page--modern .premiation-modern-ranking__visuals figure:hover img {
-  transform: scale(1.035);
+.premiation-page--modern .premiation-modern-ranking__list .is-silver strong {
+  color: var(--premiation-rank-second);
 }
 
-.premiation-page--modern .premiation-modern-ranking__visuals figcaption {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 4px;
-  background: rgba(10, 10, 12, 0.68);
-  color: #fff;
-  font-size: clamp(0.84rem, 1.1vw, 1rem);
-  font-weight: 760;
-  text-align: center;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+.premiation-page--modern .premiation-modern-ranking__list .is-bronze strong {
+  color: var(--premiation-rank-third);
 }
 
 .premiation-page--modern .premiation-modern-ranking__note {
@@ -28209,7 +28247,7 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-ranking__note svg {
-  color: var(--premiation-modern-pink);
+  color: var(--premiation-modern-blue-muted);
 }
 
 .premiation-page--modern .premiation-modern-ranking__note p {
@@ -28226,7 +28264,7 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-recognition {
-  background: var(--premiation-modern-surface);
+  background: var(--premiation-modern-bg);
 }
 
 .premiation-page--modern .premiation-modern-heading {
@@ -28283,20 +28321,8 @@ button {
   transform: scale(1.025);
 }
 
-.premiation-page--modern .premiation-modern-recognition__grid figure span {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--premiation-modern-ink);
-  font-size: 0.72rem;
-  font-weight: 820;
-  backdrop-filter: blur(12px);
+.premiation-page--modern .premiation-modern-recognition__grid article > div {
+  text-align: center;
 }
 
 .premiation-page--modern .premiation-modern-recognition__grid article > div > p {
@@ -28321,6 +28347,7 @@ button {
 .premiation-page--modern .premiation-modern-recognition__grid article > div > span {
   display: block;
   max-width: 430px;
+  margin-inline: auto;
   color: var(--premiation-modern-muted);
   font-size: 0.94rem;
   line-height: 1.52;
@@ -28359,6 +28386,11 @@ button {
   transition: background 220ms ease, color 220ms ease;
 }
 
+.premiation-page--modern .premiation-modern-special__tabs svg {
+  color: var(--premiation-modern-blue-muted);
+  stroke: currentColor;
+}
+
 .premiation-page--modern .premiation-modern-special__tabs button:last-child {
   border-right: 0;
 }
@@ -28371,6 +28403,10 @@ button {
 .premiation-page--modern .premiation-modern-special__tabs button.is-active {
   background: var(--premiation-modern-ink);
   color: #fff;
+}
+
+.premiation-page--modern .premiation-modern-special__tabs button.is-active svg {
+  color: var(--premiation-modern-blue-muted);
 }
 
 .premiation-page--modern .premiation-modern-special__panel {
@@ -28390,42 +28426,10 @@ button {
   background: #19181a;
 }
 
-.premiation-page--modern .premiation-modern-special__panel > figure::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 44%, rgba(5, 5, 8, 0.84) 100%);
-  content: "";
-}
-
 .premiation-page--modern .premiation-modern-special__panel > figure img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.premiation-page--modern .premiation-modern-special__panel figcaption {
-  position: absolute;
-  z-index: 1;
-  right: clamp(24px, 3vw, 44px);
-  bottom: clamp(26px, 3vw, 44px);
-  left: clamp(24px, 3vw, 44px);
-}
-
-.premiation-page--modern .premiation-modern-special__panel figcaption h3 {
-  margin: 12px 0;
-  color: #fff;
-  font-size: clamp(2.7rem, 4.4vw, 5.4rem);
-  font-weight: 560;
-  letter-spacing: 0;
-  line-height: 0.92;
-}
-
-.premiation-page--modern .premiation-modern-special__panel figcaption > span {
-  display: block;
-  max-width: 560px;
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 0.96rem;
-  line-height: 1.52;
 }
 
 .premiation-page--modern .premiation-modern-special__criteria {
@@ -28446,6 +28450,10 @@ button {
   border-bottom: 1px solid var(--premiation-modern-line);
 }
 
+.premiation-page--modern .premiation-modern-special__criteria article:last-child {
+  border-bottom: 0;
+}
+
 .premiation-page--modern .premiation-modern-special__criteria article > span {
   padding-top: 3px;
   color: var(--premiation-modern-muted);
@@ -28455,7 +28463,8 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-special__criteria article > svg {
-  color: var(--premiation-modern-pink);
+  color: var(--premiation-modern-blue-muted);
+  stroke: currentColor;
 }
 
 .premiation-page--modern .premiation-modern-special__criteria strong {
@@ -28492,7 +28501,7 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-special__panel > aside svg {
-  color: #278ca2;
+  color: var(--premiation-modern-blue-muted);
 }
 
 .premiation-page--modern .premiation-modern-special__panel > aside p {
@@ -28503,7 +28512,7 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-mvp {
-  background: #dfecef;
+  background: var(--premiation-modern-bg);
 }
 
 .premiation-page--modern .premiation-modern-mvp__grid {
@@ -28562,7 +28571,7 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-closing {
-  background: var(--premiation-modern-surface);
+  background: var(--premiation-modern-bg);
 }
 
 .premiation-page--modern .premiation-modern-closing__grid {
@@ -28618,6 +28627,14 @@ button {
   }
 
   .premiation-page--modern .premiation-modern-system__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .premiation-page--modern .premiation-modern-medal-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .premiation-page--modern .premiation-modern-ranking__list {
     grid-template-columns: 1fr;
   }
 
@@ -28741,32 +28758,28 @@ button {
     font-size: clamp(2.25rem, 10vw, 3.3rem);
   }
 
+  .premiation-page--modern .premiation-modern-medal-list {
+    grid-template-columns: 1fr;
+  }
+
   .premiation-page--modern .premiation-modern-medal-row {
-    grid-template-columns: 54px minmax(0, 1fr);
-    gap: 12px;
+    min-height: 170px;
+    padding: 22px;
   }
 
   .premiation-page--modern .premiation-modern-medal-row img {
-    width: 48px;
-    height: 62px;
+    width: min(48%, 110px);
+    height: min(70%, 130px);
   }
 
-  .premiation-page--modern .premiation-modern-medal-row span {
-    grid-column: 2;
-    margin-top: -12px;
-    white-space: normal;
+  .premiation-page--modern .premiation-modern-ranking__list article {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 20px;
   }
 
-  .premiation-page--modern .premiation-modern-ranking__visuals {
-    gap: 6px;
-  }
-
-  .premiation-page--modern .premiation-modern-ranking__visuals figcaption {
-    right: 6px;
-    bottom: 6px;
-    left: 6px;
-    padding: 8px 4px;
-    font-size: 0.7rem;
+  .premiation-page--modern .premiation-modern-ranking__list p {
+    max-width: none;
   }
 
   .premiation-page--modern .premiation-modern-recognition__grid {

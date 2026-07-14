@@ -242,7 +242,7 @@ const rulesContent: Record<RulesModality, RulesContent> = {
   },
   aerial: {
     className: "rules-page--aerial",
-    heroEyebrow: "Modalidad Aerial",
+    heroEyebrow: "Modalidad",
     heroTitle: { text: "Levitate", accent: "Aerial" },
     heroIntro: [
       "Evaluación clara para telas, aro, trapecio y propuestas open.",

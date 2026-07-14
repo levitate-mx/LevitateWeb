@@ -423,7 +423,6 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       <section className="sedes-light-section sedes-jury">
         <div className="sedes-jury__header">
           <SectionHeading kicker="LINEUP" title="Panel de Jurados" />
-          <p>Conoce al panel de artistas y profesionales que formarán parte de esta sede.</p>
         </div>
         <div className="sedes-jury-grid sedes-jury-grid--six">
           {juryLineup.map((judge, index) => (
@@ -439,14 +438,13 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       <section className="sedes-final-cta">
         <img
           className="sedes-final-cta__background"
-          src={venue.heroImage}
+          src="/assets/premiation-motion-medal-system.jpg"
           alt=""
           loading="lazy"
           aria-hidden="true"
         />
         <div className="sedes-final-cta__content">
           <p>Siguiente paso</p>
-          <span>{venue.venueName}</span>
           <h2>Asegura tu lugar.</h2>
           <a href="/inscripciones">
             Inscribirme <ArrowRight aria-hidden="true" size={18} />
