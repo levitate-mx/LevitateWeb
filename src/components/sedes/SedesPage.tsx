@@ -157,7 +157,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     jury: [
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
       { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
-      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.png" },
+      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
       { name: "Luis Raio", specialty: "Especialista en aéreos · Aerial straps", image: "/assets/luis-raio.png" },
     ],
   },
@@ -191,8 +191,10 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     jury: [
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
       { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: "/assets/vladimir-garza.jpg" },
-      { name: "Pendiente", specialty: "Juez por confirmar", image: assets.community },
-      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.png" },
+      { name: "Ana Karen Rojas", specialty: "Flex · Técnica y movilidad", image: "/assets/ana-karen-rojas.jpg" },
+      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
+      { name: "Ivonne Robles", specialty: "Jueza invitada", image: "/assets/ivonne-robles.jpg" },
+      { name: "Pablo Emmanuel", specialty: "Urban", image: "/assets/pablo-emmanuel.jpg" },
     ],
   },
 };
@@ -207,7 +209,7 @@ function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
 }
 
 function renderBlockText(text: string) {
-  const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "relevé", "senior", "seniors", "teen", "teens"]);
+  const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "senior", "seniors", "teen", "teens"]);
   const renderLevels = (line: string) => line.split(/\b(Baby|Junior|Legacy|Petite|Relevé|Senior|Seniors|Teen|Teens)\b/gi).map((part, index) => (
     highlightedTerms.has(part.toLowerCase())
       ? <span className="sedes-block-level" key={`${part}-${index}`}>{part}</span>
@@ -422,7 +424,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
 
       <section className="sedes-light-section sedes-jury">
         <div className="sedes-jury__header">
-          <SectionHeading kicker="LINEUP" title="Panel de Jurados" />
+          <SectionHeading kicker="LINEUP" title="Panel de Jurados." />
         </div>
         <div className="sedes-jury-grid sedes-jury-grid--six">
           {juryLineup.map((judge, index) => (

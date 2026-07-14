@@ -12027,16 +12027,24 @@ button {
   text-transform: uppercase;
 }
 
+.sedes-hero .sedes-kicker {
+  margin: 0 0 18px;
+  font-family: var(--font-body);
+  font-size: 1.09rem;
+  font-weight: 860;
+  letter-spacing: 0.14em;
+}
+
 .sedes-hero h1 {
-  max-width: 720px;
-  margin: 12px 0 0;
+  max-width: 1050px;
+  margin: 0;
   color: #fff;
-  font-family: var(--font-display);
-  font-size: clamp(5.8rem, 13vw, 12.5rem);
-  font-weight: 400;
-  letter-spacing: 0.028em;
-  line-height: 0.82;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  font-size: clamp(4.4rem, 9.2vw, 11.2rem);
+  font-weight: 560;
+  letter-spacing: -0.03em;
+  line-height: 0.84;
+  text-transform: none;
 }
 
 .sedes-hero__content > strong {
