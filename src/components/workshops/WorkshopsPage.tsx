@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import {
   ArrowUpRight,
   CalendarDays,
-  CircleUserRound,
   Clock3,
   Droplets,
   MapPin,
+  ShieldCheck,
   Shirt,
   Sparkles,
   Ticket,
@@ -24,6 +24,8 @@ const disciplines = [
   { label: "Cintas", icon: `${workshopIconBase}/cintas.png` },
   { label: "Flex", icon: `${workshopIconBase}/flex.png` },
   { label: "Expresión corporal", icon: `${workshopIconBase}/expresion-corporal.png` },
+  { label: "Jazz", icon: `${workshopIconBase}/jazz.png` },
+  { label: "Urban", icon: `${workshopIconBase}/urban.png` },
 ];
 
 const includedCards = [
@@ -61,21 +63,30 @@ const confirmedWorkshops = [
   { discipline: "Flex", coach: "Yoli Campos" },
 ];
 
+const edoMexConfirmedWorkshops = [
+  { discipline: "Flex", coach: "Ana Karen Rojas" },
+  { discipline: "Contemporary Jazz", coach: "Daniel Montalvo" },
+  { discipline: "Urban", coach: "Pablo Emmanuel" },
+  { discipline: "Comedia musical", coach: "Jorge Díaz" },
+  { discipline: "Aro y trapecio", coach: "Vladimir Garza" },
+  { discipline: "Tela y Cuna", coach: "Daniel Herrera" },
+];
+
 const basics = [
   {
     title: "Agua",
-    copy: "Para mantenerte hidratado durante la práctica.",
+    copy: "Para mantenerte hidratado durante el entrenamiento.",
     icon: Droplets,
   },
   {
     title: "Ropa cómoda",
-    copy: "Que te permita moverte con libertad y seguridad en el aula.",
+    copy: "Usa ropa que te permita moverte con libertad y seguridad. También está permitido acceder con el uniforme representativo de tu academia o escuela.",
     icon: Shirt,
   },
   {
-    title: "Cabello recogido",
-    copy: "Por tu seguridad y la de quienes entrenan a tu lado.",
-    icon: CircleUserRound,
+    title: "Responsable mayor de edad",
+    copy: "Las academias o escuelas que asistan a los workshops deberán contar con una persona responsable mayor de edad presente en todo momento.",
+    icon: ShieldCheck,
   },
 ];
 
@@ -117,6 +128,11 @@ export function WorkshopsPage() {
   return (
     <main className="workshops-page levitate-home-redesign">
       <section className="workshops-hero" id="workshops">
+        <img
+          className="workshops-hero__image"
+          src="/assets/workshops-hero-motion-4.jpg"
+          alt="Grupo de bailarinas de Motion en el escenario de Levitate."
+        />
         <LevitateHeader activeLabel="Convocatoria" useRootLinks variant="pill" />
         <div className="workshops-hero__content">
           <p className="workshops-kicker">Workshops Levitate</p>
@@ -148,7 +164,6 @@ export function WorkshopsPage() {
 
           <article className="workshops-intro__audience">
             <p className="workshops-light-kicker">¿Quién puede tomarlos?</p>
-            <h2>Para quienes empiezan, entrenan y quieren seguir creciendo.</h2>
             <p>
               Los workshops son para toda la comunidad apasionada por el vuelo en sus múltiples disciplinas. Encuentra
               opciones para cada nivel, objetivo y momento de tu camino artístico.
@@ -205,7 +220,7 @@ export function WorkshopsPage() {
 
       <section className="workshops-light-section workshops-venues" id="workshops-disponibles">
         <div className="workshops-section-head workshops-section-head--light">
-          <p className="workshops-light-kicker">Próximos workshops por sede</p>
+          <p className="workshops-light-kicker">Workshops 2026</p>
         </div>
 
         <div className="workshops-venue-grid">
@@ -240,26 +255,44 @@ export function WorkshopsPage() {
             </div>
           </article>
 
-          <article className="workshops-venue-card workshops-venue-card--soon">
+          <article className="workshops-venue-card workshops-venue-card--confirmed workshops-venue-card--edomex">
             <img
               className="workshops-venue-card__image--edomex"
               src="/assets/workshops-edomex-taller-1.jpg"
-              alt=""
-              aria-hidden="true"
+              alt="Participantes en un workshop de Motion en Estado de México."
               loading="lazy"
             />
             <div>
               <h2>EDO MEX</h2>
               <p>
-                <CalendarDays aria-hidden="true" size={17} /> 13 de noviembre
+                <CalendarDays aria-hidden="true" size={17} /> Viernes 14 de noviembre
               </p>
-              <h3>Una nueva experiencia está por revelarse.</h3>
-              <p>
-                Los workshops para esta sede se están preparando. Muy pronto conocerás talleres, docentes y horarios que
-                te esperan.
+              <p className="workshops-venue-card__location">
+                <MapPin aria-hidden="true" size={17} />
+                <span>
+                  <strong>Aerial</strong>
+                  <small>Por confirmar lugar</small>
+                </span>
               </p>
+              <p className="workshops-venue-card__location">
+                <MapPin aria-hidden="true" size={17} />
+                <span>
+                  <strong>Motion</strong>
+                  <small>City Express Plus by Marriott Mundo E</small>
+                </span>
+              </p>
+              <h3>Workshops confirmados</h3>
+              <ul>
+                {edoMexConfirmedWorkshops.map((workshop) => (
+                  <li key={workshop.discipline}>
+                    <span aria-hidden="true" />
+                    <strong>{workshop.discipline}</strong>
+                    <small>{workshop.coach}</small>
+                  </li>
+                ))}
+              </ul>
               <a href="/sedes/estado-de-mexico">
-                Próximamente <ArrowUpRight aria-hidden="true" size={17} />
+                Ver horarios <ArrowUpRight aria-hidden="true" size={17} />
               </a>
             </div>
           </article>

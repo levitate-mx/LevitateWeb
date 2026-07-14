@@ -27,7 +27,7 @@ const navItems: NavItem[] = [
   { label: "Inicio", href: "#inicio" },
   {
     label: "Convocatoria",
-    href: "#convocatorias",
+    href: "/#convocatorias",
     children: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
       { label: "Veracruz", href: "/sedes" },
@@ -101,7 +101,7 @@ const capsuleNavItems: PillMenuSection[] = [
   },
   {
     title: "Convocatoria",
-    href: "#convocatorias",
+    href: "/#convocatorias",
   },
   {
     title: "Inscripciones",
@@ -414,7 +414,7 @@ export function LevitateHeader({
           }
         }}
         onClick={(event) => {
-          if (item.children) {
+          if (item.children && item.label !== "Convocatoria") {
             event.preventDefault();
             setActiveMenu((current) => (current === item.label ? null : item.label));
           }

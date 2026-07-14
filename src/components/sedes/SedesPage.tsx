@@ -176,13 +176,16 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     motionGenres: defaultMotionGenres,
     aerialGenres: defaultAerialGenres,
     competitionBlocks: [
-      { date: "14 de noviembre", items: [
-        { title: "Bloque 1", text: "Baby y Petite - Motion" },
-        { title: "Bloque 2", text: "Junior, Teen y Senior - Motion" },
+      { date: "14 de noviembre 2026", items: [
+        { title: "Bloque 1", text: "Baby + Petite" },
+        { title: "Bloque 2", text: "Junior + Teen" },
+        { title: "Bloque 3", text: "Senior + Legacy + Relevé" },
+        { title: "Bloque 4", text: "Baby + Petite" },
       ] },
-      { date: "15 de noviembre", items: [
-        { title: "Bloque 3", text: "Baby y Petite - Aerial" },
-        { title: "Bloque 4", text: "Junior, Teen y Senior - Aerial" },
+      { date: "15 de noviembre 2026", items: [
+        { title: "Bloque 5", text: "Junior" },
+        { title: "Bloque 6", text: "Teen + Legacy" },
+        { title: "Bloque 7", text: "Seniors + Relevé" },
       ] },
     ],
     jury: [
@@ -204,8 +207,8 @@ function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
 }
 
 function renderBlockText(text: string) {
-  const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "senior", "teen", "teens"]);
-  const renderLevels = (line: string) => line.split(/\b(Baby|Junior|Legacy|Petite|Senior|Teen|Teens)\b/gi).map((part, index) => (
+  const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "relevé", "senior", "seniors", "teen", "teens"]);
+  const renderLevels = (line: string) => line.split(/\b(Baby|Junior|Legacy|Petite|Relevé|Senior|Seniors|Teen|Teens)\b/gi).map((part, index) => (
     highlightedTerms.has(part.toLowerCase())
       ? <span className="sedes-block-level" key={`${part}-${index}`}>{part}</span>
       : part

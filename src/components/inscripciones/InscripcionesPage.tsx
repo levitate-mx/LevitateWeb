@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Info,
+  MessageCircle,
   ReceiptText,
   Search,
   Upload,
@@ -311,6 +312,24 @@ function normalizePhoneNumber(value: string) {
   return value.replace(/\D/g, "").slice(0, 15);
 }
 
+function formatPhoneNumber(value: string) {
+  const digits = normalizePhoneNumber(value);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  if (digits.length <= 6) {
+    return `${digits.slice(0, 2)} ${digits.slice(2)}`;
+  }
+
+  if (digits.length <= 10) {
+    return `${digits.slice(0, 2)} ${digits.slice(2, 6)} ${digits.slice(6)}`;
+  }
+
+  return digits;
+}
+
 function normalizePhoneCountryCode(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits ? `+${digits.slice(0, 4)}` : defaultPhoneCountryCode;
@@ -562,6 +581,7 @@ function InscriptionLookupPanel() {
   const [isShareFallbackVisible, setIsShareFallbackVisible] = useState(false);
   const [proofError, setProofError] = useState("");
   const [proofMessage, setProofMessage] = useState("");
+  const [whatsappError, setWhatsappError] = useState("");
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [isTransferVisible, setIsTransferVisible] = useState(false);
   const [isLookupLoading, setIsLookupLoading] = useState(false);
@@ -603,6 +623,7 @@ function InscriptionLookupPanel() {
     setIsShareFallbackVisible(false);
     setProofError("");
     setProofMessage("");
+    setWhatsappError("");
     setSelectedProofFile(null);
     setIsTransferVisible(false);
     setSelectedPaymentMethodId("");
@@ -616,21 +637,21 @@ function InscriptionLookupPanel() {
     setPhoneNumber(normalizePhoneNumber(event.target.value));
     setLookupError("");
     setOrderError("");
+    setWhatsappError("");
   };
 
   const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const normalizedCurp = normalizeCurp(curp);
-    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
     setCurp(normalizedCurp);
-    setPhoneNumber(normalizedPhoneNumber);
     setLookupError("");
     setOrderError("");
     setCopyMessage("");
     setIsShareFallbackVisible(false);
     setProofError("");
     setProofMessage("");
+    setWhatsappError("");
     setSelectedProofFile(null);
     setIsTransferVisible(false);
     setSelectedPaymentMethodId("");
@@ -641,24 +662,10 @@ function InscriptionLookupPanel() {
       return;
     }
 
-    if (!isPhoneNumberValid(normalizedPhoneNumber)) {
-      setLookup(null);
-      setLookupError("Ingresa un número de WhatsApp válido para avisarte sobre tu pago.");
-      return;
-    }
-
     if (normalizedCurp === demoCurp) {
-      setLookup({
-        ...demoInscriptionLookup,
-        order: demoInscriptionLookup.order
-          ? {
-              ...demoInscriptionLookup.order,
-              buyerPhoneCountryCode: phoneCountryCode,
-              buyerPhoneNumber: normalizedPhoneNumber,
-              buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
-            }
-          : null,
-      });
+      setLookup(demoInscriptionLookup);
+      setPhoneCountryCode(demoInscriptionLookup.order?.buyerPhoneCountryCode ?? defaultPhoneCountryCode);
+      setPhoneNumber(demoInscriptionLookup.order?.buyerPhoneNumber ?? "5512345678");
       setSelectedPaymentMethodId("");
       resetLookupScroll();
       return;
@@ -668,12 +675,7 @@ function InscriptionLookupPanel() {
 
     try {
       const response = await fetch("/api/registration/inscription/lookup", {
-        body: JSON.stringify({
-          buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
-          buyerPhoneCountryCode: phoneCountryCode,
-          buyerPhoneNumber: normalizedPhoneNumber,
-          curp: normalizedCurp,
-        }),
+        body: JSON.stringify({ curp: normalizedCurp }),
         headers: { "content-type": "application/json" },
         method: "POST",
       });
@@ -689,6 +691,8 @@ function InscriptionLookupPanel() {
       }
 
       setLookup(payload);
+      setPhoneCountryCode(payload.order?.buyerPhoneCountryCode ?? defaultPhoneCountryCode);
+      setPhoneNumber(payload.order?.buyerPhoneNumber ?? "");
       setIsTransferVisible(false);
       setSelectedPaymentMethodId("");
       resetLookupScroll();
@@ -802,27 +806,6 @@ function InscriptionLookupPanel() {
     }
 
     void uploadProofFile(file);
-  };
-
-  const revealPaymentPanel = () => {
-    window.requestAnimationFrame(() => {
-      const visualPanel = document.querySelector<HTMLElement>(".inscripciones-payment-visual");
-
-      if (!visualPanel) {
-        return;
-      }
-
-      const panelBounds = visualPanel.getBoundingClientRect();
-
-      if (panelBounds.top >= 92 && panelBounds.top <= 124) {
-        return;
-      }
-
-      visualPanel.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        block: "start",
-      });
-    });
   };
 
   const getPaymentShareData = () => {
@@ -1315,6 +1298,19 @@ function InscriptionLookupPanel() {
     return createImagePdfBlob(imageBlob, artwork.width, artwork.height);
   };
 
+  const openPaymentPanel = () => {
+    const scrollLeft = window.scrollX;
+    const scrollTop = window.scrollY;
+    const restoreScroll = () => window.scrollTo({ behavior: "auto", left: scrollLeft, top: scrollTop });
+
+    setSelectedPaymentMethodId("");
+    setIsTransferVisible(true);
+    window.requestAnimationFrame(() => {
+      restoreScroll();
+      window.requestAnimationFrame(restoreScroll);
+    });
+  };
+
   const handleDownloadPaymentPdf = async () => {
     const shareData = getPaymentShareData();
 
@@ -1399,17 +1395,17 @@ function InscriptionLookupPanel() {
     const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
     setPhoneNumber(normalizedPhoneNumber);
     setOrderError("");
+    setWhatsappError("");
 
     if (!isPhoneNumberValid(normalizedPhoneNumber)) {
-      setOrderError("Ingresa un número de WhatsApp válido para generar la orden.");
+      setWhatsappError("Ingresa un número de WhatsApp válido.");
       return;
     }
 
     if (lookup.curp === demoCurp) {
       setLookup({ ...lookup, order: lookup.order ?? buildDemoInscriptionOrder(lookup, phoneCountryCode, normalizedPhoneNumber) });
       setSelectedPaymentMethodId("");
-      setIsTransferVisible(true);
-      revealPaymentPanel();
+      openPaymentPanel();
       return;
     }
 
@@ -1450,9 +1446,7 @@ function InscriptionLookupPanel() {
           order: payload.order,
         };
       });
-      setSelectedPaymentMethodId("");
-      setIsTransferVisible(true);
-      revealPaymentPanel();
+      openPaymentPanel();
     } catch (error) {
       setOrderError(error instanceof Error ? error.message : "No pudimos generar la orden de inscripción.");
     } finally {
@@ -1479,7 +1473,7 @@ function InscriptionLookupPanel() {
                     maxLength={18}
                     minLength={18}
                     onChange={handleCurpChange}
-                    placeholder="Ej. DEMO010101MDFLVT09"
+                    placeholder="INGRESA TU CURP..."
                     value={curp}
                   />
                   <button
@@ -1491,34 +1485,6 @@ function InscriptionLookupPanel() {
                     <Search aria-hidden="true" size={23} />
                   </button>
                 </div>
-              </div>
-              <div className="inscripciones-lookup-search__field">
-                <label htmlFor="inscription-phone-number">WhatsApp para avisos</label>
-                <div className="inscripciones-phone-card__input">
-                  <select
-                    aria-label="País del número de WhatsApp"
-                    id="inscription-phone-country"
-                    onChange={(event) => setPhoneCountryCode(event.target.value)}
-                    value={phoneCountryCode}
-                  >
-                    {phoneCountryOptions.map((option) => (
-                      <option key={`${option.country}-${option.code}`} value={option.code}>
-                        {option.country} {option.code}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    autoComplete="tel-national"
-                    id="inscription-phone-number"
-                    inputMode="tel"
-                    maxLength={15}
-                    onChange={handlePhoneNumberChange}
-                    placeholder="Número sin prefijo"
-                    type="tel"
-                    value={phoneNumber}
-                  />
-                </div>
-                <span>Lo usaremos para confirmar o corregir el pago por WhatsApp.</span>
               </div>
             </form>
             <button
@@ -1638,15 +1604,43 @@ function InscriptionLookupPanel() {
           <img alt="" src="/assets/inscripciones-payment-moment.jpg" />
 
           {lookup && visibleLines.length > 0 && !isTransferVisible ? (
-            <button
-              className="inscripciones-photo-payment-button"
-              disabled={visibleSubtotal <= 0 || isOrderLoading}
-              onClick={handlePaymentOrder}
-              type="button"
+            <form
+              className="inscripciones-photo-payment-actions"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handlePaymentOrder();
+              }}
             >
-              <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : "Datos de pago"}</span>
-              <ArrowRight aria-hidden="true" size={22} />
-            </button>
+              <label className="inscripciones-photo-whatsapp">
+                <MessageCircle aria-hidden="true" size={19} />
+                <span>
+                  WhatsApp para comprobante
+                  <input
+                    aria-invalid={Boolean(whatsappError)}
+                    autoComplete="tel"
+                    inputMode="tel"
+                    maxLength={17}
+                    onChange={handlePhoneNumberChange}
+                    placeholder="55 1234 5678"
+                    type="tel"
+                    value={formatPhoneNumber(phoneNumber)}
+                  />
+                </span>
+              </label>
+              <button
+                className="inscripciones-photo-payment-button"
+                disabled={visibleSubtotal <= 0 || isOrderLoading}
+                type="submit"
+              >
+                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : "Datos de pago"}</span>
+                <ArrowRight aria-hidden="true" size={22} />
+              </button>
+              {whatsappError ? (
+                <span className="inscripciones-photo-whatsapp__error" role="alert">
+                  {whatsappError}
+                </span>
+              ) : null}
+            </form>
           ) : null}
 
           {isTransferVisible && lookup ? (

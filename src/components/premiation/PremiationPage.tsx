@@ -620,39 +620,37 @@ export function PremiationPage() {
   return (
     <main className="premiation-page premiation-page--modern levitate-home-redesign">
       <section className="premiation-hero" id="inicio">
-        <img
+        <video
+          autoPlay
           className="premiation-hero__image"
-          src="/assets/ranking-oro.png"
-          alt="Participantes celebrando un reconocimiento en el escenario Levitate."
-          fetchPriority="high"
-        />
+          loop
+          muted
+          playsInline
+          poster={assets.competition}
+          preload="metadata"
+          aria-hidden="true"
+        >
+          <source src="/assets/visuals/workshops-experience-bg.mp4" type="video/mp4" />
+        </video>
         <div className="premiation-hero__shade" aria-hidden="true" />
         <LevitateHeader activeLabel="Premiación" useRootLinks variant="pill" />
         <div className="premiation-hero__content">
-          <p className="premiation-eyebrow">Premiación Levitate</p>
-          <h1>El talento también se reconoce.</h1>
-          <div className="premiation-hero__footer">
-            <p>
-              Cada participación recibe una medalla por su puntaje. Cuando existe competencia directa, también se
-              reconoce su posición dentro del bloque.
-            </p>
-            <a href="#sistema">
-              Conoce el sistema <ArrowRight aria-hidden="true" size={18} />
-            </a>
-          </div>
+          <h1>Reconocemos tu talento.</h1>
         </div>
       </section>
 
       <section className="premiation-modern-intro" id="sistema">
         <div className="premiation-modern-shell premiation-modern-intro__grid">
-          <p className="premiation-eyebrow">Cómo funciona</p>
           <h2>
             Dos formas de reconocer <span>cada resultado.</span>
           </h2>
-          <p>
-            El puntaje obtenido y la posición dentro del bloque cuentan historias distintas. Por eso, en Levitate se
-            reconocen por separado.
-          </p>
+          <div className="premiation-modern-intro__copy">
+            <p className="premiation-eyebrow">Cómo funciona</p>
+            <p>
+              El puntaje obtenido y la posición dentro del bloque cuentan historias distintas. Por eso, en Levitate se
+              reconocen por separado.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -664,7 +662,7 @@ export function PremiationPage() {
               <div>
                 <p className="premiation-eyebrow">Todas las participaciones</p>
                 <h2>Medallero por puntaje</h2>
-                <p>Cada rutina recibe una medalla de acuerdo con el puntaje final obtenido.</p>
+                <p>Cada coreografía inscrita recibe una medalla de acuerdo con el puntaje final obtenido.</p>
               </div>
             </header>
 
