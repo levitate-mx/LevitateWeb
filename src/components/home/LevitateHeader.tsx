@@ -38,7 +38,7 @@ const navItems: NavItem[] = [
     href: "/modalidades/levitate-motion/generos",
     children: [
       {
-        label: "Levitate Motion",
+        label: "Motion",
         href: "/modalidades/levitate-motion/generos",
         children: [
           { label: "Géneros", href: "/modalidades/levitate-motion/generos" },
@@ -47,13 +47,17 @@ const navItems: NavItem[] = [
         ],
       },
       {
-        label: "Levitate Aerial",
+        label: "Aerial",
         href: "/modalidades/levitate-aerial/evaluacion",
         children: [
           { label: "Niveles", href: "/modalidades/levitate-aerial/evaluacion" },
           { label: "Evaluación", href: "/modalidades/levitate-aerial/evaluacion" },
           { label: "Reglamento", href: regulationsPdfHref, download: true },
         ],
+      },
+      {
+        label: "Relevé",
+        href: "/modalidades/levitate-aerial/evaluacion#niveles-aerial",
       },
     ],
   },
@@ -120,8 +124,9 @@ const pillMenuSections: PillMenuSection[] = [
   {
     title: "Modalidades",
     links: [
-      { label: "Levitate Motion", href: "/modalidades/levitate-motion/generos" },
-      { label: "Levitate Aerial", href: "/modalidades/levitate-aerial/evaluacion" },
+      { label: "Motion", href: "/modalidades/levitate-motion/generos" },
+      { label: "Aerial", href: "/modalidades/levitate-aerial/evaluacion" },
+      { label: "Relevé", href: "/modalidades/levitate-aerial/evaluacion#niveles-aerial" },
     ],
   },
   {

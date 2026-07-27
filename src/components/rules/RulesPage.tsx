@@ -242,7 +242,7 @@ const rulesContent: Record<RulesModality, RulesContent> = {
   },
   aerial: {
     className: "rules-page--aerial",
-    heroEyebrow: "Modalidad",
+    heroEyebrow: "MODALIDAD",
     heroTitle: { text: "Levitate", accent: "Aerial" },
     heroIntro: [
       "Evaluación clara para telas, aro, trapecio y propuestas open.",
@@ -266,28 +266,54 @@ const rulesContent: Record<RulesModality, RulesContent> = {
   },
 };
 
-const aerialImportanceStatements = [
-  "Competir en tu género te hace más relevante y te ayuda a destacar.",
-  "El panel de jurados evalúa tu coreo dentro de contextos adecuados a cada disciplina.",
-];
-
 const aerialCompetitionGenres = [
   {
     title: "Tela",
-    text: "Combina fuerza, flexibilidad y fluidez en el aire a través de amarres, escaladas y caídas acrobáticas suspendidas en dos bandas de tela.",
+    text: "Secuencias suspendidas en tela con amarres, escaladas, figuras, transiciones y caídas acrobáticas.",
   },
   {
     title: "Aro",
-    text: "Explora la estética, el equilibrio y giros dinámicos sobre una estructura circular metálica, creando líneas corporales de gran impacto visual en suspensión.",
+    text: "Trabajo sobre estructura circular con giros, equilibrio, líneas corporales, control y presencia aérea.",
   },
   {
     title: "Trapecio",
-    text: "Fusiona fuerza y control técnico sobre una barra suspendida por dos cuerdas, ideal para transiciones fluidas, figuras estáticas y balanceos acrobáticos.",
+    text: "Figuras, balanceos y transiciones sobre barra suspendida, con fuerza, control y limpieza técnica.",
   },
   {
     title: "Open",
-    text: "Para propuestas en aparatos alternativos, no mencionados anteriormente, y fusiones circenses creativas que desafían la gravedad fuera de los formatos tradicionales.",
+    text: "Propuestas en aparatos alternativos o fusiones circenses que no pertenecen a las categorías anteriores.",
   },
+];
+
+const aerialCategories = [
+  {
+    title: "Un mismo aparato",
+    text: "Los participantes comparten el mismo aparato durante la rutina.",
+    formats: ["Solo", "Dueto", "Terna"],
+  },
+  {
+    title: "Aparato individual",
+    text: "Cada participante trabaja en su propio aparato durante la presentación.",
+    formats: ["Solo", "Dúo", "Trío"],
+  },
+];
+
+const aerialDivisions = [
+  { division: "Baby", ages: "Hasta los 6 años" },
+  { division: "Petite", ages: "De 7 a 10 años" },
+  { division: "Junior", ages: "De 11 a 13 años" },
+  { division: "Teen", ages: "De 14 a 17 años" },
+  { division: "Senior", ages: "18 años en adelante" },
+  { division: "Legacy", ages: "+40 años Amateur" },
+];
+
+const aerialLevels = [
+  { title: "Nudo" },
+  { title: "Principiante" },
+  { title: "Intermedio" },
+  { title: "Avanzado" },
+  { title: "Elite" },
+  { title: "Relevé", label: "Nueva" },
 ];
 
 type RulesPageProps = {
@@ -303,12 +329,102 @@ function RulesTitleText({ title }: { title: RulesTitle }) {
   );
 }
 
+function AerialProgram() {
+  return (
+    <section className="rules-aerial-program" aria-label="Guía de competencia Aerial">
+      <div className="rules-aerial-program__section rules-aerial-program__section--genres">
+        <div className="rules-aerial-program__heading">
+          <p className="rules-aerial-kicker">Géneros que participan</p>
+          <h3>El aparato define el punto de partida.</h3>
+        </div>
+        <div className="rules-aerial-genre-grid">
+          {aerialCompetitionGenres.map((genre) => (
+            <article className="rules-aerial-genre-card" key={genre.title}>
+              <h4>{genre.title}</h4>
+              <p>{genre.text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="rules-aerial-program__section rules-aerial-program__section--categories">
+        <div className="rules-aerial-program__heading">
+          <p className="rules-aerial-kicker">Categorías</p>
+          <h3>El formato ordena cuántas personas compiten y cómo usan el aparato.</h3>
+        </div>
+        <div className="rules-aerial-category-grid">
+          {aerialCategories.map((category) => (
+            <article className="rules-aerial-category-card" key={category.title}>
+              <div>
+                <h4>{category.title}</h4>
+                <p>{category.text}</p>
+              </div>
+              <ul aria-label={`Formatos de ${category.title}`}>
+                {category.formats.map((format) => (
+                  <li key={format}>{format}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="rules-aerial-program__section rules-aerial-program__section--divisions">
+        <div className="rules-aerial-program__heading">
+          <p className="rules-aerial-kicker">Divisiones</p>
+          <h3>Las edades mantienen una competencia justa por etapa.</h3>
+        </div>
+        <div className="rules-aerial-division-table" role="table" aria-label="Divisiones por edad">
+          <div className="rules-aerial-division-table__head" role="row">
+            <span role="columnheader">División</span>
+            <span role="columnheader">Edades</span>
+          </div>
+          {aerialDivisions.map((item) => (
+            <div className="rules-aerial-division-table__row" role="row" key={item.division}>
+              <strong role="cell">{item.division}</strong>
+              <span role="cell">{item.ages}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rules-aerial-program__section rules-aerial-program__section--levels" id="niveles-aerial">
+        <div className="rules-aerial-program__heading">
+          <p className="rules-aerial-kicker">Niveles y obligatorios</p>
+          <h3>El nivel se define por dominio técnico y obligatorios.</h3>
+        </div>
+        <div className="rules-aerial-levels">
+          <div className="rules-aerial-levels__copy">
+            <p>
+              Los niveles se eligen de acuerdo con el dominio técnico del participante y los obligatorios
+              correspondientes. Esto permite evaluar con mayor claridad la dificultad, limpieza y control de cada
+              rutina.
+            </p>
+            <button className="rules-aerial-download" disabled type="button">
+              <FileText aria-hidden="true" size={18} />
+              <span>PDF de obligatorios</span>
+              <small>Próximamente</small>
+            </button>
+          </div>
+          <div className="rules-aerial-level-list" aria-label="Niveles de Levitate Aerial">
+            {aerialLevels.map((level) => (
+              <article className={level.label ? "is-new" : ""} key={level.title}>
+                {level.label ? <span>{level.label}</span> : null}
+                <strong>{level.title}</strong>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function RulesPage({ modality = "motion" }: RulesPageProps) {
   const content = rulesContent[modality];
   const ruleCards = content.ruleCards;
   const explainerCta = content.explainerCta;
   const homeIdentityClass = modality === "aerial" ? " levitate-home-redesign" : "";
-  const showHeroEyebrow = modality !== "aerial";
   const showHeroIntro = modality !== "aerial" && content.heroIntro.length > 0;
   const pinRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -386,7 +502,7 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
 
       <section className="rules-hero">
         <div className="rules-hero__copy">
-          {showHeroEyebrow ? <p className="rules-eyebrow">{content.heroEyebrow}</p> : null}
+          <p className="rules-eyebrow">{content.heroEyebrow}</p>
           <h1>
             <RulesTitleText title={content.heroTitle} />
           </h1>
@@ -410,156 +526,122 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
       </section>
 
       {modality === "aerial" ? (
+        <AerialProgram />
+      ) : (
         <>
-          <section className="rules-aerial-importance" aria-labelledby="rules-aerial-importance-title">
-            <div className="rules-aerial-importance__inner">
-              <h2 id="rules-aerial-importance-title">El género importa.</h2>
-              <div className="rules-aerial-importance__statements">
-                {aerialImportanceStatements.map((statement) => (
-                  <p key={statement}>
-                    <strong>{statement}</strong>
-                  </p>
+          <section className="rules-carousel-pin" aria-label={content.carouselLabel} ref={pinRef}>
+            <div className="rules-carousel">
+              <aside className="rules-carousel__rail" aria-hidden="true">
+                <span>{content.carouselRail}</span>
+              </aside>
+
+              <div className="rules-track-window">
+                <div className="rules-track" ref={trackRef}>
+                  {ruleCards.map((card, index) => (
+                    <article
+                      className={`rules-card${activeIndex === index ? " is-active" : ""}${
+                        card.kind === "image" ? " rules-card--image" : ""
+                      }`}
+                      key={card.title}
+                      style={{ "--card-index": index } as CSSProperties}
+                    >
+                      <img src={card.image} alt="" aria-hidden="true" />
+                      <div className="rules-card__shade" aria-hidden="true" />
+                      {card.kind === "image" ? (
+                        <div className="rules-card__image-caption">
+                          <span>Levitate Aerial</span>
+                          <strong>{card.caption}</strong>
+                        </div>
+                      ) : (
+                        <div className="rules-card__content">
+                          <div className="rules-card__topline">
+                            <strong>{card.number}</strong>
+                          </div>
+                          <h2>{card.title}</h2>
+                          {card.points ? (
+                            <ul className="rules-card__points">
+                              {card.points.map((point) => (
+                                <li key={point}>{point}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>{card.text}</p>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rules-progress" aria-label="Pilares disponibles">
+                {ruleCards.map((card, index) => (
+                  <button
+                    aria-label={`Ver ${card.title}`}
+                    className={activeIndex === index ? "is-active" : ""}
+                    key={card.title}
+                    onClick={() => goToCard(index)}
+                    type="button"
+                  />
                 ))}
               </div>
             </div>
           </section>
 
-          <section className="rules-aerial-genres" aria-labelledby="rules-aerial-genres-title">
-            <div className="rules-aerial-genres__inner">
-              <div className="rules-aerial-genres__head">
-                <h2 id="rules-aerial-genres-title">Géneros disponibles</h2>
-                <p>La competencia se organiza por aparato para que cada propuesta sea leída desde su propio lenguaje técnico y escénico.</p>
-              </div>
+          <section className="rules-motion-explainer" aria-labelledby="rules-motion-genre-title">
+            <div className="rules-motion-explainer__copy">
+              <h2 id="rules-motion-genre-title">
+                <RulesTitleText title={content.explainerTitle} />
+              </h2>
+              {content.explainerParagraphs.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+              {explainerCta ? (
+                <a className="rules-motion-cta" href={explainerCta.href}>
+                  {explainerCta.label} <ArrowRight aria-hidden="true" size={18} />
+                </a>
+              ) : null}
+            </div>
 
-              <div className="rules-aerial-genres__grid">
-                {aerialCompetitionGenres.map((genre, index) => (
-                  <article className="rules-aerial-genre" key={genre.title}>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <h3>{genre.title}</h3>
-                    <p>{genre.text}</p>
-                  </article>
-                ))}
-              </div>
+            <div className="rules-motion-explainer__cards" aria-label="Ventajas de la evaluación por género">
+              {content.explainerCards.map(({ icon: Icon, text, title }) => (
+                <article className="rules-motion-info-card" key={title}>
+                  <Icon aria-hidden="true" size={42} strokeWidth={1.8} />
+                  <div>
+                    <h3>{title}</h3>
+                    <p>{text}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="rules-motion-process" aria-labelledby="rules-motion-process-title">
+            <div className="rules-motion-process__intro">
+              <h2 id="rules-motion-process-title">
+                <RulesTitleText title={content.processTitle} />
+              </h2>
+              <p>{content.processIntro}</p>
+            </div>
+
+            <div className="rules-motion-process__cards">
+              {content.processCards.map(({ cta, icon: Icon, number, text, title }) => (
+                <article className="rules-motion-step-card" key={title}>
+                  <Icon aria-hidden="true" size={34} strokeWidth={1.8} />
+                  <strong>{number}</strong>
+                  <h3>{title}</h3>
+                  <p>{text}</p>
+                  {cta ? (
+                    <a className="rules-motion-step-card__link" href={cta.href}>
+                      {cta.label} <ArrowRight aria-hidden="true" size={16} />
+                    </a>
+                  ) : null}
+                </article>
+              ))}
             </div>
           </section>
         </>
-      ) : (
-        <section className="rules-carousel-pin" aria-label={content.carouselLabel} ref={pinRef}>
-          <div className="rules-carousel">
-            <aside className="rules-carousel__rail" aria-hidden="true">
-              <span>{content.carouselRail}</span>
-            </aside>
-
-            <div className="rules-track-window">
-              <div className="rules-track" ref={trackRef}>
-                {ruleCards.map((card, index) => (
-                  <article
-                    className={`rules-card${activeIndex === index ? " is-active" : ""}${
-                      card.kind === "image" ? " rules-card--image" : ""
-                    }`}
-                    key={card.title}
-                    style={{ "--card-index": index } as CSSProperties}
-                  >
-                    <img src={card.image} alt="" aria-hidden="true" />
-                    <div className="rules-card__shade" aria-hidden="true" />
-                    {card.kind === "image" ? (
-                      <div className="rules-card__image-caption">
-                        <span>Levitate Aerial</span>
-                        <strong>{card.caption}</strong>
-                      </div>
-                    ) : (
-                      <div className="rules-card__content">
-                        <div className="rules-card__topline">
-                          <strong>{card.number}</strong>
-                        </div>
-                        <h2>{card.title}</h2>
-                        {card.points ? (
-                          <ul className="rules-card__points">
-                            {card.points.map((point) => (
-                              <li key={point}>{point}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>{card.text}</p>
-                        )}
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="rules-progress" aria-label="Pilares disponibles">
-              {ruleCards.map((card, index) => (
-                <button
-                  aria-label={`Ver ${card.title}`}
-                  className={activeIndex === index ? "is-active" : ""}
-                  key={card.title}
-                  onClick={() => goToCard(index)}
-                  type="button"
-                />
-              ))}
-            </div>
-          </div>
-        </section>
       )}
-
-      <section className="rules-motion-explainer" aria-labelledby="rules-motion-genre-title">
-        <div className="rules-motion-explainer__copy">
-          <h2 id="rules-motion-genre-title">
-            <RulesTitleText title={content.explainerTitle} />
-          </h2>
-          {content.explainerParagraphs.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-          {explainerCta ? (
-            <a className="rules-motion-cta" href={explainerCta.href}>
-              {explainerCta.label} <ArrowRight aria-hidden="true" size={18} />
-            </a>
-          ) : null}
-        </div>
-
-        <div
-          className="rules-motion-explainer__cards"
-          id={modality === "aerial" ? "niveles-aerial" : undefined}
-          aria-label={modality === "aerial" ? "Niveles aéreos" : "Ventajas de la evaluación por género"}
-        >
-          {content.explainerCards.map(({ icon: Icon, text, title }) => (
-            <article className="rules-motion-info-card" key={title}>
-              <Icon aria-hidden="true" size={42} strokeWidth={1.8} />
-              <div>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="rules-motion-process" aria-labelledby="rules-motion-process-title">
-        <div className="rules-motion-process__intro">
-          <h2 id="rules-motion-process-title">
-            <RulesTitleText title={content.processTitle} />
-          </h2>
-          <p>{content.processIntro}</p>
-        </div>
-
-        <div className="rules-motion-process__cards">
-          {content.processCards.map(({ cta, icon: Icon, number, text, title }) => (
-            <article className="rules-motion-step-card" key={title}>
-              <Icon aria-hidden="true" size={34} strokeWidth={1.8} />
-              <strong>{number}</strong>
-              <h3>{title}</h3>
-              <p>{text}</p>
-              {cta ? (
-                <a className="rules-motion-step-card__link" href={cta.href}>
-                  {cta.label} <ArrowRight aria-hidden="true" size={16} />
-                </a>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      </section>
 
       <LevitateFooter useRootLinks />
     </main>

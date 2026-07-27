@@ -1,5 +1,5 @@
 import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, MapPin } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
@@ -253,6 +253,52 @@ type SedesPageProps = {
 export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
   const venue = sedesContent[venueKey] ?? sedesContent.cdmx;
   const juryLineup = buildJuryLineup(venue.jury);
+  const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
+  const juryStepRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  useEffect(() => {
+    setActiveJudgeIndex(0);
+  }, [venueKey]);
+
+  useEffect(() => {
+    const nodes = juryStepRefs.current.filter((node): node is HTMLButtonElement => Boolean(node));
+
+    if (!nodes.length) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const activeEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .map((entry) => {
+            const box = entry.boundingClientRect;
+            const center = box.top + box.height / 2;
+
+            return {
+              entry,
+              distance: Math.abs(center - window.innerHeight / 2),
+            };
+          })
+          .sort((a, b) => a.distance - b.distance)[0]?.entry;
+
+        if (!activeEntry) {
+          return;
+        }
+
+        const nextIndex = Number(activeEntry.target.getAttribute("data-jury-index"));
+
+        if (!Number.isNaN(nextIndex)) {
+          setActiveJudgeIndex(nextIndex);
+        }
+      },
+      { rootMargin: "-24% 0px -36% 0px", threshold: [0.16, 0.42, 0.68] },
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+
+    return () => observer.disconnect();
+  }, [juryLineup.length, venueKey]);
 
   useEffect(() => {
     const choice = document.querySelector<HTMLElement>("[data-sedes-modality-choice]");
@@ -426,21 +472,49 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
         <div className="sedes-jury__header">
           <SectionHeading kicker="LINEUP" title="Panel de Jurados." />
         </div>
-        <div className="sedes-jury-grid sedes-jury-grid--six">
-          {juryLineup.map((judge, index) => (
-            <article className="sedes-jury-card" key={`${judge.name}-${index}`}>
-              <img src={judge.image} alt="" aria-hidden="true" />
-              <h3>{judge.name}</h3>
-              <p>{judge.specialty}</p>
-            </article>
-          ))}
+        <div className="sedes-jury-sticky">
+          <div className="sedes-jury-sticky__visual" aria-hidden="true">
+            {juryLineup.map((judge, index) => (
+              <figure className={index === activeJudgeIndex ? "is-active" : ""} key={`${judge.name}-visual-${index}`}>
+                <img src={judge.image} alt="" loading={index === 0 ? "eager" : "lazy"} />
+                <figcaption>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{judge.name}</strong>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+
+          <div className="sedes-jury-sticky__list">
+            {juryLineup.map((judge, index) => (
+              <button
+                className={`sedes-jury-step${index === activeJudgeIndex ? " is-active" : ""}`}
+                data-jury-index={index}
+                key={`${judge.name}-${index}`}
+                onClick={() => {
+                  setActiveJudgeIndex(index);
+                  juryStepRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                ref={(node) => {
+                  juryStepRefs.current[index] = node;
+                }}
+                type="button"
+              >
+                <span className="sedes-jury-step__number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="sedes-jury-step__copy">
+                  <span>{judge.name}</span>
+                  <small>{judge.specialty}</small>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
       <section className="sedes-final-cta">
         <img
           className="sedes-final-cta__background"
-          src="/assets/premiation-motion-medal-system.jpg"
+          src="/assets/sedes-final-cta-minimal-bg.png"
           alt=""
           loading="lazy"
           aria-hidden="true"

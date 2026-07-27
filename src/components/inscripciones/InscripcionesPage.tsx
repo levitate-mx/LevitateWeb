@@ -446,7 +446,6 @@ export function InscripcionesPage() {
 
         <div className="inscripciones-hero__content">
           <div className="inscripciones-hero__copy">
-            <p className="inscripciones-eyebrow">Inscripciones</p>
             <h1>No te pierdas el vuelo.</h1>
             <div className="inscripciones-hero__actions">
               <a className="inscripciones-button inscripciones-button--light" href="/registro/academias">
@@ -465,7 +464,6 @@ export function InscripcionesPage() {
 
       <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
         <div className="inscripciones-section-head">
-          <p className="inscripciones-eyebrow">Inscripciones</p>
           <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
         </div>
 
