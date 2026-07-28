@@ -276,9 +276,7 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Inicio", icon: Home, screen: "home" },
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar alumnos", icon: GraduationCap, screen: "participants" },
-  { label: "Registrar baile", icon: Music2, screen: "dance" },
-  { label: "Pagos inscripción", icon: CreditCard, screen: "payments" },
-  { label: "Reporte participante", icon: ClipboardList },
+  { label: "Registrar coreografía", icon: Music2, screen: "dance" },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
 
@@ -1420,7 +1418,7 @@ export function LevitateRegistrationEntryRoute() {
           <h1>Elige tu acceso.</h1>
           <span aria-hidden="true" />
           <strong>
-            Academias administran participantes y bailes. Alumnos consultan pagos y materiales asociados directamente a su CURP.
+            Academias administran participantes y coreografías. Alumnos consultan pagos y materiales asociados directamente a su CURP.
           </strong>
         </div>
 
@@ -1429,7 +1427,7 @@ export function LevitateRegistrationEntryRoute() {
             <Building2 aria-hidden="true" size={28} />
             <span>Academias</span>
             <h2>Registrar academia</h2>
-            <p>Acceso para titulares de academia: participantes, coreógrafos y bailes.</p>
+            <p>Acceso para titulares de academia: participantes, coreógrafos y coreografías.</p>
           </a>
           <a className="levitate-registration-choice-card" href="/registro/alumnos">
             <GraduationCap aria-hidden="true" size={28} />
@@ -1721,7 +1719,7 @@ function LevitateStudentPortal({
           <div className="levitate-student-portal__meta">
             <span>CURP: {session.user.curp}</span>
             <span>{session.registrations.length} registro(s) asociado(s)</span>
-            <span>{session.dances.length} baile(s)</span>
+            <span>{session.dances.length} coreografía(s)</span>
           </div>
         </div>
         <button className="levitate-admin-save levitate-student-portal__logout" onClick={onLogout} type="button">
@@ -1778,7 +1776,7 @@ function LevitateStudentPortal({
           </div>
         </AdminPanel>
 
-        <AdminPanel title="Bailes" eyebrow="Competencia">
+        <AdminPanel title="Coreografías" eyebrow="Competencia">
           <div className="levitate-student-list">
             {session.dances.map((dance) => (
               <article key={dance.id}>
@@ -1790,7 +1788,7 @@ function LevitateStudentPortal({
                 </p>
               </article>
             ))}
-            {session.dances.length === 0 ? <p className="levitate-admin-empty-state">Aún no hay bailes asociados a tu CURP.</p> : null}
+            {session.dances.length === 0 ? <p className="levitate-admin-empty-state">Aún no hay coreografías asociadas a tu CURP.</p> : null}
           </div>
         </AdminPanel>
       </section>
@@ -1800,18 +1798,16 @@ function LevitateStudentPortal({
 
 function AdminSidebar({
   activeScreen,
-  session,
   onScreenChange,
   onLogout,
 }: {
   activeScreen: AdminScreenId;
-  session: RegistrationSession;
   onScreenChange: (screen: AdminScreenId) => void;
   onLogout: () => void;
 }) {
   return (
     <aside className="levitate-admin-sidebar" aria-label="Menú administrativo">
-      <h2>Menu</h2>
+      <h2>Registro</h2>
       <nav>
         {adminMenuItems.map((item) => {
           const Icon = item.icon;
@@ -1840,14 +1836,6 @@ function AdminSidebar({
           );
         })}
       </nav>
-
-      <div className="levitate-admin-sidebar__meta">
-        <p>Usuario: {session.user.name}</p>
-        <p>Academia: {session.academy.name}</p>
-        <p>Sede: {getOptionLabel(venueOptions, session.academy.venue)}</p>
-      </div>
-
-      <small>© Levitate. Website: levitate.mx.</small>
     </aside>
   );
 }
@@ -2066,9 +2054,9 @@ function DanceRegistrationPanel({
       setSelectedSubgenre(defaultDanceSubgenre);
       setSelectedChoreographerIds([]);
       setSelectedParticipantIds([]);
-      setStatusMessage("Baile guardado en la base.");
+      setStatusMessage("Coreografía guardada en la base.");
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo guardar el baile."));
+      setErrorMessage(getErrorMessage(error, "No se pudo guardar la coreografía."));
     } finally {
       setIsSaving(false);
     }
@@ -2076,12 +2064,12 @@ function DanceRegistrationPanel({
 
   return (
     <>
-      <AdminPanel className="levitate-admin-panel--dance" title="Registro de nuevo baile" eyebrow="Competencia">
+      <AdminPanel className="levitate-admin-panel--dance" title="Registro de nueva coreografía" eyebrow="Competencia">
         <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
-          <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre del baile">
+          <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
             <input name="title" required type="text" />
           </AdminField>
-          <AdminField icon={Music2} label="Género de baile">
+          <AdminField icon={Music2} label="Género de coreografía">
             <AdminSelect id="dance-genre" name="genre" onChange={handleGenreChange} options={danceGenres} value={selectedGenre} />
           </AdminField>
           <AdminField icon={Music2} label="Subgénero">
@@ -2133,13 +2121,13 @@ function DanceRegistrationPanel({
           </div>
         </form>
       </AdminPanel>
-      <section className="levitate-admin-panel levitate-admin-registered-panel" aria-label="Bailes registrados">
+      <section className="levitate-admin-panel levitate-admin-registered-panel" aria-label="Coreografías registradas">
         <div className="levitate-admin-panel__heading">
           <p>Consulta</p>
-          <h2>Bailes registrados</h2>
+          <h2>Coreografías registradas</h2>
         </div>
-        <div className="levitate-admin-registered-panel__table" role="table" aria-label="Bailes registrados">
-          <span role="columnheader">Baile</span>
+        <div className="levitate-admin-registered-panel__table" role="table" aria-label="Coreografías registradas">
+          <span role="columnheader">Coreografía</span>
           <span role="columnheader">Categoría</span>
           <span role="columnheader">Nivel</span>
           <span role="columnheader">Participantes</span>
@@ -2151,7 +2139,7 @@ function DanceRegistrationPanel({
               <span role="cell">{dance.participants.map((participant) => participant.fullName).join(", ")}</span>
             </div>
           ))}
-          {dances.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay bailes registrados.</p> : null}
+          {dances.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas.</p> : null}
         </div>
       </section>
     </>
@@ -2911,12 +2899,10 @@ function RegistrationAdminOrderDetail({
 }
 
 function AdminWelcomePanel({
-  session,
   participantCount,
   choreographerCount,
   danceCount,
 }: {
-  session: RegistrationSession;
   participantCount: number;
   choreographerCount: number;
   danceCount: number;
@@ -2926,12 +2912,11 @@ function AdminWelcomePanel({
       <PanelLeftOpen aria-hidden="true" size={34} />
       <div>
         <p>Panel Levitate</p>
-        <h1>Bienvenido.</h1>
+        <h1>Registro Levitate.</h1>
         <div className="levitate-admin-welcome-panel__meta">
-          <span>{session.academy.name}</span>
           <span>{participantCount} participantes</span>
           <span>{choreographerCount} coreógrafos</span>
-          <span>{danceCount} bailes</span>
+          <span>{danceCount} coreografías</span>
         </div>
       </div>
     </section>
@@ -2990,7 +2975,6 @@ function getAdminScreen({
       choreographerCount={choreographers.length}
       danceCount={dances.length}
       participantCount={participants.length}
-      session={session}
     />
   );
 }
@@ -3119,7 +3103,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
 
   return (
     <main className={`levitate-admin-shell${isMobileMenuOpen ? " is-mobile-menu-open" : ""}`}>
-      <AdminSidebar activeScreen={activeScreen} onLogout={handleLogout} onScreenChange={handleScreenChange} session={session} />
+      <AdminSidebar activeScreen={activeScreen} onLogout={handleLogout} onScreenChange={handleScreenChange} />
       <button
         aria-label="Cerrar menú"
         className="levitate-admin-mobile-scrim"
