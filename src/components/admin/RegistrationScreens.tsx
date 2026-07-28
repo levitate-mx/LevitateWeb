@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ArrowRight,
   AtSign,
   BadgeCheck,
   BarChart3,
@@ -25,7 +26,6 @@ import {
   MessageCircle,
   Minus,
   Music2,
-  PanelLeftOpen,
   Phone,
   Plus,
   Save,
@@ -2902,22 +2902,66 @@ function AdminWelcomePanel({
   participantCount,
   choreographerCount,
   danceCount,
+  onScreenChange,
 }: {
   participantCount: number;
   choreographerCount: number;
   danceCount: number;
+  onScreenChange: (screen: AdminScreenId) => void;
 }) {
+  const actions: Array<{
+    count: number;
+    helper: string;
+    icon: LucideIcon;
+    label: string;
+    screen: AdminScreenId;
+  }> = [
+    {
+      count: participantCount,
+      helper: "Carga participantes y sus datos base.",
+      icon: GraduationCap,
+      label: "Alumnos",
+      screen: "participants",
+    },
+    {
+      count: choreographerCount,
+      helper: "Agrega el equipo creativo de la academia.",
+      icon: UserRoundPlus,
+      label: "Coreógrafos",
+      screen: "choreographers",
+    },
+    {
+      count: danceCount,
+      helper: "Registra coreografías, elenco y categoría.",
+      icon: Music2,
+      label: "Coreografías",
+      screen: "dance",
+    },
+  ];
+
   return (
-    <section className="levitate-admin-welcome-panel">
-      <PanelLeftOpen aria-hidden="true" size={34} />
-      <div>
+    <section className="levitate-admin-home">
+      <div className="levitate-admin-home__intro">
         <p>Panel Levitate</p>
-        <h1>Registro Levitate.</h1>
-        <div className="levitate-admin-welcome-panel__meta">
-          <span>{participantCount} participantes</span>
-          <span>{choreographerCount} coreógrafos</span>
-          <span>{danceCount} coreografías</span>
-        </div>
+        <h1>Organiza tu registro.</h1>
+      </div>
+
+      <div className="levitate-admin-home__actions" aria-label="Accesos rápidos de registro">
+        {actions.map((action) => {
+          const Icon = action.icon;
+
+          return (
+            <button key={action.screen} onClick={() => onScreenChange(action.screen)} type="button">
+              <span className="levitate-admin-home__count">{action.count}</span>
+              <span className="levitate-admin-home__action-copy">
+                <Icon aria-hidden="true" size={22} />
+                <strong>{action.label}</strong>
+                <small>{action.helper}</small>
+              </span>
+              <ArrowRight aria-hidden="true" size={22} />
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -2934,6 +2978,7 @@ function getAdminScreen({
   onChoreographerCreated,
   onDanceCreated,
   onOrderUpdated,
+  onScreenChange,
 }: {
   screen: AdminScreenId;
   session: RegistrationSession;
@@ -2945,6 +2990,7 @@ function getAdminScreen({
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
   onDanceCreated: (dance: RegistrationDance) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+  onScreenChange: (screen: AdminScreenId) => void;
 }) {
   if (screen === "choreographers") {
     return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
@@ -2974,6 +3020,7 @@ function getAdminScreen({
     <AdminWelcomePanel
       choreographerCount={choreographers.length}
       danceCount={dances.length}
+      onScreenChange={onScreenChange}
       participantCount={participants.length}
     />
   );
@@ -3135,6 +3182,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
             onChoreographerCreated: handleChoreographerCreated,
             onDanceCreated: handleDanceCreated,
             onOrderUpdated: handleOrderUpdated,
+            onScreenChange: handleScreenChange,
           })}
         </div>
       </section>
