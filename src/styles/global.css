@@ -23911,12 +23911,11 @@ button {
 
 .sedes-workshops {
   display: grid;
-  grid-template-columns: minmax(260px, 0.82fr) minmax(0, 1.48fr);
-  gap: clamp(24px, 4.4vw, 72px);
-  padding: clamp(70px, 8vw, 118px) clamp(18px, 4vw, 64px);
-  background:
-    linear-gradient(135deg, rgba(87, 189, 209, 0.12), transparent 48%),
-    #111;
+  grid-template-columns: minmax(280px, 0.56fr) minmax(0, 1fr);
+  gap: clamp(34px, 5.6vw, 90px);
+  padding: clamp(76px, 8vw, 118px) clamp(18px, 4vw, 64px);
+  background: var(--sedes-paper);
+  color: var(--sedes-ink);
 }
 
 .sedes-workshops__intro,
@@ -23925,31 +23924,40 @@ button {
   max-width: 1440px;
 }
 
+.sedes-workshops__intro {
+  align-self: start;
+}
+
 .sedes-workshops__intro h2 {
-  margin: 12px 0 24px;
-  color: #fff;
+  margin: 12px 0 20px;
+  color: var(--sedes-ink);
   font-family: var(--font-body);
-  font-size: clamp(3.6rem, 6.2vw, 6.5rem);
-  font-weight: 560;
-  letter-spacing: -0.055em;
-  line-height: 0.9;
+  font-size: clamp(3.7rem, 7vw, 7.2rem);
+  font-weight: 580;
+  letter-spacing: -0.068em;
+  line-height: 0.88;
   text-transform: none;
 }
 
-.sedes-workshops__intro > span {
-  display: flex;
+.sedes-workshops__meta {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 26px;
+}
+
+.sedes-workshops__meta span {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
-  padding: 17px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.13);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
-  color: rgba(247, 243, 239, 0.76);
-  font-size: 0.88rem;
-  font-weight: 650;
+  gap: 10px;
+  color: var(--sedes-muted);
+  font-size: clamp(0.94rem, 1.02vw, 1.08rem);
+  font-weight: 640;
+  line-height: 1.42;
   text-transform: none;
 }
 
-.sedes-workshops__intro svg,
+.sedes-workshops__meta svg,
 .sedes-workshop-groups span,
 .sedes-workshop-card strong,
 .sedes-workshop-card__tag,
@@ -23957,39 +23965,147 @@ button {
   color: var(--sedes-blue);
 }
 
+.sedes-workshop-groups {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 18px;
+}
+
+.sedes-workshop-groups article {
+  min-height: 0;
+  padding: 15px 16px 16px;
+  border: 1px solid rgba(42, 41, 40, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
 .sedes-workshop-groups article::before {
-  border-color: rgba(87, 189, 209, 0.76);
+  content: none;
+}
+
+.sedes-workshop-groups span {
+  display: block;
   color: var(--sedes-blue);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  font-weight: 820;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.sedes-workshop-groups p {
+  margin: 6px 0 0;
+  color: var(--sedes-ink);
+  font-size: clamp(0.94rem, 1vw, 1.05rem);
+  font-weight: 710;
+  line-height: 1.2;
+  white-space: pre-line;
+}
+
+.sedes-workshops__intro small {
+  display: block;
+  margin-top: 16px;
+  color: rgba(42, 41, 40, 0.56);
+  font-size: clamp(0.86rem, 0.92vw, 0.98rem);
+  font-weight: 620;
+  line-height: 1.42;
+}
+
+.sedes-workshop-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  align-self: start;
+  border-top: 1px solid var(--sedes-line);
 }
 
 .sedes-workshop-card {
-  min-height: 310px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.016)),
-    #171719;
+  grid-template-columns: minmax(150px, 0.34fr) minmax(0, 1fr);
+  gap: clamp(18px, 3.6vw, 54px);
+  min-height: 0;
+  padding: clamp(22px, 3vw, 34px) 0;
+  border: 0;
+  border-bottom: 1px solid var(--sedes-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sedes-workshop-card__head {
+  min-height: 0;
+  padding: 0;
+  border-bottom: 0;
 }
 
 .sedes-workshop-card h3 {
-  color: #fff;
+  margin: 0 0 7px;
+  color: var(--sedes-ink);
   font-family: var(--font-body);
-  font-size: clamp(2rem, 2.7vw, 3rem);
-  font-weight: 620;
-  letter-spacing: -0.04em;
+  font-size: clamp(1.5rem, 2.1vw, 2.45rem);
+  font-weight: 720;
+  letter-spacing: -0.052em;
+  line-height: 0.98;
   text-transform: none;
 }
 
 .sedes-workshop-card strong {
+  color: var(--sedes-blue);
   font-family: var(--font-body);
-  font-size: clamp(1rem, 1.2vw, 1.18rem);
-  font-weight: 650;
-  letter-spacing: 0;
+  font-size: clamp(0.75rem, 0.86vw, 0.9rem);
+  font-weight: 780;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.sedes-workshop-card ul {
+  gap: 0;
+}
+
+.sedes-workshop-card li {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  padding: 9px 0;
+  border-bottom: 0;
+  color: var(--sedes-muted);
+}
+
+.sedes-workshop-card li.sedes-workshop-card__session--tagged {
+  grid-template-columns: minmax(128px, 0.34fr) 30px minmax(0, 1fr);
+}
+
+.sedes-workshop-card__tag {
+  color: var(--sedes-ink);
+  font-family: var(--font-body);
+  font-size: clamp(0.88rem, 0.96vw, 1.02rem);
+  font-weight: 720;
+  letter-spacing: -0.015em;
+  line-height: 1.18;
   text-transform: none;
+  overflow-wrap: anywhere;
 }
 
 .sedes-workshop-card__clock {
-  border-color: rgba(87, 189, 209, 0.72);
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(87, 189, 209, 0.5);
+  color: var(--sedes-blue);
+}
+
+.sedes-workshop-card__time {
+  color: var(--sedes-ink);
+  font-size: clamp(0.92rem, 1vw, 1.06rem);
+  font-weight: 760;
+  letter-spacing: -0.01em;
+  white-space: normal;
+}
+
+.sedes-workshop-card__group {
+  margin-top: 3px;
+  color: var(--sedes-muted);
+  font-size: clamp(0.82rem, 0.94vw, 0.96rem);
+  font-weight: 620;
+  line-height: 1.3;
 }
 
 .sedes-jury {
@@ -24731,6 +24847,24 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .sedes-workshops {
+    gap: 34px;
+  }
+
+  .sedes-workshops__intro h2 {
+    font-size: clamp(3.5rem, 16vw, 5.2rem);
+  }
+
+  .sedes-workshop-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .sedes-workshop-card {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 24px 0;
+  }
+
   .sedes-block-day article {
     min-height: 0;
   }
@@ -24794,7 +24928,7 @@ button {
 
   .sedes-workshop-card li,
   .sedes-workshop-card li.sedes-workshop-card__session--tagged {
-    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-columns: 30px minmax(0, 1fr);
   }
 
   .sedes-workshop-card__tag {

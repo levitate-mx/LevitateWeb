@@ -265,7 +265,7 @@ export function WorkshopsPage() {
             <div>
               <h2>EDO MEX</h2>
               <p>
-                <CalendarDays aria-hidden="true" size={17} /> Viernes 14 de noviembre
+                <CalendarDays aria-hidden="true" size={17} /> Viernes 13 de noviembre
               </p>
               <p className="workshops-venue-card__location">
                 <MapPin aria-hidden="true" size={17} />

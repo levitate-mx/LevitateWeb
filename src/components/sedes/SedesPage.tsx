@@ -199,7 +199,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       ] },
     ],
     workshops: {
-      title: "Viernes 14 de noviembre",
+      title: "Viernes 13 de noviembre",
       location: "Motion: City Express Plus Mundo E by Marriott · Aerial: sede por confirmar",
       groups: [
         { label: "Grupo A", text: "Aerial\nHasta 12 años" },
@@ -528,8 +528,11 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
         <section className="sedes-workshops">
           <div className="sedes-workshops__intro">
             <p className="sedes-kicker">Workshops</p>
-            <h2>{venue.workshops.title}</h2>
-            <span><MapPin aria-hidden="true" size={17} /> {venue.workshops.location}</span>
+            <h2>Workshops.</h2>
+            <div className="sedes-workshops__meta">
+              <span><CalendarDays aria-hidden="true" size={17} /> {venue.workshops.title}</span>
+              <span><MapPin aria-hidden="true" size={17} /> {venue.workshops.location}</span>
+            </div>
 
             <div className="sedes-workshop-groups">
               {venue.workshops.groups.map((group) => (
