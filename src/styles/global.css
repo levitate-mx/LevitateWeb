@@ -23955,6 +23955,7 @@ button {
   font-weight: 640;
   line-height: 1.42;
   text-transform: none;
+  white-space: pre-line;
 }
 
 .sedes-workshops__meta svg,
@@ -23985,7 +23986,7 @@ button {
 
 .sedes-workshop-groups span {
   display: block;
-  color: var(--sedes-blue);
+  color: var(--sedes-pink);
   font-family: var(--font-body);
   font-size: 0.74rem;
   font-weight: 820;
@@ -24031,10 +24032,27 @@ button {
   box-shadow: none;
 }
 
+.sedes-workshop-card--timeline {
+  grid-template-columns: minmax(170px, 0.28fr) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(20px, 4vw, 64px);
+}
+
 .sedes-workshop-card__head {
   min-height: 0;
   padding: 0;
   border-bottom: 0;
+}
+
+.sedes-workshop-card__time-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 12px;
+  place-items: center;
+  border: 1px solid rgba(87, 189, 209, 0.48);
+  border-radius: 999px;
+  color: var(--sedes-blue);
 }
 
 .sedes-workshop-card h3 {
@@ -24061,6 +24079,12 @@ button {
   gap: 0;
 }
 
+.sedes-workshop-card--timeline ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px clamp(16px, 2vw, 26px);
+}
+
 .sedes-workshop-card li {
   grid-template-columns: 30px minmax(0, 1fr);
   gap: 12px;
@@ -24068,6 +24092,13 @@ button {
   padding: 9px 0;
   border-bottom: 0;
   color: var(--sedes-muted);
+}
+
+.sedes-workshop-card li.sedes-workshop-card__session--timeline {
+  grid-template-columns: minmax(112px, 0.45fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 0;
 }
 
 .sedes-workshop-card li.sedes-workshop-card__session--tagged {
@@ -24865,6 +24896,10 @@ button {
     padding: 24px 0;
   }
 
+  .sedes-workshop-card--timeline ul {
+    grid-template-columns: 1fr;
+  }
+
   .sedes-block-day article {
     min-height: 0;
   }
@@ -24929,6 +24964,11 @@ button {
   .sedes-workshop-card li,
   .sedes-workshop-card li.sedes-workshop-card__session--tagged {
     grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .sedes-workshop-card li.sedes-workshop-card__session--timeline {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .sedes-workshop-card__tag {
@@ -30685,8 +30725,9 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card {
   display: grid;
-  align-content: space-between;
-  gap: 28px;
+  grid-template-rows: auto 1fr;
+  align-content: start;
+  gap: clamp(34px, 4vw, 52px);
   min-height: 246px;
   padding: clamp(22px, 2.6vw, 30px);
 }

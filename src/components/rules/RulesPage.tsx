@@ -273,7 +273,7 @@ const aerialCompetitionGenres = [
   },
   {
     title: "Aro",
-    text: "Trabajo sobre estructura circular con giros, equilibrio, líneas corporales, control y presencia aérea.",
+    text: "Trabajo sobre un aro aéreo en el que se trabaja equilibrio, líneas corporales, control y presencia aérea.",
   },
   {
     title: "Trapecio",

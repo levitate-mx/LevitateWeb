@@ -200,7 +200,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     ],
     workshops: {
       title: "Viernes 13 de noviembre",
-      location: "Motion: City Express Plus Mundo E by Marriott · Aerial: sede por confirmar",
+      location: "Motion: City Express Plus Mundo E by Marriott\nAerial: sede por confirmar",
       groups: [
         { label: "Grupo A", text: "Aerial\nHasta 12 años" },
         { label: "Grupo B", text: "Aerial\nMayores de 12 años" },
@@ -323,6 +323,53 @@ function buildJuryLineup(jury: JuryMember[]) {
   return lineup;
 }
 
+function getWorkshopStartMinutes(time: string) {
+  const [start = ""] = time.split("-");
+  const match = start.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+
+  if (!match) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const [, hourValue, minuteValue, periodValue] = match;
+  const period = periodValue.toUpperCase();
+  const hour = Number(hourValue);
+  const minute = Number(minuteValue);
+  const normalizedHour = period === "PM" && hour !== 12 ? hour + 12 : period === "AM" && hour === 12 ? 0 : hour;
+
+  return normalizedHour * 60 + minute;
+}
+
+function getWorkshopGroupLabel(group: string) {
+  return group.split("·")[0]?.trim() || group;
+}
+
+function buildWorkshopTimeline(workshops: NonNullable<SedeContent["workshops"]>) {
+  const timeline = new Map<string, Array<WorkshopSession & { coachName: string; specialty?: string }>>();
+
+  workshops.coaches.forEach((coach) => {
+    coach.sessions.forEach((session) => {
+      const sessions = timeline.get(session.time) ?? [];
+
+      sessions.push({
+        ...session,
+        coachName: coach.name,
+        specialty: coach.specialty,
+        group: getWorkshopGroupLabel(session.group),
+      });
+      timeline.set(session.time, sessions);
+    });
+  });
+
+  return Array.from(timeline.entries())
+    .map(([time, sessions]) => ({
+      time,
+      sessions,
+      sortValue: getWorkshopStartMinutes(time),
+    }))
+    .sort((left, right) => left.sortValue - right.sortValue);
+}
+
 type SedesPageProps = {
   venueKey?: keyof typeof sedesContent;
 };
@@ -330,6 +377,7 @@ type SedesPageProps = {
 export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
   const venue = sedesContent[venueKey] ?? sedesContent.cdmx;
   const juryLineup = buildJuryLineup(venue.jury);
+  const workshopTimeline = venue.workshops ? buildWorkshopTimeline(venue.workshops) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
   const juryStepRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -527,7 +575,6 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
       {venue.workshops ? (
         <section className="sedes-workshops">
           <div className="sedes-workshops__intro">
-            <p className="sedes-kicker">Workshops</p>
             <h2>Workshops.</h2>
             <div className="sedes-workshops__meta">
               <span><CalendarDays aria-hidden="true" size={17} /> {venue.workshops.title}</span>
@@ -546,24 +593,23 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
           </div>
 
           <div className="sedes-workshop-grid">
-            {venue.workshops.coaches.map((workshop) => (
-              <article className="sedes-workshop-card" key={workshop.name}>
+            {workshopTimeline.map((slot) => (
+              <article className="sedes-workshop-card sedes-workshop-card--timeline" key={slot.time}>
                 <div className="sedes-workshop-card__head">
                   <div>
-                    <h3>{workshop.name}</h3>
-                    {workshop.specialty ? <strong>{workshop.specialty}</strong> : null}
+                    <span className="sedes-workshop-card__time-icon"><Clock3 aria-hidden="true" size={22} /></span>
+                    <h3>{slot.time}</h3>
                   </div>
                 </div>
                 <ul>
-                  {workshop.sessions.map((session) => (
+                  {slot.sessions.map((session) => (
                     <li
-                      className={session.label ? "sedes-workshop-card__session sedes-workshop-card__session--tagged" : "sedes-workshop-card__session"}
-                      key={`${workshop.name}-${session.time}-${session.group}`}
+                      className="sedes-workshop-card__session sedes-workshop-card__session--timeline"
+                      key={`${slot.time}-${session.coachName}-${session.group}-${session.label ?? session.specialty}`}
                     >
-                      {session.label ? <span className="sedes-workshop-card__tag">{session.label}</span> : null}
-                      <span className="sedes-workshop-card__clock"><Clock3 aria-hidden="true" size={24} /></span>
+                      <span className="sedes-workshop-card__tag">{session.label ?? session.specialty ?? "Workshop"}</span>
                       <span className="sedes-workshop-card__session-copy">
-                        <span className="sedes-workshop-card__time">{session.time}</span>
+                        <span className="sedes-workshop-card__time">{session.coachName}</span>
                         <span className="sedes-workshop-card__group">{session.group}</span>
                       </span>
                     </li>
