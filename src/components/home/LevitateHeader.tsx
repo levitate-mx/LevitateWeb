@@ -5,14 +5,16 @@ import { Download, Grip, UserRound, X } from "lucide-react";
 
 type NavItem = {
   label: string;
-  href: string;
+  href?: string;
   children?: NavItem[];
   download?: boolean;
+  disabled?: boolean;
 };
 
 type PillMenuLink = {
   label: string;
-  href: string;
+  href?: string;
+  disabled?: boolean;
 };
 
 type PillMenuSection = {
@@ -27,10 +29,10 @@ const navItems: NavItem[] = [
   { label: "Inicio", href: "#inicio" },
   {
     label: "Convocatoria",
-    href: "/#convocatorias",
+    href: "/sedes/estado-de-mexico",
     children: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-      { label: "Veracruz", href: "/sedes" },
+      { label: "Veracruz", disabled: true },
     ],
   },
   {
@@ -105,7 +107,7 @@ const capsuleNavItems: PillMenuSection[] = [
   },
   {
     title: "Convocatoria",
-    href: "/#convocatorias",
+    href: "/sedes/estado-de-mexico",
   },
   {
     title: "Inscripciones",
@@ -118,7 +120,7 @@ const pillMenuSections: PillMenuSection[] = [
     title: "Sedes",
     links: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-      { label: "Veracruz", href: "/sedes" },
+      { label: "Veracruz", disabled: true },
     ],
   },
   {
@@ -193,16 +195,22 @@ export function LevitateHeader({
       <div className="levitate-nav__dropdown-list">
         {renderedNavItem.children?.map((child) => (
           <div className="levitate-nav__dropdown-item" key={child.label}>
-            <a className="levitate-nav__dropdown-main" href={resolveHref(child.href, useRootLinks)}>
-              {child.label}
-            </a>
+            {child.disabled ? (
+              <span aria-disabled="true" className="levitate-nav__dropdown-main is-disabled">
+                {child.label}
+              </span>
+            ) : (
+              <a className="levitate-nav__dropdown-main" href={resolveHref(child.href ?? "#inicio", useRootLinks)}>
+                {child.label}
+              </a>
+            )}
             {child.children ? (
               <div className="levitate-nav__dropdown-sublist" aria-label={`${child.label} submenu`}>
                 {child.children.map((nestedChild) => (
                   <a
                     className={nestedChild.download ? "is-download" : undefined}
                     download={nestedChild.download ? true : undefined}
-                    href={resolveHref(nestedChild.href, useRootLinks)}
+                    href={resolveHref(nestedChild.href ?? "#inicio", useRootLinks)}
                     key={nestedChild.label}
                   >
                     <span>{nestedChild.label}</span>
@@ -412,7 +420,7 @@ export function LevitateHeader({
         aria-haspopup={item.children ? "true" : undefined}
         className={`levitate-nav__link${item.label === activeLabel ? " is-active" : ""}`}
         data-nav-label={item.label}
-        href={resolveHref(item.href, useRootLinks)}
+        href={resolveHref(item.href ?? "#inicio", useRootLinks)}
         onBlur={(event) => {
           if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
             setActiveMenu(null);
@@ -510,9 +518,15 @@ export function LevitateHeader({
         {isOpen && item.links ? (
           <div className="levitate-nav__submenu-flow" id={submenuId} aria-label={`${item.title} submenu`}>
             {item.links.map((link) => (
-              <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closeCapsuleSubmenu}>
-                {link.label}
-              </a>
+              link.disabled ? (
+                <span aria-disabled="true" className="is-disabled" key={link.label}>
+                  {link.label}
+                </span>
+              ) : (
+                <a href={resolveHref(link.href ?? "#inicio", useRootLinks)} key={link.label} onClick={closeCapsuleSubmenu}>
+                  {link.label}
+                </a>
+              )
             ))}
           </div>
         ) : null}
@@ -606,9 +620,15 @@ export function LevitateHeader({
                         aria-label={`${section.title} submenu`}
                       >
                         {section.links.map((link) => (
-                          <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
-                            {link.label}
-                          </a>
+                          link.disabled ? (
+                            <span aria-disabled="true" className="is-disabled" key={link.label}>
+                              {link.label}
+                            </span>
+                          ) : (
+                            <a href={resolveHref(link.href ?? "#inicio", useRootLinks)} key={link.label} onClick={closePillMenu}>
+                              {link.label}
+                            </a>
+                          )
                         ))}
                       </aside>
                     ) : null}
@@ -659,9 +679,15 @@ export function LevitateHeader({
               style={pillMenuStyle}
             >
               {selectedPillSection.links?.map((link) => (
-                <a href={resolveHref(link.href, useRootLinks)} key={link.label} onClick={closePillMenu}>
-                  {link.label}
-                </a>
+                link.disabled ? (
+                  <span aria-disabled="true" className="is-disabled" key={link.label}>
+                    {link.label}
+                  </span>
+                ) : (
+                  <a href={resolveHref(link.href ?? "#inicio", useRootLinks)} key={link.label} onClick={closePillMenu}>
+                    {link.label}
+                  </a>
+                )
               ))}
             </aside>
           ) : null}

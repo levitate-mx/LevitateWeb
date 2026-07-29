@@ -335,7 +335,7 @@ function AerialProgram() {
       <div className="rules-aerial-program__section rules-aerial-program__section--genres">
         <div className="rules-aerial-program__heading">
           <p className="rules-aerial-kicker">Géneros que participan</p>
-          <h3>El aparato define el punto de partida.</h3>
+          <h3>Aparatos en competencia.</h3>
         </div>
         <div className="rules-aerial-genre-grid">
           {aerialCompetitionGenres.map((genre) => (
@@ -350,7 +350,7 @@ function AerialProgram() {
       <div className="rules-aerial-program__section rules-aerial-program__section--categories">
         <div className="rules-aerial-program__heading">
           <p className="rules-aerial-kicker">Categorías</p>
-          <h3>El formato ordena cuántas personas compiten y cómo usan el aparato.</h3>
+          <h3>Formatos de participación.</h3>
         </div>
         <div className="rules-aerial-category-grid">
           {aerialCategories.map((category) => (
@@ -372,7 +372,7 @@ function AerialProgram() {
       <div className="rules-aerial-program__section rules-aerial-program__section--divisions">
         <div className="rules-aerial-program__heading">
           <p className="rules-aerial-kicker">Divisiones</p>
-          <h3>Las edades mantienen una competencia justa por etapa.</h3>
+          <h3>Rangos por edad.</h3>
         </div>
         <div className="rules-aerial-division-table" role="table" aria-label="Divisiones por edad">
           <div className="rules-aerial-division-table__head" role="row">
@@ -391,7 +391,7 @@ function AerialProgram() {
       <div className="rules-aerial-program__section rules-aerial-program__section--levels" id="niveles-aerial">
         <div className="rules-aerial-program__heading">
           <p className="rules-aerial-kicker">Niveles y obligatorios</p>
-          <h3>El nivel se define por dominio técnico y obligatorios.</h3>
+          <h3>Niveles técnicos.</h3>
         </div>
         <div className="rules-aerial-levels">
           <div className="rules-aerial-levels__copy">

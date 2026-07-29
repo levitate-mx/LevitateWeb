@@ -77,21 +77,17 @@ export function EventsSection() {
         </MotionReveal>
 
         <div ref={trackRef} className="event-track" aria-label="Próximos eventos">
-          {events.map((event, index) => (
-            <MotionReveal key={`${event.date}-${event.venue}`} delay={index * 80}>
-              <a
-                className="event-card"
-                href={`/sedes/${event.slug}`}
-                aria-label={`Ver sede ${event.venue}`}
-                onPointerMove={handleCardPointerMove}
-                onPointerLeave={resetCardTilt}
-              >
+          {events.map((event, index) => {
+            const isUpcoming = event.slug === "veracruz";
+            const dateParts = event.date.split(" ");
+            const cardContent = (
+              <>
                 <img src={event.image} alt="" loading="lazy" />
                 <span className="event-card__curtain" aria-hidden="true" />
                 <div className="event-card__shade" aria-hidden="true" />
                 <div className="event-card__date">
-                  <span>{event.date.split(" ")[0]}</span>
-                  <span>{event.date.split(" ")[1]}</span>
+                  <span>{dateParts[0]}</span>
+                  <span>{dateParts[1]}</span>
                 </div>
                 <div className="event-card__content">
                   <p>{event.name}</p>
@@ -101,16 +97,41 @@ export function EventsSection() {
                     {event.location}
                   </span>
                   <span className="event-card__cta">
-                    Ver evento
-                    <ArrowRight aria-hidden="true" size={16} />
+                    {isUpcoming ? "Próximamente" : "Ver evento"}
+                    {isUpcoming ? null : <ArrowRight aria-hidden="true" size={16} />}
                   </span>
                 </div>
-                <span className="event-card__link" aria-hidden="true">
-                  <ArrowRight aria-hidden="true" size={20} />
-                </span>
-              </a>
-            </MotionReveal>
-          ))}
+                {isUpcoming ? null : (
+                  <span className="event-card__link" aria-hidden="true">
+                    <ArrowRight aria-hidden="true" size={20} />
+                  </span>
+                )}
+              </>
+            );
+
+            return (
+              <MotionReveal key={`${event.date}-${event.venue}`} delay={index * 80}>
+                {isUpcoming ? (
+                  <article
+                    className="event-card is-disabled"
+                    aria-label={`${event.venue} próximamente`}
+                  >
+                    {cardContent}
+                  </article>
+                ) : (
+                  <a
+                    className="event-card"
+                    href={`/sedes/${event.slug}`}
+                    aria-label={`Ver sede ${event.venue}`}
+                    onPointerMove={handleCardPointerMove}
+                    onPointerLeave={resetCardTilt}
+                  >
+                    {cardContent}
+                  </a>
+                )}
+              </MotionReveal>
+            );
+          })}
         </div>
         <div className="event-progress" aria-hidden="true">
           <span style={{ transform: `scaleX(${trackProgress})` }} />

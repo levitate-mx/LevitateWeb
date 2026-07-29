@@ -913,6 +913,11 @@ button {
   filter: grayscale(20%) contrast(1.05);
 }
 
+.event-card.is-disabled:hover img {
+  filter: none;
+  transform: none;
+}
+
 .experience-card__overlay {
   position: absolute;
   inset: 0;
@@ -1057,8 +1062,21 @@ button {
   transform: perspective(900px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateY(-6px);
 }
 
+.event-card.is-disabled {
+  cursor: default;
+}
+
+.event-card.is-disabled:hover {
+  border-color: var(--color-border);
+  transform: perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0);
+}
+
 .event-card:hover::before {
   opacity: 1;
+}
+
+.event-card.is-disabled:hover::before {
+  opacity: 0;
 }
 
 .event-card::after {
@@ -6294,9 +6312,18 @@ button {
   color: #fff;
 }
 
-.workshops-venue-card > img {
+.workshops-venue-card__media {
+  position: relative;
   grid-column: 1;
   grid-row: 1;
+  min-height: 430px;
+  overflow: hidden;
+}
+
+.workshops-venue-card__media > img {
+  grid-column: 1;
+  grid-row: 1;
+  display: block;
   width: 100%;
   height: 100%;
   min-height: 430px;
@@ -6304,12 +6331,12 @@ button {
   filter: saturate(1.06) hue-rotate(306deg) contrast(1.08);
 }
 
-.workshops-venue-card > img.workshops-venue-card__image--cdmx {
+.workshops-venue-card__media > img.workshops-venue-card__image--cdmx {
   object-position: center;
   filter: grayscale(0.58) saturate(0.28) contrast(1.12) brightness(0.74);
 }
 
-.workshops-venue-card > img.workshops-venue-card__image--edomex {
+.workshops-venue-card__media > img.workshops-venue-card__image--edomex {
   object-position: center;
   filter: grayscale(0.54) saturate(0.3) contrast(1.1) brightness(0.76);
 }
@@ -6336,7 +6363,7 @@ button {
     linear-gradient(90deg, rgba(5, 5, 5, 0.24), rgba(5, 5, 5, 0));
 }
 
-.workshops-venue-card > div {
+.workshops-venue-card__content {
   position: relative;
   z-index: 2;
   display: flex;
@@ -6346,7 +6373,7 @@ button {
   padding: clamp(24px, 3.4vw, 44px);
 }
 
-.workshops-venue-card > div > a {
+.workshops-venue-card__content > a {
   margin-top: auto;
 }
 
@@ -6728,7 +6755,8 @@ button {
     border-top: 1px solid rgba(17, 16, 21, 0.12);
   }
 
-  .workshops-venue-card > img {
+  .workshops-venue-card__media,
+  .workshops-venue-card__media > img {
     min-height: 260px;
   }
 
@@ -9538,6 +9566,16 @@ button {
 .levitate-nav__dropdown-main:hover::after,
 .levitate-nav__dropdown-main:focus-visible::after {
   transform: scaleX(1);
+}
+
+.levitate-nav__dropdown-main.is-disabled {
+  cursor: default;
+  color: rgba(8, 8, 10, 0.38);
+  transform: none;
+}
+
+.levitate-nav__dropdown-main.is-disabled::after {
+  content: none;
 }
 
 .levitate-nav__dropdown-sublist {
@@ -15501,7 +15539,8 @@ button {
   content: "";
 }
 
-.levitate-home-redesign .levitate-nav__submenu-flow a {
+.levitate-home-redesign .levitate-nav__submenu-flow a,
+.levitate-home-redesign .levitate-nav__submenu-flow span {
   position: relative;
   z-index: 1;
   display: inline-flex;
@@ -15522,6 +15561,11 @@ button {
   transition:
     color 180ms ease,
     transform 180ms var(--ease-out);
+}
+
+.levitate-home-redesign .levitate-nav__submenu-flow span.is-disabled {
+  cursor: default;
+  color: rgba(39, 38, 37, 0.48);
 }
 
 .levitate-home-redesign .levitate-nav__submenu-flow a:hover,
@@ -15718,7 +15762,8 @@ button {
   display: none;
 }
 
-.levitate-home-redesign .levitate-pill-menu__submenu a {
+.levitate-home-redesign .levitate-pill-menu__submenu a,
+.levitate-home-redesign .levitate-pill-menu__submenu span {
   position: relative;
   z-index: 2;
   display: flex;
@@ -15735,6 +15780,11 @@ button {
   text-decoration: none;
   pointer-events: auto;
   transition: color 180ms ease;
+}
+
+.levitate-home-redesign .levitate-pill-menu__submenu span.is-disabled {
+  cursor: default;
+  color: rgba(42, 41, 40, 0.42);
 }
 
 .levitate-home-redesign .levitate-pill-menu__submenu a:hover,
@@ -23919,7 +23969,8 @@ button {
 }
 
 .sedes-workshops__intro,
-.sedes-workshop-grid {
+.sedes-workshop-grid,
+.sedes-workshop-agenda {
   width: 100%;
   max-width: 1440px;
 }
@@ -23959,7 +24010,7 @@ button {
 }
 
 .sedes-workshops__meta svg,
-.sedes-workshop-groups span,
+.sedes-workshop-groups__label,
 .sedes-workshop-card strong,
 .sedes-workshop-card__tag,
 .sedes-workshop-card__clock {
@@ -23984,7 +24035,7 @@ button {
   content: none;
 }
 
-.sedes-workshop-groups span {
+.sedes-workshop-groups__label {
   display: block;
   color: var(--sedes-pink);
   font-family: var(--font-body);
@@ -23992,6 +24043,10 @@ button {
   font-weight: 820;
   letter-spacing: 0.11em;
   text-transform: uppercase;
+}
+
+.sedes-workshop-groups__modality {
+  color: rgba(42, 41, 40, 0.56);
 }
 
 .sedes-workshop-groups p {
@@ -24010,6 +24065,80 @@ button {
   font-size: clamp(0.86rem, 0.92vw, 0.98rem);
   font-weight: 620;
   line-height: 1.42;
+}
+
+.sedes-workshop-agenda {
+  display: grid;
+  gap: 14px;
+  align-self: start;
+}
+
+.sedes-workshop-agenda__head {
+  display: none;
+}
+
+.sedes-workshop-slot {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(42, 41, 40, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: 0 22px 54px rgba(42, 41, 40, 0.06);
+}
+
+.sedes-workshop-slot time {
+  display: grid;
+  min-height: 0;
+  padding: 18px clamp(18px, 2.2vw, 28px);
+  border-bottom: 1px solid rgba(42, 41, 40, 0.1);
+  color: var(--sedes-ink);
+  font-size: clamp(1.2rem, 1.48vw, 1.7rem);
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  text-align: center;
+}
+
+.sedes-workshop-slot__sessions {
+  display: grid;
+  gap: 0;
+}
+
+.sedes-workshop-slot__session {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.26fr) minmax(170px, 0.35fr) minmax(170px, 0.39fr);
+  gap: clamp(12px, 1.8vw, 24px);
+  align-items: center;
+  justify-items: center;
+  min-height: 66px;
+  padding: 15px clamp(18px, 2.2vw, 28px);
+  text-align: center;
+}
+
+.sedes-workshop-slot__session + .sedes-workshop-slot__session {
+  border-top: 1px solid rgba(42, 41, 40, 0.08);
+}
+
+.sedes-workshop-slot__group {
+  color: var(--sedes-pink);
+  font-size: clamp(0.76rem, 0.84vw, 0.92rem);
+  font-weight: 820;
+  letter-spacing: 0.12em;
+  line-height: 1.12;
+  text-transform: uppercase;
+}
+
+.sedes-workshop-slot__class,
+.sedes-workshop-slot__speaker {
+  color: var(--sedes-ink);
+  font-size: clamp(0.98rem, 1.05vw, 1.14rem);
+  font-weight: 720;
+  line-height: 1.14;
+}
+
+.sedes-workshop-slot__speaker {
+  color: var(--sedes-muted);
+  font-weight: 680;
 }
 
 .sedes-workshop-grid {
@@ -24890,6 +25019,50 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .sedes-workshop-agenda {
+    gap: 12px;
+  }
+
+  .sedes-workshop-slot time {
+    padding: 17px 18px;
+    font-size: clamp(1.28rem, 7vw, 1.85rem);
+    text-align: center;
+  }
+
+  .sedes-workshop-slot__session {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    justify-items: center;
+    min-height: 0;
+    padding: 16px 18px 18px;
+    text-align: center;
+  }
+
+  .sedes-workshop-slot__session span::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: rgba(42, 41, 40, 0.42);
+    font-size: 0.68rem;
+    font-weight: 820;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .sedes-workshop-slot__group,
+  .sedes-workshop-slot__class,
+  .sedes-workshop-slot__speaker {
+    font-size: 1rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .sedes-workshop-slot__group {
+    color: var(--sedes-pink);
+    font-weight: 780;
+  }
+
   .sedes-workshop-card {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -25550,7 +25723,7 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1fr);
-  min-height: 520px;
+  min-height: 490px;
   overflow: hidden;
   border: 1px solid var(--home-line);
   border-radius: 8px;
@@ -25566,23 +25739,30 @@ button {
   background: rgba(255, 255, 255, 0.4);
 }
 
-.workshops-page.levitate-home-redesign .workshops-venue-card > img {
+.workshops-page.levitate-home-redesign .workshops-venue-card__media {
+  position: relative;
+  min-height: 490px;
+  overflow: hidden;
+}
+
+.workshops-page.levitate-home-redesign .workshops-venue-card__media > img {
   position: relative;
   z-index: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 520px;
+  min-height: 490px;
   aspect-ratio: auto;
   object-fit: cover;
   filter: saturate(1.08) contrast(1.04) brightness(1.02);
 }
 
-.workshops-page.levitate-home-redesign .workshops-venue-card > img.workshops-venue-card__image--cdmx,
-.workshops-page.levitate-home-redesign .workshops-venue-card > img.workshops-venue-card__image--edomex {
+.workshops-page.levitate-home-redesign .workshops-venue-card__media > img.workshops-venue-card__image--cdmx,
+.workshops-page.levitate-home-redesign .workshops-venue-card__media > img.workshops-venue-card__image--edomex {
   object-position: center;
 }
 
-.workshops-page.levitate-home-redesign .workshops-venue-card > div {
+.workshops-page.levitate-home-redesign .workshops-venue-card__content {
   position: relative;
   z-index: 1;
   display: flex;
@@ -25727,6 +25907,19 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.88);
   --workshops-button-surface: rgba(255, 255, 255, 0.7);
   margin-top: auto;
+}
+
+.workshops-page.levitate-home-redesign .workshops-venue-card .workshops-venue-card__image-cta {
+  --workshops-button-border: rgba(255, 255, 255, 0.66);
+  --workshops-button-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --workshops-button-surface: rgba(255, 255, 255, 0.78);
+  position: absolute;
+  right: clamp(18px, 2vw, 30px);
+  bottom: clamp(18px, 2vw, 30px);
+  z-index: 2;
+  margin-top: 0;
 }
 
 .workshops-page.levitate-home-redesign .workshops-experience {
@@ -25891,7 +26084,8 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .workshops-page.levitate-home-redesign .workshops-venue-card > img {
+  .workshops-page.levitate-home-redesign .workshops-venue-card__media,
+  .workshops-page.levitate-home-redesign .workshops-venue-card__media > img {
     height: 300px;
     min-height: 300px;
   }
@@ -25927,7 +26121,7 @@ button {
   .workshops-page.levitate-home-redesign .workshops-intro__audience,
   .workshops-page.levitate-home-redesign .workshops-intro__disciplines,
   .workshops-page.levitate-home-redesign .workshops-note,
-  .workshops-page.levitate-home-redesign .workshops-venue-card > div,
+  .workshops-page.levitate-home-redesign .workshops-venue-card__content,
   .workshops-page.levitate-home-redesign .workshops-experience__copy {
     padding: 24px;
   }
@@ -25986,6 +26180,12 @@ button {
   .workshops-page.levitate-home-redesign .workshops-outline-cta,
   .workshops-page.levitate-home-redesign .workshops-venue-card a {
     width: 100%;
+  }
+
+  .workshops-page.levitate-home-redesign .workshops-venue-card .workshops-venue-card__image-cta {
+    right: 18px;
+    left: 18px;
+    width: auto;
   }
 
   .workshops-page.levitate-home-redesign .workshops-disciplines span {
@@ -30494,6 +30694,11 @@ button {
   --aerial-muted: var(--home-soft-ink, rgba(42, 41, 40, 0.66));
   --aerial-line: var(--home-line, rgba(42, 41, 40, 0.12));
   --aerial-pink: var(--home-pink, #e74697);
+  --aerial-title-size: clamp(4rem, 6.8vw, 8rem);
+  --aerial-section-title-size: clamp(3.45rem, 5.7vw, 6.85rem);
+  --aerial-title-weight: 620;
+  --aerial-title-tracking: -0.065em;
+  --aerial-title-leading: 0.88;
   --rules-pink: var(--aerial-pink);
   --rules-white: #ffffff;
   overflow-x: clip;
@@ -30660,10 +30865,10 @@ button {
   margin: 0;
   color: var(--aerial-ink);
   font-family: var(--font-body);
-  font-size: clamp(3.3rem, 6.8vw, 6.45rem);
-  font-weight: 620;
-  letter-spacing: 0;
-  line-height: 0.96;
+  font-size: var(--aerial-title-size);
+  font-weight: var(--aerial-title-weight);
+  letter-spacing: var(--aerial-title-tracking);
+  line-height: var(--aerial-title-leading);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-program__intro p:not(.rules-aerial-kicker) {
@@ -30677,8 +30882,8 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-program__section {
   display: grid;
-  grid-template-columns: minmax(230px, 0.3fr) minmax(0, 1fr);
-  gap: clamp(28px, 6vw, 96px);
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(30px, 4.8vw, 58px);
   padding: clamp(54px, 7vw, 94px) 0;
 }
 
@@ -30692,20 +30897,21 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading {
   display: grid;
+  width: 100%;
   align-content: start;
   gap: 12px;
-  padding-top: 6px;
+  padding-top: 0;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading h3 {
-  max-width: 440px;
+  max-width: min(100%, 1120px);
   margin: 0;
   color: var(--aerial-ink);
   font-family: var(--font-body);
-  font-size: clamp(1.86rem, 2.55vw, 3rem);
-  font-weight: 620;
-  letter-spacing: 0;
-  line-height: 1;
+  font-size: var(--aerial-section-title-size);
+  font-weight: var(--aerial-title-weight);
+  letter-spacing: var(--aerial-title-tracking);
+  line-height: var(--aerial-title-leading);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-grid {
@@ -30715,8 +30921,7 @@ button {
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card,
-.rules-page--aerial.levitate-home-redesign .rules-aerial-category-card,
-.rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article {
+.rules-page--aerial.levitate-home-redesign .rules-aerial-category-card {
   border: 1px solid var(--aerial-line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.5);
@@ -30892,32 +31097,58 @@ button {
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(12px, 2vw, 24px);
+  padding-top: 28px;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-level-list::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: var(--aerial-line);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article {
   position: relative;
   display: grid;
-  min-height: 142px;
-  align-content: end;
-  gap: 16px;
-  padding: 22px;
-  overflow: hidden;
+  align-content: start;
+  gap: 9px;
+  min-height: 0;
+  padding: 18px 0 0;
+  overflow: visible;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article::before {
+  content: "";
+  position: absolute;
+  top: -25px;
+  left: 0;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--aerial-muted-blue);
+  border-radius: 999px;
+  background: var(--aerial-bg);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article.is-new {
-  border-color: rgba(231, 70, 151, 0.28);
-  background:
-    linear-gradient(135deg, rgba(231, 70, 151, 0.16), rgba(255, 255, 255, 0.54) 62%),
-    rgba(255, 255, 255, 0.58);
+  color: var(--aerial-pink);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article.is-new::before {
+  border-color: var(--aerial-pink);
+  background: var(--aerial-pink);
+  box-shadow: 0 0 0 6px rgba(231, 70, 151, 0.1);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article span {
-  position: absolute;
-  top: 18px;
-  left: 18px;
+  order: -1;
+  width: fit-content;
   color: var(--aerial-pink);
   font-size: 0.72rem;
   font-weight: 860;
@@ -30927,10 +31158,10 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article strong {
   color: var(--aerial-ink);
-  font-size: clamp(1.04rem, 1.35vw, 1.56rem);
-  font-weight: 650;
+  font-size: clamp(1.08rem, 1.5vw, 1.68rem);
+  font-weight: 720;
   letter-spacing: 0;
-  line-height: 0.98;
+  line-height: 1;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-importance,
@@ -30961,15 +31192,15 @@ button {
   margin: 0;
   color: var(--aerial-ink);
   font-family: var(--font-body);
-  font-weight: 620;
-  letter-spacing: 0;
+  font-weight: var(--aerial-title-weight);
+  letter-spacing: var(--aerial-title-tracking);
+  line-height: var(--aerial-title-leading);
   text-transform: none;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-importance h2 {
   max-width: 760px;
-  font-size: clamp(4rem, 7.5vw, 7.1rem);
-  line-height: 0.94;
+  font-size: var(--aerial-title-size);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-importance__statements {
@@ -31003,8 +31234,7 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genres h2 {
   max-width: 720px;
-  font-size: clamp(3.1rem, 6.2vw, 5.55rem);
-  line-height: 0.96;
+  font-size: var(--aerial-title-size);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genres__head p {
@@ -31447,14 +31677,21 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__intro p:not(.rules-aerial-kicker),
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading h3 {
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__intro p:not(.rules-aerial-kicker) {
     max-width: 720px;
   }
 
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-grid,
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading h3 {
+    max-width: 100%;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 38px;
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-importance__inner,
@@ -31499,8 +31736,14 @@ button {
     padding-bottom: 58px;
   }
 
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__intro h2 {
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__intro h2,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-importance h2,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-genres h2 {
     font-size: clamp(3rem, 14vw, 4.6rem);
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading h3 {
+    font-size: clamp(2.8rem, 12.5vw, 4.25rem);
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-program__section {
@@ -31545,12 +31788,27 @@ button {
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding-top: 0;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list::before {
+    top: 4px;
+    bottom: 6px;
+    left: 7px;
+    width: 1px;
+    height: auto;
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article {
-    min-height: 116px;
-    padding: 18px;
+    min-height: 0;
+    padding: 0 0 26px 34px;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article::before {
+    top: 2px;
+    left: 0;
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-download {
@@ -31562,10 +31820,6 @@ button {
   .rules-page--aerial.levitate-home-redesign .rules-aerial-genres {
     padding-right: 20px;
     padding-left: 20px;
-  }
-
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-importance h2 {
-    font-size: clamp(3.35rem, 15vw, 4.85rem);
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-genres__grid {

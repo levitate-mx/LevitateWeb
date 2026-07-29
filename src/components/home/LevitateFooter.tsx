@@ -28,7 +28,7 @@ function getFooterHref(item: string, useRootLinks: boolean) {
   const anchors: Record<string, string> = {
     Bases: "#convocatorias",
     Contacto: "#contacto",
-    Convocatorias: "#convocatorias",
+    Convocatorias: "/sedes/estado-de-mexico",
     Inicio: "#inicio",
     Requisitos: "#convocatorias",
   };

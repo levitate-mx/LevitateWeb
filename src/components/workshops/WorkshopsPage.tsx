@@ -56,13 +56,6 @@ const includedCards = [
   },
 ];
 
-const confirmedWorkshops = [
-  { discipline: "Telas", coach: "Alex Nájera" },
-  { discipline: "Aro / Trapecio", coach: "Vladimir Garza" },
-  { discipline: "Cintas", coach: "Luis Raio" },
-  { discipline: "Flex", coach: "Yoli Campos" },
-];
-
 const edoMexConfirmedWorkshops = [
   { discipline: "Flex", coach: "Ana Karen Rojas" },
   { discipline: "Contemporary Jazz", coach: "Daniel Montalvo" },
@@ -224,45 +217,19 @@ export function WorkshopsPage() {
         </div>
 
         <div className="workshops-venue-grid">
-          <article className="workshops-venue-card workshops-venue-card--confirmed">
-            <img
-              className="workshops-venue-card__image--cdmx"
-              src="/assets/workshops-cdmx-parque-juana-asbaje.png"
-              alt="Participantes del workshop de CDMX en Parque Juana de Asbaje."
-              loading="lazy"
-            />
-            <div>
-              <h2>CDMX</h2>
-              <p>
-                <CalendarDays aria-hidden="true" size={17} /> Viernes 29 de mayo
-              </p>
-              <p>
-                <MapPin aria-hidden="true" size={17} /> Parque Juana de Asbaje, Tlalpan
-              </p>
-              <h3>Workshops confirmados</h3>
-              <ul>
-                {confirmedWorkshops.map((workshop) => (
-                  <li key={workshop.discipline}>
-                    <span aria-hidden="true" />
-                    <strong>{workshop.discipline}</strong>
-                    <small>{workshop.coach}</small>
-                  </li>
-                ))}
-              </ul>
-              <a href="/sedes/ciudad-de-mexico">
+          <article className="workshops-venue-card workshops-venue-card--confirmed workshops-venue-card--edomex">
+            <div className="workshops-venue-card__media">
+              <img
+                className="workshops-venue-card__image--edomex"
+                src="/assets/workshops-edomex-taller-1.jpg"
+                alt="Participantes en un workshop de Motion en Estado de México."
+                loading="lazy"
+              />
+              <a className="workshops-venue-card__image-cta" href="/sedes/estado-de-mexico">
                 Ver horarios <ArrowUpRight aria-hidden="true" size={17} />
               </a>
             </div>
-          </article>
-
-          <article className="workshops-venue-card workshops-venue-card--confirmed workshops-venue-card--edomex">
-            <img
-              className="workshops-venue-card__image--edomex"
-              src="/assets/workshops-edomex-taller-1.jpg"
-              alt="Participantes en un workshop de Motion en Estado de México."
-              loading="lazy"
-            />
-            <div>
+            <div className="workshops-venue-card__content">
               <h2>EDO MEX</h2>
               <p>
                 <CalendarDays aria-hidden="true" size={17} /> Viernes 13 de noviembre
@@ -291,9 +258,6 @@ export function WorkshopsPage() {
                   </li>
                 ))}
               </ul>
-              <a href="/sedes/estado-de-mexico">
-                Ver horarios <ArrowUpRight aria-hidden="true" size={17} />
-              </a>
             </div>
           </article>
         </div>

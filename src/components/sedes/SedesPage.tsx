@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, Clock3, MapPin } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
@@ -19,6 +19,12 @@ type WorkshopCoach = {
   name: string;
   specialty?: string;
   sessions: WorkshopSession[];
+};
+
+type WorkshopTableRow = WorkshopSession & {
+  className: string;
+  coachName: string;
+  sortValue: number;
 };
 
 type JuryMember = {
@@ -286,7 +292,7 @@ function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
 }
 
 function renderBlockText(text: string) {
-  const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "senior", "seniors", "teen", "teens"]);
+  const highlightedTerms = new Set(["baby", "junior", "legacy", "petite", "relevé", "senior", "seniors", "teen", "teens"]);
   const renderLevels = (line: string) => line.split(/\b(Baby|Junior|Legacy|Petite|Relevé|Senior|Seniors|Teen|Teens)\b/gi).map((part, index) => (
     highlightedTerms.has(part.toLowerCase())
       ? <span className="sedes-block-level" key={`${part}-${index}`}>{part}</span>
@@ -344,40 +350,50 @@ function getWorkshopGroupLabel(group: string) {
   return group.split("·")[0]?.trim() || group;
 }
 
-function buildWorkshopTimeline(workshops: NonNullable<SedeContent["workshops"]>) {
-  const timeline = new Map<string, Array<WorkshopSession & { coachName: string; specialty?: string }>>();
+function buildWorkshopRows(workshops: NonNullable<SedeContent["workshops"]>) {
+  return workshops.coaches
+    .flatMap((coach) =>
+      coach.sessions.map((session) => {
+        const labelIsGroup = session.label?.toLowerCase().includes("grupo");
 
-  workshops.coaches.forEach((coach) => {
-    coach.sessions.forEach((session) => {
-      const sessions = timeline.get(session.time) ?? [];
+        return {
+          ...session,
+          coachName: coach.name,
+          className: labelIsGroup ? session.group : session.label ?? coach.specialty ?? "Workshop",
+          group: labelIsGroup ? session.label ?? session.group : getWorkshopGroupLabel(session.group),
+          sortValue: getWorkshopStartMinutes(session.time),
+        };
+      }),
+    )
+    .sort((left, right) => left.sortValue - right.sortValue);
+}
 
-      sessions.push({
-        ...session,
-        coachName: coach.name,
-        specialty: coach.specialty,
-        group: getWorkshopGroupLabel(session.group),
-      });
-      timeline.set(session.time, sessions);
-    });
+function buildWorkshopTimeGroups(workshops: NonNullable<SedeContent["workshops"]>) {
+  const rows = buildWorkshopRows(workshops);
+  const groups: Array<{ time: string; rows: WorkshopTableRow[] }> = [];
+
+  rows.forEach((row) => {
+    const group = groups.find((item) => item.time === row.time);
+
+    if (group) {
+      group.rows.push(row);
+      return;
+    }
+
+    groups.push({ time: row.time, rows: [row] });
   });
 
-  return Array.from(timeline.entries())
-    .map(([time, sessions]) => ({
-      time,
-      sessions,
-      sortValue: getWorkshopStartMinutes(time),
-    }))
-    .sort((left, right) => left.sortValue - right.sortValue);
+  return groups;
 }
 
 type SedesPageProps = {
   venueKey?: keyof typeof sedesContent;
 };
 
-export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
-  const venue = sedesContent[venueKey] ?? sedesContent.cdmx;
+export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
+  const venue = sedesContent[venueKey] ?? sedesContent.edomex;
   const juryLineup = buildJuryLineup(venue.jury);
-  const workshopTimeline = venue.workshops ? buildWorkshopTimeline(venue.workshops) : [];
+  const workshopTimeGroups = venue.workshops ? buildWorkshopTimeGroups(venue.workshops) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
   const juryStepRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -582,39 +598,50 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
             </div>
 
             <div className="sedes-workshop-groups">
-              {venue.workshops.groups.map((group) => (
-                <article key={group.label}>
-                  <span>{group.label}</span>
-                  <p>{group.text}</p>
-                </article>
-              ))}
+              {venue.workshops.groups.map((group) => {
+                const [modality, ...details] = group.text.split("\n");
+
+                return (
+                  <article key={group.label}>
+                    <span className="sedes-workshop-groups__label">{group.label}</span>
+                    <p>
+                      <span className="sedes-workshop-groups__modality">{modality}</span>
+                      {details.length ? (
+                        <>
+                          <br />
+                          {details.join(" ")}
+                        </>
+                      ) : null}
+                    </p>
+                  </article>
+                );
+              })}
             </div>
             <small>{venue.workshops.footnote}</small>
           </div>
 
-          <div className="sedes-workshop-grid">
-            {workshopTimeline.map((slot) => (
-              <article className="sedes-workshop-card sedes-workshop-card--timeline" key={slot.time}>
-                <div className="sedes-workshop-card__head">
-                  <div>
-                    <span className="sedes-workshop-card__time-icon"><Clock3 aria-hidden="true" size={22} /></span>
-                    <h3>{slot.time}</h3>
-                  </div>
-                </div>
-                <ul>
-                  {slot.sessions.map((session) => (
-                    <li
-                      className="sedes-workshop-card__session sedes-workshop-card__session--timeline"
-                      key={`${slot.time}-${session.coachName}-${session.group}-${session.label ?? session.specialty}`}
+          <div className="sedes-workshop-agenda">
+            <div className="sedes-workshop-agenda__head" aria-hidden="true">
+              <span>Hora</span>
+              <span>Grupo</span>
+              <span>Clase</span>
+              <span>Ponente</span>
+            </div>
+            {workshopTimeGroups.map((slot) => (
+              <article className="sedes-workshop-slot" key={slot.time}>
+                <time>{slot.time}</time>
+                <div className="sedes-workshop-slot__sessions">
+                  {slot.rows.map((session) => (
+                    <div
+                      className="sedes-workshop-slot__session"
+                      key={`${session.time}-${session.group}-${session.className}-${session.coachName}`}
                     >
-                      <span className="sedes-workshop-card__tag">{session.label ?? session.specialty ?? "Workshop"}</span>
-                      <span className="sedes-workshop-card__session-copy">
-                        <span className="sedes-workshop-card__time">{session.coachName}</span>
-                        <span className="sedes-workshop-card__group">{session.group}</span>
-                      </span>
-                    </li>
+                      <span className="sedes-workshop-slot__group" data-label="Grupo">{session.group}</span>
+                      <span className="sedes-workshop-slot__class" data-label="Clase">{session.className}</span>
+                      <span className="sedes-workshop-slot__speaker" data-label="Ponente">{session.coachName}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </article>
             ))}
           </div>

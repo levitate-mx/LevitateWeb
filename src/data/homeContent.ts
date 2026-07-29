@@ -41,7 +41,7 @@ export const megaMenuItems = [
   },
   {
     label: "Convocatoria",
-    href: "/#convocatoria",
+    href: "/sedes/estado-de-mexico",
     image: assets.hero,
     description: "Inscripción y próximos pasos para academias y participantes.",
   },
@@ -88,20 +88,12 @@ export const events = [
     image: assets.venue,
   },
   {
-    slug: "puebla",
-    date: "07 JUN",
+    slug: "veracruz",
+    date: "Próximamente",
     name: "Levitate MX",
-    venue: "Auditorio Daniel Forcelledo",
-    location: "Puebla",
+    venue: "Veracruz",
+    location: "Veracruz",
     image: assets.competition,
-  },
-  {
-    slug: "ciudad-de-mexico",
-    date: "04 OCT",
-    name: "Levitate MX",
-    venue: "Ciudad de México",
-    location: "Ciudad de México",
-    image: assets.community,
   },
 ];
 

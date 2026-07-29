@@ -151,7 +151,7 @@ export default function App() {
     const venueSlug = venueMatch[1];
 
     if (venueSlug === "ciudad-de-mexico" || venueSlug === "cdmx") {
-      return <SedesPage venueKey="cdmx" />;
+      return <SedesPage venueKey="edomex" />;
     }
 
     if (venueSlug === "puebla" || venueSlug === "monterrey") {
