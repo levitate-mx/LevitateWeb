@@ -15,7 +15,7 @@ import { LevitateHeader } from "./LevitateHeader";
 
 const venues = [
   {
-    title: "Teatro El Gran Recinto",
+    title: "Teatro Gran Recinto",
     city: "Tlalnepantla, Edo. Méx.",
     date: "13, 14 y 15 noviembre 2026",
     image: "/assets/sedes-edomex-hero.jpg",

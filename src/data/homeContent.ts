@@ -83,7 +83,7 @@ export const events = [
     slug: "estado-de-mexico",
     date: "13 NOV",
     name: "Levitate MX",
-    venue: "Teatro El Gran Recinto",
+    venue: "Teatro Gran Recinto",
     location: "Tlalnepantla, Edo. Méx.",
     image: assets.venue,
   },

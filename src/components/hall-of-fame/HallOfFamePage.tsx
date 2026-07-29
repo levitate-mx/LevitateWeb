@@ -70,23 +70,10 @@ const scholarshipDownloads = [
   { label: "CDMX Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
 ];
 
-function getMvpStackPosition(index: number, activeIndex: number) {
-  const total = mvpPerformances.length;
-  let offset = (index - activeIndex + total) % total;
-
-  if (offset > total / 2) offset -= total;
-
-  if (offset === 0) return "is-active";
-  if (offset === 1) return "is-next";
-  if (offset === -1) return "is-prev";
-  if (offset === 2) return "is-far-next";
-  if (offset === -2) return "is-far-prev";
-  return "is-hidden";
-}
-
 export function HallOfFamePage() {
   const [activeMvpIndex, setActiveMvpIndex] = useState(0);
   const [selectedScholarshipIndex, setSelectedScholarshipIndex] = useState(0);
+  const activePerformance = mvpPerformances[activeMvpIndex] ?? mvpPerformances[0];
   const selectedScholarshipDownload = scholarshipDownloads[selectedScholarshipIndex] ?? scholarshipDownloads[0];
 
   const showMvp = (step: number) => {
@@ -96,88 +83,92 @@ export function HallOfFamePage() {
   return (
     <main className="levitate-page hall-fame-page">
       <section className="hall-fame-shell">
-        <LevitateHeader activeLabel="Salón de la fama" useRootLinks />
-
         <section className="levitate-hof" id="mvps">
-          <div className="levitate-hof__header">
-            <div className="levitate-hof__rule" aria-hidden="true">
-              <span />
-              <i />
-              <span />
+          <LevitateHeader activeLabel="Salón de la fama" useRootLinks />
+
+          <img
+            alt=""
+            aria-hidden="true"
+            className="levitate-hof__hero-image"
+            src={activePerformance.image}
+          />
+          <div className="levitate-hof__shade" aria-hidden="true" />
+
+          <div className="levitate-hof__content">
+            <div className="levitate-hof__header">
+              <p className="levitate-eyebrow">Salón de la fama</p>
+              <h1>
+                Historias que siguen
+                {" "}
+                <span>elevando.</span>
+              </h1>
+              <strong>Un archivo vivo de los MVPs que marcaron cada edición de Levitate.</strong>
             </div>
-            <p className="levitate-eyebrow">Hall of the Fame</p>
-            <h1>
-              <span>MVPs</span>
-              {" "}
-              Levitate
-            </h1>
-            <strong>Los grandes protagonistas de cada edición.</strong>
+
+            <article className="levitate-hof__featured" aria-live="polite">
+              <small>MVP seleccionado</small>
+              <h2>{activePerformance.title}</h2>
+              <dl>
+                <div>
+                  <dt><Building2 aria-hidden="true" size={18} /> Academia</dt>
+                  <dd>{activePerformance.academy}</dd>
+                </div>
+                <div>
+                  <dt><MapPin aria-hidden="true" size={18} /> Sede</dt>
+                  <dd>
+                    {activePerformance.venue}
+                    {" · "}
+                    {activePerformance.year}
+                  </dd>
+                </div>
+              </dl>
+              <div className="levitate-hof__controls">
+                <button aria-label="Ver MVP anterior" onClick={() => showMvp(-1)} type="button">
+                  <ChevronLeft aria-hidden="true" size={22} />
+                </button>
+                <button aria-label="Ver siguiente MVP" onClick={() => showMvp(1)} type="button">
+                  <ChevronRight aria-hidden="true" size={22} />
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section className="levitate-hof-archive" aria-labelledby="hof-archive-title">
+          <div className="levitate-hof-archive__head">
+            <div>
+              <p className="levitate-eyebrow">MVPs Levitate</p>
+              <h2 id="hof-archive-title">Ganadores por edición.</h2>
+            </div>
+            <p>
+              Selecciona una edición para ver su historia destacada en portada. Cada MVP representa presencia,
+              propuesta y una ejecución que dejó huella.
+            </p>
           </div>
 
-          <div className="levitate-hof__carousel" aria-label="MVPs Levitate">
-            <button
-              aria-label="Ver MVP anterior"
-              className="levitate-hof__arrow levitate-hof__arrow--prev"
-              onClick={() => showMvp(-1)}
-              type="button"
-            >
-              <ChevronLeft aria-hidden="true" size={26} />
-            </button>
-
-            <div className="levitate-hof__stage">
-              {mvpPerformances.map((performance, index) => {
-                const stackPosition = getMvpStackPosition(index, activeMvpIndex);
-                const isActive = stackPosition === "is-active";
-
-                return (
-                  <article
-                    aria-hidden={!isActive}
-                    className={`levitate-mvp-card ${stackPosition}`}
-                    key={`${performance.image}-${index}`}
-                  >
-                    <figure>
-                      <img
-                        aria-hidden="true"
-                        className="levitate-mvp-card__image-backdrop"
-                        src={performance.image}
-                        alt=""
-                        loading={isActive ? "eager" : "lazy"}
-                      />
-                      <img
-                        className={`levitate-mvp-card__image${performance.imageClassName ? ` ${performance.imageClassName}` : ""}`}
-                        src={performance.image}
-                        alt={`Imagen de referencia para ${performance.title}`}
-                        loading={isActive ? "eager" : "lazy"}
-                      />
-                    </figure>
-                    <div className="levitate-mvp-card__content">
-                      <small>{performance.year}</small>
-                      <h2>{performance.title}</h2>
-                      <i aria-hidden="true" />
-                      <dl>
-                        <div>
-                          <dt><Building2 aria-hidden="true" size={20} /> Academia</dt>
-                          <dd>{performance.academy}</dd>
-                        </div>
-                        <div>
-                          <dt><MapPin aria-hidden="true" size={20} /> Sede</dt>
-                          <dd>{performance.venue}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            <button
-              aria-label="Ver siguiente MVP"
-              className="levitate-hof__arrow levitate-hof__arrow--next"
-              onClick={() => showMvp(1)}
-              type="button"
-            >
-              <ChevronRight aria-hidden="true" size={26} />
-            </button>
+          <div className="levitate-hof-archive__grid" aria-label="Archivo de MVPs">
+            {mvpPerformances.map((performance, index) => (
+              <button
+                aria-pressed={activeMvpIndex === index}
+                className={`levitate-hof-archive__card${activeMvpIndex === index ? " is-active" : ""}`}
+                key={`${performance.title}-${performance.year}`}
+                onClick={() => setActiveMvpIndex(index)}
+                type="button"
+              >
+                <img
+                  alt={`MVP ${performance.title}`}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  src={performance.image}
+                />
+                <span>{performance.year}</span>
+                <strong>{performance.title}</strong>
+                <small>
+                  {performance.academy}
+                  {" · "}
+                  {performance.venue}
+                </small>
+              </button>
+            ))}
           </div>
         </section>
 

@@ -16,7 +16,7 @@ export function HospedajePage() {
           <h1>Hotel sede Edo Méx.</h1>
           <strong>City Express Plus Mundo E by Marriott</strong>
           <span>
-            Una opción cercana al Teatro El Gran Recinto para quienes viajan con su academia, familia o equipo.
+            Una opción cercana al Teatro Gran Recinto para quienes viajan con su academia, familia o equipo.
           </span>
         </div>
       </section>

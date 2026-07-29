@@ -173,8 +173,8 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   },
   edomex: {
     heroTitle: "Estado de México",
-    eventName: "Teatro El Gran Recinto",
-    venueName: "Teatro El Gran Recinto",
+    eventName: "Teatro Gran Recinto",
+    venueName: "Teatro Gran Recinto",
     heroImage: "/assets/sedes-edomex-hero.jpg",
     motionImage: "/assets/sedes-cdmx-motion.jpg",
     aerialImage: "/assets/sedes-cdmx-aerial.jpg",
@@ -263,7 +263,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       href: "/hospedaje",
       title: "Quédate cerca del escenario.",
       copy: "Nuestro hotel sede para Edo Méx está pensado para quienes viajan con su academia, familia o equipo y quieren moverse fácil durante el evento.",
-      distance: "A unos minutos del Teatro El Gran Recinto.",
+      distance: "A unos minutos del Teatro Gran Recinto.",
     },
     jury: [
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
