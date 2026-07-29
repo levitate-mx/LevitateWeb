@@ -16,6 +16,7 @@ import {
   PassportOverviewPage,
   PassportStationPage,
 } from "./components/passport/PassportPages";
+import { HospedajePage } from "./components/hospedaje/HospedajePage";
 import { PremiationPage } from "./components/premiation/PremiationPage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
@@ -30,6 +31,7 @@ export default function App() {
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const hallOfFameMvpsMatch = window.location.pathname.match(/^\/salon-de-la-fama\/mvps\/?$/);
+  const hospedajeMatch = window.location.pathname.match(/^\/hospedaje\/?$/);
   const inscripcionesConsultaMatch = window.location.pathname.match(/^\/inscripciones\/consulta-curp\/?$/);
   const inscripcionesMatch = window.location.pathname.match(/^\/inscripciones\/?$/);
   const registrationAdminPaymentsMatch = window.location.pathname.match(/^\/admin\/inscripciones\/?$/);
@@ -83,6 +85,10 @@ export default function App() {
 
   if (hallOfFameMvpsMatch) {
     return <HallOfFamePage />;
+  }
+
+  if (hospedajeMatch) {
+    return <HospedajePage />;
   }
 
   if (inscripcionesConsultaMatch) {

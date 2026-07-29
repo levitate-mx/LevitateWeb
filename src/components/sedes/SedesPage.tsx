@@ -27,6 +27,15 @@ type JuryMember = {
   image: string;
 };
 
+type HotelFeature = {
+  name: string;
+  image: string;
+  href: string;
+  title: string;
+  copy: string;
+  distance: string;
+};
+
 type SedeContent = {
   heroTitle: string;
   eventName: string;
@@ -49,6 +58,7 @@ type SedeContent = {
     footnote: string;
     coaches: WorkshopCoach[];
   };
+  hotel?: HotelFeature;
   jury: JuryMember[];
 };
 
@@ -188,13 +198,80 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
         { title: "Bloque 7", text: "Seniors + Relevé" },
       ] },
     ],
+    workshops: {
+      title: "Viernes 14 de noviembre",
+      location: "Motion: City Express Plus Mundo E by Marriott · Aerial: sede por confirmar",
+      groups: [
+        { label: "Grupo A", text: "Aerial\nHasta 12 años" },
+        { label: "Grupo B", text: "Aerial\nMayores de 12 años" },
+        { label: "Grupo C", text: "Motion\nHasta 12 años" },
+        { label: "Grupo D", text: "Motion\nMayores de 12 años" },
+      ],
+      footnote: "*La inscripción incluye acceso a 3 workshops de la elección del participante.",
+      coaches: [
+        {
+          name: "Ana Karen Rojas",
+          specialty: "Flex",
+          sessions: [
+            { label: "Todos los grupos", time: "10:00 AM - 11:30 AM", group: "Flex" },
+          ],
+        },
+        {
+          name: "Vladimir Garza",
+          specialty: "Aerial",
+          sessions: [
+            { label: "Aro", time: "12:00 PM - 1:30 PM", group: "Grupo A · Hasta 12 años" },
+            { label: "Trapecio", time: "10:00 AM - 11:30 AM", group: "Grupo B · Mayores de 12 años" },
+          ],
+        },
+        {
+          name: "Daniel Herrera",
+          specialty: "Aerial",
+          sessions: [
+            { label: "Tela", time: "2:30 PM - 4:30 PM", group: "Grupo A · Hasta 12 años" },
+            { label: "Cuna", time: "12:00 PM - 2:00 PM", group: "Grupo B · Mayores de 12 años" },
+          ],
+        },
+        {
+          name: "Jorge Díaz",
+          specialty: "Motion",
+          sessions: [
+            { label: "Comedia musical", time: "12:00 PM - 2:00 PM", group: "Grupo C · Hasta 12 años" },
+            { label: "Comedia musical", time: "10:00 AM - 11:30 AM", group: "Grupo D · Mayores de 12 años" },
+          ],
+        },
+        {
+          name: "Daniel Montalvo",
+          specialty: "Motion",
+          sessions: [
+            { label: "Contemporary Jazz", time: "2:30 PM - 4:30 PM", group: "Grupo C · Hasta 12 años" },
+            { label: "Contemporary Jazz", time: "12:00 PM - 2:00 PM", group: "Grupo D · Mayores de 12 años" },
+          ],
+        },
+        {
+          name: "Pablo Emmanuel",
+          specialty: "Motion",
+          sessions: [
+            { label: "Urbanos", time: "2:30 PM - 4:30 PM", group: "Grupo D · Mayores de 12 años" },
+          ],
+        },
+      ],
+    },
+    hotel: {
+      name: "City Express Plus Mundo E by Marriott",
+      image: "/assets/hotel-city-express-mundo-e.png",
+      href: "/hospedaje",
+      title: "Quédate cerca del escenario.",
+      copy: "Nuestro hotel sede para Edo Méx está pensado para quienes viajan con su academia, familia o equipo y quieren moverse fácil durante el evento.",
+      distance: "A unos minutos del Teatro El Gran Recinto.",
+    },
     jury: [
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
       { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: "/assets/vladimir-garza.jpg" },
-      { name: "Ana Karen Rojas", specialty: "Flex · Técnica y movilidad", image: "/assets/ana-karen-rojas.jpg" },
+      { name: "Ana Karen Rojas", specialty: "Artista Circense", image: "/assets/ana-karen-rojas.jpg" },
       { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
-      { name: "Ivonne Robles", specialty: "Jueza invitada", image: "/assets/ivonne-robles.jpg" },
-      { name: "Pablo Emmanuel", specialty: "Urban", image: "/assets/pablo-emmanuel.jpg" },
+      { name: "Ivonne Robles", specialty: "Maestra de danza clásica y neoclásica", image: "/assets/ivonne-robles.jpg" },
+      { name: "Pablo Emmanuel", specialty: "Performance urbano", image: "/assets/pablo-emmanuel.jpg" },
     ],
   },
 };
@@ -254,6 +331,7 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
   const venue = sedesContent[venueKey] ?? sedesContent.cdmx;
   const juryLineup = buildJuryLineup(venue.jury);
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
+  const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
   const juryStepRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
@@ -261,43 +339,69 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
   }, [venueKey]);
 
   useEffect(() => {
-    const nodes = juryStepRefs.current.filter((node): node is HTMLButtonElement => Boolean(node));
+    let animationFrame = 0;
 
-    if (!nodes.length) {
-      return;
-    }
+    const syncActiveJudge = () => {
+      const region = juryScrollRegionRef.current;
+      const nodes = juryStepRefs.current.slice(0, juryLineup.length).filter((node): node is HTMLButtonElement => Boolean(node));
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const activeEntry = entries
-          .filter((entry) => entry.isIntersecting)
-          .map((entry) => {
-            const box = entry.boundingClientRect;
-            const center = box.top + box.height / 2;
+      if (!region || !nodes.length) {
+        return;
+      }
 
-            return {
-              entry,
-              distance: Math.abs(center - window.innerHeight / 2),
-            };
-          })
-          .sort((a, b) => a.distance - b.distance)[0]?.entry;
+      const regionBox = region.getBoundingClientRect();
 
-        if (!activeEntry) {
+      if (regionBox.bottom < 0 || regionBox.top > window.innerHeight) {
+        return;
+      }
+
+      const targetY = window.innerHeight * 0.5;
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      nodes.forEach((node) => {
+        const nodeIndex = Number(node.dataset.juryIndex);
+
+        if (Number.isNaN(nodeIndex)) {
           return;
         }
 
-        const nextIndex = Number(activeEntry.target.getAttribute("data-jury-index"));
+        const nodeBox = node.getBoundingClientRect();
+        const nodeCenter = nodeBox.top + nodeBox.height / 2;
+        const distance = Math.abs(nodeCenter - targetY);
 
-        if (!Number.isNaN(nextIndex)) {
-          setActiveJudgeIndex(nextIndex);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = nodeIndex;
         }
-      },
-      { rootMargin: "-24% 0px -36% 0px", threshold: [0.16, 0.42, 0.68] },
-    );
+      });
 
-    nodes.forEach((node) => observer.observe(node));
+      setActiveJudgeIndex((currentIndex) => (currentIndex === closestIndex ? currentIndex : closestIndex));
+    };
 
-    return () => observer.disconnect();
+    const scheduleSync = () => {
+      if (animationFrame) {
+        return;
+      }
+
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        syncActiveJudge();
+      });
+    };
+
+    scheduleSync();
+    window.addEventListener("scroll", scheduleSync, { passive: true });
+    window.addEventListener("resize", scheduleSync);
+
+    return () => {
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+
+      window.removeEventListener("scroll", scheduleSync);
+      window.removeEventListener("resize", scheduleSync);
+    };
   }, [juryLineup.length, venueKey]);
 
   useEffect(() => {
@@ -472,13 +576,12 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
         <div className="sedes-jury__header">
           <SectionHeading kicker="LINEUP" title="Panel de Jurados." />
         </div>
-        <div className="sedes-jury-sticky">
+        <div className="sedes-jury-sticky" ref={juryScrollRegionRef}>
           <div className="sedes-jury-sticky__visual" aria-hidden="true">
             {juryLineup.map((judge, index) => (
               <figure className={index === activeJudgeIndex ? "is-active" : ""} key={`${judge.name}-visual-${index}`}>
                 <img src={judge.image} alt="" loading={index === 0 ? "eager" : "lazy"} />
                 <figcaption>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
                   <strong>{judge.name}</strong>
                 </figcaption>
               </figure>
@@ -491,16 +594,15 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
                 className={`sedes-jury-step${index === activeJudgeIndex ? " is-active" : ""}`}
                 data-jury-index={index}
                 key={`${judge.name}-${index}`}
-                onClick={() => {
-                  setActiveJudgeIndex(index);
-                  juryStepRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
+                aria-pressed={index === activeJudgeIndex}
+                onClick={() => setActiveJudgeIndex(index)}
+                onFocus={() => setActiveJudgeIndex(index)}
+                onMouseEnter={() => setActiveJudgeIndex(index)}
                 ref={(node) => {
                   juryStepRefs.current[index] = node;
                 }}
                 type="button"
               >
-                <span className="sedes-jury-step__number">{String(index + 1).padStart(2, "0")}</span>
                 <span className="sedes-jury-step__copy">
                   <span>{judge.name}</span>
                   <small>{judge.specialty}</small>
@@ -511,22 +613,40 @@ export function SedesPage({ venueKey = "cdmx" }: SedesPageProps) {
         </div>
       </section>
 
-      <section className="sedes-final-cta">
-        <img
-          className="sedes-final-cta__background"
-          src="/assets/sedes-final-cta-minimal-bg.png"
-          alt=""
-          loading="lazy"
-          aria-hidden="true"
-        />
-        <div className="sedes-final-cta__content">
-          <p>Siguiente paso</p>
-          <h2>Asegura tu lugar.</h2>
-          <a href="/inscripciones">
-            Inscribirme <ArrowRight aria-hidden="true" size={18} />
-          </a>
-        </div>
-      </section>
+      {venue.hotel ? (
+        <section className="sedes-hotel-cta" id="hotel-sede">
+          <div className="sedes-hotel-cta__content">
+            <p>Hotel sede</p>
+            <h2>{venue.hotel.title}</h2>
+            <strong>{venue.hotel.name}</strong>
+            <span>{venue.hotel.copy}</span>
+            <small>{venue.hotel.distance}</small>
+            <a href={venue.hotel.href}>
+              Ver hospedaje <ArrowRight aria-hidden="true" size={18} />
+            </a>
+          </div>
+          <figure className="sedes-hotel-cta__media">
+            <img src={venue.hotel.image} alt={venue.hotel.name} loading="lazy" />
+          </figure>
+        </section>
+      ) : (
+        <section className="sedes-final-cta">
+          <img
+            className="sedes-final-cta__background"
+            src="/assets/sedes-final-cta-minimal-bg.png"
+            alt=""
+            loading="lazy"
+            aria-hidden="true"
+          />
+          <div className="sedes-final-cta__content">
+            <p>Siguiente paso</p>
+            <h2>Asegura tu lugar.</h2>
+            <a href="/inscripciones">
+              Inscribirme <ArrowRight aria-hidden="true" size={18} />
+            </a>
+          </div>
+        </section>
+      )}
 
       <LevitateFooter useRootLinks />
     </main>

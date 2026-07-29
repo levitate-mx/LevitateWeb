@@ -24039,9 +24039,8 @@ button {
   top: clamp(86px, 12vh, 132px);
   min-height: min(74vh, 720px);
   overflow: hidden;
-  border: 1px solid var(--sedes-line);
   border-radius: 8px;
-  background: #111;
+  background: transparent;
   box-shadow: 0 28px 70px rgba(42, 41, 40, 0.14);
 }
 
@@ -24085,16 +24084,9 @@ button {
   z-index: 1;
   display: flex;
   align-items: end;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 18px;
   color: #fff;
-}
-
-.sedes-jury-sticky__visual figcaption span {
-  color: rgba(255, 255, 255, 0.64);
-  font-size: 0.88rem;
-  font-weight: 850;
-  letter-spacing: 0.12em;
 }
 
 .sedes-jury-sticky__visual figcaption strong {
@@ -24113,8 +24105,7 @@ button {
 
 .sedes-jury-step {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  gap: clamp(18px, 2.2vw, 30px);
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   min-height: clamp(136px, 18vh, 190px);
   padding: clamp(28px, 4.2vw, 46px) 0;
@@ -24128,15 +24119,6 @@ button {
 
 .sedes-jury-step:last-child {
   border-bottom: 1px solid var(--sedes-line);
-}
-
-.sedes-jury-step__number {
-  padding-top: 0.36em;
-  color: var(--sedes-muted);
-  font-size: 0.88rem;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-  transition: color 180ms ease;
 }
 
 .sedes-jury-step__copy {
@@ -24160,12 +24142,6 @@ button {
   letter-spacing: 0;
   line-height: 1.35;
   text-transform: none;
-}
-
-.sedes-jury-step.is-active .sedes-jury-step__number,
-.sedes-jury-step:hover .sedes-jury-step__number,
-.sedes-jury-step:focus-visible .sedes-jury-step__number {
-  color: var(--sedes-blue);
 }
 
 .sedes-jury-step.is-active .sedes-jury-step__copy > span,
@@ -24338,6 +24314,247 @@ button {
     0 22px 58px rgba(0, 0, 0, 0.28),
     0 0 0 5px rgba(87, 189, 209, 0.08);
   transform: translateY(-2px);
+}
+
+.sedes-hotel-cta {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.64fr) minmax(0, 0.92fr);
+  min-height: clamp(520px, 56vw, 720px);
+  overflow: hidden;
+  background: var(--sedes-paper);
+}
+
+.sedes-hotel-cta__media {
+  min-height: 100%;
+  margin: 0;
+}
+
+.sedes-hotel-cta__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: clamp(520px, 56vw, 720px);
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(1.02) contrast(1.02);
+}
+
+.sedes-hotel-cta__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(16px, 2vw, 24px);
+  padding: clamp(34px, 5vw, 86px);
+  color: var(--sedes-ink);
+}
+
+.sedes-hotel-cta__content p,
+.hospedaje-hero__content p,
+.hospedaje-info > div p {
+  margin: 0;
+  color: var(--sedes-pink);
+  font-size: clamp(0.84rem, 0.98vw, 1rem);
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.sedes-hotel-cta__content h2 {
+  max-width: 8.8ch;
+  margin: 0;
+  font-size: clamp(4rem, 6.8vw, 8rem);
+  font-weight: 620;
+  letter-spacing: -0.065em;
+  line-height: 0.88;
+}
+
+.sedes-hotel-cta__content strong {
+  display: block;
+  max-width: 20ch;
+  color: var(--sedes-ink);
+  font-size: clamp(1.28rem, 1.7vw, 2rem);
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+}
+
+.sedes-hotel-cta__content span,
+.sedes-hotel-cta__content small {
+  display: block;
+  max-width: 34rem;
+  color: var(--sedes-muted);
+  font-size: clamp(1rem, 1.18vw, 1.26rem);
+  font-weight: 620;
+  letter-spacing: 0;
+  line-height: 1.46;
+}
+
+.sedes-hotel-cta__content small {
+  color: var(--sedes-ink);
+  font-weight: 780;
+}
+
+.sedes-hotel-cta__content a,
+.hospedaje-info > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 14px;
+  min-height: 60px;
+  margin-top: clamp(8px, 1vw, 14px);
+  padding: 0 28px;
+  border: 1px solid rgba(42, 41, 40, 0.18);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--sedes-ink);
+  font-size: 0.96rem;
+  font-weight: 830;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  box-shadow: 0 18px 42px rgba(42, 41, 40, 0.08);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.sedes-hotel-cta__content a:hover,
+.sedes-hotel-cta__content a:focus-visible,
+.hospedaje-info > a:hover,
+.hospedaje-info > a:focus-visible {
+  border-color: var(--sedes-ink);
+  background: var(--sedes-ink);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.hospedaje-page {
+  min-height: 100vh;
+  background: var(--sedes-paper);
+  color: var(--sedes-ink);
+}
+
+.hospedaje-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 0.7fr);
+  min-height: var(--levitate-hero-screen);
+  padding-top: 112px;
+  background: var(--sedes-paper);
+}
+
+.hospedaje-hero__media {
+  min-height: 100%;
+  margin: 0;
+}
+
+.hospedaje-hero__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: calc(var(--levitate-hero-screen) - 112px);
+  object-fit: cover;
+  object-position: center;
+}
+
+.hospedaje-hero__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: 20px;
+  padding: clamp(48px, 6vw, 92px);
+}
+
+.hospedaje-hero__content h1,
+.hospedaje-info h2 {
+  margin: 0;
+  color: var(--sedes-ink);
+  font-size: clamp(4.2rem, 8vw, 9rem);
+  font-weight: 620;
+  letter-spacing: -0.066em;
+  line-height: 0.88;
+}
+
+.hospedaje-hero__content strong {
+  display: block;
+  max-width: 18ch;
+  color: var(--sedes-ink);
+  font-size: clamp(1.35rem, 1.8vw, 2.2rem);
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.hospedaje-hero__content span {
+  display: block;
+  max-width: 34rem;
+  color: var(--sedes-muted);
+  font-size: clamp(1rem, 1.28vw, 1.34rem);
+  font-weight: 620;
+  line-height: 1.5;
+}
+
+.hospedaje-info {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(360px, 1fr);
+  gap: clamp(28px, 5vw, 82px);
+  padding: clamp(74px, 8vw, 118px) clamp(18px, 4vw, 64px);
+  background: var(--sedes-paper);
+}
+
+.hospedaje-info > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.hospedaje-info h2 {
+  max-width: 8.5ch;
+  font-size: clamp(3.8rem, 7vw, 7.4rem);
+}
+
+.hospedaje-info article {
+  display: grid;
+  grid-column: 2;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 20px;
+  padding: 28px 0;
+  border-top: 1px solid rgba(42, 41, 40, 0.12);
+}
+
+.hospedaje-info article svg {
+  color: var(--sedes-blue);
+}
+
+.hospedaje-info__marker {
+  color: var(--sedes-blue);
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.hospedaje-info article strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--sedes-ink);
+  font-size: clamp(1.35rem, 1.7vw, 2rem);
+  font-weight: 760;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.hospedaje-info article span {
+  display: block;
+  color: var(--sedes-muted);
+  font-size: clamp(1rem, 1.15vw, 1.2rem);
+  font-weight: 620;
+  line-height: 1.48;
+}
+
+.hospedaje-info > a {
+  grid-column: 2;
 }
 
 @media (max-width: 1120px) {
@@ -24540,7 +24757,6 @@ button {
 
   .sedes-jury-step {
     min-height: 0;
-    grid-template-columns: 42px minmax(0, 1fr);
     padding: 24px 0;
   }
 
@@ -24596,6 +24812,76 @@ button {
 
   .sedes-final-cta__content h2 {
     font-size: clamp(3.8rem, 16vw, 5.8rem);
+  }
+
+  .sedes-hotel-cta,
+  .hospedaje-hero,
+  .hospedaje-info {
+    grid-template-columns: 1fr;
+  }
+
+  .sedes-hotel-cta {
+    min-height: 0;
+  }
+
+  .sedes-hotel-cta__media img {
+    min-height: 0;
+    aspect-ratio: 16 / 11;
+    height: auto;
+  }
+
+  .sedes-hotel-cta__content {
+    padding: 34px 18px 52px;
+  }
+
+  .sedes-hotel-cta__content h2 {
+    max-width: 10ch;
+    font-size: clamp(3.5rem, 14vw, 5.2rem);
+  }
+
+  .sedes-hotel-cta__content a,
+  .hospedaje-info > a {
+    width: 100%;
+  }
+
+  .hospedaje-hero {
+    padding-top: 118px;
+  }
+
+  .hospedaje-hero__media {
+    order: -1;
+  }
+
+  .hospedaje-hero__media img {
+    min-height: 0;
+    aspect-ratio: 16 / 11;
+    height: auto;
+  }
+
+  .hospedaje-hero__content {
+    justify-content: start;
+    padding: 30px 18px 58px;
+  }
+
+  .hospedaje-hero__content h1,
+  .hospedaje-info h2 {
+    font-size: clamp(3.8rem, 15vw, 5.8rem);
+  }
+
+  .hospedaje-info {
+    gap: 30px;
+    padding: 66px 18px 82px;
+  }
+
+  .hospedaje-info article,
+  .hospedaje-info > a {
+    grid-column: 1;
+  }
+
+  .hospedaje-info article {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 16px;
+    padding: 24px 0;
   }
 }
 
