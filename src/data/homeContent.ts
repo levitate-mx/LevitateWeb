@@ -4,7 +4,7 @@ export const navLinks = [
 
 export const assets = {
   hero: "/assets/visuals/hero-stage.jpg",
-  competition: "/assets/visuals/experience-competition.jpg",
+  competition: "/assets/visuals/community-kids-stage.jpg",
   workshops: "/assets/visuals/experience-workshops.jpg",
   community: "/assets/visuals/gallery-community.jpg",
   communityAerial: "/assets/visuals/community-aerial-hoop.jpg",
@@ -53,7 +53,7 @@ export const experiences = [
     description: "Escenarios de alto nivel para participantes que buscan superarse.",
     image: assets.competition,
     href: "#eventos",
-    alt: "Bailarina en salto sobre un escenario oscuro de competencia.",
+    alt: "Participantes en escenario de competencia Levitate.",
   },
   {
     title: "Workshops",

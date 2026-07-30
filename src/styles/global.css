@@ -14646,7 +14646,7 @@ button {
 .ticket-shop__layout {
   display: grid;
   align-items: start;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(28px, 4vw, 64px);
 }
 
@@ -14662,13 +14662,16 @@ button {
 
 .ticket-shop-products {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
 .ticket-shop-product {
   display: grid;
   align-items: stretch;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.52fr);
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(260px, 1fr) auto;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ticket-shop-line);
   border-radius: 8px;
@@ -14679,19 +14682,20 @@ button {
 .ticket-shop-product__controls {
   display: grid;
   gap: 18px;
-  padding: clamp(22px, 3vw, 34px);
+  min-width: 0;
+  padding: clamp(20px, 2.4vw, 30px);
 }
 
 .ticket-shop-product__controls {
   align-content: center;
-  border-left: 1px solid var(--ticket-shop-line);
+  border-top: 1px solid var(--ticket-shop-line);
   background: rgba(255, 255, 255, 0.42);
 }
 
 .ticket-shop-product h2 {
   margin: 0;
   color: var(--ticket-shop-ink);
-  font-size: clamp(2.1rem, 4vw, 4.2rem);
+  font-size: clamp(2.35rem, 4vw, 3.95rem);
   font-weight: 680;
   letter-spacing: 0;
   line-height: 0.95;
@@ -14768,7 +14772,9 @@ button {
 }
 
 .ticket-shop-product select {
-  padding: 0 14px;
+  border-radius: 999px;
+  padding: 0 18px;
+  text-overflow: ellipsis;
 }
 
 .ticket-shop-product__included {
@@ -14784,6 +14790,145 @@ button {
 
 .ticket-shop-product__included svg {
   color: var(--ticket-shop-blue);
+}
+
+.media-shop-feature {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.media-shop-feature figure {
+  position: relative;
+  min-height: clamp(320px, 34vw, 520px);
+  margin: 0;
+  overflow: hidden;
+  background: #161616;
+}
+
+.media-shop-feature img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.media-shop-slideshow img {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: media-shop-slideshow 12s ease-in-out infinite;
+}
+
+@keyframes media-shop-slideshow {
+  0%,
+  14.5% {
+    opacity: 1;
+  }
+
+  16.666%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-shop-slideshow img {
+    animation: none;
+  }
+
+  .media-shop-slideshow img:first-child {
+    opacity: 1;
+  }
+}
+
+.media-shop-feature > div {
+  display: grid;
+  align-content: center;
+  gap: clamp(18px, 2.4vw, 28px);
+  padding: clamp(28px, 4vw, 56px);
+}
+
+.media-shop-feature > div > span {
+  color: var(--ticket-shop-pink);
+  font-size: clamp(0.8rem, 0.9vw, 0.96rem);
+  font-weight: 900;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.media-shop-feature h2 {
+  margin: 0;
+  color: var(--ticket-shop-ink);
+  font-size: clamp(3rem, 6vw, 6.4rem);
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 0.92;
+}
+
+.media-shop-feature p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--ticket-shop-muted);
+  font-size: clamp(1rem, 1.2vw, 1.18rem);
+  font-weight: 680;
+  line-height: 1.36;
+}
+
+.media-shop-deliverables {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.media-shop-deliverables article {
+  position: relative;
+  display: grid;
+  align-content: end;
+  min-height: 130px;
+  padding: 18px;
+  border: 1px solid rgba(230, 70, 151, 0.22);
+  border-radius: 8px;
+  background: rgba(230, 70, 151, 0.08);
+}
+
+.media-shop-deliverables strong {
+  color: var(--ticket-shop-pink);
+  font-size: clamp(2.1rem, 3.6vw, 3.6rem);
+  font-weight: 780;
+  line-height: 0.9;
+}
+
+.media-shop-deliverables span {
+  margin-top: 10px;
+  color: var(--ticket-shop-ink);
+  font-size: 0.9rem;
+  font-weight: 860;
+  line-height: 1.08;
+  text-transform: uppercase;
+}
+
+.media-shop-deliverables svg {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: rgba(230, 70, 151, 0.62);
+}
+
+.media-shop-products {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.media-shop-product {
+  grid-template-rows: minmax(230px, 1fr) auto;
+}
+
+.media-shop-product h2 {
+  font-size: clamp(2.35rem, 4vw, 3.7rem);
 }
 
 .ticket-shop-stepper {
@@ -14857,10 +15002,195 @@ button {
 }
 
 .ticket-shop-checkout {
-  position: sticky;
-  top: 112px;
+  position: fixed;
+  z-index: 2147483647;
+  top: clamp(10px, 1.4vw, 18px);
+  right: clamp(10px, 1.4vw, 18px);
+  bottom: clamp(10px, 1.4vw, 18px);
   display: grid;
+  align-content: start;
   gap: 14px;
+  width: min(520px, calc(100vw - 20px));
+  padding: clamp(16px, 2vw, 22px);
+  overflow-y: auto;
+  border: 1px solid rgba(42, 41, 40, 0.14);
+  border-radius: 12px;
+  background: rgba(248, 246, 241, 0.96);
+  box-shadow: 0 28px 90px rgba(42, 41, 40, 0.26);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(100% + 34px));
+  transition:
+    opacity 220ms ease,
+    transform 280ms cubic-bezier(0.18, 0.88, 0.24, 1),
+    visibility 220ms ease;
+  visibility: hidden;
+  overscroll-behavior: contain;
+}
+
+.ticket-shop-checkout.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.ticket-shop-cart-backdrop {
+  position: fixed;
+  z-index: 2147483646;
+  inset: 0;
+  border: 0;
+  background: rgba(42, 41, 40, 0.34);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    visibility 220ms ease;
+  visibility: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.ticket-shop-cart-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.ticket-shop-cart-trigger {
+  position: fixed;
+  z-index: 2147483645;
+  right: clamp(16px, 2.4vw, 34px);
+  bottom: clamp(16px, 2.4vw, 34px);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 12px 0 16px;
+  border: 1px solid rgba(42, 41, 40, 0.16);
+  border-radius: 999px;
+  background: rgba(248, 246, 241, 0.92);
+  color: var(--ticket-shop-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 840;
+  box-shadow: 0 18px 48px rgba(42, 41, 40, 0.16);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    visibility 180ms ease;
+  backdrop-filter: blur(12px);
+}
+
+.ticket-shop-cart-trigger:hover,
+.ticket-shop-cart-trigger:focus-visible {
+  transform: translateY(-2px);
+}
+
+.ticket-shop-cart-trigger.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  visibility: hidden;
+}
+
+.ticket-shop-cart-trigger svg {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-cart-trigger strong {
+  display: inline-flex;
+  min-width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(90, 166, 180, 0.34);
+  border-radius: 999px;
+  background: rgba(90, 166, 180, 0.12);
+  color: var(--ticket-shop-ink);
+  font-size: 0.78rem;
+  font-weight: 860;
+}
+
+.ticket-shop-cart-trigger--inline {
+  position: static;
+  z-index: auto;
+  right: auto;
+  bottom: auto;
+  justify-self: end;
+  min-height: 42px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+}
+
+.ticket-shop-cart-trigger--inline:hover,
+.ticket-shop-cart-trigger--inline:focus-visible {
+  border-color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-cart-trigger--inline.is-hidden {
+  transform: translateY(0);
+}
+
+.ticket-shop-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 2px 16px;
+  border-bottom: 1px solid var(--ticket-shop-line);
+}
+
+.ticket-shop-drawer-header > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 0 12px;
+}
+
+.ticket-shop-drawer-header > div svg {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-drawer-header span {
+  color: var(--ticket-shop-pink);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.ticket-shop-drawer-header strong {
+  color: var(--ticket-shop-ink);
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 0.96;
+}
+
+.ticket-shop-drawer-header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ticket-shop-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 840;
+}
+
+.ticket-shop-drawer-header button:hover,
+.ticket-shop-drawer-header button:focus-visible {
+  border-color: var(--ticket-shop-pink);
+  color: var(--ticket-shop-pink);
 }
 
 .ticket-shop-cart,
@@ -14976,10 +15306,15 @@ button {
 
 .ticket-shop-cart__empty {
   display: grid;
-  justify-items: start;
-  gap: 8px;
-  padding: 18px 0;
+  min-height: 190px;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px;
+  border: 1px dashed rgba(42, 41, 40, 0.18);
+  border-radius: 8px;
   color: var(--ticket-shop-muted);
+  text-align: center;
 }
 
 .ticket-shop-cart__empty svg {
@@ -15036,6 +15371,155 @@ button {
   color: var(--ticket-shop-blue);
 }
 
+.ticket-shop-buyer .ticket-shop-buyer__demo {
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--ticket-shop-line);
+  background: #fff;
+  color: var(--ticket-shop-ink);
+  font-size: 0.78rem;
+  font-weight: 820;
+}
+
+.ticket-shop-buyer .ticket-shop-buyer__demo:hover,
+.ticket-shop-buyer .ticket-shop-buyer__demo:focus-visible {
+  border-color: var(--ticket-shop-blue);
+  color: var(--ticket-shop-blue);
+}
+
+.media-shop-lookup-actions {
+  display: flex;
+  margin-top: -6px;
+}
+
+.ticket-shop-buyer .media-shop-lookup-actions button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(90, 166, 180, 0.46);
+  background: rgba(90, 166, 180, 0.08);
+  color: var(--ticket-shop-blue);
+  font-size: 0.8rem;
+  font-weight: 860;
+}
+
+.ticket-shop-buyer .media-shop-lookup-actions button:hover,
+.ticket-shop-buyer .media-shop-lookup-actions button:focus-visible {
+  background: rgba(90, 166, 180, 0.14);
+}
+
+.media-shop-choreography-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(90, 166, 180, 0.24);
+  border-radius: 8px;
+  background: rgba(90, 166, 180, 0.07);
+}
+
+.ticket-shop-buyer .media-shop-choreography-picker header {
+  display: grid;
+  justify-content: start;
+  gap: 4px;
+  color: var(--ticket-shop-ink);
+  font-size: 1rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.18;
+  text-transform: none;
+}
+
+.media-shop-choreography-picker header > span {
+  color: var(--ticket-shop-pink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.media-shop-choreography-picker header small {
+  color: var(--ticket-shop-muted);
+  font-size: 0.78rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.media-shop-choreography-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ticket-shop-buyer .media-shop-choreography-list button {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  justify-content: stretch;
+  gap: 2px 10px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ticket-shop-ink);
+  text-align: left;
+}
+
+.ticket-shop-buyer .media-shop-choreography-list button:hover,
+.ticket-shop-buyer .media-shop-choreography-list button:focus-visible,
+.ticket-shop-buyer .media-shop-choreography-list button.is-selected {
+  border-color: var(--ticket-shop-blue);
+  background: #fff;
+}
+
+.ticket-shop-buyer .media-shop-choreography-list button.is-selected {
+  box-shadow: inset 0 0 0 1px var(--ticket-shop-blue);
+}
+
+.media-shop-choreography-list button > span {
+  grid-row: 1 / 3;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(90, 166, 180, 0.32);
+  border-radius: 999px;
+  color: var(--ticket-shop-blue);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.media-shop-choreography-list button strong {
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 820;
+  line-height: 1.18;
+}
+
+.media-shop-choreography-list button small {
+  min-width: 0;
+  color: var(--ticket-shop-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.28;
+}
+
+.media-shop-choreography-empty {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  color: var(--ticket-shop-muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.media-shop-choreography-empty svg {
+  color: var(--ticket-shop-blue);
+}
+
 .ticket-shop-buyer label > div {
   display: grid;
   align-items: center;
@@ -15087,29 +15571,6 @@ button {
   color: var(--ticket-shop-muted);
   font-size: 0.82rem;
   font-weight: 680;
-}
-
-.ticket-shop-payment__tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.ticket-shop-payment__tabs button {
-  min-height: 42px;
-  border: 1px solid var(--ticket-shop-line);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ticket-shop-ink);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 780;
-}
-
-.ticket-shop-payment__tabs button.is-active {
-  border-color: var(--ticket-shop-blue);
-  color: var(--ticket-shop-blue);
 }
 
 .ticket-shop-payment__details {
@@ -15197,7 +15658,7 @@ button {
 }
 
 .ticket-shop-deadline--inline {
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
   min-height: 66px;
   padding: 14px 0;
@@ -15211,16 +15672,16 @@ button {
   line-height: 1.24;
 }
 
-.ticket-shop-deadline--inline svg {
+.ticket-shop-deadline--inline > svg {
   width: 20px;
   height: 20px;
 }
 
-.ticket-shop-deadline--inline span {
+.ticket-shop-deadline--inline > span {
   font-weight: 860;
 }
 
-.ticket-shop-deadline--inline strong {
+.ticket-shop-deadline--inline > span strong {
   font-weight: 900;
 }
 
@@ -15296,8 +15757,20 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .ticket-shop-checkout {
-    position: static;
+  .ticket-shop-products {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .media-shop-feature {
+    grid-template-columns: 1fr;
+  }
+
+  .media-shop-feature figure {
+    min-height: clamp(280px, 48vw, 440px);
+  }
+
+  .ticket-shop-product:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .ticket-shop-how__grid {
@@ -15314,9 +15787,16 @@ button {
     font-size: clamp(3.4rem, 17vw, 5.2rem);
   }
 
+  .ticket-shop-products,
   .ticket-shop-product,
-  .ticket-shop-how__grid {
+  .ticket-shop-how__grid,
+  .media-shop-deliverables {
     grid-template-columns: 1fr;
+  }
+
+  .ticket-shop-product {
+    grid-column: auto;
+    grid-template-rows: auto;
   }
 
   .ticket-shop-product__controls {
@@ -15325,14 +15805,31 @@ button {
   }
 
   .ticket-shop-deadline--inline {
-    grid-template-columns: 26px minmax(0, 1fr);
+    grid-template-columns: 26px minmax(0, 1fr) auto;
     min-height: 58px;
     font-size: 0.92rem;
+  }
+
+  .ticket-shop-cart-trigger--inline {
+    min-height: 38px;
+    padding: 0 9px 0 11px;
+  }
+
+  .ticket-shop-cart-trigger--inline > span {
+    display: none;
   }
 
   .ticket-shop-product__copy,
   .ticket-shop-product__controls {
     padding: 22px;
+  }
+
+  .media-shop-feature > div {
+    padding: 24px;
+  }
+
+  .media-shop-feature h2 {
+    font-size: clamp(2.7rem, 14vw, 4rem);
   }
 
   .ticket-shop-product__controls {
@@ -15346,6 +15843,31 @@ button {
 
   .ticket-shop-cart-line__actions {
     justify-content: start;
+  }
+
+  .ticket-shop-checkout {
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: calc(100vw - 20px);
+  }
+
+  .ticket-shop-drawer-header {
+    align-items: center;
+  }
+
+  .ticket-shop-drawer-header button {
+    min-width: 42px;
+    padding: 0;
+  }
+
+  .ticket-shop-drawer-header button:not(:focus-visible) {
+    font-size: 0;
+  }
+
+  .ticket-shop-drawer-header button svg {
+    width: 19px;
+    height: 19px;
   }
 }
 

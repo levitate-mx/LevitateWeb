@@ -147,6 +147,7 @@ const pillMenuSections: PillMenuSection[] = [
     title: "Tienda Oficial",
     links: [
       { label: "Taquilla", href: "/tienda#boletos" },
+      { label: "Fotografía y video", href: "/tienda#foto-video" },
     ],
   },
 ];
