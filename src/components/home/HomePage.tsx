@@ -9,7 +9,8 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useDeferredDecorativeVideo } from "../../hooks/useDeferredDecorativeVideo";
 import { LevitateFooter } from "./LevitateFooter";
 import { LevitateHeader } from "./LevitateHeader";
 
@@ -66,42 +67,9 @@ const sponsors = [
   { name: "VideoImagen Digital", logo: "/assets/sponsor-videoimagen-digital.png", className: "sponsor-videoimagen" },
 ];
 
-const heroVideoMediaQuery = "(prefers-reduced-motion: no-preference)";
-
-type BrowserConnection = {
-  effectiveType?: string;
-  saveData?: boolean;
-};
-
-function canUseHomeHeroVideo() {
-  const connection =
-    (navigator as Navigator & {
-      connection?: BrowserConnection;
-      mozConnection?: BrowserConnection;
-      webkitConnection?: BrowserConnection;
-    }).connection ??
-    (navigator as Navigator & { mozConnection?: BrowserConnection }).mozConnection ??
-    (navigator as Navigator & { webkitConnection?: BrowserConnection }).webkitConnection;
-
-  if (connection?.saveData || connection?.effectiveType?.includes("2g")) {
-    return false;
-  }
-
-  return window.matchMedia(heroVideoMediaQuery).matches;
-}
-
 export function HomePage() {
-  const [shouldRenderHeroVideo, setShouldRenderHeroVideo] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(heroVideoMediaQuery);
-    const updateHeroVideoPreference = () => setShouldRenderHeroVideo(canUseHomeHeroVideo());
-
-    updateHeroVideoPreference();
-    mediaQuery.addEventListener("change", updateHeroVideoPreference);
-
-    return () => mediaQuery.removeEventListener("change", updateHeroVideoPreference);
-  }, []);
+  const { containerRef: heroVideoRef, shouldRenderVideo: shouldRenderHeroVideo } =
+    useDeferredDecorativeVideo<HTMLDivElement>("0px");
 
   useEffect(() => {
     const items = document.querySelectorAll<HTMLElement>("[data-levitate-reveal]");
@@ -181,9 +149,9 @@ export function HomePage() {
   return (
     <main className="levitate-page levitate-home-redesign">
       <section id="inicio" className="levitate-home-hero">
-        <div className="levitate-home-hero__backdrop" aria-hidden="true">
+        <div className="levitate-home-hero__backdrop" aria-hidden="true" ref={heroVideoRef}>
           {shouldRenderHeroVideo ? (
-            <video autoPlay muted loop playsInline preload="metadata">
+            <video autoPlay muted loop playsInline poster="/assets/levitate-home-hero-poster.jpg" preload="none">
               <source src="/assets/levitate-home-hero.mp4" type="video/mp4" />
             </video>
           ) : null}

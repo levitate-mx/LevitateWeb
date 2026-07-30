@@ -45,6 +45,12 @@
 - When a card is alone in the last row, extend it across the available grid columns, for example with `:last-child:nth-child(odd) { grid-column: 1 / -1; }` in two-column grids.
 - Keep the mobile single-column layout natural; the full-width orphan rule should not create horizontal overflow.
 
+## API Security
+
+- Registration/admin endpoints and any CURP lookup, order, payment, or participant data endpoint must require server-side authentication before reading or mutating data.
+- Do not ship stubbed auth guards, local-only bypasses, query-string admin tokens, or hardcoded demo passwords in production code.
+- When an endpoint accepts a CURP, validate that the authenticated academy owns that CURP or that the authenticated student session matches that CURP before returning data.
+
 ## Verification
 
 - After changing hero layout or typography, run `npm run build`.

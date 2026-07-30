@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { assets } from "../../data/homeContent";
+import { useDeferredDecorativeVideo } from "../../hooks/useDeferredDecorativeVideo";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -94,6 +95,8 @@ export function WorkshopsPage() {
   const [isExperienceOverlayVisible, setIsExperienceOverlayVisible] = useState(true);
   const [isExperienceVideoReady, setIsExperienceVideoReady] = useState(false);
   const experienceOverlayTimer = useRef<number | null>(null);
+  const { containerRef: experienceVideoRef, shouldRenderVideo: shouldRenderExperienceVideo } =
+    useDeferredDecorativeVideo<HTMLElement>("700px");
 
   const scheduleExperienceOverlayHide = useCallback(() => {
     if (experienceOverlayTimer.current !== null) {
@@ -228,7 +231,7 @@ export function WorkshopsPage() {
             <div className="workshops-venue-card__media">
               <img
                 className="workshops-venue-card__image--cdmx"
-                src="/assets/workshops-cdmx-parque-juana-asbaje.png"
+                src="/assets/workshops-cdmx-parque-juana-asbaje.jpg"
                 alt="Participantes en workshop en Parque Juana de Asbaje, CDMX."
                 loading="lazy"
               />
@@ -308,26 +311,29 @@ export function WorkshopsPage() {
         className={[
           "workshops-experience",
           isExperienceOverlayVisible ? "" : "is-overlay-hidden",
-          isExperienceVideoReady ? "" : "is-video-loading",
+          shouldRenderExperienceVideo && isExperienceVideoReady ? "" : "is-video-loading",
         ].filter(Boolean).join(" ")}
         onFocus={revealExperienceOverlay}
         onPointerMove={revealExperienceOverlay}
+        ref={experienceVideoRef}
       >
         <div className="levitate-video-fallback" aria-hidden="true" />
-        <video
-          className="workshops-experience__background"
-          aria-hidden="true"
-          autoPlay
-          loop
-          muted
-          playsInline
-          poster={assets.community}
-          preload="metadata"
-          onCanPlay={() => setIsExperienceVideoReady(true)}
-          onLoadedData={() => setIsExperienceVideoReady(true)}
-        >
-          <source src="/assets/videos/talleres-mix.mp4" type="video/mp4" />
-        </video>
+        {shouldRenderExperienceVideo ? (
+          <video
+            className="workshops-experience__background"
+            aria-hidden="true"
+            autoPlay
+            loop
+            muted
+            playsInline
+            poster={assets.community}
+            preload="none"
+            onCanPlay={() => setIsExperienceVideoReady(true)}
+            onLoadedData={() => setIsExperienceVideoReady(true)}
+          >
+            <source src="/assets/videos/talleres-mix.mp4" type="video/mp4" />
+          </video>
+        ) : null}
         <div className="workshops-experience__overlay">
           <div className="workshops-experience__copy">
             <p className="workshops-kicker">Lo que se vive en workshops</p>

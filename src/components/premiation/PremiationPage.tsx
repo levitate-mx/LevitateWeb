@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { assets } from "../../data/homeContent";
+import { useDeferredDecorativeVideo } from "../../hooks/useDeferredDecorativeVideo";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -62,7 +63,7 @@ const recognitionShowcase = [
   {
     title: "Trofeos",
     label: "Dúos · Tríos · Grupales",
-    image: "/assets/premiation-recognition-trophies.png",
+    image: "/assets/premiation-recognition-trophies.jpg",
     alt: "Escenario Levitate preparado para entrega de trofeos.",
     copy: "Piezas de escenario para lugares competitivos en formatos colectivos, acompañadas por medallas para sus integrantes.",
   },
@@ -98,7 +99,7 @@ const specialAwards = [
     title: "Mejor música",
     summary:
       "Reconocimiento a una música clara, bien editada y conectada con la rutina.",
-    image: "/assets/premio-especial-musica.png",
+    image: "/assets/premio-especial-musica.jpg",
     imageAlt: "Escenario Levitate con iluminación para una presentación de competencia.",
     criteria: [
       {
@@ -140,7 +141,7 @@ const specialAwards = [
     title: "Mejor coreografía",
     summary:
       "Reconocimiento a una composición clara, creativa y escénicamente sólida.",
-    image: "/assets/premio-especial-coreografia.png",
+    image: "/assets/premio-especial-coreografia.jpg",
     imageAlt: "Participantes en una sesión de movimiento y preparación coreográfica.",
     criteria: [
       {
@@ -182,7 +183,7 @@ const specialAwards = [
     title: "Mejor vestuario",
     summary:
       "Reconocimiento a un vestuario cuidado, funcional y conectado con la propuesta.",
-    image: "/assets/premio-especial-vestuario.png",
+    image: "/assets/premio-especial-vestuario.jpg",
     imageAlt: "Participante en escenario Levitate durante una presentación.",
     criteria: [
       {
@@ -224,7 +225,7 @@ const specialAwards = [
     title: "Mejor porra",
     summary:
       "Reconocimiento a una porra energética, organizada y respetuosa.",
-    image: "/assets/premio-especial-porra.png",
+    image: "/assets/premio-especial-porra.jpg",
     imageAlt: "Comunidad Levitate celebrando durante una experiencia de competencia.",
     criteria: [
       {
@@ -577,22 +578,27 @@ export function PremiationLegacyPage() {
 export function PremiationPage() {
   const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
   const activeSpecialAward = specialAwards.find((award) => award.id === activeSpecialAwardId) ?? specialAwards[0];
+  const { containerRef: heroVideoRef, shouldRenderVideo: shouldRenderHeroVideo } =
+    useDeferredDecorativeVideo<HTMLElement>("0px");
 
   return (
     <main className="premiation-page premiation-page--modern levitate-home-redesign">
-      <section className="premiation-hero" id="inicio">
-        <video
-          autoPlay
-          className="premiation-hero__image"
-          loop
-          muted
-          playsInline
-          poster={assets.competition}
-          preload="metadata"
-          aria-hidden="true"
-        >
-          <source src="/assets/visuals/workshops-experience-bg.mp4" type="video/mp4" />
-        </video>
+      <section className={`premiation-hero${shouldRenderHeroVideo ? "" : " is-video-loading"}`} id="inicio" ref={heroVideoRef}>
+        <div className="levitate-video-fallback" aria-hidden="true" />
+        {shouldRenderHeroVideo ? (
+          <video
+            autoPlay
+            className="premiation-hero__image"
+            loop
+            muted
+            playsInline
+            poster={assets.competition}
+            preload="none"
+            aria-hidden="true"
+          >
+            <source src="/assets/visuals/workshops-experience-bg.mp4" type="video/mp4" />
+          </video>
+        ) : null}
         <div className="premiation-hero__shade" aria-hidden="true" />
         <LevitateHeader activeLabel="Premiación" useRootLinks variant="pill" />
         <div className="premiation-hero__content">

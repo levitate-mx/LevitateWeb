@@ -49,7 +49,7 @@ const mvpPerformances: MvpPerformance[] = [
     title: "Party, Party, Party",
     academy: "Stiletto Estudio de Danza",
     venue: "San Luis Potosí",
-    image: "/assets/mvp-party-party-party-2025-slp.png",
+    image: "/assets/mvp-party-party-party-2025-slp.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
   {
@@ -91,16 +91,13 @@ const mvpPerformances: MvpPerformance[] = [
 ].sort((left, right) => left.sortOrder - right.sortOrder);
 
 const scholarshipDownloads = [
-  { label: "Veracruz Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
-  { label: "Puebla Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
-  { label: "CDMX Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
+  { label: "Edo. México - Otoño 2026" },
 ];
 
 export function HallOfFamePage() {
   const [activeMvpIndex, setActiveMvpIndex] = useState(0);
   const [selectedScholarshipIndex, setSelectedScholarshipIndex] = useState(0);
   const activePerformance = mvpPerformances[activeMvpIndex] ?? mvpPerformances[0];
-  const selectedScholarshipDownload = scholarshipDownloads[selectedScholarshipIndex] ?? scholarshipDownloads[0];
 
   const showMvp = (step: number) => {
     setActiveMvpIndex((currentIndex) => (currentIndex + step + mvpPerformances.length) % mvpPerformances.length);
@@ -164,8 +161,7 @@ export function HallOfFamePage() {
                 su nivel, disciplina y presencia para que sigan entrenando, creciendo y compitiendo dentro de Levitate.
               </p>
               <div className="levitate-scholarships__actions">
-                <label className="levitate-scholarships__select" htmlFor="scholarship-edition">
-                  <span>Edición</span>
+                <label aria-label="Edición de becados" className="levitate-scholarships__select" htmlFor="scholarship-edition">
                   <select
                     id="scholarship-edition"
                     onChange={(event) => setSelectedScholarshipIndex(Number(event.target.value))}
@@ -179,10 +175,10 @@ export function HallOfFamePage() {
                   </select>
                   <ChevronDown aria-hidden="true" size={20} />
                 </label>
-                <a className="levitate-scholarships__download" download href={selectedScholarshipDownload.href}>
+                <button className="levitate-scholarships__download" disabled type="button">
                   <Download aria-hidden="true" size={20} />
                   Descargar PDF
-                </a>
+                </button>
               </div>
             </div>
 

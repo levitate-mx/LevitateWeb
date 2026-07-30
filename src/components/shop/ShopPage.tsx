@@ -173,7 +173,6 @@ const mediaFeatureSlides = [
   "/assets/media-shop-blue-group-stage.jpg",
 ];
 const mediaFeatureSlideDurationSeconds = 4.5;
-const mediaFeatureSlideshowDurationSeconds = mediaFeatureSlides.length * mediaFeatureSlideDurationSeconds;
 
 const mediaDemoParticipantLookup: MediaParticipantLookup = {
   academyName: "Academia Demo Levitate",
@@ -919,6 +918,7 @@ function PhotoVideoShopPage() {
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
   const [selectedDanceId, setSelectedDanceId] = useState("");
+  const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = paymentMethods[0];
   const cartLines = useMemo(
@@ -932,6 +932,7 @@ function PhotoVideoShopPage() {
   const mediaItemCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
   const selectedDance = participantLookup?.lines.find((line) => line.id === selectedDanceId) ?? null;
+  const activeMediaFeatureSlide = mediaFeatureSlides[mediaFeatureSlideIndex] ?? mediaFeatureSlides[0];
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -953,6 +954,20 @@ function PhotoVideoShopPage() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isCartOpen]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setMediaFeatureSlideIndex((currentIndex) => (currentIndex + 1) % mediaFeatureSlides.length);
+    }, mediaFeatureSlideDurationSeconds * 1000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const nextSlide = mediaFeatureSlides[(mediaFeatureSlideIndex + 1) % mediaFeatureSlides.length];
+    const image = new Image();
+    image.src = nextSlide;
+  }, [mediaFeatureSlideIndex]);
 
   const clearPaymentProof = () => {
     setProofFileName("");
@@ -1268,19 +1283,7 @@ function PhotoVideoShopPage() {
 
             <section className="media-shop-feature" aria-label="Cobertura all inclusive">
               <figure className="media-shop-slideshow">
-                {mediaFeatureSlides.map((image, index) => (
-                  <img
-                    alt=""
-                    aria-hidden="true"
-                    key={image}
-                    loading={index === 0 ? "eager" : "lazy"}
-                    src={image}
-                    style={{
-                      animationDelay: `${index * mediaFeatureSlideDurationSeconds}s`,
-                      animationDuration: `${mediaFeatureSlideshowDurationSeconds}s`,
-                    }}
-                  />
-                ))}
+                <img alt="" aria-hidden="true" decoding="async" key={activeMediaFeatureSlide} src={activeMediaFeatureSlide} />
               </figure>
               <div>
                 <span>Fotografía y video</span>

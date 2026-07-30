@@ -454,6 +454,8 @@ async function handleRegistrationStudentAccess(request, env, status = 200) {
     }
 
     const db = getDb(env);
+    await requireRegistrationCurpExists(db, curp);
+
     const user = await ensureRegistrationStudentProfile(db, curp);
     const sessionToken = await createRegistrationStudentSession(db, user.id, request);
     const state = await getRegistrationStudentState(db, user);
@@ -597,6 +599,7 @@ async function handleRegistrationInscriptionLookup(request, env) {
   try {
     assertMethod(request, ["POST"]);
 
+    const db = getDb(env);
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
 
@@ -604,7 +607,9 @@ async function handleRegistrationInscriptionLookup(request, env) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
-    const lookup = await getRegistrationInscriptionLookup(getDb(env), curp);
+    await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+
+    const lookup = await getRegistrationInscriptionLookup(db, curp);
     return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
   } catch (error) {
     return sendRegistrationError(error);
@@ -615,15 +620,18 @@ async function handleRegistrationInscriptionOrder(request, env) {
   try {
     assertMethod(request, ["POST"]);
 
+    const db = getDb(env);
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
-    const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
 
     if (curp.length !== 18) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
-    const lookup = await createOrUpdateRegistrationInscriptionOrder(getDb(env), curp, buyerPhoneContact);
+    await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+
+    const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
+    const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact);
     return sendJson(
       {
         order: lookup.order ? serializePublicRegistrationInscriptionOrder(lookup.order) : null,
@@ -648,6 +656,8 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
     if (curp.length !== 18) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
+
+    await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
     const order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
     const proof = getRegistrationPaymentProofInput(body);
@@ -774,9 +784,13 @@ async function handleRegistrationInscriptionOrderStatus(request, env) {
 async function handleRegistrationAdminInscriptionOrders(request, env) {
   try {
     assertMethod(request, ["GET"]);
-    requireRegistrationAdmin(request, env);
 
-    const orders = await getAllRegistrationInscriptionOrders(getDb(env));
+    const db = getDb(env);
+    const admin = await requireRegistrationAdmin(request, env, db);
+    const orders =
+      admin.scope === "global"
+        ? await getAllRegistrationInscriptionOrders(db)
+        : await getRegistrationInscriptionOrders(db, admin.session.academy.id);
 
     return sendJson({
       orders,
@@ -790,9 +804,9 @@ async function handleRegistrationAdminInscriptionOrders(request, env) {
 async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
   try {
     assertMethod(request, ["POST"]);
-    requireRegistrationAdmin(request, env);
 
     const db = getDb(env);
+    const admin = await requireRegistrationAdmin(request, env, db);
     const body = await readJsonBody(request);
     const orderId = requireString(body.id, "id");
     const status = requireRegistrationChoice(body.status, "status", registrationInscriptionOrderStatuses);
@@ -803,6 +817,7 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
     const reviewedBy = optionalString(body.reviewedBy) || "Admin";
 
     await updateRegistrationInscriptionOrderStatus(db, {
+      academyId: admin.scope === "academy" ? admin.session.academy.id : undefined,
       notes,
       orderId,
       paidAmount,
@@ -812,7 +827,10 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
       status,
     });
 
-    const order = await getRegistrationInscriptionOrderRecordById(db, orderId);
+    const order =
+      admin.scope === "global"
+        ? await getRegistrationInscriptionOrderRecordById(db, orderId)
+        : await getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId, admin.session.academy.id);
 
     if (order.status === "paid") {
       await ensureRegistrationEventTicketsForOrder(db, order);
@@ -1312,6 +1330,94 @@ async function getRegistrationStudentStateFromRequest({ db, request }) {
     .run();
 
   return getRegistrationStudentState(db, user);
+}
+
+async function getOptionalRegistrationStateFromRequest({ db, request }) {
+  try {
+    return await getRegistrationStateFromRequest({ db, request });
+  } catch (error) {
+    if (error?.statusCode === 401) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function getOptionalRegistrationStudentStateFromRequest({ db, request }) {
+  try {
+    return await getRegistrationStudentStateFromRequest({ db, request });
+  } catch (error) {
+    if (error?.statusCode === 401) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function requireRegistrationInscriptionLookupAccess({ db, request, curp }) {
+  let hasValidSession = false;
+  const academySession = await getOptionalRegistrationStateFromRequest({ db, request });
+
+  if (academySession) {
+    hasValidSession = true;
+
+    if (await isRegistrationCurpInAcademy(db, curp, academySession.academy.id)) {
+      return { scope: "academy", session: academySession };
+    }
+  }
+
+  const studentSession = await getOptionalRegistrationStudentStateFromRequest({ db, request });
+
+  if (studentSession) {
+    hasValidSession = true;
+
+    if (normalizeCurp(studentSession.user.curp) === curp) {
+      return { scope: "student", session: studentSession };
+    }
+  }
+
+  if (hasValidSession) {
+    throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
+  }
+
+  throwHttpError("registration_inscription_lookup_unauthorized", "Inicia sesión para consultar una inscripción", 401);
+}
+
+async function isRegistrationCurpInAcademy(db, curp, academyId) {
+  const participant = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_participants
+        WHERE curp = ?
+          AND academy_id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(curp, academyId)
+    .first();
+
+  return Boolean(participant);
+}
+
+async function requireRegistrationCurpExists(db, curp) {
+  const participant = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_participants
+        WHERE curp = ?
+        LIMIT 1
+      `,
+    )
+    .bind(curp)
+    .first();
+
+  if (!participant) {
+    throwHttpError("registration_student_user_not_found", "No se encontró una inscripción asociada a esa CURP", 404);
+  }
 }
 
 async function getRegistrationStateByUserId(db, userId) {
@@ -3441,8 +3547,23 @@ function requirePassportAdmin(request, env) {
   }
 }
 
-function requireRegistrationAdmin(request, env) {
-  return;
+async function requireRegistrationAdmin(request, env, db) {
+  const configuredToken = env.REGISTRATION_ADMIN_TOKEN;
+  const authorization = request.headers.get("authorization") || "";
+  const bearerToken = authorization.replace(/^Bearer\s+/i, "").trim();
+  const headerToken = request.headers.get("x-registration-admin-token") || "";
+  const suppliedToken = bearerToken || headerToken;
+
+  if (configuredToken && suppliedToken) {
+    if (suppliedToken === configuredToken) {
+      return { scope: "global", session: null };
+    }
+
+    throwHttpError("registration_admin_unauthorized", "Token admin inválido", 401);
+  }
+
+  const session = await getRegistrationStateFromRequest({ db, request });
+  return { scope: "academy", session };
 }
 
 function toNumber(value) {

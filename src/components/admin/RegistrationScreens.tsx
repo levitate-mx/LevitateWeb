@@ -403,9 +403,13 @@ const studentPortalModules = [
   icon: LucideIcon;
 }>;
 
+const registrationDemoPassword = import.meta.env.DEV ? (import.meta.env.VITE_REGISTRATION_DEMO_PASSWORD ?? "") : "";
+const isRegistrationDemoEnabled = import.meta.env.DEV && registrationDemoPassword.length > 0;
+const isRegistrationStudentDemoEnabled = import.meta.env.DEV;
+
 const demoAcademyCredentials = {
   username: "demo_academia",
-  password: "levitate123",
+  password: registrationDemoPassword,
 };
 
 const demoStudentCredentials = {
@@ -1464,7 +1468,7 @@ function LevitateAuthScreen({
       const username = getFormValue(formData, "username");
       const password = getFormValue(formData, "password");
 
-      if (username.toLowerCase() === demoAcademyCredentials.username && password === demoAcademyCredentials.password) {
+      if (isRegistrationDemoEnabled && username.toLowerCase() === demoAcademyCredentials.username && password === demoAcademyCredentials.password) {
         persistDemoRegistrationSession("academy");
         onAuthenticated(demoRegistrationBootstrap);
         return;
@@ -1570,11 +1574,13 @@ function LevitateAuthScreen({
           {mode === "login" ? (
             <form className="levitate-auth-form levitate-auth-form--login" onSubmit={handleLoginSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
-              <DemoCredentialsHint
-                label="Demo academia"
-                password={demoAcademyCredentials.password}
-                username={demoAcademyCredentials.username}
-              />
+              {isRegistrationDemoEnabled ? (
+                <DemoCredentialsHint
+                  label="Demo academia"
+                  password={demoAcademyCredentials.password}
+                  username={demoAcademyCredentials.username}
+                />
+              ) : null}
               <AdminField icon={AtSign} label="Usuario o correo">
                 <input autoComplete="username" name="username" required type="text" />
               </AdminField>
@@ -1643,7 +1649,7 @@ function LevitateStudentAuthScreen({
     try {
       const curp = getFormValue(formData, "curp").toUpperCase();
 
-      if (curp === demoStudentCredentials.curp) {
+      if (isRegistrationStudentDemoEnabled && curp === demoStudentCredentials.curp) {
         persistDemoRegistrationSession("student");
         onAuthenticated(demoStudentSession);
         return;
@@ -1684,7 +1690,7 @@ function LevitateStudentAuthScreen({
         <section className="levitate-auth-card" aria-label="Acceso de alumno">
           <form className="levitate-auth-form" onSubmit={handleAccessSubmit}>
             <AdminStatusMessage message={systemMessage} tone="error" />
-            <DemoCredentialsHint curp={demoStudentCredentials.curp} label="Demo alumno" />
+            {isRegistrationStudentDemoEnabled ? <DemoCredentialsHint curp={demoStudentCredentials.curp} label="Demo alumno" /> : null}
             <AdminField helper="La CURP debe tener 18 caracteres." icon={ClipboardList} label="CURP">
               <input autoComplete="off" maxLength={18} minLength={18} name="curp" required type="text" />
             </AdminField>

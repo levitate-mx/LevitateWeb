@@ -98,7 +98,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     heroTitle: "CDMX",
     eventName: "CAO Tiempo Nuevo",
     venueName: "CAO Tiempo Nuevo",
-    heroImage: "/assets/sedes-cdmx-hero.png",
+    heroImage: "/assets/sedes-cdmx-hero.jpg",
     motionImage: "/assets/sedes-cdmx-motion.jpg",
     aerialImage: "/assets/sedes-cdmx-aerial.jpg",
     location: "Miguel Hidalgo, Tlalpan",
@@ -174,7 +174,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     heroTitle: "Puebla",
     eventName: "Auditorio Daniel Forcelledo",
     venueName: "Auditorio Daniel Forcelledo",
-    heroImage: "/assets/sedes-puebla-hero.png",
+    heroImage: "/assets/sedes-puebla-hero.jpg",
     motionImage: "/assets/sedes-cdmx-motion.jpg",
     aerialImage: "/assets/sedes-cdmx-aerial.jpg",
     location: "Tlatempa, San Pedro Cholula",
@@ -196,7 +196,7 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
       { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
       { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
-      { name: "Luis Raio", specialty: "Especialista en aéreos · Aerial straps", image: "/assets/luis-raio.png" },
+      { name: "Luis Raio", specialty: "Especialista en aéreos · Aerial straps", image: "/assets/luis-raio.jpg" },
     ],
   },
   edomex: {
@@ -730,7 +730,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
         <section className="sedes-final-cta">
           <img
             className="sedes-final-cta__background"
-            src="/assets/sedes-final-cta-minimal-bg.png"
+            src="/assets/sedes-final-cta-minimal-bg.jpg"
             alt=""
             loading="lazy"
             aria-hidden="true"

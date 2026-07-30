@@ -440,7 +440,7 @@ export function InscripcionesPage() {
     <main className="levitate-home-redesign inscripciones-page">
       <section className="inscripciones-hero" id="inicio">
         <div className="inscripciones-hero__backdrop" aria-hidden="true">
-          <img alt="" src="/assets/inscripciones-hero-color-4.png" />
+          <img alt="" src="/assets/inscripciones-hero-color-4.jpg" />
         </div>
         <LevitateHeader activeLabel="Inscripciones" useRootLinks variant="pill" />
 
