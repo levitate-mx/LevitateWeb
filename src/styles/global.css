@@ -14820,16 +14820,16 @@ button {
   position: absolute;
   inset: 0;
   opacity: 0;
-  animation: media-shop-slideshow 12s ease-in-out infinite;
+  animation: media-shop-slideshow 31.5s ease-in-out infinite;
 }
 
 @keyframes media-shop-slideshow {
   0%,
-  14.5% {
+  12.5% {
     opacity: 1;
   }
 
-  16.666%,
+  14.285%,
   100% {
     opacity: 0;
   }

@@ -164,13 +164,16 @@ const mediaDeliverables = [
 ];
 
 const mediaFeatureSlides = [
-  "/assets/premiation-aerial-medal-system.jpg",
-  "/assets/premiation-motion-medal-system.jpg",
-  "/assets/ranking-bronce.jpg",
-  "/assets/ranking-plata.png",
-  "/assets/ranking-oro.png",
-  "/assets/levitate-home-hero-poster.jpg",
+  "/assets/visuals/community-lyra-smoke.jpg",
+  "/assets/visuals/community-kids-stage.jpg",
+  "/assets/visuals/community-duo-silks.jpg",
+  "/assets/mvp-instruction-primavera-2026-puebla.jpg",
+  "/assets/media-shop-aerial-yellow-silks.jpg",
+  "/assets/media-shop-medal-portrait.jpg",
+  "/assets/media-shop-blue-group-stage.jpg",
 ];
+const mediaFeatureSlideDurationSeconds = 4.5;
+const mediaFeatureSlideshowDurationSeconds = mediaFeatureSlides.length * mediaFeatureSlideDurationSeconds;
 
 const mediaDemoParticipantLookup: MediaParticipantLookup = {
   academyName: "Academia Demo Levitate",
@@ -196,16 +199,6 @@ const mediaDemoParticipantLookup: MediaParticipantLookup = {
       level: null,
       subgenre: "jazz",
       title: "Demo Motion Crew",
-      venue: "edomex",
-    },
-    {
-      academyName: "Academia Demo Levitate",
-      category: "trio",
-      genre: "motion",
-      id: "demo-lyrical-trio",
-      level: "intermedio",
-      subgenre: "lirico",
-      title: "Demo Lyrical Trío",
       venue: "edomex",
     },
   ],
@@ -1282,7 +1275,10 @@ function PhotoVideoShopPage() {
                     key={image}
                     loading={index === 0 ? "eager" : "lazy"}
                     src={image}
-                    style={{ animationDelay: `${index * 2}s` }}
+                    style={{
+                      animationDelay: `${index * mediaFeatureSlideDurationSeconds}s`,
+                      animationDuration: `${mediaFeatureSlideshowDurationSeconds}s`,
+                    }}
                   />
                 ))}
               </figure>
