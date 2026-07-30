@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Info,
   Lightbulb,
+  Medal,
   Megaphone,
   Music2,
   Pencil,
@@ -88,6 +89,7 @@ const directRanking = [
     variant: "bronze",
   },
 ];
+const academyResultsLoginPath = "/login?tipo=academia";
 
 const specialAwards = [
   {
@@ -561,7 +563,7 @@ export function PremiationLegacyPage() {
                 </li>
               ))}
             </ul>
-            <a href="/evaluaciones">Consulta tus resultados</a>
+            <a href={academyResultsLoginPath}>Consulta tus resultados</a>
           </article>
         </section>
 
@@ -638,9 +640,11 @@ export function PremiationPage() {
               </header>
 
               <div className="premiation-modern-ranking__list" aria-label="Lugares del ranking por bloque">
-                {directRanking.map((rank, index) => (
+                {directRanking.map((rank) => (
                   <article className={`is-${rank.variant}`} key={rank.place}>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <span className="premiation-modern-ranking__medal" aria-label={`Medalla ${rank.place}`}>
+                      <Medal aria-hidden="true" size={24} strokeWidth={2.15} />
+                    </span>
                     <strong>{rank.place}</strong>
                     <p>Posición competitiva dentro del bloque.</p>
                   </article>
@@ -788,7 +792,7 @@ export function PremiationPage() {
                 </li>
               ))}
             </ul>
-            <a href="/evaluaciones">
+            <a href={academyResultsLoginPath}>
               Consultar resultados <ArrowRight aria-hidden="true" size={18} />
             </a>
           </div>

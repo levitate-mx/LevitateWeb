@@ -14604,6 +14604,751 @@ button {
   }
 }
 
+.ticket-shop-page {
+  --ticket-shop-bg: #f8f6f1;
+  --ticket-shop-ink: #2a2928;
+  --ticket-shop-muted: rgba(42, 41, 40, 0.62);
+  --ticket-shop-line: rgba(42, 41, 40, 0.14);
+  --ticket-shop-soft: rgba(255, 255, 255, 0.54);
+  --ticket-shop-pink: var(--home-pink, #e74697);
+  --ticket-shop-blue: #5aa6b4;
+  min-height: 100vh;
+  background: var(--ticket-shop-bg);
+  color: var(--ticket-shop-ink);
+}
+
+.ticket-shop {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: clamp(126px, 12vw, 164px) clamp(18px, 4vw, 64px) clamp(72px, 8vw, 120px);
+}
+
+.ticket-shop-how > div > p {
+  margin: 0;
+  color: var(--ticket-shop-pink);
+  font-size: clamp(0.8rem, 0.9vw, 0.96rem);
+  font-weight: 900;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.ticket-shop-how h1,
+.ticket-shop-how h2 {
+  margin: 0;
+  color: var(--ticket-shop-ink);
+  font-size: clamp(3.8rem, 8vw, 8.2rem);
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 0.92;
+}
+
+.ticket-shop__layout {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  gap: clamp(28px, 4vw, 64px);
+}
+
+.ticket-shop__main {
+  display: grid;
+  gap: clamp(28px, 4vw, 54px);
+}
+
+.ticket-shop-deadline svg,
+.ticket-shop-confirmation-note svg {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-products {
+  display: grid;
+  gap: 16px;
+}
+
+.ticket-shop-product {
+  display: grid;
+  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.52fr);
+  overflow: hidden;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 8px;
+  background: var(--ticket-shop-soft);
+}
+
+.ticket-shop-product__copy,
+.ticket-shop-product__controls {
+  display: grid;
+  gap: 18px;
+  padding: clamp(22px, 3vw, 34px);
+}
+
+.ticket-shop-product__controls {
+  align-content: center;
+  border-left: 1px solid var(--ticket-shop-line);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.ticket-shop-product h2 {
+  margin: 0;
+  color: var(--ticket-shop-ink);
+  font-size: clamp(2.1rem, 4vw, 4.2rem);
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 0.95;
+}
+
+.ticket-shop-product p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--ticket-shop-muted);
+  font-size: 1rem;
+  font-weight: 610;
+  line-height: 1.42;
+}
+
+.ticket-shop-product__price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.ticket-shop-product__price strong {
+  color: var(--ticket-shop-blue);
+  font-size: clamp(1.7rem, 2.6vw, 2.8rem);
+  font-weight: 760;
+  line-height: 1;
+}
+
+.ticket-shop-product__price span,
+.ticket-shop-product__price small {
+  color: var(--ticket-shop-muted);
+  font-size: 0.92rem;
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.ticket-shop-product__price span {
+  text-decoration: line-through;
+}
+
+.ticket-shop-product__price small {
+  flex-basis: 100%;
+  color: var(--ticket-shop-pink);
+  font-weight: 820;
+}
+
+.ticket-shop-product label {
+  display: grid;
+  gap: 9px;
+}
+
+.ticket-shop-product label > span,
+.ticket-shop-buyer label > span {
+  color: rgba(42, 41, 40, 0.74);
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.ticket-shop-product select,
+.ticket-shop-buyer input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ticket-shop-ink);
+  font: inherit;
+  font-size: 0.96rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.ticket-shop-product select {
+  padding: 0 14px;
+}
+
+.ticket-shop-product__included {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 48px;
+  align-items: center;
+  color: var(--ticket-shop-muted);
+  font-size: 0.94rem;
+  font-weight: 660;
+}
+
+.ticket-shop-product__included svg {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-stepper {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 48px minmax(52px, 1fr) 48px;
+  overflow: hidden;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.ticket-shop-stepper button,
+.ticket-shop-cart-line__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ticket-shop-ink);
+  cursor: pointer;
+}
+
+.ticket-shop-stepper button {
+  min-height: 48px;
+}
+
+.ticket-shop-stepper strong {
+  text-align: center;
+  color: var(--ticket-shop-ink);
+  font-size: 1rem;
+  font-weight: 820;
+}
+
+.ticket-shop-add,
+.ticket-shop-buyer button,
+.ticket-shop-proof button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ticket-shop-ink);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 860;
+  letter-spacing: 0;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.ticket-shop-add:hover,
+.ticket-shop-add:focus-visible,
+.ticket-shop-buyer button:hover,
+.ticket-shop-buyer button:focus-visible,
+.ticket-shop-proof button:hover,
+.ticket-shop-proof button:focus-visible {
+  transform: translateY(-1px);
+}
+
+.ticket-shop-buyer button:disabled,
+.ticket-shop-proof button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+  transform: none;
+}
+
+.ticket-shop-checkout {
+  position: sticky;
+  top: 112px;
+  display: grid;
+  gap: 14px;
+}
+
+.ticket-shop-cart,
+.ticket-shop-buyer,
+.ticket-shop-deadline {
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ticket-shop-cart,
+.ticket-shop-buyer {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.ticket-shop-cart header,
+.ticket-shop-buyer header,
+.ticket-shop-payment header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--ticket-shop-ink);
+}
+
+.ticket-shop-cart header > div,
+.ticket-shop-buyer header,
+.ticket-shop-payment header {
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.ticket-shop-cart header > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ticket-shop-cart header strong {
+  color: var(--ticket-shop-blue);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.ticket-shop-cart__lines {
+  display: grid;
+  gap: 12px;
+}
+
+.ticket-shop-cart-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--ticket-shop-line);
+}
+
+.ticket-shop-cart-line:first-child {
+  border-top: 0;
+}
+
+.ticket-shop-cart-line strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ticket-shop-ink);
+  font-size: 1rem;
+  font-weight: 760;
+}
+
+.ticket-shop-cart-line span,
+.ticket-shop-cart-line small {
+  display: block;
+  color: var(--ticket-shop-muted);
+  font-size: 0.86rem;
+  font-weight: 620;
+  line-height: 1.32;
+}
+
+.ticket-shop-cart-line small {
+  margin-top: 5px;
+  color: var(--ticket-shop-blue);
+  font-weight: 760;
+}
+
+.ticket-shop-cart-line__actions {
+  display: grid;
+  align-items: center;
+  grid-template-columns: repeat(4, 30px);
+  gap: 3px;
+}
+
+.ticket-shop-cart-line__actions button,
+.ticket-shop-cart-line__actions b {
+  width: 30px;
+  height: 30px;
+}
+
+.ticket-shop-cart-line__actions b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.86rem;
+}
+
+.ticket-shop-cart-line__actions button:last-child {
+  color: var(--ticket-shop-pink);
+}
+
+.ticket-shop-cart__empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 18px 0;
+  color: var(--ticket-shop-muted);
+}
+
+.ticket-shop-cart__empty svg {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-total {
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--ticket-shop-line);
+}
+
+.ticket-shop-total div,
+.ticket-shop-payment__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ticket-shop-total dt,
+.ticket-shop-payment__summary span {
+  color: var(--ticket-shop-muted);
+  font-size: 0.86rem;
+  font-weight: 820;
+}
+
+.ticket-shop-total dd,
+.ticket-shop-payment__summary strong {
+  margin: 0;
+  color: var(--ticket-shop-ink);
+  font-size: clamp(1.55rem, 2.4vw, 2.1rem);
+  font-weight: 780;
+}
+
+.ticket-shop-buyer label {
+  display: grid;
+  gap: 8px;
+}
+
+.ticket-shop-buyer__notice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  margin-top: -2px;
+  color: var(--ticket-shop-muted);
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.28;
+}
+
+.ticket-shop-buyer__notice svg {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-buyer label > div {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 34px minmax(0, 1fr);
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ticket-shop-buyer label svg {
+  justify-self: center;
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-buyer input {
+  min-height: 48px;
+  padding: 0 12px 0 0;
+  border: 0;
+  outline: 0;
+}
+
+.ticket-shop-buyer p {
+  margin: 0;
+  color: var(--ticket-shop-pink);
+  font-size: 0.9rem;
+  font-weight: 720;
+  line-height: 1.34;
+}
+
+.ticket-shop-payment {
+  display: grid;
+  gap: 18px;
+  margin-top: 2px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ticket-shop-line);
+}
+
+.ticket-shop-payment__summary {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 16px;
+  border-radius: 7px;
+  background: rgba(90, 166, 180, 0.1);
+}
+
+.ticket-shop-payment__summary small {
+  grid-column: 1 / -1;
+  color: var(--ticket-shop-muted);
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.ticket-shop-payment__tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ticket-shop-payment__tabs button {
+  min-height: 42px;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ticket-shop-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 780;
+}
+
+.ticket-shop-payment__tabs button.is-active {
+  border-color: var(--ticket-shop-blue);
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-payment__details {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 7px;
+}
+
+.ticket-shop-payment__details div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.44fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ticket-shop-line);
+}
+
+.ticket-shop-payment__details div:last-child {
+  border-bottom: 0;
+}
+
+.ticket-shop-payment__details dt,
+.ticket-shop-payment__details dd {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.28;
+}
+
+.ticket-shop-payment__details dt {
+  color: var(--ticket-shop-muted);
+  font-weight: 720;
+}
+
+.ticket-shop-payment__details dd {
+  color: var(--ticket-shop-ink);
+  font-weight: 760;
+  word-break: break-word;
+}
+
+.ticket-shop-proof {
+  display: grid;
+  gap: 10px;
+}
+
+.ticket-shop-proof input {
+  display: none;
+}
+
+.ticket-shop-proof strong,
+.ticket-shop-proof p {
+  margin: 0;
+  color: var(--ticket-shop-muted);
+  font-size: 0.88rem;
+  font-weight: 680;
+  line-height: 1.34;
+}
+
+.ticket-shop-proof p {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-confirmation-note,
+.ticket-shop-deadline {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  color: var(--ticket-shop-muted);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.38;
+}
+
+.ticket-shop-confirmation-note {
+  padding-top: 2px;
+}
+
+.ticket-shop-deadline {
+  padding: 18px;
+}
+
+.ticket-shop-deadline strong {
+  color: var(--ticket-shop-ink);
+}
+
+.ticket-shop-deadline--inline {
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  min-height: 66px;
+  padding: 14px 0;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ticket-shop-ink);
+  font-size: clamp(0.98rem, 1.12vw, 1.18rem);
+  font-weight: 860;
+  line-height: 1.24;
+}
+
+.ticket-shop-deadline--inline svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ticket-shop-deadline--inline span {
+  font-weight: 860;
+}
+
+.ticket-shop-deadline--inline strong {
+  font-weight: 900;
+}
+
+.ticket-shop-how {
+  display: grid;
+  gap: 22px;
+  margin-bottom: clamp(34px, 5vw, 72px);
+}
+
+.ticket-shop-how--intro h1 {
+  width: 100%;
+  max-width: none;
+  font-size: clamp(4.383rem, 8.583vw, 9.183rem);
+}
+
+.ticket-shop-how__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 8px;
+  background: var(--ticket-shop-line);
+}
+
+.ticket-shop-how__grid article {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 210px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ticket-shop-how__grid svg {
+  color: var(--ticket-shop-blue);
+}
+
+.ticket-shop-how__grid strong {
+  color: var(--ticket-shop-ink);
+  font-size: 1.08rem;
+  font-weight: 760;
+  line-height: 1.08;
+}
+
+.ticket-shop-how__grid span {
+  color: var(--ticket-shop-muted);
+  font-size: 0.94rem;
+  font-weight: 620;
+  line-height: 1.42;
+}
+
+.ticket-shop-how__grid ul {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ticket-shop-muted);
+}
+
+.ticket-shop-how__grid li {
+  font-size: 0.9rem;
+  font-weight: 760;
+  line-height: 1.32;
+}
+
+.ticket-shop-how__grid li::marker {
+  color: var(--ticket-shop-blue);
+}
+
+@media (max-width: 1180px) {
+  .ticket-shop__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-shop-checkout {
+    position: static;
+  }
+
+  .ticket-shop-how__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .ticket-shop {
+    padding-top: 138px;
+  }
+
+  .ticket-shop-how--intro h1 {
+    font-size: clamp(3.4rem, 17vw, 5.2rem);
+  }
+
+  .ticket-shop-product,
+  .ticket-shop-how__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-shop-product__controls {
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .ticket-shop-deadline--inline {
+    grid-template-columns: 26px minmax(0, 1fr);
+    min-height: 58px;
+    font-size: 0.92rem;
+  }
+
+  .ticket-shop-product__copy,
+  .ticket-shop-product__controls {
+    padding: 22px;
+  }
+
+  .ticket-shop-product__controls {
+    border-top: 1px solid var(--ticket-shop-line);
+  }
+
+  .ticket-shop-cart-line,
+  .ticket-shop-payment__details div {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-shop-cart-line__actions {
+    justify-content: start;
+  }
+}
+
 @media (max-width: 1080px) {
   .levitate-scholarships__grid {
     grid-template-columns: 1fr;
@@ -16642,6 +17387,10 @@ button {
   }
 
   .levitate-home-redesign .levitate-nav__group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .levitate-home-redesign .levitate-nav__capsule-item[data-capsule-title="Convocatoria"] {
     display: none;
   }
 
@@ -24641,7 +25390,7 @@ button {
   margin: 0;
   font-size: clamp(4rem, 6.8vw, 8rem);
   font-weight: 620;
-  letter-spacing: -0.065em;
+  letter-spacing: 1pt;
   line-height: 0.88;
 }
 
@@ -24672,6 +25421,7 @@ button {
 }
 
 .sedes-hotel-cta__content a,
+.sedes-hotel-cta__content button,
 .hospedaje-info > a {
   display: inline-flex;
   align-items: center;
@@ -24685,6 +25435,8 @@ button {
   border-radius: 999px;
   background: #fff;
   color: var(--sedes-ink);
+  cursor: pointer;
+  font-family: inherit;
   font-size: 0.96rem;
   font-weight: 830;
   letter-spacing: -0.01em;
@@ -24699,6 +25451,8 @@ button {
 
 .sedes-hotel-cta__content a:hover,
 .sedes-hotel-cta__content a:focus-visible,
+.sedes-hotel-cta__content button:hover,
+.sedes-hotel-cta__content button:focus-visible,
 .hospedaje-info > a:hover,
 .hospedaje-info > a:focus-visible {
   border-color: var(--sedes-ink);
@@ -24827,6 +25581,56 @@ button {
   font-size: clamp(1rem, 1.15vw, 1.2rem);
   font-weight: 620;
   line-height: 1.48;
+}
+
+.hospedaje-documents {
+  display: grid;
+  grid-column: 2;
+  gap: 14px;
+}
+
+.hospedaje-documents a {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 32px minmax(0, 1fr) 20px;
+  gap: 18px;
+  padding: 20px 0;
+  border-top: 1px solid rgba(42, 41, 40, 0.12);
+  color: var(--sedes-ink);
+  text-decoration: none;
+}
+
+.hospedaje-documents a:last-child {
+  border-bottom: 1px solid rgba(42, 41, 40, 0.12);
+}
+
+.hospedaje-documents svg {
+  color: var(--sedes-blue);
+}
+
+.hospedaje-documents a > span {
+  display: grid;
+  gap: 6px;
+}
+
+.hospedaje-documents strong {
+  color: var(--sedes-ink);
+  font-size: clamp(1.18rem, 1.5vw, 1.72rem);
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.hospedaje-documents small {
+  color: var(--sedes-muted);
+  font-size: clamp(0.94rem, 1.05vw, 1.08rem);
+  font-weight: 620;
+  line-height: 1.42;
+}
+
+.hospedaje-documents a:hover strong,
+.hospedaje-documents a:focus-visible strong {
+  color: var(--sedes-pink);
 }
 
 .hospedaje-info > a {
@@ -25187,6 +25991,7 @@ button {
   }
 
   .sedes-hotel-cta__content a,
+  .sedes-hotel-cta__content button,
   .hospedaje-info > a {
     width: 100%;
   }
@@ -25221,6 +26026,7 @@ button {
   }
 
   .hospedaje-info article,
+  .hospedaje-documents,
   .hospedaje-info > a {
     grid-column: 1;
   }
@@ -29723,18 +30529,36 @@ button {
   border-bottom: 0;
 }
 
-.premiation-page--modern .premiation-modern-ranking__list article > span {
+.premiation-page--modern .premiation-modern-ranking__medal {
   display: inline-flex;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(106, 164, 173, 0.28);
+  border: 1px solid currentColor;
   border-radius: 999px;
   color: var(--premiation-modern-blue-muted);
-  font-size: 0.74rem;
-  font-weight: 820;
-  letter-spacing: 0.12em;
+  background: rgba(106, 164, 173, 0.08);
+}
+
+.premiation-page--modern .premiation-modern-ranking__medal svg {
+  width: 24px;
+  height: 24px;
+}
+
+.premiation-page--modern .premiation-modern-ranking__list .is-gold .premiation-modern-ranking__medal {
+  color: var(--premiation-rank-first);
+  background: rgba(79, 152, 163, 0.1);
+}
+
+.premiation-page--modern .premiation-modern-ranking__list .is-silver .premiation-modern-ranking__medal {
+  color: var(--premiation-rank-second);
+  background: rgba(114, 174, 182, 0.1);
+}
+
+.premiation-page--modern .premiation-modern-ranking__list .is-bronze .premiation-modern-ranking__medal {
+  color: var(--premiation-rank-third);
+  background: rgba(163, 200, 206, 0.12);
 }
 
 .premiation-page--modern .premiation-modern-ranking__list strong {

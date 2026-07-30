@@ -36,7 +36,6 @@ type JuryMember = {
 type HotelFeature = {
   name: string;
   image: string;
-  href: string;
   title: string;
   copy: string;
   distance: string;
@@ -70,6 +69,29 @@ type SedeContent = {
 
 const defaultMotionGenres = ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"];
 const defaultAerialGenres = ["Tela", "Aro", "Open"];
+const hotelDocumentDownloads = [
+  {
+    fileName: "hotel-levitate-2026.pdf",
+    href: "/assets/hotel-levitate-2026.pdf",
+  },
+  {
+    fileName: "beneficios-huespedes-levitate-2026.pdf",
+    href: "/assets/beneficios-huespedes-levitate-2026.pdf",
+  },
+];
+
+function downloadHotelDocuments() {
+  hotelDocumentDownloads.forEach((documentDownload, index) => {
+    window.setTimeout(() => {
+      const link = document.createElement("a");
+      link.href = documentDownload.href;
+      link.download = documentDownload.fileName;
+      document.body.append(link);
+      link.click();
+      link.remove();
+    }, index * 120);
+  });
+}
 
 const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
   cdmx: {
@@ -266,7 +288,6 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     hotel: {
       name: "City Express Plus Mundo E by Marriott",
       image: "/assets/hotel-city-express-mundo-e.png",
-      href: "/hospedaje",
       title: "Quédate cerca del escenario.",
       copy: "Nuestro hotel sede para Edo Méx está pensado para quienes viajan con su academia, familia o equipo y quieren moverse fácil durante el evento.",
       distance: "A unos minutos del Teatro Gran Recinto.",
@@ -697,9 +718,9 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <strong>{venue.hotel.name}</strong>
             <span>{venue.hotel.copy}</span>
             <small>{venue.hotel.distance}</small>
-            <a href={venue.hotel.href}>
+            <button onClick={downloadHotelDocuments} type="button">
               Ver hospedaje <ArrowRight aria-hidden="true" size={18} />
-            </a>
+            </button>
           </div>
           <figure className="sedes-hotel-cta__media">
             <img src={venue.hotel.image} alt={venue.hotel.name} loading="lazy" />

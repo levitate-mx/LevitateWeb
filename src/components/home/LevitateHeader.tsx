@@ -147,7 +147,6 @@ const pillMenuSections: PillMenuSection[] = [
     title: "Tienda Oficial",
     links: [
       { label: "Taquilla", href: "/tienda#boletos" },
-      { label: "Galería Oficial", href: "/tienda#foto-video" },
     ],
   },
 ];
@@ -473,7 +472,7 @@ export function LevitateHeader({
         : `levitate-nav__link${item.title === activeLabel ? " is-active" : ""}${isOpen ? " is-open" : ""}`;
 
     return (
-      <div className={itemClassName} key={item.title}>
+      <div className={itemClassName} data-capsule-title={item.title} key={item.title}>
         {item.title === "Menú" ? (
           <button
             aria-controls="levitate-pill-menu"
