@@ -25722,8 +25722,8 @@ button {
 .workshops-page.levitate-home-redesign .workshops-venue-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1fr);
-  min-height: 490px;
+  grid-template-columns: minmax(210px, 0.76fr) minmax(0, 1fr);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--home-line);
   border-radius: 8px;
@@ -25741,7 +25741,7 @@ button {
 
 .workshops-page.levitate-home-redesign .workshops-venue-card__media {
   position: relative;
-  min-height: 490px;
+  min-height: 428px;
   overflow: hidden;
 }
 
@@ -25751,7 +25751,7 @@ button {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 490px;
+  min-height: 428px;
   aspect-ratio: auto;
   object-fit: cover;
   filter: saturate(1.08) contrast(1.04) brightness(1.02);
@@ -25767,15 +25767,15 @@ button {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  padding: 34px 38px 36px;
+  padding: 30px 34px 26px;
   background: transparent;
 }
 
 .workshops-page.levitate-home-redesign .workshops-venue-card h2 {
-  margin: 0 0 22px;
+  margin: 0 0 17px;
   color: var(--home-ink);
   font-family: var(--font-body);
-  font-size: clamp(3.05rem, 3.15vw, 3.45rem);
+  font-size: clamp(2.85rem, 2.9vw, 3.22rem);
   font-weight: 620;
   line-height: 0.92;
   letter-spacing: 0;
@@ -25787,11 +25787,11 @@ button {
   display: flex;
   gap: 9px;
   align-items: flex-start;
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--home-soft-ink);
-  font-size: 0.95rem;
+  font-size: 0.91rem;
   font-weight: 560;
-  line-height: 1.42;
+  line-height: 1.34;
 }
 
 .workshops-page.levitate-home-redesign .workshops-venue-card p svg {
@@ -25819,13 +25819,13 @@ button {
 
 .workshops-page.levitate-home-redesign .workshops-venue-card__location small {
   color: var(--home-soft-ink);
-  font-size: 0.9rem;
+  font-size: 0.87rem;
   font-weight: 560;
-  line-height: 1.35;
+  line-height: 1.28;
 }
 
 .workshops-page.levitate-home-redesign .workshops-venue-card h3 {
-  margin: 26px 0 0;
+  margin: 20px 0 0;
   color: var(--home-ink);
   font-family: var(--font-body);
   font-size: 0.96rem;
@@ -25857,16 +25857,16 @@ button {
 .workshops-page.levitate-home-redesign .workshops-venue-card ul {
   display: grid;
   gap: 0;
-  margin: 15px 0 28px;
+  margin: 12px 0 0;
   padding: 0;
 }
 
 .workshops-page.levitate-home-redesign .workshops-venue-card li {
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr);
-  gap: 6px 12px;
+  gap: 4px 11px;
   align-items: start;
-  padding: 9px 0;
+  padding: 7px 0;
   border-bottom: 1px solid var(--home-line);
 }
 
@@ -25886,7 +25886,7 @@ button {
 
 .workshops-page.levitate-home-redesign .workshops-venue-card li strong {
   color: var(--home-ink);
-  font-size: 0.93rem;
+  font-size: 0.88rem;
   font-weight: 760;
   line-height: 1.2;
 }
@@ -25894,7 +25894,7 @@ button {
 .workshops-page.levitate-home-redesign .workshops-venue-card li small {
   margin-top: 1px;
   color: var(--home-soft-ink);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 560;
   line-height: 1.25;
 }
@@ -25916,8 +25916,8 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --workshops-button-surface: rgba(255, 255, 255, 0.78);
   position: absolute;
-  right: clamp(18px, 2vw, 30px);
-  bottom: clamp(18px, 2vw, 30px);
+  right: clamp(16px, 1.8vw, 24px);
+  bottom: clamp(16px, 1.8vw, 24px);
   z-index: 2;
   margin-top: 0;
 }
@@ -29479,18 +29479,22 @@ button {
 
 .premiation-page--modern .premiation-modern-system__intro {
   display: grid;
-  grid-template-columns: minmax(0, 0.76fr) minmax(280px, 0.34fr);
-  align-items: end;
-  gap: clamp(28px, 5vw, 76px);
+  max-width: 1080px;
+  row-gap: clamp(12px, 1.4vw, 18px);
   margin-bottom: clamp(28px, 4vw, 56px);
 }
 
+.premiation-page--modern .premiation-modern-system__intro .premiation-eyebrow {
+  grid-area: auto;
+}
+
 .premiation-page--modern .premiation-modern-system__intro h2 {
+  grid-area: auto;
   max-width: 980px;
-  margin: 14px 0 0;
+  margin: 0;
   color: var(--premiation-modern-ink);
   font-family: var(--font-body);
-  font-size: clamp(3.8rem, 7.4vw, 8rem);
+  font-size: clamp(3.8rem, 6.7vw, 7.4rem);
   font-weight: 560;
   letter-spacing: 0;
   line-height: 0.9;
@@ -29499,79 +29503,21 @@ button {
 }
 
 .premiation-page--modern .premiation-modern-system__intro > p:last-child {
-  max-width: 500px;
+  grid-area: auto;
+  max-width: 700px;
   margin: 0;
-  justify-self: end;
+  justify-self: auto;
   color: var(--premiation-modern-muted);
   font-size: clamp(1rem, 1.14vw, 1.18rem);
   font-weight: 540;
   line-height: 1.56;
 }
 
-.premiation-page--modern .premiation-modern-system__summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  margin-bottom: clamp(20px, 2.8vw, 40px);
-  border-top: 1px solid var(--premiation-modern-line);
-  border-bottom: 1px solid var(--premiation-modern-line);
-}
-
-.premiation-page--modern .premiation-modern-system__summary article {
-  display: grid;
-  grid-template-columns: minmax(84px, 0.22fr) minmax(0, 1fr);
-  min-height: clamp(128px, 11vw, 172px);
-  align-content: center;
-  align-items: start;
-  gap: clamp(16px, 2vw, 28px);
-  padding: clamp(22px, 2.6vw, 38px) clamp(18px, 2.6vw, 40px);
-  background: transparent;
-}
-
-.premiation-page--modern .premiation-modern-system__summary article + article {
-  border-left: 1px solid var(--premiation-modern-line);
-}
-
-.premiation-page--modern .premiation-modern-system__summary span {
-  display: inline-flex;
-  width: fit-content;
-  min-height: 34px;
-  align-items: center;
-  padding: 0 12px;
-  border: 1px solid rgba(217, 76, 140, 0.2);
-  border-radius: 999px;
-  background: rgba(217, 76, 140, 0.06);
-  color: var(--premiation-modern-pink);
-  font-size: 0.68rem;
-  font-weight: 840;
-  letter-spacing: 0.13em;
-  line-height: 1.1;
-  text-transform: uppercase;
-}
-
-.premiation-page--modern .premiation-modern-system__summary strong {
-  color: var(--premiation-modern-ink);
-  font-size: clamp(1.7rem, 2.45vw, 2.95rem);
-  font-weight: 620;
-  letter-spacing: 0;
-  line-height: 0.96;
-}
-
-.premiation-page--modern .premiation-modern-system__summary p {
-  max-width: 520px;
-  grid-column: 2;
-  margin: -2px 0 0;
-  color: var(--premiation-modern-muted);
-  font-size: 0.95rem;
-  font-weight: 540;
-  line-height: 1.45;
-}
-
 .premiation-page--modern .premiation-modern-system__grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  align-items: stretch;
-  gap: clamp(16px, 2.2vw, 30px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: clamp(18px, 2.8vw, 44px);
 }
 
 .premiation-page--modern .premiation-modern-medals,
@@ -29579,42 +29525,25 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: clamp(24px, 2.7vw, 38px);
+  padding: clamp(28px, 3vw, 46px);
   border: 1px solid var(--premiation-modern-line);
-  border-radius: 10px;
+  border-radius: clamp(18px, 2vw, 28px);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.24)),
-    rgba(244, 241, 235, 0.32);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.22)),
+    rgba(244, 241, 235, 0.28);
   box-shadow: 0 26px 80px rgba(42, 41, 40, 0.055);
 }
 
 .premiation-page--modern .premiation-modern-section-head {
-  display: grid;
-  gap: clamp(12px, 1.4vw, 18px);
-}
-
-.premiation-page--modern .premiation-modern-section-head > span {
-  display: inline-flex;
-  width: fit-content;
-  min-height: 30px;
-  align-items: center;
-  padding: 0 12px;
-  border: 1px solid rgba(217, 76, 140, 0.22);
-  border-radius: 999px;
-  background: rgba(217, 76, 140, 0.075);
-  color: var(--premiation-modern-pink);
-  font-size: 0.68rem;
-  font-weight: 840;
-  letter-spacing: 0.13em;
-  line-height: 1.1;
-  text-transform: uppercase;
+  display: block;
+  margin-bottom: clamp(24px, 3.2vw, 44px);
 }
 
 .premiation-page--modern .premiation-modern-section-head h2 {
-  margin: 10px 0 10px;
+  margin: 0 0 clamp(10px, 1vw, 14px);
   color: var(--premiation-modern-ink);
   font-family: var(--font-body);
-  font-size: clamp(2.25rem, 3.1vw, 3.75rem);
+  font-size: clamp(2.55rem, 3.6vw, 4.25rem);
   font-weight: 580;
   letter-spacing: 0;
   line-height: 0.94;
@@ -29622,11 +29551,12 @@ button {
   text-wrap: balance;
 }
 
-.premiation-page--modern .premiation-modern-section-head div > p:last-child {
-  max-width: 560px;
+.premiation-page--modern .premiation-modern-section-head > p {
+  max-width: 620px;
   margin: 0;
   color: var(--premiation-modern-muted);
-  font-size: 0.98rem;
+  font-size: clamp(1rem, 1.08vw, 1.12rem);
+  font-weight: 540;
   line-height: 1.5;
 }
 
@@ -29634,8 +29564,8 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: clamp(10px, 1.2vw, 16px);
-  margin-top: auto;
-  padding-top: clamp(26px, 3vw, 40px);
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .premiation-page--modern .premiation-modern-medal-row {
@@ -29661,12 +29591,13 @@ button {
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.24)),
-    rgba(244, 241, 235, 0.08);
-  backdrop-filter: blur(7px) saturate(1.04);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.34)),
+    rgba(244, 241, 235, 0.12);
+  opacity: 0;
+  backdrop-filter: blur(0) saturate(1);
   content: "";
   pointer-events: none;
-  transition: opacity 260ms ease;
+  transition: opacity 260ms ease, backdrop-filter 280ms ease;
 }
 
 .premiation-page--modern .premiation-modern-medal-row::after {
@@ -29674,7 +29605,8 @@ button {
   inset: auto 0 0;
   z-index: 1;
   height: 52%;
-  background: linear-gradient(180deg, transparent, rgba(244, 241, 235, 0.86) 78%);
+  background: linear-gradient(180deg, transparent, rgba(244, 241, 235, 0.78) 78%);
+  opacity: 0.42;
   content: "";
   pointer-events: none;
   transition: opacity 260ms ease;
@@ -29688,9 +29620,9 @@ button {
   width: min(92%, 198px);
   height: min(92%, 198px);
   object-fit: contain;
-  opacity: 0.72;
-  filter: blur(2.5px) saturate(0.96) contrast(0.98);
-  transform: translate(-50%, -52%) scale(1.08);
+  opacity: 1;
+  filter: blur(0) saturate(1) contrast(1);
+  transform: translate(-50%, -50%) scale(1.02);
   transition:
     filter 280ms ease,
     opacity 260ms ease,
@@ -29703,6 +29635,7 @@ button {
   color: var(--premiation-modern-ink);
   font-size: clamp(1.15rem, 1.35vw, 1.48rem);
   font-weight: 740;
+  text-shadow: 0 1px 18px rgba(244, 241, 235, 0.82);
   transition: opacity 220ms ease, transform 260ms var(--ease-out);
 }
 
@@ -29713,6 +29646,7 @@ button {
   font-size: clamp(0.68rem, 0.72vw, 0.8rem);
   font-weight: 680;
   line-height: 1.25;
+  text-shadow: 0 1px 18px rgba(244, 241, 235, 0.82);
   transition: opacity 220ms ease, transform 260ms var(--ease-out);
 }
 
@@ -29739,27 +29673,28 @@ button {
 
 .premiation-page--modern .premiation-modern-medal-row:hover::before,
 .premiation-page--modern .premiation-modern-medal-row:focus-within::before {
-  opacity: 0;
+  opacity: 1;
+  backdrop-filter: blur(8px) saturate(1.04);
 }
 
 .premiation-page--modern .premiation-modern-medal-row:hover::after,
 .premiation-page--modern .premiation-modern-medal-row:focus-within::after {
-  opacity: 0;
+  opacity: 1;
 }
 
 .premiation-page--modern .premiation-modern-medal-row:hover img,
 .premiation-page--modern .premiation-modern-medal-row:focus-within img {
-  opacity: 1;
-  filter: blur(0) saturate(1) contrast(1);
-  transform: translate(-50%, -50%) scale(1.02);
+  opacity: 0.9;
+  filter: blur(3.5px) saturate(0.98) contrast(0.98);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 .premiation-page--modern .premiation-modern-medal-row:hover strong,
 .premiation-page--modern .premiation-modern-medal-row:hover span,
 .premiation-page--modern .premiation-modern-medal-row:focus-within strong,
 .premiation-page--modern .premiation-modern-medal-row:focus-within span {
-  opacity: 0;
-  transform: translateY(8px);
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .premiation-page--modern .premiation-modern-ranking__list {
@@ -30027,13 +29962,16 @@ button {
 
 .premiation-page--modern .premiation-modern-special__panel > figure {
   position: relative;
-  min-height: 700px;
+  align-self: stretch;
+  min-height: 0;
   margin: 0;
   overflow: hidden;
   background: #19181a;
 }
 
 .premiation-page--modern .premiation-modern-special__panel > figure img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -30250,18 +30188,17 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .premiation-page--modern .premiation-modern-system__intro,
-  .premiation-page--modern .premiation-modern-system__summary {
+  .premiation-page--modern .premiation-modern-system__intro {
     grid-template-columns: 1fr;
   }
 
-  .premiation-page--modern .premiation-modern-system__summary article + article {
-    border-top: 1px solid var(--premiation-modern-line);
-    border-left: 0;
+  .premiation-page--modern .premiation-modern-system__intro {
+    align-items: start;
   }
 
   .premiation-page--modern .premiation-modern-system__intro > p:last-child {
     justify-self: start;
+    margin-bottom: 0;
   }
 
   .premiation-page--modern .premiation-modern-medal-list {
@@ -30358,15 +30295,6 @@ button {
     font-size: clamp(3.2rem, 14vw, 5.2rem);
   }
 
-  .premiation-page--modern .premiation-modern-system__summary article {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
-
-  .premiation-page--modern .premiation-modern-system__summary p {
-    grid-column: auto;
-  }
-
   .premiation-page--modern .premiation-modern-intro h2,
   .premiation-page--modern .premiation-modern-heading h2,
   .premiation-page--modern .premiation-modern-mvp h2,
@@ -30457,7 +30385,7 @@ button {
   }
 
   .premiation-page--modern .premiation-modern-special__panel > figure {
-    min-height: 520px;
+    min-height: clamp(340px, 86vw, 460px);
   }
 
   .premiation-page--modern .premiation-modern-special__criteria {

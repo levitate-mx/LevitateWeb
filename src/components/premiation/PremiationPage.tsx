@@ -603,35 +603,18 @@ export function PremiationPage() {
         <div className="premiation-modern-shell">
           <header className="premiation-modern-system__intro">
             <p className="premiation-eyebrow">Sistema de evaluación</p>
-            <h2>Dos lecturas del resultado.</h2>
+            <h2>Cómo se reconoce cada resultado.</h2>
             <p>
-              Cada coreografía recibe una medalla por puntaje. Cuando hay competencia directa, también se define su
-              posición dentro del bloque.
+              Cada coreografía se reconoce por puntaje y, cuando existe competencia directa, también por su posición
+              dentro del bloque.
             </p>
           </header>
-
-          <div className="premiation-modern-system__summary" aria-label="Dos formas de evaluación">
-            <article>
-              <span>Forma 1</span>
-              <strong>Medallero por puntaje</strong>
-              <p>Aplica a todas las coreografías inscritas, sin depender del número de participantes en el bloque.</p>
-            </article>
-            <article>
-              <span>Forma 2</span>
-              <strong>Ranking por bloque</strong>
-              <p>Se usa cuando hay participantes comparables y define las posiciones competitivas.</p>
-            </article>
-          </div>
 
           <div className="premiation-modern-system__grid">
             <article className="premiation-modern-medals">
               <header className="premiation-modern-section-head">
-                <span>Siempre aplica</span>
-                <div>
-                  <p className="premiation-eyebrow">Resultado por puntaje</p>
-                  <h2>Medalla según puntaje.</h2>
-                  <p>Este reconocimiento se entrega a todas las coreografías inscritas.</p>
-                </div>
+                <h2>Medallero por puntaje.</h2>
+                <p>Se entrega a cada coreografía inscrita de acuerdo con el puntaje final obtenido.</p>
               </header>
 
               <div className="premiation-modern-medal-list">
@@ -647,15 +630,11 @@ export function PremiationPage() {
 
             <article className="premiation-modern-ranking">
               <header className="premiation-modern-section-head">
-                <span>Competencia directa</span>
-                <div>
-                  <p className="premiation-eyebrow">Resultado competitivo</p>
-                  <h2>Lugar dentro del bloque.</h2>
-                  <p>
-                    Si dos o más participantes comparten división, género, nivel y categoría, compiten por una posición
-                    dentro de su bloque.
-                  </p>
-                </div>
+                <h2>Ranking por bloque.</h2>
+                <p>
+                  Cuando dos o más participantes comparten división, género, nivel y categoría, compiten por una posición
+                  dentro de su bloque.
+                </p>
               </header>
 
               <div className="premiation-modern-ranking__list" aria-label="Lugares del ranking por bloque">
@@ -714,7 +693,6 @@ export function PremiationPage() {
               <p className="premiation-eyebrow">Criterios de selección</p>
               <h2>Premios especiales por bloque.</h2>
             </div>
-            <p>Explora cada premio para conocer qué observa el equipo técnico y cómo se elige cada reconocimiento.</p>
           </header>
 
           <div className="premiation-modern-special__tabs" role="tablist" aria-label="Premios especiales por bloque">

@@ -65,6 +65,13 @@ const edoMexConfirmedWorkshops = [
   { discipline: "Tela y Cuna", coach: "Daniel Herrera" },
 ];
 
+const cdmxConfirmedWorkshops = [
+  { discipline: "Telas", coach: "Alex Nájera" },
+  { discipline: "Aro / Trapecio", coach: "Vladimir Garza" },
+  { discipline: "Cintas", coach: "Luis Raio" },
+  { discipline: "Flex", coach: "Yoli Campos" },
+];
+
 const basics = [
   {
     title: "Agua",
@@ -217,6 +224,40 @@ export function WorkshopsPage() {
         </div>
 
         <div className="workshops-venue-grid">
+          <article className="workshops-venue-card workshops-venue-card--confirmed workshops-venue-card--cdmx">
+            <div className="workshops-venue-card__media">
+              <img
+                className="workshops-venue-card__image--cdmx"
+                src="/assets/workshops-cdmx-parque-juana-asbaje.png"
+                alt="Participantes en workshop en Parque Juana de Asbaje, CDMX."
+                loading="lazy"
+              />
+            </div>
+            <div className="workshops-venue-card__content">
+              <h2>CDMX</h2>
+              <p>
+                <CalendarDays aria-hidden="true" size={17} /> Viernes 29 de mayo
+              </p>
+              <p className="workshops-venue-card__location">
+                <MapPin aria-hidden="true" size={17} />
+                <span>
+                  <strong>Parque Juana de Asbaje</strong>
+                  <small>Tlalpan</small>
+                </span>
+              </p>
+              <h3>Workshops confirmados</h3>
+              <ul>
+                {cdmxConfirmedWorkshops.map((workshop) => (
+                  <li key={workshop.discipline}>
+                    <span aria-hidden="true" />
+                    <strong>{workshop.discipline}</strong>
+                    <small>{workshop.coach}</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </article>
+
           <article className="workshops-venue-card workshops-venue-card--confirmed workshops-venue-card--edomex">
             <div className="workshops-venue-card__media">
               <img
