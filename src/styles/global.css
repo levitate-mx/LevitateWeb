@@ -32317,6 +32317,10 @@ button {
   padding-bottom: 0;
 }
 
+.rules-page--aerial.levitate-home-redesign .rules-aerial-program__section--levels {
+  width: min(100%, 1760px);
+}
+
 .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading {
   display: grid;
   width: 100%;
@@ -32465,26 +32469,28 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-levels {
   display: grid;
-  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
-  gap: clamp(22px, 4vw, 54px);
+  grid-template-columns: minmax(260px, 0.32fr) minmax(0, 0.68fr);
+  align-items: center;
+  gap: clamp(42px, 6vw, 92px);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-levels__copy {
   display: grid;
   align-content: start;
-  gap: 24px;
+  gap: clamp(24px, 3vw, 36px);
+  max-width: 470px;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-download {
-  display: inline-flex;
-  width: fit-content;
+  display: inline-grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  width: min(100%, 320px);
   max-width: 100%;
-  min-height: 52px;
+  min-height: 64px;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  row-gap: 4px;
-  padding: 10px 18px;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 10px 24px;
   border: 1px solid rgba(42, 41, 40, 0.14);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.7);
@@ -32493,6 +32499,7 @@ button {
   font-size: 0.9rem;
   font-weight: 760;
   letter-spacing: 0;
+  text-align: left;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
@@ -32502,15 +32509,19 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-download svg {
   color: var(--aerial-pink);
-  flex: 0 0 auto;
+  grid-row: 1 / span 2;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-download small {
-  flex-basis: 100%;
-  padding-left: 28px;
+  grid-column: 2;
+  padding-left: 0;
   color: var(--aerial-muted);
   font-size: 0.72rem;
   font-weight: 760;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-download span {
+  grid-column: 2;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-download span,
@@ -32521,9 +32532,11 @@ button {
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: clamp(12px, 2vw, 24px);
-  padding-top: 28px;
+  grid-template-columns: repeat(6, max-content);
+  align-self: center;
+  gap: clamp(10px, 1.2vw, 18px);
+  justify-content: space-between;
+  padding-top: 32px;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list::before {
@@ -32539,10 +32552,12 @@ button {
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article {
   position: relative;
   display: grid;
+  grid-template-rows: 18px auto;
   align-content: start;
-  gap: 9px;
+  gap: 8px;
   min-height: 0;
-  padding: 18px 0 0;
+  min-width: 0;
+  padding: 22px 0 0;
   overflow: visible;
 }
 
@@ -32569,7 +32584,8 @@ button {
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article span {
-  order: -1;
+  grid-row: 1;
+  align-self: end;
   width: fit-content;
   color: var(--aerial-pink);
   font-size: 0.72rem;
@@ -32579,11 +32595,56 @@ button {
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article strong {
+  grid-row: 2;
+  min-width: 0;
   color: var(--aerial-ink);
-  font-size: clamp(1.08rem, 1.5vw, 1.68rem);
+  font-size: clamp(1rem, 1.36vw, 2.15rem);
   font-weight: 720;
   letter-spacing: 0;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .rules-hero__mark img {
+  object-position: 50% 44%;
+  filter: saturate(0.92) contrast(1.06) brightness(0.72);
+  transform: scale(1.04);
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__genre-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__category-grid .rules-aerial-category-card {
+  min-height: 250px;
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__note {
+  max-width: 640px;
+  margin: 4px 0 0;
+  color: var(--aerial-muted);
+  font-size: clamp(1rem, 1.14vw, 1.14rem);
+  font-weight: 560;
+  line-height: 1.5;
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__download {
+  margin-top: 12px;
+  text-decoration: none;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__download:hover {
+  border-color: rgba(231, 70, 151, 0.42);
+  color: var(--aerial-pink);
+  transform: translateY(-2px);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-importance,
@@ -33111,6 +33172,11 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__genre-grid,
+  .rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     row-gap: 38px;
@@ -33179,6 +33245,11 @@ button {
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-grid,
   .rules-page--aerial.levitate-home-redesign .rules-aerial-category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__genre-grid,
+  .rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__category-grid {
     grid-template-columns: 1fr;
   }
 
@@ -33308,14 +33379,17 @@ button {
 }
 
 .levitate-hof {
+  --hof-info-width: 25%;
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: var(--hof-info-width) minmax(0, 1fr);
+  grid-template-rows: var(--levitate-hero-screen);
+  height: var(--levitate-hero-screen);
   min-height: var(--levitate-hero-screen);
   overflow: hidden;
   padding: 0;
-  background: #070707;
-  color: #fff;
+  background: var(--hof-paper);
+  color: var(--hof-ink);
   isolation: isolate;
 }
 
@@ -33328,39 +33402,34 @@ button {
   z-index: 6;
 }
 
-.levitate-hof__hero-image,
-.levitate-hof__shade {
-  position: absolute;
-  inset: 0;
-}
-
 .levitate-hof__hero-image {
+  position: relative;
   z-index: 0;
+  grid-column: 2;
+  grid-row: 1;
   width: 100%;
   height: 100%;
+  min-height: 0;
   object-fit: cover;
   object-position: center;
-  opacity: 0.72;
-  transform: scale(1.02);
+  opacity: 1;
+  transform: none;
   transition: opacity 320ms ease, transform 600ms ease;
-}
-
-.levitate-hof__shade {
-  z-index: 1;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.52) 42%, rgba(0, 0, 0, 0.28) 100%),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.16) 54%, rgba(0, 0, 0, 0.56) 100%);
 }
 
 .levitate-hof__content {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: 1fr;
   align-items: end;
-  gap: clamp(28px, 5vw, 72px);
+  align-self: stretch;
+  gap: 0;
   width: 100%;
-  padding: clamp(110px, 14vh, 164px) clamp(24px, 5vw, 88px) var(--levitate-hero-bottom-pad);
+  min-height: var(--levitate-hero-screen);
+  padding: 0;
 }
 
 .levitate-hof__header {
@@ -33418,14 +33487,18 @@ button {
 
 .levitate-hof__featured {
   display: grid;
+  grid-column: 1;
+  justify-self: start;
+  align-self: stretch;
+  align-content: end;
   gap: 18px;
-  padding: clamp(22px, 2.6vw, 34px);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  width: 100%;
+  min-width: 0;
+  padding: clamp(112px, 15vh, 164px) clamp(24px, 3vw, 44px) var(--levitate-hero-bottom-pad);
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 18px 0 52px rgba(40, 39, 37, 0.1);
 }
 
 .levitate-hof__featured small {
@@ -33439,12 +33512,14 @@ button {
 
 .levitate-hof__featured h2 {
   margin: 0;
-  color: #fff;
+  max-width: 100%;
+  color: var(--hof-ink);
   font-family: var(--font-body);
-  font-size: clamp(2.2rem, 4.2vw, 4.65rem);
+  font-size: clamp(2.15rem, 3.1vw, 3.55rem);
   font-weight: 620;
   letter-spacing: 0;
   line-height: 0.92;
+  overflow-wrap: anywhere;
 }
 
 .levitate-hof__featured dl {
@@ -33462,7 +33537,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--hof-muted);
   font-family: var(--font-body);
   font-size: 0.78rem;
   font-weight: 800;
@@ -33477,7 +33552,7 @@ button {
 
 .levitate-hof__featured dd {
   margin: 0;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--hof-ink);
   font-family: var(--font-body);
   font-size: clamp(1rem, 1.35vw, 1.2rem);
   font-weight: 650;
@@ -33495,23 +33570,23 @@ button {
   width: 50px;
   height: 50px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(40, 39, 37, 0.16);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hof-ink);
   color: #fff;
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
 .levitate-hof__controls button:hover {
-  border-color: rgba(255, 255, 255, 0.42);
-  background: rgba(255, 255, 255, 0.2);
+  border-color: var(--hof-pink);
+  background: var(--hof-pink);
   transform: translateY(-2px);
 }
 
 .levitate-hof-archive {
   background: var(--hof-paper);
-  padding: clamp(84px, 9vw, 138px) clamp(20px, 5vw, 88px);
+  padding: clamp(36px, 5vw, 72px) clamp(20px, 5vw, 88px) clamp(84px, 9vw, 138px);
 }
 
 .levitate-hof-archive__head {
@@ -33781,14 +33856,22 @@ button {
 }
 
 @media (max-width: 1120px) {
-  .levitate-hof__content,
   .levitate-hof-archive__head,
   .levitate-scholarships__grid {
     grid-template-columns: 1fr;
   }
 
+  .levitate-hof {
+    --hof-info-width: 34%;
+  }
+
+  .levitate-hof__content {
+    grid-template-columns: 1fr;
+  }
+
   .levitate-hof__featured {
-    max-width: 560px;
+    grid-column: 1;
+    max-width: none;
   }
 
   .levitate-hof-archive__grid {
@@ -33797,8 +33880,27 @@ button {
 }
 
 @media (max-width: 680px) {
+  .levitate-hof {
+    --hof-info-width: 100%;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: auto;
+  }
+
+  .levitate-hof__hero-image {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: min(58vh, 520px);
+    min-height: 0;
+  }
+
   .levitate-hof__content {
-    padding: 116px 20px var(--levitate-hero-bottom-pad);
+    grid-column: 1;
+    grid-row: 2;
+    min-height: auto;
+    padding: 0;
   }
 
   .levitate-hof__header h1 {
@@ -33806,7 +33908,9 @@ button {
   }
 
   .levitate-hof__featured {
-    padding: 22px;
+    min-height: 286px;
+    padding: 28px 20px 32px;
+    box-shadow: 0 -18px 48px rgba(40, 39, 37, 0.1);
   }
 
   .levitate-hof-archive,

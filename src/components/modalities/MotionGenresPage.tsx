@@ -1,139 +1,165 @@
-import { ArrowRight, Scale, Sparkles, UsersRound } from "lucide-react";
+import { FileText } from "lucide-react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-const benefits = [
+const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+
+const motionGenres = [
   {
-    icon: Sparkles,
-    title: "Destaca tu estilo único",
-    copy: "Competir en tu género te hace más relevante y te ayuda a destacar.",
+    title: "Acrojazz",
+    text: "Fusiona jazz técnico y acrobacias contemporáneas para crear coreografías de alto impacto visual.",
   },
   {
-    icon: UsersRound,
-    title: "Evaluación con claridad",
-    copy: "Los jueces evalúan tu coreo dentro de contextos adecuados a cada disciplina.",
+    title: "Ballet",
+    text: "Técnica clásica, postura, líneas tradicionales y precisión escénica.",
   },
   {
-    icon: Scale,
-    title: "Vive una clasificación justa",
-    copy: "Cada coreografía compite en su género, para una valoración imparcial.",
+    title: "Jazz",
+    text: "Estilo libre y expresivo con energía, dinámica, técnica y versatilidad.",
+  },
+  {
+    title: "Folklore",
+    text: "Danzas tradicionales que representan identidad, raíces, cultura y presencia escénica.",
+  },
+  {
+    title: "Contemporáneo",
+    text: "Movimiento libre, emocional y técnico con fluidez, intención y propuesta creativa.",
+  },
+  {
+    title: "Urbanos",
+    text: "Incluye street jazz, commercial, hip hop, waacking, heels, house y fusiones urbanas.",
+  },
+  {
+    title: "Lírico",
+    text: "Combina técnica, musicalidad e interpretación para contar una historia desde el movimiento.",
+  },
+  {
+    title: "Belly Dance",
+    text: "Danza oriental con control corporal, aislamientos, musicalidad y presencia.",
+  },
+  {
+    title: "Open",
+    text: "Para propuestas que integran estilos, lenguajes o fusiones fuera de un género único.",
   },
 ];
 
-const genres = [
+const motionCategories = [
   {
-    number: "01",
-    title: "Acrojazz",
-    copy: "Fusiona el jazz técnico y acrobacias contemporáneas para crear coreos de gran impacto visual.",
+    title: "Solo",
+    text: "Una persona en escena durante toda la presentación.",
+    formats: ["1 participante"],
   },
   {
-    number: "02",
-    title: "Ballet",
-    copy: "Técnica clásica y líneas tradicionales, con precisión, postura y estética en su máxima expresión.",
+    title: "Dúo",
+    text: "Dos participantes comparten la misma coreografía y propuesta escénica.",
+    formats: ["2 participantes"],
   },
   {
-    number: "03",
-    title: "Jazz",
-    copy: "Estilo libre y expresivo. Combina jazz técnico con movimientos dinámicos y versátil contemporáneo.",
+    title: "Trío",
+    text: "Tres participantes compiten dentro de una misma presentación.",
+    formats: ["3 participantes"],
   },
   {
-    number: "04",
-    title: "Folklore",
-    copy: "Expresa la identidad, raíces y cultura de regiones o países a través de danzas tradicionales.",
+    title: "Grupo",
+    text: "Cuatro o más participantes integran una coreografía colectiva.",
+    formats: ["4+ participantes"],
   },
-  {
-    number: "05",
-    title: "Contemporáneo",
-    copy: "Movimiento libre y emocional, que mezcla técnica, fluidez y creatividad sin límites.",
-  },
-  {
-    number: "06",
-    title: "Urbanos",
-    copy: "Incluye street jazz, commercial, hip hop, waacking, heels, house y demás fusiones urbanas.",
-  },
-  {
-    number: "07",
-    title: "Lírico",
-    copy: "Combina técnica, musicalidad e interpretación para contar una historia desde el movimiento.",
-  },
-  {
-    number: "08",
-    title: "Belly Dance",
-    copy: "Danza oriental con control corporal, aislamientos, musicalidad y presencia escénica.",
-  },
-  {
-    number: "09",
-    title: "Open",
-    copy: "Para propuestas que integran estilos, lenguajes o fusiones que no encajan en un género único.",
-  },
+];
+
+const motionDivisions = [
+  { division: "Baby", ages: "Hasta los 6 años" },
+  { division: "Petite", ages: "De 7 a 10 años" },
+  { division: "Junior", ages: "De 11 a 13 años" },
+  { division: "Teen", ages: "De 14 a 17 años" },
+  { division: "Senior", ages: "18 años en adelante" },
+  { division: "Legacy", ages: "+40 años Amateur" },
 ];
 
 export function MotionGenresPage() {
   return (
-    <main className="motion-genres-page">
-      <section className="motion-genres-hero" id="generos-motion">
-        <LevitateHeader activeLabel="Modalidades" useRootLinks />
-        <img className="motion-genres-hero__image" src={assets.hero} alt="" aria-hidden="true" />
-        <div className="motion-genres-hero__shade" aria-hidden="true" />
-        <div className="motion-genres-hero__light motion-genres-hero__light--one" aria-hidden="true" />
-        <div className="motion-genres-hero__light motion-genres-hero__light--two" aria-hidden="true" />
+    <main className="rules-page rules-page--aerial levitate-home-redesign motion-genres-page motion-genres-page--redesign">
+      <LevitateHeader activeLabel="Modalidades" useRootLinks variant="pill" />
 
-        <div className="motion-genres-hero__content">
+      <section className="rules-hero motion-genres-hero-redesign" id="generos-motion">
+        <div className="rules-hero__copy">
+          <p className="rules-eyebrow">MODALIDAD</p>
           <h1>
-            <span>Géneros</span>
-            <span>Levitate Motion</span>
+            <span className="rules-title__line">Levitate </span>
+            <span className="rules-title__accent">Motion</span>
           </h1>
-          <p>Clasifica tu coreografía con precisión.</p>
-          <a href="#generos-participantes">
-            Ver géneros participantes <ArrowRight aria-hidden="true" size={18} />
-          </a>
-        </div>
-      </section>
-
-      <section className="motion-genres-intro" aria-labelledby="motion-genero-importa">
-        <div className="motion-genres-intro__header">
-          <h2 id="motion-genero-importa">
-            El género <span>importa.</span>
-          </h2>
         </div>
 
-        <div className="motion-genres-benefits">
-          {benefits.map((benefit) => {
-            const Icon = benefit.icon;
-            return (
-              <article key={benefit.title}>
-                <Icon aria-hidden="true" size={44} strokeWidth={1.6} />
-                <h3>{benefit.title}</h3>
-                <p>{benefit.copy}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="motion-genres-catalog" id="generos-participantes" aria-labelledby="motion-generos-title">
-        <img
-          className="motion-genres-catalog__dancer"
-          src={assets.competition}
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-        />
-        <div className="motion-genres-catalog__content">
-          <div className="motion-genres-catalog__header">
-            <p>Categorías oficiales</p>
-            <h2 id="motion-generos-title">Géneros participantes</h2>
-            <span>Todos los géneros deberán adecuarse a los lineamientos oficiales de cada categoría.</span>
+        <div className="rules-hero__mark" aria-hidden="true">
+          <img src={assets.communityKidsStage} alt="" />
+          <div>
+            <span>Levitate MX</span>
+            <strong>L</strong>
           </div>
+        </div>
+      </section>
 
-          <div className="motion-genres-grid">
-            {genres.map((genre) => (
-              <article key={genre.number}>
-                <span>{genre.number}</span>
-                <h3>{genre.title}</h3>
-                <p>{genre.copy}</p>
+      <section className="rules-aerial-program motion-program" aria-label="Guía de competencia Motion">
+        <div className="rules-aerial-program__section rules-aerial-program__section--genres">
+          <div className="rules-aerial-program__heading">
+            <p className="rules-aerial-kicker">Géneros que participan</p>
+            <h3>Estilos en competencia.</h3>
+          </div>
+          <div className="rules-aerial-genre-grid motion-program__genre-grid">
+            {motionGenres.map((genre) => (
+              <article className="rules-aerial-genre-card" key={genre.title}>
+                <h4>{genre.title}</h4>
+                <p>{genre.text}</p>
               </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="rules-aerial-program__section rules-aerial-program__section--categories">
+          <div className="rules-aerial-program__heading">
+            <p className="rules-aerial-kicker">Categorías</p>
+            <h3>Formatos de participación.</h3>
+            <p className="motion-program__note">
+              Motion no se divide por niveles. La participación se clasifica por género, categoría y división de edad.
+            </p>
+            <a className="rules-aerial-download motion-program__download" download href={regulationsPdfHref}>
+              <FileText aria-hidden="true" size={18} />
+              <span>PDF de reglamento</span>
+              <small>Descargar</small>
+            </a>
+          </div>
+          <div className="rules-aerial-category-grid motion-program__category-grid">
+            {motionCategories.map((category) => (
+              <article className="rules-aerial-category-card" key={category.title}>
+                <div>
+                  <h4>{category.title}</h4>
+                  <p>{category.text}</p>
+                </div>
+                <ul aria-label={`Formato ${category.title}`}>
+                  {category.formats.map((format) => (
+                    <li key={format}>{format}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="rules-aerial-program__section rules-aerial-program__section--divisions">
+          <div className="rules-aerial-program__heading">
+            <p className="rules-aerial-kicker">Divisiones</p>
+            <h3>Rangos por edad.</h3>
+          </div>
+          <div className="rules-aerial-division-table" role="table" aria-label="Divisiones por edad">
+            <div className="rules-aerial-division-table__head" role="row">
+              <span role="columnheader">División</span>
+              <span role="columnheader">Edades</span>
+            </div>
+            {motionDivisions.map((item) => (
+              <div className="rules-aerial-division-table__row" role="row" key={item.division}>
+                <strong role="cell">{item.division}</strong>
+                <span role="cell">{item.ages}</span>
+              </div>
             ))}
           </div>
         </div>

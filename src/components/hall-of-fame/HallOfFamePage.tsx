@@ -3,13 +3,30 @@ import { Building2, ChevronDown, ChevronLeft, ChevronRight, Download, MapPin } f
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-const mvpPerformances = [
-  { year: "Otoño 2023", title: "Barracuda", academy: "Ventuerion", venue: "CDMX", image: "/assets/mvp-barracuda-2023.jpg" },
+type MvpPerformance = {
+  academy: string;
+  heroImage?: string;
+  image: string;
+  imageClassName?: string;
+  title: string;
+  venue: string;
+  year: string;
+};
+
+const mvpPerformances: MvpPerformance[] = [
   {
-    year: "Primavera 2024",
+    year: "Otoño 2023",
+    title: "Barracuda",
+    academy: "Ventuerion",
+    venue: "CDMX",
+    image: "/assets/mvp-barracuda-2023-left.jpg",
+  },
+  {
+    year: "Primavera 2025",
     title: "Paint in Black",
     academy: "Dance Forum",
     venue: "CDMX",
+    heroImage: "/assets/mvp-paint-in-black-2024-hero.jpg",
     image: "/assets/mvp-paint-in-black-2024.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
@@ -23,7 +40,7 @@ const mvpPerformances = [
   },
   { year: "Otoño 2024", title: "Zozobra", academy: "Spiralis", venue: "CDMX", image: "/assets/mvp-zozobra-2024.jpg" },
   {
-    year: "2025",
+    year: "Primavera 2025",
     title: "Party, Party, Party",
     academy: "Stiletto Estudio de Danza",
     venue: "San Luis Potosí",
@@ -32,7 +49,7 @@ const mvpPerformances = [
   },
   {
     year: "Primavera 2026",
-    title: "RUN",
+    title: "Run",
     academy: "Release Danza de Alto Rendimiento",
     venue: "Veracruz",
     image: "/assets/mvp-run-primavera-2026-veracruz.jpg",
@@ -48,15 +65,15 @@ const mvpPerformances = [
   },
   {
     year: "Primavera 2026",
-    title: "INSTRUCTION",
+    title: "Instruction",
     academy: "Plataforma studio",
     venue: "Puebla",
     image: "/assets/mvp-instruction-primavera-2026-puebla.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
   {
-    year: "Otoño 2026",
-    title: "LA FORMA",
+    year: "Otoño 2025",
+    title: "La Forma",
     academy: "Release Danza de Alto Rendimiento",
     venue: "CDMX",
     image: "/assets/mvp-la-forma-otono-2026-cdmx.jpg",
@@ -81,30 +98,19 @@ export function HallOfFamePage() {
   };
 
   return (
-    <main className="levitate-page hall-fame-page">
+    <main className="levitate-page levitate-home-redesign hall-fame-page">
       <section className="hall-fame-shell">
         <section className="levitate-hof" id="mvps">
-          <LevitateHeader activeLabel="Salón de la fama" useRootLinks />
+          <LevitateHeader activeLabel="Salón de la fama" useRootLinks variant="pill" />
 
           <img
             alt=""
             aria-hidden="true"
             className="levitate-hof__hero-image"
-            src={activePerformance.image}
+            src={activePerformance.heroImage ?? activePerformance.image}
           />
-          <div className="levitate-hof__shade" aria-hidden="true" />
 
           <div className="levitate-hof__content">
-            <div className="levitate-hof__header">
-              <p className="levitate-eyebrow">Salón de la fama</p>
-              <h1>
-                Historias que siguen
-                {" "}
-                <span>elevando.</span>
-              </h1>
-              <strong>Un archivo vivo de los MVPs que marcaron cada edición de Levitate.</strong>
-            </div>
-
             <article className="levitate-hof__featured" aria-live="polite">
               <small>MVP seleccionado</small>
               <h2>{activePerformance.title}</h2>
@@ -131,44 +137,6 @@ export function HallOfFamePage() {
                 </button>
               </div>
             </article>
-          </div>
-        </section>
-
-        <section className="levitate-hof-archive" aria-labelledby="hof-archive-title">
-          <div className="levitate-hof-archive__head">
-            <div>
-              <p className="levitate-eyebrow">MVPs Levitate</p>
-              <h2 id="hof-archive-title">Ganadores por edición.</h2>
-            </div>
-            <p>
-              Selecciona una edición para ver su historia destacada en portada. Cada MVP representa presencia,
-              propuesta y una ejecución que dejó huella.
-            </p>
-          </div>
-
-          <div className="levitate-hof-archive__grid" aria-label="Archivo de MVPs">
-            {mvpPerformances.map((performance, index) => (
-              <button
-                aria-pressed={activeMvpIndex === index}
-                className={`levitate-hof-archive__card${activeMvpIndex === index ? " is-active" : ""}`}
-                key={`${performance.title}-${performance.year}`}
-                onClick={() => setActiveMvpIndex(index)}
-                type="button"
-              >
-                <img
-                  alt={`MVP ${performance.title}`}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  src={performance.image}
-                />
-                <span>{performance.year}</span>
-                <strong>{performance.title}</strong>
-                <small>
-                  {performance.academy}
-                  {" · "}
-                  {performance.venue}
-                </small>
-              </button>
-            ))}
           </div>
         </section>
 
