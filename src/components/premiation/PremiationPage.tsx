@@ -95,168 +95,168 @@ const specialAwards = [
     icon: Music2,
     title: "Mejor música",
     summary:
-      "Reconocimiento a la selección, edición e integración musical que fortalece la propuesta escénica.",
+      "Reconocimiento a una música clara, bien editada y conectada con la rutina.",
     image: "/assets/premio-especial-musica.png",
     imageAlt: "Escenario Levitate con iluminación para una presentación de competencia.",
     criteria: [
       {
         icon: Music2,
         title: "Selección musical",
-        copy: "Se reconocerá la elección de música que mejor fortalezca la propuesta artística, el concepto y la interpretación de la coreografía.",
+        copy: "La música debe acompañar la intención y energía de la coreografía.",
         highlights: ["propuesta artística", "concepto", "interpretación"],
       },
       {
         icon: SlidersHorizontal,
         title: "Edición y estructura",
-        copy: "Se valorará la calidad de la edición musical, la fluidez de las transiciones, la coherencia entre segmentos y el aprovechamiento de los cambios de ritmo, intensidad y dinámica.",
+        copy: "Se valora una pista limpia, fluida y sin cortes accidentales.",
         highlights: ["edición musical", "transiciones", "cambios de ritmo", "intensidad y dinámica"],
       },
       {
         icon: Sparkles,
         title: "Originalidad y creatividad",
-        copy: "Se considerará el uso creativo de mezclas, efectos, adaptaciones o combinaciones musicales que aporten identidad y valor a la presentación.",
+        copy: "Las mezclas o adaptaciones deben aportar identidad a la rutina.",
         highlights: ["mezclas", "efectos", "adaptaciones", "identidad"],
       },
       {
         icon: Star,
         title: "Relación con la ejecución",
-        copy: "La música deberá integrarse de manera efectiva con la coreografía, permitiendo que los movimientos, acentos y momentos clave se desarrollen en armonía con la composición musical.",
+        copy: "Movimientos, acentos y momentos clave deben sentirse integrados.",
         highlights: ["movimientos", "acentos", "momentos clave", "armonía"],
       },
       {
         icon: WandSparkles,
         title: "Impacto escénico",
-        copy: "Se evaluará la capacidad de la música para generar emoción, reforzar la narrativa y contribuir a una experiencia memorable para el público y los jueces.",
+        copy: "La selección musical debe potenciar la presencia escénica.",
         highlights: ["emoción", "narrativa", "experiencia memorable"],
       },
     ],
-    note: "Este reconocimiento premia exclusivamente la selección, edición e integración musical dentro de la propuesta escénica, independientemente de la calificación técnica obtenida en la competencia.",
+    note: "Este reconocimiento evalúa únicamente la música y su integración a la propuesta.",
   },
   {
     id: "coreografia",
     icon: Lightbulb,
     title: "Mejor coreografía",
     summary:
-      "Reconocimiento a la calidad de la composición coreográfica y a la claridad de su propuesta artística.",
+      "Reconocimiento a una composición clara, creativa y escénicamente sólida.",
     image: "/assets/premio-especial-coreografia.png",
     imageAlt: "Participantes en una sesión de movimiento y preparación coreográfica.",
     criteria: [
       {
         icon: Lightbulb,
         title: "Creatividad y composición",
-        copy: "Se evaluará la originalidad de la propuesta, la construcción de secuencias, el uso del espacio y la capacidad de desarrollar una idea clara y atractiva.",
+        copy: "La rutina debe presentar una idea clara, original y bien construida.",
         highlights: ["originalidad", "construcción de secuencias", "uso del espacio", "idea clara y atractiva"],
       },
       {
         icon: SlidersHorizontal,
         title: "Estructura coreográfica",
-        copy: "La rutina deberá presentar una composición coherente, con un adecuado desarrollo, transiciones fluidas y una distribución equilibrada de los elementos técnicos y artísticos.",
+        copy: "Se valora un desarrollo coherente y transiciones fluidas.",
         highlights: ["composición coherente", "desarrollo", "transiciones fluidas", "distribución equilibrada"],
       },
       {
         icon: Music2,
         title: "Relación con la música",
-        copy: "Se valorará la sincronía entre la coreografía y la música, así como el aprovechamiento de acentos, cambios de ritmo y matices musicales.",
+        copy: "La coreografía debe aprovechar acentos, ritmo y matices musicales.",
         highlights: ["sincronía", "acentos", "cambios de ritmo", "matices musicales"],
       },
       {
         icon: Star,
         title: "Impacto artístico",
-        copy: "Se considerará la capacidad de la coreografía para transmitir emociones, contar una historia o comunicar un concepto de manera efectiva.",
+        copy: "La propuesta debe comunicar emoción, historia o concepto.",
         highlights: ["transmitir emociones", "contar una historia", "comunicar un concepto"],
       },
       {
         icon: Sparkles,
         title: "Innovación y propuesta escénica",
-        copy: "Se reconocerán las coreografías que aporten elementos creativos, recursos originales y una identidad artística que las haga destacar dentro de la competencia.",
+        copy: "Se reconocen recursos creativos que hagan destacar la rutina.",
         highlights: ["elementos creativos", "recursos originales", "identidad artística"],
       },
     ],
-    note: "Este reconocimiento premia la calidad de la composición coreográfica y su propuesta artística, independientemente del nivel técnico de ejecución o de la puntuación final obtenida en la competencia.",
+    note: "Este reconocimiento evalúa la composición coreográfica y su propuesta artística.",
   },
   {
     id: "vestuario",
     icon: WandSparkles,
     title: "Mejor vestuario",
     summary:
-      "Se reconocerá el vestuario que complemente la propuesta escénica, refuerce el concepto de la coreografía y mantenga coherencia visual, funcionalidad y cuidado en su presentación.",
+      "Reconocimiento a un vestuario cuidado, funcional y conectado con la propuesta.",
     image: "/assets/premio-especial-vestuario.png",
     imageAlt: "Participante en escenario Levitate durante una presentación.",
     criteria: [
       {
         icon: Star,
         title: "Relación con la propuesta artística",
-        copy: "El vestuario deberá complementar y reforzar la temática, concepto o historia presentada en la coreografía.",
+        copy: "Debe acompañar la temática o historia de la coreografía.",
         highlights: ["complementar", "reforzar", "temática", "concepto o historia"],
       },
       {
         icon: Pencil,
         title: "Creatividad y diseño",
-        copy: "Se valorará la originalidad, estética, combinación de elementos y el impacto visual generado en escena.",
+        copy: "Se valora originalidad, estética e impacto visual.",
         highlights: ["originalidad", "estética", "combinación de elementos", "impacto visual"],
       },
       {
         icon: Sparkles,
         title: "Presentación y cuidado",
-        copy: "El vestuario deberá encontrarse limpio, en buen estado y con acabados que reflejen atención al detalle.",
+        copy: "Debe verse limpio, cuidado y en buen estado.",
         highlights: ["limpio", "buen estado", "atención al detalle"],
       },
       {
         icon: ShieldCheck,
         title: "Funcionalidad y seguridad",
-        copy: "El vestuario no deberá representar riesgos para la ejecución técnica ni interferir con el desarrollo de la rutina.",
+        copy: "No debe representar riesgos ni limitar la ejecución.",
         highlights: ["riesgos", "ejecución técnica", "desarrollo de la rutina"],
       },
       {
         icon: Users,
         title: "Imagen integral",
-        copy: "Se tomará en cuenta la armonía entre vestuario, peinado, maquillaje y accesorios como parte de la propuesta escénica completa.",
+        copy: "Se considera la armonía entre vestuario, peinado, maquillaje y accesorios.",
         highlights: ["armonía", "vestuario", "peinado", "maquillaje y accesorios"],
       },
     ],
-    note: "ESTE RECONOCIMIENTO ES INDEPENDIENTE DE LA CALIFICACIÓN TÉCNICA Y ARTÍSTICA OBTENIDA EN LA COMPETENCIA.",
+    note: "Este reconocimiento es independiente de la calificación técnica y artística.",
   },
   {
     id: "porra",
     icon: Megaphone,
     title: "Mejor porra",
     summary:
-      "Reconocimiento a la energía, organización y actitud positiva de la porra durante toda la competencia.",
+      "Reconocimiento a una porra energética, organizada y respetuosa.",
     image: "/assets/premio-especial-porra.png",
     imageAlt: "Comunidad Levitate celebrando durante una experiencia de competencia.",
     criteria: [
       {
         icon: Star,
         title: "Espíritu deportivo y valores",
-        copy: "El premio reconocerá a la porra que demuestre entusiasmo, compañerismo, respeto, inclusión y apoyo positivo durante toda la competencia.",
+        copy: "Se reconoce entusiasmo, respeto, inclusión y apoyo positivo.",
         highlights: ["entusiasmo", "compañerismo", "respeto", "inclusión", "apoyo positivo"],
       },
       {
         icon: Users,
         title: "Animar es compartir",
-        copy: "Una gran porra no solo alienta a su propia academia, sino que también reconoce, celebra y aplaude el esfuerzo de los demás participantes y escuelas, contribuyendo a un ambiente de unión y crecimiento para toda la comunidad.",
+        copy: "También se celebra el esfuerzo de otros participantes y escuelas.",
         highlights: ["reconoce", "celebra", "aplaude", "unión y crecimiento"],
       },
       {
         icon: Megaphone,
         title: "Uso responsable de accesorios sonoros",
-        copy: "Las cornetas, matracas y otros elementos de animación podrán utilizarse únicamente durante el momento indicado por el conductor del evento para la dinámica de elección de la Mejor Porra.",
+        copy: "Cornetas, matracas y accesorios solo podrán usarse cuando se indique.",
         highlights: ["cornetas", "matracas", "momento indicado", "Mejor Porra"],
       },
       {
         icon: ShieldCheck,
         title: "Respeto y sana convivencia",
-        copy: "No se permitirán gritos ofensivos, burlas, abucheos, conductas antideportivas ni acciones que incomoden, distraigan o molesten a otros participantes, espectadores o academias.",
+        copy: "No se permiten burlas, gritos ofensivos ni acciones antideportivas.",
         highlights: ["gritos ofensivos", "burlas", "abucheos", "conductas antideportivas"],
       },
       {
         icon: CheckCircle2,
         title: "Seguridad ante todo",
-        copy: "Queda estrictamente prohibido el uso de humo, máquinas de niebla, agua, espuma, confeti líquido, pirotecnia o cualquier otro elemento que pueda representar un riesgo para los asistentes, participantes, instalaciones o equipos del evento.",
+        copy: "Quedan prohibidos humo, niebla, agua, espuma, pirotecnia y riesgos similares.",
         highlights: ["humo", "pirotecnia", "riesgo", "asistentes", "equipos del evento"],
       },
     ],
-    note: "Se evaluará la energía, creatividad, organización y actitud positiva de la porra. Cualquier conducta o acción que vaya en contra de los valores de respeto, inclusión, seguridad y sana convivencia podrá ser motivo de descalificación para la obtención de este reconocimiento.",
+    note: "La porra debe mantener respeto, seguridad y sana convivencia durante el evento.",
   },
 ];
 
@@ -276,30 +276,6 @@ const considerations = [
   "Las premiaciones dependen del registro, inscripción, asistencia y participación.",
   "La devolución de hojas de jueceo está disponible al concluir la ceremonia de premiación.",
 ];
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function renderHighlightedCopy(copy: string, highlights: string[] = []) {
-  if (!highlights.length) {
-    return copy;
-  }
-
-  const sortedHighlights = [...highlights].sort((a, b) => b.length - a.length);
-  const highlightedSet = new Set(sortedHighlights.map((highlight) => highlight.toLocaleLowerCase("es-MX")));
-  const parts = copy.split(new RegExp(`(${sortedHighlights.map(escapeRegExp).join("|")})`, "gi"));
-
-  return parts.map((part, index) =>
-    highlightedSet.has(part.toLocaleLowerCase("es-MX")) ? (
-      <mark className="premiation-special-keyword" key={`${part}-${index}`}>
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  );
-}
 
 export function PremiationLegacyPage() {
   const [activeSpecialAwardId, setActiveSpecialAwardId] = useState("vestuario");
@@ -523,7 +499,7 @@ export function PremiationLegacyPage() {
                           <CriterionIcon aria-hidden="true" size={34} strokeWidth={1.7} />
                           <div>
                             <strong>{criterion.title}</strong>
-                            <p>{renderHighlightedCopy(criterion.copy, criterion.highlights)}</p>
+                            <p>{criterion.copy}</p>
                           </div>
                         </div>
                       );
@@ -623,75 +599,84 @@ export function PremiationPage() {
         </div>
       </section>
 
-      <section className="premiation-modern-intro" id="sistema">
-        <div className="premiation-modern-shell premiation-modern-intro__grid">
-          <h2>
-            Dos formas de reconocer <span>cada resultado.</span>
-          </h2>
-          <div className="premiation-modern-intro__copy">
-            <p className="premiation-eyebrow">Cómo funciona</p>
+      <section className="premiation-modern-system" id="sistema">
+        <div className="premiation-modern-shell">
+          <header className="premiation-modern-system__intro">
+            <p className="premiation-eyebrow">Sistema de evaluación</p>
+            <h2>Dos lecturas del resultado.</h2>
             <p>
-              El puntaje obtenido y la posición dentro del bloque cuentan historias distintas. Por eso, en Levitate se
-              reconocen por separado.
+              Cada coreografía recibe una medalla por puntaje. Cuando hay competencia directa, también se define su
+              posición dentro del bloque.
             </p>
+          </header>
+
+          <div className="premiation-modern-system__summary" aria-label="Dos formas de evaluación">
+            <article>
+              <span>Forma 1</span>
+              <strong>Medallero por puntaje</strong>
+              <p>Aplica a todas las coreografías inscritas, sin depender del número de participantes en el bloque.</p>
+            </article>
+            <article>
+              <span>Forma 2</span>
+              <strong>Ranking por bloque</strong>
+              <p>Se usa cuando hay participantes comparables y define las posiciones competitivas.</p>
+            </article>
           </div>
-        </div>
-      </section>
 
-      <section className="premiation-modern-system">
-        <div className="premiation-modern-shell premiation-modern-system__grid">
-          <article className="premiation-modern-medals">
-            <header className="premiation-modern-section-head">
-              <span>01</span>
-              <div>
-                <p className="premiation-eyebrow">Todas las participaciones</p>
-                <h2>Medallero por puntaje</h2>
-                <p>Cada coreografía inscrita recibe una medalla de acuerdo con el puntaje final obtenido.</p>
-              </div>
-            </header>
-
-            <div className="premiation-modern-medal-list">
-              {medalRules.map((rule) => (
-                <div className={`premiation-modern-medal-row is-${rule.tone}`} key={rule.label}>
-                  <img src={rule.image} alt={rule.alt} loading="lazy" />
-                  <strong>{rule.label}</strong>
-                  <span>{rule.description}</span>
+          <div className="premiation-modern-system__grid">
+            <article className="premiation-modern-medals">
+              <header className="premiation-modern-section-head">
+                <span>Siempre aplica</span>
+                <div>
+                  <p className="premiation-eyebrow">Resultado por puntaje</p>
+                  <h2>Medalla según puntaje.</h2>
+                  <p>Este reconocimiento se entrega a todas las coreografías inscritas.</p>
                 </div>
-              ))}
-            </div>
-          </article>
+              </header>
 
-          <article className="premiation-modern-ranking">
-            <header className="premiation-modern-section-head">
-              <span>02</span>
-              <div>
-                <p className="premiation-eyebrow">Cuando hay competencia directa</p>
-                <h2>Ranking por bloque</h2>
-                <p>
-                  Si dos o más participantes comparten división, género, nivel y categoría, compiten por una posición
-                  dentro de su bloque.
-                </p>
+              <div className="premiation-modern-medal-list">
+                {medalRules.map((rule) => (
+                  <div className={`premiation-modern-medal-row is-${rule.tone}`} key={rule.label}>
+                    <img src={rule.image} alt={rule.alt} loading="lazy" />
+                    <strong>{rule.label}</strong>
+                    <span>{rule.description}</span>
+                  </div>
+                ))}
               </div>
-            </header>
+            </article>
 
-            <div className="premiation-modern-ranking__list" aria-label="Lugares del ranking por bloque">
-              {directRanking.map((rank, index) => (
-                <article className={`is-${rank.variant}`} key={rank.place}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{rank.place}</strong>
-                  <p>Posición competitiva dentro del bloque.</p>
-                </article>
-              ))}
-            </div>
+            <article className="premiation-modern-ranking">
+              <header className="premiation-modern-section-head">
+                <span>Competencia directa</span>
+                <div>
+                  <p className="premiation-eyebrow">Resultado competitivo</p>
+                  <h2>Lugar dentro del bloque.</h2>
+                  <p>
+                    Si dos o más participantes comparten división, género, nivel y categoría, compiten por una posición
+                    dentro de su bloque.
+                  </p>
+                </div>
+              </header>
 
-            <aside className="premiation-modern-ranking__note">
-              <Info aria-hidden="true" size={22} />
-              <p>
-                El medallero es independiente del ranking. Por eso puede existir un primer lugar con medalla de oro,
-                plata, bronce o participación.
-              </p>
-            </aside>
-          </article>
+              <div className="premiation-modern-ranking__list" aria-label="Lugares del ranking por bloque">
+                {directRanking.map((rank, index) => (
+                  <article className={`is-${rank.variant}`} key={rank.place}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{rank.place}</strong>
+                    <p>Posición competitiva dentro del bloque.</p>
+                  </article>
+                ))}
+              </div>
+
+              <aside className="premiation-modern-ranking__note">
+                <Info aria-hidden="true" size={22} />
+                <p>
+                  El medallero es independiente del ranking. Por eso puede existir un primer lugar con medalla de oro,
+                  plata, bronce o participación.
+                </p>
+              </aside>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -777,7 +762,7 @@ export function PremiationPage() {
                       <CriterionIcon aria-hidden="true" size={24} strokeWidth={1.7} />
                       <div>
                         <strong>{criterion.title}</strong>
-                        <p>{renderHighlightedCopy(criterion.copy, criterion.highlights)}</p>
+                        <p>{criterion.copy}</p>
                       </div>
                     </article>
                   );
