@@ -66,6 +66,8 @@ type RulesContent = {
   processCards: RulesProcessCard[];
 };
 
+const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+
 const motionRuleCards: RuleCard[] = [
   {
     kind: "criterion",
@@ -506,6 +508,12 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
           <h1>
             <RulesTitleText title={content.heroTitle} />
           </h1>
+          {modality === "aerial" ? (
+            <a className="rules-hero__download" download href={regulationsPdfHref}>
+              <FileText aria-hidden="true" size={18} />
+              <span>PDF de reglamento</span>
+            </a>
+          ) : null}
         </div>
 
         {showHeroIntro ? (

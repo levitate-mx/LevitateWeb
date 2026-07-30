@@ -32162,6 +32162,7 @@ button {
   position: relative;
   z-index: 1;
   align-self: end;
+  animation: rules-premium-rise 760ms var(--ease-out) 120ms both;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-eyebrow {
@@ -32196,6 +32197,53 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-title__accent {
   color: #fff;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-hero__download {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: clamp(22px, 2.8vw, 36px);
+  padding: 0 22px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 22px 58px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px) saturate(1.12);
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    transform 220ms var(--ease-out);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-hero__download svg {
+  flex: 0 0 auto;
+  color: var(--aerial-pink);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-hero__download:hover {
+  border-color: rgba(255, 255, 255, 0.46);
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-hero__download:focus-visible {
+  outline: 2px solid rgba(231, 70, 151, 0.72);
+  outline-offset: 4px;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-hero__intro {
@@ -32240,6 +32288,7 @@ button {
   opacity: 1;
   filter: saturate(0.78) contrast(1.08) brightness(0.76);
   transform: translateX(calc(2.5% + 30px)) scale(1.05);
+  animation: rules-premium-media-settle 1200ms var(--ease-out) both;
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-hero__mark::after,
@@ -32348,10 +32397,47 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card,
 .rules-page--aerial.levitate-home-redesign .rules-aerial-category-card {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--aerial-line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.5);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 220ms ease,
+    transform 240ms var(--ease-out);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card::after,
+.rules-page--aerial.levitate-home-redesign .rules-aerial-category-card::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.52) 46%, transparent 68%);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-24%);
+  transition:
+    opacity 220ms ease,
+    transform 520ms var(--ease-out);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card:hover,
+.rules-page--aerial.levitate-home-redesign .rules-aerial-category-card:hover {
+  border-color: rgba(231, 70, 151, 0.26);
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 24px 58px rgba(42, 41, 40, 0.08);
+  transform: translateY(-3px);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card:hover::after,
+.rules-page--aerial.levitate-home-redesign .rules-aerial-category-card:hover::after {
+  opacity: 0.38;
+  transform: translateX(18%);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card {
@@ -32450,6 +32536,13 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row {
   min-height: 72px;
+  transition:
+    background 180ms ease,
+    padding 240ms var(--ease-out);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row:hover {
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row strong {
@@ -32559,6 +32652,9 @@ button {
   min-width: 0;
   padding: 22px 0 0;
   overflow: visible;
+  transition:
+    color 180ms ease,
+    transform 240ms var(--ease-out);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article::before {
@@ -32571,6 +32667,21 @@ button {
   border: 2px solid var(--aerial-muted-blue);
   border-radius: 999px;
   background: var(--aerial-bg);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 220ms ease,
+    transform 240ms var(--ease-out);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article:hover {
+  transform: translateY(-3px);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article:hover::before {
+  border-color: var(--aerial-pink);
+  box-shadow: 0 0 0 6px rgba(231, 70, 151, 0.1);
+  transform: scale(1.08);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list article.is-new {
@@ -32621,30 +32732,6 @@ button {
 
 .rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__category-grid .rules-aerial-category-card {
   min-height: 250px;
-}
-
-.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__note {
-  max-width: 640px;
-  margin: 4px 0 0;
-  color: var(--aerial-muted);
-  font-size: clamp(1rem, 1.14vw, 1.14rem);
-  font-weight: 560;
-  line-height: 1.5;
-}
-
-.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__download {
-  margin-top: 12px;
-  text-decoration: none;
-  transition:
-    border-color 180ms ease,
-    color 180ms ease,
-    transform 220ms var(--ease-out);
-}
-
-.rules-page--aerial.levitate-home-redesign.motion-genres-page--redesign .motion-program__download:hover {
-  border-color: rgba(231, 70, 151, 0.42);
-  color: var(--aerial-pink);
-  transform: translateY(-2px);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-importance,
@@ -33142,6 +33229,52 @@ button {
   text-transform: none;
 }
 
+@keyframes rules-premium-rise {
+  from {
+    opacity: 0;
+    translate: 0 18px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes rules-premium-media-settle {
+  from {
+    opacity: 0.84;
+    scale: 1.025;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes rules-premium-view {
+  from {
+    opacity: 0.2;
+    translate: 0 18px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__section > *,
+  .rules-page--aerial.levitate-home-redesign .rules-motion-explainer > *,
+  .rules-page--aerial.levitate-home-redesign .rules-motion-process > * {
+    animation: rules-premium-view both;
+    animation-range: entry 8% cover 28%;
+    animation-timeline: view();
+  }
+}
+
 @media (max-width: 1080px) {
   .rules-page--aerial.levitate-home-redesign .rules-hero {
     grid-template-areas:
@@ -33358,6 +33491,16 @@ button {
   .rules-page--aerial.levitate-home-redesign .rules-motion-step-card {
     min-height: 0;
     padding: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rules-page--aerial.levitate-home-redesign *,
+  .rules-page--aerial.levitate-home-redesign *::before,
+  .rules-page--aerial.levitate-home-redesign *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
   }
 }
 

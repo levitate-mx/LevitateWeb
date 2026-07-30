@@ -88,6 +88,10 @@ export function MotionGenresPage() {
             <span className="rules-title__line">Levitate </span>
             <span className="rules-title__accent">Motion</span>
           </h1>
+          <a className="rules-hero__download" download href={regulationsPdfHref}>
+            <FileText aria-hidden="true" size={18} />
+            <span>PDF de reglamento</span>
+          </a>
         </div>
 
         <div className="rules-hero__mark" aria-hidden="true">
@@ -119,14 +123,6 @@ export function MotionGenresPage() {
           <div className="rules-aerial-program__heading">
             <p className="rules-aerial-kicker">Categorías</p>
             <h3>Formatos de participación.</h3>
-            <p className="motion-program__note">
-              Motion no se divide por niveles. La participación se clasifica por género, categoría y división de edad.
-            </p>
-            <a className="rules-aerial-download motion-program__download" download href={regulationsPdfHref}>
-              <FileText aria-hidden="true" size={18} />
-              <span>PDF de reglamento</span>
-              <small>Descargar</small>
-            </a>
           </div>
           <div className="rules-aerial-category-grid motion-program__category-grid">
             {motionCategories.map((category) => (
