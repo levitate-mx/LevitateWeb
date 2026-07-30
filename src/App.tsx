@@ -8,6 +8,7 @@ import {
 import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
 import { InscripcionesConsultaPage, InscripcionesPage } from "./components/inscripciones/InscripcionesPage";
+import { LaunchTeaserPage } from "./components/launch/LaunchTeaserPage";
 import { MotionGenresPage } from "./components/modalities/MotionGenresPage";
 import {
   PassportAdminPage,
@@ -25,7 +26,27 @@ import { VenuePage } from "./components/venue/VenuePage";
 import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
 import { getVenueBySlug } from "./data/venueContent";
 
+const showLaunchTeaser = true;
+const launchPreviewStorageKey = "levitate-launch-preview";
+
 export default function App() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const launchPreviewParam = searchParams.get("preview");
+
+  if (launchPreviewParam === "site") {
+    window.localStorage.setItem(launchPreviewStorageKey, "site");
+  }
+
+  if (launchPreviewParam === "off") {
+    window.localStorage.removeItem(launchPreviewStorageKey);
+  }
+
+  const isLaunchPreview = window.localStorage.getItem(launchPreviewStorageKey) === "site";
+
+  if (showLaunchTeaser && !isLaunchPreview) {
+    return <LaunchTeaserPage />;
+  }
+
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
@@ -49,7 +70,7 @@ export default function App() {
   const shopMatch = window.location.pathname.match(/^\/tienda\/?$/);
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
   const venueMatch = window.location.pathname.match(/^\/sedes\/([^/]+)\/?$/);
-  const loginType = new URLSearchParams(window.location.search).get("tipo");
+  const loginType = searchParams.get("tipo");
 
   if (adminMediaMatch) {
     return <LevitateRegistrationRoute />;

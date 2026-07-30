@@ -119,6 +119,119 @@ button {
   color: var(--color-pink);
 }
 
+.launch-teaser {
+  position: relative;
+  display: grid;
+  min-height: var(--levitate-hero-screen);
+  place-items: center;
+  overflow: hidden;
+  padding: clamp(28px, 5vw, 72px);
+  background:
+    radial-gradient(circle at 50% 44%, rgba(231, 70, 151, 0.06), transparent 32rem),
+    #f6f2ed;
+  color: #292826;
+  font-family: var(--font-body);
+  isolation: isolate;
+  user-select: none;
+}
+
+.launch-teaser::before {
+  position: absolute;
+  inset: clamp(18px, 3vw, 42px);
+  border: 1px solid rgba(41, 40, 38, 0.08);
+  border-radius: 999px;
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.launch-teaser__content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: clamp(44px, 7vw, 92px);
+  width: min(100%, 860px);
+  animation: launch-teaser-enter 900ms var(--ease-out) both;
+}
+
+.launch-teaser__logo {
+  width: clamp(240px, 46vw, 620px);
+  height: auto;
+  opacity: 0.94;
+}
+
+.launch-teaser__timer {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(68px, 1fr));
+  gap: clamp(14px, 2.6vw, 36px);
+  width: min(100%, 640px);
+}
+
+.launch-teaser__unit {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.launch-teaser__unit strong {
+  color: #292826;
+  font-size: clamp(2.85rem, 7vw, 6.2rem);
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 0.82;
+}
+
+.launch-teaser__unit span {
+  color: rgba(41, 40, 38, 0.55);
+  font-size: clamp(0.7rem, 1.1vw, 0.86rem);
+  font-weight: 780;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+@keyframes launch-teaser-enter {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .launch-teaser {
+    padding: 28px 18px;
+  }
+
+  .launch-teaser::before {
+    inset: 12px;
+    border-radius: 42px;
+  }
+
+  .launch-teaser__content {
+    gap: 54px;
+  }
+
+  .launch-teaser__timer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 300px;
+    gap: 30px 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-teaser__content {
+    animation: none;
+  }
+}
+
 .site-header {
   position: fixed;
   z-index: 50;

@@ -8,6 +8,7 @@ type MvpPerformance = {
   heroImage?: string;
   image: string;
   imageClassName?: string;
+  sortOrder: number;
   title: string;
   venue: string;
   year: string;
@@ -15,6 +16,7 @@ type MvpPerformance = {
 
 const mvpPerformances: MvpPerformance[] = [
   {
+    sortOrder: 202302,
     year: "Otoño 2023",
     title: "Barracuda",
     academy: "Ventuerion",
@@ -22,7 +24,8 @@ const mvpPerformances: MvpPerformance[] = [
     image: "/assets/mvp-barracuda-2023-left.jpg",
   },
   {
-    year: "Primavera 2025",
+    sortOrder: 202401,
+    year: "Primavera 2024",
     title: "Paint in Black",
     academy: "Dance Forum",
     venue: "CDMX",
@@ -30,16 +33,18 @@ const mvpPerformances: MvpPerformance[] = [
     image: "/assets/mvp-paint-in-black-2024.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
+  { sortOrder: 202402, year: "Otoño 2024", title: "Zozobra", academy: "Spiralis", venue: "CDMX", image: "/assets/mvp-zozobra-2024.jpg" },
   {
-    year: "Primavera 2024",
+    sortOrder: 202501,
+    year: "Primavera 2025",
     title: "Querida Yo",
     academy: "Ars Nova",
     venue: "Puebla",
     image: "/assets/mvp-querida-yo-2024.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
-  { year: "Otoño 2024", title: "Zozobra", academy: "Spiralis", venue: "CDMX", image: "/assets/mvp-zozobra-2024.jpg" },
   {
+    sortOrder: 202502,
     year: "Primavera 2025",
     title: "Party, Party, Party",
     academy: "Stiletto Estudio de Danza",
@@ -48,6 +53,16 @@ const mvpPerformances: MvpPerformance[] = [
     imageClassName: "levitate-mvp-card__image--fill",
   },
   {
+    sortOrder: 202503,
+    year: "Otoño 2025",
+    title: "La Forma",
+    academy: "Release Danza de Alto Rendimiento",
+    venue: "CDMX",
+    image: "/assets/mvp-la-forma-otono-2026-cdmx.jpg",
+    imageClassName: "levitate-mvp-card__image--fill",
+  },
+  {
+    sortOrder: 202601,
     year: "Primavera 2026",
     title: "Run",
     academy: "Release Danza de Alto Rendimiento",
@@ -56,6 +71,7 @@ const mvpPerformances: MvpPerformance[] = [
     imageClassName: "levitate-mvp-card__image--fill",
   },
   {
+    sortOrder: 202602,
     year: "Primavera 2026",
     title: "El Nahual",
     academy: "Azquil",
@@ -64,6 +80,7 @@ const mvpPerformances: MvpPerformance[] = [
     imageClassName: "levitate-mvp-card__image--fill levitate-mvp-card__image--nahual",
   },
   {
+    sortOrder: 202603,
     year: "Primavera 2026",
     title: "Instruction",
     academy: "Plataforma studio",
@@ -71,15 +88,7 @@ const mvpPerformances: MvpPerformance[] = [
     image: "/assets/mvp-instruction-primavera-2026-puebla.jpg",
     imageClassName: "levitate-mvp-card__image--fill",
   },
-  {
-    year: "Otoño 2025",
-    title: "La Forma",
-    academy: "Release Danza de Alto Rendimiento",
-    venue: "CDMX",
-    image: "/assets/mvp-la-forma-otono-2026-cdmx.jpg",
-    imageClassName: "levitate-mvp-card__image--fill",
-  },
-];
+].sort((left, right) => left.sortOrder - right.sortOrder);
 
 const scholarshipDownloads = [
   { label: "Veracruz Primavera 2026", href: "/assets/becados-proxima-edicion.pdf" },
