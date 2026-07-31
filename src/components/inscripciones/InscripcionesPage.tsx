@@ -143,9 +143,9 @@ const phoneCountryOptions = [
 const registrationPaths: RegistrationPath[] = [
   {
     eyebrow: "Academias",
-    title: "Registra tu academia, alumnos y coreografías.",
+    title: "Registra tu academia, participantes y coreografías.",
     description: "Para poder hacer el pago de la inscripción es necesario registrarse primero.",
-    action: "Registrar alumnos",
+    action: "Registrar participante",
     href: "/registro/academias",
   },
   {
@@ -458,7 +458,7 @@ export function InscripcionesPage() {
             <h1>No te pierdas el vuelo.</h1>
             <div className="inscripciones-hero__actions">
               <a className="inscripciones-button inscripciones-button--light" href="/registro/academias">
-                Registrar alumnos
+                Registrar participante
                 <ArrowRight aria-hidden="true" size={18} />
               </a>
               <a className="inscripciones-button inscripciones-button--dark" href={consultationPath}>

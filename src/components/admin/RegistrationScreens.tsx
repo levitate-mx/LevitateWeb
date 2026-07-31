@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowRight,
   AtSign,
   BadgeCheck,
   BarChart3,
@@ -24,7 +23,6 @@ import {
   Mail,
   Menu,
   MessageCircle,
-  Minus,
   Music2,
   Phone,
   Plus,
@@ -34,6 +32,7 @@ import {
   ShoppingBag,
   Shirt,
   Ticket,
+  Upload,
   UserPlus,
   UserRoundPlus,
   Users,
@@ -44,7 +43,8 @@ import {
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
-type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "program" | "payments";
+type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "program" | "feedback" | "payments";
+type AdminLookupTab = "participants" | "choreographers" | "dances";
 type RegistrationAdminDashboardSection = "payments" | "tickets";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error";
@@ -111,6 +111,8 @@ type RegistrationParticipant = {
   age: number | null;
   division: string;
   shirtSize: string;
+  isInternational: boolean;
+  isReleveTeacher: boolean;
   createdAt: string;
 };
 
@@ -119,6 +121,7 @@ type RegistrationChoreographer = {
   fullName: string;
   email: string | null;
   phone: string | null;
+  shirtSize: string;
   createdAt: string;
 };
 
@@ -127,6 +130,16 @@ type RegistrationDanceRelation = {
   id: string;
   fullName: string;
   shirtSize?: string;
+};
+
+type RegistrationMusicUpload = {
+  id: string;
+  danceId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  dataUrl: string;
+  uploadedAt: string;
 };
 
 type RegistrationDance = {
@@ -140,6 +153,7 @@ type RegistrationDance = {
   createdAt: string;
   choreographers: RegistrationDanceRelation[];
   participants: RegistrationDanceRelation[];
+  musicUpload?: RegistrationMusicUpload | null;
 };
 
 type RegistrationInscriptionOrderStatus = "pending_payment" | "payment_reported" | "paid" | "rejected";
@@ -328,10 +342,18 @@ class RegistrationApiError extends Error {
 const adminMenuItems: AdminNavItem[] = [
   { label: "Inicio", icon: Home, screen: "home" },
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
-  { label: "Registrar alumnos", icon: GraduationCap, screen: "participants" },
+  { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
+  { label: "Subir música", icon: Upload, screen: "music" },
   { label: "Programa", icon: ClipboardList, screen: "program" },
+  { label: "Feedback", icon: MessageCircle, screen: "feedback" },
   { label: "Salir", icon: LogOut, action: "logout" },
+];
+
+const adminLookupTabs: Array<{ id: AdminLookupTab; label: string }> = [
+  { id: "participants", label: "Participantes" },
+  { id: "choreographers", label: "Coreógrafos" },
+  { id: "dances", label: "Coreografías" },
 ];
 
 const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
@@ -345,11 +367,13 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { label: "Reportes", icon: BarChart3 },
 ];
 
+const maxMusicUploadBytes = 12000000;
+
 const divisions: FieldOption[] = [
   { value: "baby", label: "Baby: hasta los 6 años" },
   { value: "petite", label: "Petite: 7 a 10 años" },
-  { value: "junior", label: "Junior: 10 a 12 años" },
-  { value: "teen", label: "Teen: 13 a 17 años" },
+  { value: "junior", label: "Junior: 11 a 13 años" },
+  { value: "teen", label: "Teen: 14 a 17 años" },
   { value: "senior", label: "Senior: 18 años en adelante" },
   { value: "legacy", label: "Legacy: +40 años" },
   { value: "releve", label: "Relevé" },
@@ -423,6 +447,16 @@ const danceCategoriesByGenre: Record<string, FieldOption[]> = {
 
 const danceCategories = [...motionDanceCategories, ...aerialDanceCategories.filter((option) => !motionDanceCategories.some((category) => category.value === option.value))];
 const defaultDanceCategory = danceCategoriesByGenre[defaultDanceGenre][0].value;
+const danceCategoryParticipantRequirements: Record<string, number> = {
+  solo: 1,
+  duo: 2,
+  dueto: 2,
+  dupla_1_aparato: 2,
+  duo_2_aparatos: 2,
+  trio: 3,
+  terna_1_aparato: 3,
+  trio_3_aparatos: 3,
+};
 
 const danceLevels: FieldOption[] = [
   { value: "nudo", label: "Nudo" },
@@ -437,6 +471,12 @@ const venueOptions: FieldOption[] = [
   { value: "puebla", label: "Puebla - 7 junio 2026" },
   { value: "edomex", label: "Edo. Méx. - 13 /15 noviembre 2026" },
 ];
+
+const venueEventDates: Record<string, string> = {
+  cdmx: "2026-05-29",
+  edomex: "2026-11-13",
+  puebla: "2026-06-07",
+};
 
 const inscriptionOrderStatusOptions: FieldOption[] = [
   { value: "pending_payment", label: "Pendiente de pago" },
@@ -532,6 +572,8 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
       age: 15,
       division: "teen",
       shirtSize: "m",
+      isInternational: false,
+      isReleveTeacher: false,
       createdAt: "2026-07-04T00:00:00Z",
     },
     {
@@ -542,6 +584,8 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
       age: 12,
       division: "junior",
       shirtSize: "s",
+      isInternational: false,
+      isReleveTeacher: false,
       createdAt: "2026-07-04T00:00:00Z",
     },
   ],
@@ -551,6 +595,7 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
       fullName: "Camila Torres Demo",
       email: "camila.demo@levitate.mx",
       phone: "55 1111 1111",
+      shirtSize: "m",
       createdAt: "2026-07-04T00:00:00Z",
     },
   ],
@@ -762,6 +807,101 @@ function getProgramDivisionLabel(division?: string) {
 function getProgramDivisionRank(division?: string) {
   const index = programDivisionOrder.indexOf(normalizeProgramDivision(division));
   return index === -1 ? 999 : index;
+}
+
+function normalizeCurpInput(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 18);
+}
+
+function normalizeDocumentInput(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 32);
+}
+
+function parseDateInput(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null;
+  }
+
+  return { day, month, year };
+}
+
+function calculateAgeAtDate(birthDate: string, referenceDate: string) {
+  const birth = parseDateInput(birthDate);
+  const reference = parseDateInput(referenceDate);
+
+  if (!birth || !reference) {
+    return null;
+  }
+
+  let age = reference.year - birth.year;
+
+  if (reference.month < birth.month || (reference.month === birth.month && reference.day < birth.day)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
+function getDivisionFromAge(age: number) {
+  if (age <= 6) {
+    return "baby";
+  }
+
+  if (age <= 10) {
+    return "petite";
+  }
+
+  if (age <= 13) {
+    return "junior";
+  }
+
+  if (age <= 17) {
+    return "teen";
+  }
+
+  if (age >= 40) {
+    return "legacy";
+  }
+
+  return "senior";
+}
+
+function getBirthDateFromCurp(curp: string, referenceDate: string) {
+  const normalizedCurp = normalizeCurpInput(curp);
+
+  if (normalizedCurp.length !== 18) {
+    return "";
+  }
+
+  const datePart = normalizedCurp.slice(4, 10);
+
+  if (!/^\d{6}$/.test(datePart)) {
+    return "";
+  }
+
+  const yearSuffix = Number(datePart.slice(0, 2));
+  const month = datePart.slice(2, 4);
+  const day = datePart.slice(4, 6);
+  const centuryMarker = normalizedCurp.charAt(16);
+  const century = /[A-Z]/.test(centuryMarker) ? 2000 : 1900;
+  const birthDate = `${century + yearSuffix}-${month}-${day}`;
+
+  if (!parseDateInput(birthDate) || calculateAgeAtDate(birthDate, referenceDate) === null) {
+    return "";
+  }
+
+  return birthDate;
 }
 
 function getDanceProgramDivision(dance: RegistrationDance) {
@@ -998,6 +1138,45 @@ function getAdminPaymentStatusLabel(status: RegistrationInscriptionOrderStatus) 
   };
 
   return labels[status];
+}
+
+function isParticipantInscriptionPaid(participant: RegistrationParticipant, inscriptionOrders: RegistrationInscriptionOrder[]) {
+  const participantCurp = normalizeCurpInput(participant.curp);
+
+  return inscriptionOrders.some((order) => getAdminOrderType(order) === "registration" && normalizeCurpInput(order.curp) === participantCurp && order.status === "paid");
+}
+
+function isMp3File(file: File) {
+  const normalizedName = file.name.toLowerCase();
+  const normalizedType = file.type.toLowerCase();
+
+  return normalizedName.endsWith(".mp3") && (!normalizedType || normalizedType === "audio/mpeg" || normalizedType === "audio/mp3");
+}
+
+function readMusicFileAsDataUrl(file: File) {
+  return new Promise<{ contentType: string; dataUrl: string; fileName: string; fileSize: number }>((resolve, reject) => {
+    if (file.size > maxMusicUploadBytes) {
+      reject(new Error("La canción debe pesar menos de 12 MB."));
+      return;
+    }
+
+    if (!isMp3File(file)) {
+      reject(new Error("Solo se aceptan archivos en formato MP3."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("No pudimos leer la canción."));
+    reader.onload = () =>
+      resolve({
+        contentType: file.type || "audio/mpeg",
+        dataUrl: String(reader.result),
+        fileName: file.name,
+        fileSize: file.size,
+      });
+    reader.readAsDataURL(file);
+  });
 }
 
 function getPaymentRejectionReasonLabel(reason?: string | null) {
@@ -1774,6 +1953,7 @@ function AdminSelect({
   name,
   options,
   defaultValue,
+  disabled = false,
   value,
   onChange,
 }: {
@@ -1781,6 +1961,7 @@ function AdminSelect({
   name?: string;
   options: FieldOption[];
   defaultValue?: string;
+  disabled?: boolean;
   value?: string;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
@@ -1788,6 +1969,7 @@ function AdminSelect({
     <span className="levitate-admin-select">
       <select
         defaultValue={value === undefined ? (defaultValue ?? options[0]?.value) : undefined}
+        disabled={disabled}
         id={id}
         name={name ?? id}
         onChange={onChange}
@@ -1887,6 +2069,8 @@ function TransferList({
   selectedIds,
   onSelectionChange,
   emptyMessage,
+  maxSelection,
+  selectionHint,
 }: {
   sourceTitle: string;
   assignedTitle: string;
@@ -1894,6 +2078,8 @@ function TransferList({
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
   emptyMessage: string;
+  maxSelection?: number | null;
+  selectionHint?: string;
 }) {
   const [query, setQuery] = useState("");
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -1902,6 +2088,7 @@ function TransferList({
   const filteredItems = normalizedQuery
     ? sourceItems.filter((item) => item.fullName.toLowerCase().includes(normalizedQuery))
     : sourceItems;
+  const hasReachedLimit = Boolean(maxSelection && selectedIds.length >= maxSelection);
 
   const toggleItem = (id: string) => {
     if (selectedIdSet.has(id)) {
@@ -1909,58 +2096,94 @@ function TransferList({
       return;
     }
 
+    if (maxSelection === 1) {
+      onSelectionChange([id]);
+      return;
+    }
+
+    if (hasReachedLimit) {
+      return;
+    }
+
     onSelectionChange([...selectedIds, id]);
   };
 
   return (
-    <div className="levitate-admin-transfer">
-      <div className="levitate-admin-transfer__list">
-        <div className="levitate-admin-transfer__title">
-          <Users aria-hidden="true" size={18} />
-          <h3>{sourceTitle}</h3>
+    <section className="levitate-admin-picker" aria-label={sourceTitle}>
+      <header className="levitate-admin-picker__header">
+        <div className="levitate-admin-picker__title">
+          <Users aria-hidden="true" size={20} />
+          <div>
+            <h3>{sourceTitle}</h3>
+            <p>{selectionHint || `Selecciona ${sourceTitle.toLowerCase()} para esta coreografía.`}</p>
+          </div>
         </div>
-        <label className="levitate-admin-transfer__search">
-          <Search aria-hidden="true" size={16} />
-          <span>Buscar</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" />
-        </label>
-        <ul aria-label={sourceTitle}>
-          {filteredItems.map((item) => (
-            <li key={item.id}>
-              <label className="levitate-admin-transfer__check">
-                <input checked={selectedIdSet.has(item.id)} onChange={() => toggleItem(item.id)} type="checkbox" />
-                <span>{item.fullName}</span>
-              </label>
-            </li>
-          ))}
-          {filteredItems.length === 0 ? <li className="levitate-admin-transfer__empty">{emptyMessage}</li> : null}
-        </ul>
-      </div>
 
-      <div className="levitate-admin-transfer__actions" aria-label={`${sourceTitle} acciones`}>
-        <button disabled={sourceItems.length === 0} onClick={() => onSelectionChange(sourceItems.map((item) => item.id))} type="button">
-          <Plus aria-hidden="true" size={18} />
-          Todos
-        </button>
-        <button disabled={selectedIds.length === 0} onClick={() => onSelectionChange([])} type="button">
-          <Minus aria-hidden="true" size={18} />
-          Limpiar
-        </button>
-      </div>
-
-      <div className="levitate-admin-transfer__list">
-        <div className="levitate-admin-transfer__title">
-          <BadgeCheck aria-hidden="true" size={18} />
-          <h3>{assignedTitle}</h3>
+        <div className="levitate-admin-picker__actions" aria-label={`${sourceTitle} acciones`}>
+          <span>
+            {selectedIds.length}
+            {maxSelection ? `/${maxSelection}` : ""} seleccionados
+          </span>
+          <button
+            disabled={sourceItems.length === 0 || Boolean(maxSelection)}
+            onClick={() => onSelectionChange(sourceItems.map((item) => item.id))}
+            type="button"
+          >
+            Todos
+          </button>
+          <button disabled={selectedIds.length === 0} onClick={() => onSelectionChange([])} type="button">
+            Limpiar
+          </button>
         </div>
-        <ul aria-label={assignedTitle}>
+      </header>
+
+      <label className="levitate-admin-picker__search">
+        <Search aria-hidden="true" size={17} />
+        <span>Buscar</span>
+        <input placeholder={`Buscar ${sourceTitle.toLowerCase()}`} value={query} onChange={(event) => setQuery(event.target.value)} type="search" />
+      </label>
+
+      <div className="levitate-admin-picker__selected" aria-label={assignedTitle}>
+        <BadgeCheck aria-hidden="true" size={18} />
+        <div>
+          <strong>{assignedTitle}</strong>
           {selectedItems.map((item) => (
-            <li key={item.id}>{item.fullName}</li>
+            <button key={item.id} onClick={() => toggleItem(item.id)} type="button">
+              <X aria-hidden="true" size={14} />
+              {item.fullName}
+            </button>
           ))}
-          {selectedItems.length === 0 ? <li className="levitate-admin-transfer__empty">Sin selección todavía.</li> : null}
-        </ul>
+          {selectedItems.length === 0 ? <span>Sin selección todavía.</span> : null}
+        </div>
       </div>
-    </div>
+
+      <ul className="levitate-admin-picker__options" aria-label={sourceTitle}>
+        {filteredItems.map((item) => {
+          const isSelected = selectedIdSet.has(item.id);
+          const isDisabled = !isSelected && hasReachedLimit && maxSelection !== 1;
+          const actionLabel = isSelected ? "Seleccionado" : isDisabled ? "Límite alcanzado" : hasReachedLimit && maxSelection === 1 ? "Reemplazar" : "Agregar";
+
+          return (
+            <li key={item.id}>
+              <button
+                aria-pressed={isSelected}
+                className={isSelected ? "is-selected" : ""}
+                disabled={isDisabled}
+                onClick={() => toggleItem(item.id)}
+                type="button"
+              >
+                <span className="levitate-admin-picker__check" aria-hidden="true">
+                  {isSelected ? <CheckCircle2 size={18} /> : <Plus size={18} />}
+                </span>
+                <span>{item.fullName}</span>
+                <small>{actionLabel}</small>
+              </button>
+            </li>
+          );
+        })}
+        {filteredItems.length === 0 ? <li className="levitate-admin-picker__empty">{emptyMessage}</li> : null}
+      </ul>
+    </section>
   );
 }
 
@@ -2011,7 +2234,7 @@ export function LevitateRegistrationEntryRoute() {
           <h1>Elige tu acceso.</h1>
           <span aria-hidden="true" />
           <strong>
-            Academias administran participantes y coreografías. Alumnos consultan pagos y materiales asociados directamente a su CURP.
+            Academias administran participantes y coreografías. Participantes consultan pagos y materiales asociados directamente a su CURP.
           </strong>
         </div>
 
@@ -2024,7 +2247,7 @@ export function LevitateRegistrationEntryRoute() {
           </a>
           <a className="levitate-registration-choice-card" href="/registro/alumnos">
             <GraduationCap aria-hidden="true" size={28} />
-            <span>Alumnos</span>
+            <span>Participantes</span>
             <h2>Ingresar con CURP</h2>
             <p>Consulta pagos, hojas de jueceo, fotos y videos sin usuario ni contraseña.</p>
           </a>
@@ -2516,7 +2739,7 @@ function LevitateStudentAuthScreen({
 
       <section className="levitate-auth-shell levitate-student-auth-shell">
         <div className="levitate-auth-copy">
-          <p>Portal de alumnos</p>
+          <p>Portal de participante</p>
           <h1>Ingresa con tu CURP.</h1>
           <span aria-hidden="true" />
           <div>
@@ -2525,10 +2748,10 @@ function LevitateStudentAuthScreen({
           </div>
         </div>
 
-        <section className="levitate-auth-card" aria-label="Acceso de alumno">
+        <section className="levitate-auth-card" aria-label="Acceso de participante">
           <form className="levitate-auth-form" onSubmit={handleAccessSubmit}>
             <AdminStatusMessage message={systemMessage} tone="error" />
-            {isRegistrationStudentDemoEnabled ? <DemoCredentialsHint curp={demoStudentCredentials.curp} label="Demo alumno" /> : null}
+            {isRegistrationStudentDemoEnabled ? <DemoCredentialsHint curp={demoStudentCredentials.curp} label="Demo participante" /> : null}
             <AdminField helper="La CURP debe tener 18 caracteres." icon={ClipboardList} label="CURP">
               <input autoComplete="off" maxLength={18} minLength={18} name="curp" required type="text" />
             </AdminField>
@@ -2558,8 +2781,8 @@ function LevitateStudentPortal({
 
       <section className="levitate-student-portal__hero">
         <div>
-          <p>Portal de alumnos</p>
-          <h1>Hola, {session.registrations[0]?.fullName || "alumno Levitate"}.</h1>
+          <p>Portal de participante</p>
+          <h1>Hola, {session.registrations[0]?.fullName || "participante Levitate"}.</h1>
           <div className="levitate-student-portal__meta">
             <span>CURP: {session.user.curp}</span>
             <span>{session.registrations.length} registro(s) asociado(s)</span>
@@ -2572,7 +2795,7 @@ function LevitateStudentPortal({
         </button>
       </section>
 
-      <section className="levitate-student-module-grid" aria-label="Acciones de alumno">
+      <section className="levitate-student-module-grid" aria-label="Acciones de participante">
         {studentPortalModules.map((module) => {
           const Icon = module.icon;
           const resource = module.resourceType
@@ -2685,13 +2908,89 @@ function AdminSidebar({
 }
 
 function ParticipantRegistrationPanel({
+  academyVenue,
   onParticipantCreated,
 }: {
+  academyVenue: string;
   onParticipantCreated: (participant: RegistrationParticipant) => void;
 }) {
+  const eventDate = venueEventDates[academyVenue] ?? venueEventDates.cdmx;
+  const [curp, setCurp] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [ageValue, setAgeValue] = useState("");
+  const [division, setDivision] = useState("baby");
+  const [isInternational, setIsInternational] = useState(false);
+  const [curpHelper, setCurpHelper] = useState("Ingrese su CURP (18 caracteres)");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const documentFieldLabel = isInternational ? "Número de Documento" : "CURP";
+
+  const clearAutoFields = () => {
+    setBirthDate("");
+    setAgeValue("");
+    setDivision("baby");
+  };
+
+  const updateAgeAndDivision = (nextBirthDate: string) => {
+    const nextAge = calculateAgeAtDate(nextBirthDate, eventDate);
+
+    if (nextAge == null) {
+      setAgeValue("");
+      setDivision("baby");
+      return;
+    }
+
+    setAgeValue(String(nextAge));
+    setDivision(getDivisionFromAge(nextAge));
+  };
+
+  const handleInternationalChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextIsInternational = event.target.checked;
+    setIsInternational(nextIsInternational);
+    setCurp("");
+    clearAutoFields();
+    setCurpHelper(nextIsInternational ? "Ingrese el número de documento." : "Ingrese su CURP (18 caracteres)");
+  };
+
+  const handleCurpChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextCurp = isInternational ? normalizeDocumentInput(event.target.value) : normalizeCurpInput(event.target.value);
+    setCurp(nextCurp);
+    setCurpHelper(isInternational ? "Ingrese el número de documento." : "Ingrese su CURP (18 caracteres)");
+
+    if (isInternational) {
+      return;
+    }
+
+    if (nextCurp.length !== 18) {
+      clearAutoFields();
+      return;
+    }
+
+    const nextBirthDate = getBirthDateFromCurp(nextCurp, eventDate);
+
+    if (!nextBirthDate) {
+      clearAutoFields();
+      setCurpHelper("No pudimos leer la fecha de nacimiento. Revisa la CURP.");
+      return;
+    }
+
+    setBirthDate(nextBirthDate);
+    updateAgeAndDivision(nextBirthDate);
+  };
+
+  const handleBirthDateChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextBirthDate = event.target.value;
+    setBirthDate(nextBirthDate);
+
+    if (!nextBirthDate) {
+      setAgeValue("");
+      setDivision("baby");
+      return;
+    }
+
+    updateAgeAndDivision(nextBirthDate);
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2711,12 +3010,18 @@ function ParticipantRegistrationPanel({
           age: getFormValue(formData, "age"),
           division: getFormValue(formData, "division"),
           shirtSize: getFormValue(formData, "shirtSize"),
+          isInternational: formData.get("isInternational") === "on",
+          isReleveTeacher: formData.get("isReleveTeacher") === "on",
         }),
         method: "POST",
       });
 
       onParticipantCreated(response.participant);
       form.reset();
+      setCurp("");
+      setIsInternational(false);
+      clearAutoFields();
+      setCurpHelper("Ingrese su CURP (18 caracteres)");
       setStatusMessage("Participante guardado en la base.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo guardar el participante."));
@@ -2731,21 +3036,66 @@ function ParticipantRegistrationPanel({
         <AdminField icon={Users} label="Nombre del participante">
           <input name="fullName" required type="text" />
         </AdminField>
-        <AdminField helper="Ingrese su CURP (18 caracteres)" icon={ClipboardList} label="CURP">
-          <input maxLength={18} minLength={18} name="curp" required type="text" />
+        <label className="levitate-admin-check-card">
+          <input checked={isInternational} name="isInternational" onChange={handleInternationalChange} type="checkbox" />
+          <span>
+            <strong>Internacional</strong>
+            <small>Usa número de documento y fecha de nacimiento manual.</small>
+          </span>
+        </label>
+        <AdminField helper={curpHelper} icon={ClipboardList} label={documentFieldLabel}>
+          <input
+            maxLength={isInternational ? 32 : 18}
+            minLength={isInternational ? 3 : 18}
+            name="curp"
+            onChange={handleCurpChange}
+            required
+            type="text"
+            value={curp}
+          />
         </AdminField>
-        <AdminField icon={CalendarDays} label="Fecha de nacimiento">
-          <input name="birthDate" type="date" />
+        <AdminField
+          helper={isInternational ? "Se usa para calcular edad y división." : "Se calcula automáticamente con la CURP."}
+          icon={CalendarDays}
+          label="Fecha de nacimiento"
+        >
+          <input
+            aria-readonly={!isInternational}
+            name="birthDate"
+            onChange={handleBirthDateChange}
+            readOnly={!isInternational}
+            required
+            type="date"
+            value={birthDate}
+          />
         </AdminField>
-        <AdminField icon={BadgeCheck} label="Edad">
-          <input min={0} name="age" type="number" />
+        <AdminField
+          helper={isInternational ? "Se calcula automáticamente con la fecha de nacimiento." : "Se calcula automáticamente con la CURP."}
+          icon={BadgeCheck}
+          label="Edad"
+        >
+          <input aria-readonly="true" min={0} name="age" readOnly required type="number" value={ageValue} />
         </AdminField>
-        <AdminField icon={GraduationCap} label="División">
-          <AdminSelect defaultValue="baby" id="participant-division" name="division" options={divisions} />
+        <AdminField helper="Se asigna automáticamente según la edad al día del evento." icon={GraduationCap} label="División">
+          <input name="division" type="hidden" value={division} />
+          <AdminSelect
+            disabled
+            id="participant-division"
+            name="participantDivisionDisplay"
+            options={divisions}
+            value={division}
+          />
         </AdminField>
         <AdminField icon={Shirt} label="Talla playera">
           <AdminSelect defaultValue="8" id="participant-shirt" name="shirtSize" options={shirtSizes} />
         </AdminField>
+        <label className="levitate-admin-check-card">
+          <input name="isReleveTeacher" type="checkbox" />
+          <span>
+            <strong>Soy Maestro Relevé</strong>
+            <small>Marca esta casilla si corresponde.</small>
+          </span>
+        </label>
         <div className="levitate-admin-form__wide-block">
           <AdminStatusMessage message={statusMessage} />
           <AdminStatusMessage message={errorMessage} tone="error" />
@@ -2784,8 +3134,8 @@ function ChoreographerRegistrationPanel({
         {
           body: JSON.stringify({
             fullName: getFormValue(formData, "fullName"),
-            email: getFormValue(formData, "email"),
             phone: getFormValue(formData, "phone"),
+            shirtSize: getFormValue(formData, "shirtSize"),
           }),
           method: "POST",
         },
@@ -2807,14 +3157,14 @@ function ChoreographerRegistrationPanel({
         <AdminField icon={Users} label="Nombre del coreógrafo">
           <input name="fullName" required type="text" />
         </AdminField>
-        <AdminField icon={Mail} label="Correo electrónico">
-          <input name="email" type="email" />
-        </AdminField>
         <AdminField icon={Phone} label="Teléfono">
-          <input name="phone" type="tel" />
+          <input name="phone" required type="tel" />
+        </AdminField>
+        <AdminField icon={Shirt} label="Talla playera">
+          <AdminSelect defaultValue="m" id="choreographer-shirt" name="shirtSize" options={shirtSizes} />
         </AdminField>
         <AdminField icon={Building2} label="Nombre de la academia">
-          <input readOnly type="text" value={academyName} />
+          <input readOnly required type="text" value={academyName} />
         </AdminField>
         <div className="levitate-admin-form__wide-block">
           <AdminStatusMessage message={statusMessage} />
@@ -2832,13 +3182,11 @@ function DanceRegistrationPanel({
   academyVenue,
   choreographers,
   participants,
-  dances,
   onDanceCreated,
 }: {
   academyVenue: string;
   choreographers: RegistrationChoreographer[];
   participants: RegistrationParticipant[];
-  dances: RegistrationDance[];
   onDanceCreated: (dance: RegistrationDance) => void;
 }) {
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
@@ -2860,7 +3208,21 @@ function DanceRegistrationPanel({
     id: participant.id,
     fullName: participant.fullName,
   }));
-  const cannotSave = isSaving || choreographers.length === 0 || participants.length === 0;
+  const participantRequirement = danceCategoryParticipantRequirements[selectedCategory] ?? null;
+  const participantRequirementMessage =
+    participantRequirement && selectedParticipantIds.length !== participantRequirement
+      ? `Esta categoría requiere exactamente ${participantRequirement} ${participantRequirement === 1 ? "participante" : "participantes"}. Seleccionaste ${selectedParticipantIds.length}.`
+      : "";
+  const choreographerSelectionMessage =
+    choreographers.length > 0 && selectedChoreographerIds.length === 0 ? "Selecciona al menos un coreógrafo." : "";
+  const participantSelectionMessage =
+    participantRequirementMessage ||
+    (participants.length > 0 && selectedParticipantIds.length === 0 ? "Selecciona al menos un participante." : "");
+  const cannotSave =
+    isSaving ||
+    choreographers.length === 0 ||
+    participants.length === 0 ||
+    Boolean(choreographerSelectionMessage || participantSelectionMessage);
 
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
@@ -2877,9 +3239,15 @@ function DanceRegistrationPanel({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    setIsSaving(true);
     setStatusMessage("");
     setErrorMessage("");
+
+    if (choreographerSelectionMessage || participantSelectionMessage) {
+      setErrorMessage(choreographerSelectionMessage || participantSelectionMessage);
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
       const response = await requestRegistrationApi<{ dance: RegistrationDance }>("/api/registration/dances", {
@@ -2912,92 +3280,78 @@ function DanceRegistrationPanel({
   };
 
   return (
-    <>
-      <AdminPanel className="levitate-admin-panel--dance" title="Registro de nueva coreografía" eyebrow="Competencia">
-        <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
-          <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
-            <input name="title" required type="text" />
+    <AdminPanel className="levitate-admin-panel--dance" title="Registro de nueva coreografía" eyebrow="Competencia">
+      <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
+        <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
+          <input name="title" required type="text" />
+        </AdminField>
+        <AdminField icon={Music2} label="Género de coreografía">
+          <AdminSelect id="dance-genre" name="genre" onChange={handleGenreChange} options={danceGenres} value={selectedGenre} />
+        </AdminField>
+        <AdminField icon={Music2} label="Subgénero">
+          <AdminSelect
+            id="dance-subgenre"
+            name="subgenre"
+            onChange={(event) => setSelectedSubgenre(event.target.value)}
+            options={subgenreOptions}
+            value={selectedSubgenre}
+          />
+        </AdminField>
+        <AdminField icon={Users} label="Categoría">
+          <AdminSelect
+            id="dance-category"
+            name="category"
+            onChange={(event) => setSelectedCategory(event.target.value)}
+            options={categoryOptions}
+            value={selectedCategory}
+          />
+        </AdminField>
+        {shouldShowLevel ? (
+          <AdminField icon={BadgeCheck} label="Nivel">
+            <AdminSelect defaultValue="nudo" id="dance-level" name="level" options={danceLevels} />
           </AdminField>
-          <AdminField icon={Music2} label="Género de coreografía">
-            <AdminSelect id="dance-genre" name="genre" onChange={handleGenreChange} options={danceGenres} value={selectedGenre} />
-          </AdminField>
-          <AdminField icon={Music2} label="Subgénero">
-            <AdminSelect
-              id="dance-subgenre"
-              name="subgenre"
-              onChange={(event) => setSelectedSubgenre(event.target.value)}
-              options={subgenreOptions}
-              value={selectedSubgenre}
-            />
-          </AdminField>
-          <AdminField icon={Users} label="Categoría">
-            <AdminSelect
-              id="dance-category"
-              name="category"
-              onChange={(event) => setSelectedCategory(event.target.value)}
-              options={categoryOptions}
-              value={selectedCategory}
-            />
-          </AdminField>
-          {shouldShowLevel ? (
-            <AdminField icon={BadgeCheck} label="Nivel">
-              <AdminSelect defaultValue="nudo" id="dance-level" name="level" options={danceLevels} />
-            </AdminField>
-          ) : null}
+        ) : null}
 
-          <div className="levitate-admin-form__wide-block">
-            <TransferList
-              assignedTitle="Coreógrafos inscritos"
-              emptyMessage="Registra un coreógrafo primero."
-              onSelectionChange={setSelectedChoreographerIds}
-              selectedIds={selectedChoreographerIds}
-              sourceItems={choreographerItems}
-              sourceTitle="Coreógrafos"
-            />
-          </div>
-
-          <div className="levitate-admin-form__wide-block">
-            <TransferList
-              assignedTitle="Participantes inscritos"
-              emptyMessage="Registra un participante primero."
-              onSelectionChange={setSelectedParticipantIds}
-              selectedIds={selectedParticipantIds}
-              sourceItems={participantItems}
-              sourceTitle="Alumnos"
-            />
-          </div>
-
-          <div className="levitate-admin-form__wide-block">
-            <AdminStatusMessage message={statusMessage} />
-            <AdminStatusMessage message={errorMessage} tone="error" />
-          </div>
-          <div className="levitate-admin-form__actions">
-            <SaveButton disabled={cannotSave} isSaving={isSaving} />
-          </div>
-        </form>
-      </AdminPanel>
-      <section className="levitate-admin-panel levitate-admin-registered-panel" aria-label="Coreografías registradas">
-        <div className="levitate-admin-panel__heading">
-          <p>Consulta</p>
-          <h2>Coreografías registradas</h2>
+        <div className="levitate-admin-form__wide-block">
+          <TransferList
+            assignedTitle="Coreógrafos inscritos"
+            emptyMessage="Registra un coreógrafo primero."
+            onSelectionChange={setSelectedChoreographerIds}
+            selectedIds={selectedChoreographerIds}
+            selectionHint="Marca uno o más coreógrafos responsables."
+            sourceItems={choreographerItems}
+            sourceTitle="Coreógrafos"
+          />
         </div>
-        <div className="levitate-admin-registered-panel__table" role="table" aria-label="Coreografías registradas">
-          <span role="columnheader">Coreografía</span>
-          <span role="columnheader">Categoría</span>
-          <span role="columnheader">Nivel</span>
-          <span role="columnheader">Participantes</span>
-          {dances.map((dance) => (
-            <div className="levitate-admin-registered-panel__row" role="row" key={dance.id}>
-              <span role="cell">{dance.title}</span>
-              <span role="cell">{getOptionLabel(danceCategories, dance.category)}</span>
-              <span role="cell">{getDanceLevelLabel(dance.level)}</span>
-              <span role="cell">{dance.participants.map((participant) => participant.fullName).join(", ")}</span>
-            </div>
-          ))}
-          {dances.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas.</p> : null}
+
+        <div className="levitate-admin-form__wide-block">
+          <TransferList
+            assignedTitle="Participantes inscritos"
+            emptyMessage="Registra un participante primero."
+            maxSelection={participantRequirement}
+            onSelectionChange={setSelectedParticipantIds}
+            selectedIds={selectedParticipantIds}
+            selectionHint={
+              participantRequirement
+                ? `Marca exactamente ${participantRequirement} ${participantRequirement === 1 ? "participante" : "participantes"} para esta categoría.`
+                : "Marca los participantes de esta coreografía."
+            }
+            sourceItems={participantItems}
+            sourceTitle="Participantes"
+          />
         </div>
-      </section>
-    </>
+
+        <div className="levitate-admin-form__wide-block">
+          <AdminStatusMessage message={statusMessage} />
+          <AdminStatusMessage message={choreographerSelectionMessage} tone="error" />
+          <AdminStatusMessage message={participantSelectionMessage} tone="error" />
+          <AdminStatusMessage message={errorMessage} tone="error" />
+        </div>
+        <div className="levitate-admin-form__actions">
+          <SaveButton disabled={cannotSave} isSaving={isSaving} />
+        </div>
+      </form>
+    </AdminPanel>
   );
 }
 
@@ -3065,6 +3419,201 @@ function ProgramPanel({ academyName, dances }: { academyName: string; dances: Re
 
       {totalRows === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreografías para armar el programa.</p> : null}
     </section>
+  );
+}
+
+function MusicUploadPanel({
+  academyName,
+  dances,
+  onDanceUpdated,
+}: {
+  academyName: string;
+  dances: RegistrationDance[];
+  onDanceUpdated: (dance: RegistrationDance) => void;
+}) {
+  const [selectedDanceId, setSelectedDanceId] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileInputVersion, setFileInputVersion] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const selectedDance = dances.find((dance) => dance.id === selectedDanceId) ?? dances[0] ?? null;
+  const selectedDanceValue = selectedDance?.id ?? "";
+  const currentMusicUpload = selectedDance?.musicUpload ?? null;
+  const selectedCategoryOptions = selectedDance ? danceCategoriesByGenre[selectedDance.genre] ?? danceCategories : danceCategories;
+  const selectedDivision = selectedDance ? getDanceProgramDivision(selectedDance) : "";
+  const selectedDivisionLabel = selectedDivision ? getProgramDivisionLabel(selectedDivision).split(":")[0] : "";
+  const suggestedFileName = selectedDance
+    ? `${selectedDance.title} - ${academyName} - ${getOptionLabel(danceGenres, selectedDance.genre)} ${getOptionLabel(
+        danceSubgenresByGenre[selectedDance.genre] ?? [],
+        selectedDance.subgenre,
+      )} - ${getOptionLabel(selectedCategoryOptions, selectedDance.category)}${selectedDivisionLabel ? ` - ${selectedDivisionLabel}` : ""}`
+    : "";
+  const danceOptions = dances.map((dance) => ({
+    value: dance.id,
+      label: dance.title,
+    }));
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+
+    setUploadError("");
+    setUploadMessage("");
+    setSelectedFile(null);
+
+    if (!file) {
+      return;
+    }
+
+    if (file.size > maxMusicUploadBytes) {
+      event.currentTarget.value = "";
+      setUploadError("La canción debe pesar menos de 12 MB.");
+      return;
+    }
+
+    if (!isMp3File(file)) {
+      event.currentTarget.value = "";
+      setUploadError("Solo se aceptan archivos en formato MP3.");
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selectedDance) {
+      setUploadError("Selecciona una coreografía.");
+      return;
+    }
+
+    if (!selectedFile) {
+      setUploadError("Selecciona un archivo MP3.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError("");
+    setUploadMessage("");
+
+    try {
+      const musicFile = await readMusicFileAsDataUrl(selectedFile);
+
+      if (getPersistedDemoRegistrationSession() === "academy") {
+        const demoUpload: RegistrationMusicUpload = {
+          ...musicFile,
+          id: `demo-music-upload-${selectedDance.id}`,
+          danceId: selectedDance.id,
+          uploadedAt: new Date().toISOString(),
+        };
+
+        onDanceUpdated({
+          ...selectedDance,
+          musicUpload: demoUpload,
+        });
+        setUploadMessage("Música subida para la coreografía seleccionada.");
+        setSelectedFile(null);
+        setFileInputVersion((current) => current + 1);
+        return;
+      }
+
+      const response = await requestRegistrationApi<{ dance: RegistrationDance; musicUpload: RegistrationMusicUpload }>(
+        "/api/registration/music",
+        {
+          body: JSON.stringify({
+            danceId: selectedDance.id,
+            ...musicFile,
+          }),
+          method: "POST",
+        },
+      );
+
+      onDanceUpdated(response.dance);
+      setUploadMessage("Música subida para la coreografía seleccionada.");
+      setSelectedFile(null);
+      setFileInputVersion((current) => current + 1);
+    } catch (error) {
+      setUploadError(getErrorMessage(error, "No pudimos subir la música."));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <AdminPanel className="levitate-admin-panel--music" eyebrow="Música" title="Subir música">
+      <form className="levitate-admin-music-form" onSubmit={handleSubmit}>
+        <AdminField icon={Music2} label="Coreografía">
+          <AdminSelect
+            disabled={dances.length === 0}
+            id="music-dance"
+            name="danceId"
+            onChange={(event) => {
+              setSelectedDanceId(event.target.value);
+              setSelectedFile(null);
+              setFileInputVersion((current) => current + 1);
+              setUploadMessage("");
+              setUploadError("");
+            }}
+            options={danceOptions}
+            value={selectedDanceValue}
+          />
+        </AdminField>
+
+        {selectedDance ? (
+          <div className="levitate-admin-music-selected">
+            <span>{getOptionLabel(danceGenres, selectedDance.genre)}</span>
+            <strong>{selectedDance.title}</strong>
+            <p>{selectedDance.participants.map((participant) => participant.fullName).join(", ") || "Sin participantes asignados"}</p>
+            <small>{currentMusicUpload ? `Música actual: ${currentMusicUpload.fileName}` : `${suggestedFileName}.mp3`}</small>
+          </div>
+        ) : null}
+
+        <label className={`levitate-admin-music-dropzone${selectedFile ? " has-file" : ""}`}>
+          <Upload aria-hidden="true" size={26} />
+          <strong>{selectedFile?.name || "Sube la canción en MP3"}</strong>
+          <span>
+            {selectedFile
+              ? `Archivo listo para subir · ${formatAdminFileSize(selectedFile.size)}`
+              : currentMusicUpload
+                ? `Último archivo: ${currentMusicUpload.fileName} · ${formatAdminFileSize(currentMusicUpload.fileSize)}`
+                : "Selecciona únicamente un archivo .mp3."}
+          </span>
+          <input key={fileInputVersion} accept=".mp3,audio/mpeg" disabled={!selectedDance || isUploading} onChange={handleFileChange} type="file" />
+        </label>
+
+        <button className="levitate-admin-save" disabled={!selectedDance || !selectedFile || isUploading} type="submit">
+          <Upload aria-hidden="true" size={18} />
+          {isUploading ? "Subiendo música..." : "Subir música"}
+        </button>
+
+        <AdminStatusMessage message={uploadMessage} />
+        <AdminStatusMessage message={uploadError} tone="error" />
+        {dances.length === 0 ? <p className="levitate-admin-empty-state">Registra una coreografía para poder subir su música.</p> : null}
+      </form>
+    </AdminPanel>
+  );
+}
+
+function FeedbackPanel({ dances }: { dances: RegistrationDance[] }) {
+  return (
+    <AdminPanel className="levitate-admin-panel--feedback" eyebrow="Jueceo" title="Feedback">
+      <div className="levitate-admin-feedback-list">
+        {dances.map((dance) => (
+          <article className="levitate-admin-feedback-card" key={dance.id}>
+            <div>
+              <span>{getOptionLabel(danceCategories, dance.category)}</span>
+              <h2>{dance.title}</h2>
+              <p>{dance.participants.map((participant) => participant.fullName).join(", ")}</p>
+            </div>
+            <strong>Por publicar</strong>
+          </article>
+        ))}
+        {dances.length === 0 ? (
+          <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas para mostrar feedback.</p>
+        ) : null}
+      </div>
+    </AdminPanel>
   );
 }
 
@@ -4027,78 +4576,150 @@ function RegistrationAdminOrderDetail({
   );
 }
 
-function AdminWelcomePanel({
-  participantCount,
-  choreographerCount,
-  danceCount,
-  onScreenChange,
+function AdminLookupPanel({
+  participants,
+  choreographers,
+  dances,
+  inscriptionOrders,
 }: {
-  participantCount: number;
-  choreographerCount: number;
-  danceCount: number;
-  onScreenChange: (screen: AdminScreenId) => void;
+  participants: RegistrationParticipant[];
+  choreographers: RegistrationChoreographer[];
+  dances: RegistrationDance[];
+  inscriptionOrders: RegistrationInscriptionOrder[];
 }) {
-  const actions: Array<{
-    count: number;
-    helper: string;
-    icon: LucideIcon;
-    label: string;
-    screen: AdminScreenId;
-  }> = [
-    {
-      count: participantCount,
-      helper: "Carga participantes y sus datos base.",
-      icon: GraduationCap,
-      label: "Alumnos",
-      screen: "participants",
-    },
-    {
-      count: choreographerCount,
-      helper: "Agrega el equipo creativo de la academia.",
-      icon: UserRoundPlus,
-      label: "Coreógrafos",
-      screen: "choreographers",
-    },
-    {
-      count: danceCount,
-      helper: "Registra coreografías, elenco y categoría.",
-      icon: Music2,
-      label: "Coreografías",
-      screen: "dance",
-    },
-    {
-      count: danceCount,
-      helper: "Ordena bloques y exporta el .xls.",
-      icon: ClipboardList,
-      label: "Programa",
-      screen: "program",
-    },
-  ];
+  const [activeLookupTab, setActiveLookupTab] = useState<AdminLookupTab>("participants");
 
+  return (
+    <section className="levitate-admin-panel levitate-admin-home__lookup levitate-admin-lookup-panel" aria-label="Consulta de registros">
+      <div className="levitate-admin-panel__heading">
+        <p>Consulta</p>
+        <h2>Registros guardados</h2>
+      </div>
+
+      <div className="levitate-admin-lookup-tabs" role="tablist" aria-label="Tipo de registro">
+        {adminLookupTabs.map((tab) => (
+          <button
+            aria-selected={activeLookupTab === tab.id}
+            className={activeLookupTab === tab.id ? "is-active" : ""}
+            key={tab.id}
+            onClick={() => setActiveLookupTab(tab.id)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeLookupTab === "participants" ? (
+        <div className="levitate-admin-lookup-table-scroll">
+          <div
+            className="levitate-admin-lookup-table levitate-admin-lookup-table--participants"
+            role="table"
+            aria-label="Participantes registrados"
+          >
+            <span role="columnheader">Participante</span>
+            <span role="columnheader">CURP / Documento</span>
+            <span role="columnheader">División</span>
+            <span role="columnheader">Edad</span>
+            <span role="columnheader">Maestro Relevé</span>
+            <span role="columnheader">Pago</span>
+            {participants.map((participant) => {
+              const isPaid = isParticipantInscriptionPaid(participant, inscriptionOrders);
+
+              return (
+                <div className="levitate-admin-lookup-table__row" role="row" key={participant.id}>
+                  <span role="cell">{participant.fullName}</span>
+                  <span role="cell">
+                    {participant.curp}
+                    {participant.isInternational ? " · Internacional" : ""}
+                  </span>
+                  <span role="cell">{getProgramDivisionLabel(participant.division)}</span>
+                  <span role="cell">{participant.age || "Sin edad"}</span>
+                  <span role="cell">{participant.isReleveTeacher ? "Sí" : "No"}</span>
+                  <span className={`levitate-admin-payment-badge${isPaid ? " is-paid" : ""}`} role="cell">
+                    {isPaid ? "Pagado" : "Falta pagar"}
+                  </span>
+                </div>
+              );
+            })}
+            {participants.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay participantes registrados.</p> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {activeLookupTab === "choreographers" ? (
+        <div className="levitate-admin-lookup-table-scroll">
+          <div
+            className="levitate-admin-lookup-table levitate-admin-lookup-table--choreographers"
+            role="table"
+            aria-label="Coreógrafos registrados"
+          >
+            <span role="columnheader">Coreógrafo</span>
+            <span role="columnheader">Teléfono</span>
+            <span role="columnheader">Talla</span>
+            {choreographers.map((choreographer) => (
+              <div className="levitate-admin-lookup-table__row" role="row" key={choreographer.id}>
+                <span role="cell">{choreographer.fullName}</span>
+                <span role="cell">{choreographer.phone || "Sin teléfono"}</span>
+                <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+              </div>
+            ))}
+            {choreographers.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreógrafos registrados.</p> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {activeLookupTab === "dances" ? (
+        <div className="levitate-admin-lookup-table-scroll">
+          <div className="levitate-admin-lookup-table levitate-admin-lookup-table--dances" role="table" aria-label="Coreografías registradas">
+            <span role="columnheader">Coreografía</span>
+            <span role="columnheader">Modalidad</span>
+            <span role="columnheader">Categoría</span>
+            <span role="columnheader">Nivel</span>
+            <span role="columnheader">Participantes</span>
+            {dances.map((dance) => {
+              const categoryOptions = danceCategoriesByGenre[dance.genre] ?? danceCategories;
+              const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");
+
+              return (
+                <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
+                  <span role="cell">{dance.title}</span>
+                  <span role="cell">{getOptionLabel(danceGenres, dance.genre)}</span>
+                  <span role="cell">{getOptionLabel(categoryOptions, dance.category)}</span>
+                  <span role="cell">{getDanceLevelLabel(dance.level)}</span>
+                  <span role="cell">{participantNames || "Sin participantes"}</span>
+                </div>
+              );
+            })}
+            {dances.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas.</p> : null}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AdminWelcomePanel({
+  academyName,
+  participants,
+  choreographers,
+  dances,
+  inscriptionOrders,
+}: {
+  academyName: string;
+  participants: RegistrationParticipant[];
+  choreographers: RegistrationChoreographer[];
+  dances: RegistrationDance[];
+  inscriptionOrders: RegistrationInscriptionOrder[];
+}) {
   return (
     <section className="levitate-admin-home">
       <div className="levitate-admin-home__intro">
-        <p>Panel Levitate</p>
-        <h1>Organiza tu registro.</h1>
+        <h1>¡Hola, {academyName}!</h1>
       </div>
 
-      <div className="levitate-admin-home__actions" aria-label="Accesos rápidos de registro">
-        {actions.map((action) => {
-          const Icon = action.icon;
-
-          return (
-            <button key={action.screen} onClick={() => onScreenChange(action.screen)} type="button">
-              <span className="levitate-admin-home__count">{action.count}</span>
-              <span className="levitate-admin-home__action-copy">
-                <Icon aria-hidden="true" size={22} />
-                <strong>{action.label}</strong>
-                <small>{action.helper}</small>
-              </span>
-              <ArrowRight aria-hidden="true" size={22} />
-            </button>
-          );
-        })}
-      </div>
+      <AdminLookupPanel choreographers={choreographers} dances={dances} inscriptionOrders={inscriptionOrders} participants={participants} />
     </section>
   );
 }
@@ -4114,7 +4735,6 @@ function getAdminScreen({
   onChoreographerCreated,
   onDanceCreated,
   onOrderUpdated,
-  onScreenChange,
 }: {
   screen: AdminScreenId;
   session: RegistrationSession;
@@ -4126,14 +4746,13 @@ function getAdminScreen({
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
   onDanceCreated: (dance: RegistrationDance) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
-  onScreenChange: (screen: AdminScreenId) => void;
 }) {
   if (screen === "choreographers") {
     return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
   }
 
   if (screen === "participants") {
-    return <ParticipantRegistrationPanel onParticipantCreated={onParticipantCreated} />;
+    return <ParticipantRegistrationPanel academyVenue={session.academy.venue} onParticipantCreated={onParticipantCreated} />;
   }
 
   if (screen === "dance") {
@@ -4141,7 +4760,6 @@ function getAdminScreen({
       <DanceRegistrationPanel
         academyVenue={session.academy.venue}
         choreographers={choreographers}
-        dances={dances}
         onDanceCreated={onDanceCreated}
         participants={participants}
       />
@@ -4152,16 +4770,25 @@ function getAdminScreen({
     return <ProgramPanel academyName={session.academy.name} dances={dances} />;
   }
 
+  if (screen === "music") {
+    return <MusicUploadPanel academyName={session.academy.name} dances={dances} onDanceUpdated={onDanceCreated} />;
+  }
+
+  if (screen === "feedback") {
+    return <FeedbackPanel dances={dances} />;
+  }
+
   if (screen === "payments") {
     return <InscriptionOrdersPanel onOrderUpdated={onOrderUpdated} orders={inscriptionOrders} />;
   }
 
   return (
     <AdminWelcomePanel
-      choreographerCount={choreographers.length}
-      danceCount={dances.length}
-      onScreenChange={onScreenChange}
-      participantCount={participants.length}
+      academyName={session.academy.name}
+      choreographers={choreographers}
+      dances={dances}
+      inscriptionOrders={inscriptionOrders}
+      participants={participants}
     />
   );
 }
@@ -4322,7 +4949,6 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
             onChoreographerCreated: handleChoreographerCreated,
             onDanceCreated: handleDanceCreated,
             onOrderUpdated: handleOrderUpdated,
-            onScreenChange: handleScreenChange,
           })}
         </div>
       </section>
@@ -4351,7 +4977,7 @@ export function LevitateStudentRegistrationRoute() {
       setSession(null);
 
       if (!isUnauthorizedRegistrationError(error)) {
-        setLoadError(getErrorMessage(error, "No se pudo cargar tu portal de alumno."));
+        setLoadError(getErrorMessage(error, "No se pudo cargar tu portal de participante."));
       }
     } finally {
       setIsCheckingSession(false);
@@ -4397,7 +5023,7 @@ export function LevitateAuthRoute() {
 export function LevitateParticipantRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ParticipantRegistrationPanel onParticipantCreated={() => undefined} />
+      <ParticipantRegistrationPanel academyVenue="cdmx" onParticipantCreated={() => undefined} />
     </RegistrationPageScaffold>
   );
 }
@@ -4416,7 +5042,6 @@ export function LevitateDanceRegistrationScreen() {
       <DanceRegistrationPanel
         academyVenue="cdmx"
         choreographers={[]}
-        dances={[]}
         onDanceCreated={() => undefined}
         participants={[]}
       />

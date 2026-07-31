@@ -19160,6 +19160,44 @@ button {
   width: min(100%, 520px);
 }
 
+.levitate-admin-check-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  padding: 18px 20px;
+  border: 1px solid rgba(17, 16, 21, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 2px rgba(17, 16, 21, 0.05);
+  color: var(--admin-ink);
+  cursor: pointer;
+}
+
+.levitate-admin-check-card input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--admin-pink);
+}
+
+.levitate-admin-check-card span {
+  display: grid;
+  gap: 4px;
+}
+
+.levitate-admin-check-card strong {
+  font-size: 0.96rem;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.levitate-admin-check-card small {
+  color: rgba(17, 16, 21, 0.54);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
 .levitate-admin-field__label {
   display: inline-flex;
   align-items: center;
@@ -19235,6 +19273,26 @@ button {
 
 .levitate-admin-form__wide-block .levitate-auth-message + .levitate-auth-message {
   margin-top: 10px;
+}
+
+.levitate-admin-panel .levitate-auth-message {
+  border-color: rgba(108, 167, 178, 0.34);
+  background: rgba(108, 167, 178, 0.12);
+  color: rgba(39, 37, 37, 0.84);
+}
+
+.levitate-admin-panel .levitate-auth-message svg {
+  color: var(--admin-cyan-muted);
+}
+
+.levitate-admin-panel .levitate-auth-message--error {
+  border-color: rgba(224, 79, 146, 0.38);
+  background: rgba(224, 79, 146, 0.1);
+  color: rgba(39, 37, 37, 0.86);
+}
+
+.levitate-admin-panel .levitate-auth-message--error svg {
+  color: var(--admin-pink);
 }
 
 .levitate-admin-save,
@@ -21342,16 +21400,16 @@ button {
 
 .levitate-admin-home {
   display: grid;
-  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   align-items: start;
-  gap: clamp(28px, 5vw, 76px);
+  gap: clamp(18px, 3vw, 30px);
   width: 100%;
 }
 
 .levitate-admin-home__intro {
   display: grid;
   align-content: start;
-  min-height: 320px;
+  min-height: 0;
   padding-top: clamp(8px, 1.8vw, 18px);
 }
 
@@ -21375,12 +21433,12 @@ button {
 
 .levitate-admin-home__intro h1 {
   max-width: 620px;
-  margin: 18px 0 0;
-  font-size: clamp(3rem, 5.8vw, 6rem);
+  margin: 0;
+  font-size: clamp(2.6rem, 5vw, 5rem);
 }
 
 .levitate-admin-home__intro::after {
-  display: block;
+  display: none;
   width: min(100%, 340px);
   height: 1px;
   margin-top: clamp(28px, 4vw, 52px);
@@ -21472,6 +21530,10 @@ button {
   line-height: 1.35;
 }
 
+.levitate-admin-home__lookup {
+  grid-column: 1 / -1;
+}
+
 .levitate-admin-panel {
   overflow: hidden;
   border: 1px solid var(--admin-border);
@@ -21516,6 +21578,12 @@ button {
   width: min(100%, 620px);
 }
 
+.levitate-admin-check-card {
+  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: var(--admin-soft-shadow);
+}
+
 .levitate-admin-field__label,
 .levitate-admin-transfer__title h3 {
   color: rgba(39, 37, 37, 0.78);
@@ -21557,6 +21625,12 @@ button {
 
 .levitate-admin-field input[readonly] {
   background: rgba(39, 37, 37, 0.055);
+}
+
+.levitate-admin-field select:disabled {
+  background: rgba(39, 37, 37, 0.055);
+  color: rgba(39, 37, 37, 0.7);
+  cursor: not-allowed;
 }
 
 .levitate-admin-field small {
@@ -21609,6 +21683,321 @@ button {
   accent-color: var(--admin-cyan-muted);
 }
 
+.levitate-admin-picker {
+  display: grid;
+  gap: 16px;
+  padding: clamp(18px, 2.6vw, 28px);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(108, 167, 178, 0.07), transparent 44%),
+    rgba(255, 255, 255, 0.68);
+  box-shadow: var(--admin-soft-shadow);
+}
+
+.levitate-admin-picker__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.levitate-admin-picker__title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.levitate-admin-picker__title svg {
+  margin-top: 2px;
+  color: var(--admin-cyan-muted);
+}
+
+.levitate-admin-picker__title h3 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: clamp(1rem, 1.35vw, 1.24rem);
+  font-weight: 820;
+  line-height: 1.05;
+}
+
+.levitate-admin-picker__title p {
+  margin: 6px 0 0;
+  max-width: 520px;
+  color: rgba(39, 37, 37, 0.52);
+  font-size: 0.9rem;
+  font-weight: 620;
+  line-height: 1.35;
+}
+
+.levitate-admin-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.levitate-admin-picker__actions span,
+.levitate-admin-picker__actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.levitate-admin-picker__actions span {
+  padding: 0 12px;
+  border: 1px solid rgba(108, 167, 178, 0.28);
+  color: var(--admin-cyan-muted);
+}
+
+.levitate-admin-picker__actions button {
+  padding: 0 13px;
+  border: 1px solid var(--admin-border);
+  background: rgba(255, 255, 255, 0.74);
+  color: rgba(39, 37, 37, 0.68);
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 200ms var(--ease-out);
+}
+
+.levitate-admin-picker__actions button:hover,
+.levitate-admin-picker__actions button:focus-visible {
+  border-color: rgba(108, 167, 178, 0.44);
+  color: var(--admin-ink);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.levitate-admin-picker__actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.levitate-admin-picker__search {
+  position: relative;
+  display: block;
+}
+
+.levitate-admin-picker__search svg {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  color: rgba(39, 37, 37, 0.38);
+  transform: translateY(-50%);
+}
+
+.levitate-admin-picker__search span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.levitate-admin-picker__search input {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px 0 46px;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--admin-ink);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  outline: 0;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.levitate-admin-picker__search input:focus {
+  border-color: rgba(108, 167, 178, 0.55);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0 0 4px rgba(108, 167, 178, 0.12);
+}
+
+.levitate-admin-picker__selected {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(108, 167, 178, 0.2);
+  border-radius: 8px;
+  background: rgba(108, 167, 178, 0.06);
+}
+
+.levitate-admin-picker__selected > svg {
+  margin-top: 3px;
+  color: var(--admin-cyan-muted);
+}
+
+.levitate-admin-picker__selected div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.levitate-admin-picker__selected strong {
+  width: 100%;
+  color: rgba(39, 37, 37, 0.56);
+  font-size: 0.72rem;
+  font-weight: 840;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-picker__selected button,
+.levitate-admin-picker__selected span {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid rgba(108, 167, 178, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(39, 37, 37, 0.74);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.levitate-admin-picker__selected button {
+  cursor: pointer;
+}
+
+.levitate-admin-picker__selected button svg {
+  color: var(--admin-pink);
+}
+
+.levitate-admin-picker__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.levitate-admin-picker__options button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  color: rgba(39, 37, 37, 0.74);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 200ms var(--ease-out);
+}
+
+.levitate-admin-picker__options button:hover,
+.levitate-admin-picker__options button:focus-visible {
+  border-color: rgba(108, 167, 178, 0.4);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 30px rgba(38, 32, 27, 0.08);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.levitate-admin-picker__options button.is-selected {
+  border-color: rgba(108, 167, 178, 0.54);
+  background:
+    linear-gradient(135deg, rgba(108, 167, 178, 0.16), rgba(224, 79, 146, 0.08)),
+    rgba(255, 255, 255, 0.9);
+  color: var(--admin-ink);
+  box-shadow: 0 16px 34px rgba(38, 32, 27, 0.1);
+}
+
+.levitate-admin-picker__options button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.levitate-admin-picker__check {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(108, 167, 178, 0.32);
+  border-radius: 50%;
+  color: var(--admin-cyan-muted);
+}
+
+.levitate-admin-picker__options button.is-selected .levitate-admin-picker__check {
+  border-color: var(--admin-pink);
+  background: var(--admin-pink);
+  color: #fff;
+}
+
+.levitate-admin-picker__options button > span:not(.levitate-admin-picker__check) {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.98rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.levitate-admin-picker__options button small {
+  color: rgba(39, 37, 37, 0.48);
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.levitate-admin-picker__empty {
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  border: 1px dashed var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.48);
+  color: rgba(39, 37, 37, 0.52);
+  font-size: 0.92rem;
+  font-weight: 720;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .levitate-admin-picker__header {
+    grid-template-columns: 1fr;
+  }
+
+  .levitate-admin-picker__actions {
+    justify-content: flex-start;
+  }
+
+  .levitate-admin-picker__options {
+    grid-template-columns: 1fr;
+  }
+}
+
 .levitate-admin-registered-panel__table {
   min-height: 80px;
   padding: clamp(24px, 3vw, 34px) clamp(20px, 4vw, 44px) clamp(24px, 3vw, 34px);
@@ -21640,6 +22029,134 @@ button {
 .levitate-admin-empty-state {
   border-top-color: var(--admin-border-soft);
   color: rgba(39, 37, 37, 0.5);
+}
+
+.levitate-admin-lookup-panel {
+  display: grid;
+  gap: clamp(18px, 2.4vw, 26px);
+}
+
+.levitate-admin-lookup-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 clamp(20px, 4vw, 44px);
+}
+
+.levitate-admin-lookup-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: rgba(39, 37, 37, 0.62);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 200ms var(--ease-out);
+}
+
+.levitate-admin-lookup-tabs button:hover,
+.levitate-admin-lookup-tabs button:focus-visible {
+  border-color: rgba(108, 167, 178, 0.48);
+  color: var(--admin-ink);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.levitate-admin-lookup-tabs button.is-active {
+  border-color: rgba(39, 37, 37, 0.92);
+  background: rgba(39, 37, 37, 0.96);
+  color: #fffaf5;
+}
+
+.levitate-admin-lookup-table-scroll {
+  overflow-x: auto;
+  padding: 0 clamp(20px, 4vw, 44px) clamp(24px, 3vw, 34px);
+}
+
+.levitate-admin-lookup-table {
+  --admin-lookup-columns: 1fr;
+  display: grid;
+  grid-template-columns: var(--admin-lookup-columns);
+  min-width: 0;
+  align-items: start;
+  gap: 0 18px;
+  color: rgba(39, 37, 37, 0.48);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-lookup-table--participants {
+  --admin-lookup-columns: minmax(180px, 1.1fr) minmax(172px, 0.9fr) minmax(132px, 0.72fr) minmax(76px, 0.38fr) minmax(120px, 0.58fr) minmax(128px, 0.62fr);
+}
+
+.levitate-admin-lookup-table--choreographers {
+  --admin-lookup-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(90px, 0.42fr);
+}
+
+.levitate-admin-lookup-table--dances {
+  --admin-lookup-columns: minmax(190px, 1fr) minmax(112px, 0.55fr) minmax(138px, 0.68fr) minmax(118px, 0.58fr) minmax(220px, 1.1fr);
+}
+
+.levitate-admin-lookup-table > span[role="columnheader"] {
+  align-self: end;
+  min-height: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--admin-border-soft);
+  line-height: 1.1;
+}
+
+.levitate-admin-lookup-table__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: var(--admin-lookup-columns);
+  gap: 18px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--admin-border-soft);
+  color: rgba(39, 37, 37, 0.78);
+  font-size: 0.92rem;
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.levitate-admin-lookup-table > .levitate-admin-lookup-table__row:first-of-type {
+  border-top: 0;
+}
+
+.levitate-admin-payment-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(224, 79, 146, 0.28);
+  border-radius: 999px;
+  background: rgba(224, 79, 146, 0.1);
+  color: var(--admin-pink);
+  font-size: 0.78rem;
+  font-weight: 820;
+}
+
+.levitate-admin-payment-badge.is-paid {
+  border-color: rgba(108, 167, 178, 0.34);
+  background: rgba(108, 167, 178, 0.12);
+  color: var(--admin-cyan-muted);
 }
 
 .levitate-admin-program {
@@ -21687,6 +22204,203 @@ button {
 .levitate-admin-program__toolbar button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.levitate-admin-feedback-list {
+  display: grid;
+  gap: 14px;
+  padding: clamp(24px, 4vw, 44px);
+}
+
+.levitate-admin-feedback-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 116px;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid var(--admin-border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: var(--admin-soft-shadow);
+}
+
+.levitate-admin-feedback-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--admin-pink);
+  font-size: 0.72rem;
+  font-weight: 860;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-feedback-card h2 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: clamp(1.32rem, 2vw, 2rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.04;
+}
+
+.levitate-admin-feedback-card p {
+  margin: 8px 0 0;
+  color: rgba(39, 37, 37, 0.58);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.levitate-admin-feedback-card strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid rgba(91, 172, 189, 0.38);
+  border-radius: 999px;
+  color: var(--admin-cyan-muted);
+  font-size: 0.78rem;
+  font-weight: 860;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.levitate-admin-music-form {
+  display: grid;
+  gap: clamp(18px, 3vw, 28px);
+  padding: clamp(24px, 4vw, 44px);
+}
+
+.levitate-admin-music-form .levitate-admin-field {
+  max-width: 620px;
+}
+
+.levitate-admin-music-form > .levitate-admin-save {
+  justify-self: start;
+}
+
+.levitate-admin-music-selected {
+  display: grid;
+  gap: 7px;
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid var(--admin-border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: var(--admin-soft-shadow);
+}
+
+.levitate-admin-music-selected span {
+  display: block;
+  color: var(--admin-pink);
+  font-size: 0.72rem;
+  font-weight: 860;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-music-selected strong {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: clamp(1.32rem, 2vw, 2rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.04;
+}
+
+.levitate-admin-music-selected p {
+  margin: 0;
+  color: rgba(39, 37, 37, 0.58);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.levitate-admin-music-selected small {
+  display: block;
+  margin-top: 6px;
+  color: rgba(39, 37, 37, 0.48);
+  font-size: 0.82rem;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.levitate-admin-music-dropzone {
+  position: relative;
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  justify-items: center;
+  gap: 10px;
+  min-height: clamp(190px, 22vw, 260px);
+  padding: clamp(24px, 5vw, 46px);
+  overflow: hidden;
+  border: 1px dashed rgba(108, 167, 178, 0.52);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(108, 167, 178, 0.12), rgba(224, 79, 146, 0.08)),
+    rgba(255, 255, 255, 0.68);
+  color: var(--admin-ink);
+  cursor: pointer;
+  text-align: center;
+  box-shadow: var(--admin-soft-shadow);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 200ms var(--ease-out);
+}
+
+.levitate-admin-music-dropzone:hover,
+.levitate-admin-music-dropzone:focus-within {
+  border-color: var(--admin-pink);
+  background:
+    linear-gradient(135deg, rgba(108, 167, 178, 0.16), rgba(224, 79, 146, 0.12)),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 38px rgba(224, 79, 146, 0.2);
+  transform: translateY(-1px);
+}
+
+.levitate-admin-music-dropzone.has-file {
+  border-style: solid;
+  border-color: rgba(108, 167, 178, 0.54);
+}
+
+.levitate-admin-music-dropzone svg {
+  color: var(--admin-cyan-muted);
+}
+
+.levitate-admin-music-dropzone strong {
+  margin: 0;
+  letter-spacing: 0;
+  color: var(--admin-ink);
+  font-size: clamp(1.18rem, 1.8vw, 1.7rem);
+  font-weight: 780;
+  line-height: 1.08;
+}
+
+.levitate-admin-music-dropzone span {
+  max-width: 420px;
+  margin: 0;
+  color: rgba(39, 37, 37, 0.58);
+  font-size: 0.94rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.levitate-admin-music-dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.levitate-admin-music-dropzone input:disabled {
+  cursor: not-allowed;
 }
 
 .levitate-admin-program-block {
@@ -21780,6 +22494,19 @@ button {
 
   .levitate-admin-program__toolbar button {
     width: 100%;
+  }
+
+  .levitate-admin-feedback-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .levitate-admin-feedback-card strong {
+    width: fit-content;
+  }
+
+  .levitate-admin-music-form {
+    padding: 24px 18px 30px;
   }
 }
 
@@ -21906,6 +22633,16 @@ button {
   .levitate-admin-registered-panel__table,
   .levitate-admin-registered-panel__row {
     grid-template-columns: 1fr;
+  }
+
+  .levitate-admin-lookup-tabs,
+  .levitate-admin-lookup-table-scroll {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .levitate-admin-lookup-table {
+    min-width: 680px;
   }
 }
 
@@ -33169,18 +33906,31 @@ button {
 .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__head,
 .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.36fr) minmax(0, 0.64fr);
-  gap: clamp(18px, 3vw, 46px);
+  grid-template-columns:
+    minmax(104px, 0.16fr)
+    minmax(170px, 0.34fr)
+    minmax(190px, 0.5fr);
+  gap: clamp(16px, 2.4vw, 34px);
   align-items: center;
   border-bottom: 1px solid var(--aerial-line);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-division-table--with-groups .rules-aerial-division-table__head,
+.rules-page--aerial.levitate-home-redesign .rules-aerial-division-table--with-groups .rules-aerial-division-table__row {
+  grid-template-columns:
+    minmax(104px, 0.16fr)
+    minmax(170px, 0.28fr)
+    minmax(190px, 0.31fr)
+    minmax(170px, 0.25fr);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__head {
   min-height: 66px;
   color: var(--aerial-pink);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 860;
   letter-spacing: 0.14em;
+  line-height: 1.25;
   text-transform: uppercase;
 }
 
@@ -33205,9 +33955,57 @@ button {
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row span {
   color: var(--aerial-ink);
-  font-size: clamp(1.12rem, 1.5vw, 1.56rem);
+  font-size: clamp(1rem, 1.28vw, 1.38rem);
   font-weight: 540;
   line-height: 1.2;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-music-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--aerial-line);
+  border-bottom: 1px solid var(--aerial-line);
+  list-style: none;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-music-list li {
+  position: relative;
+  min-height: 0;
+  padding: clamp(18px, 2.3vw, 28px) 0 clamp(18px, 2.3vw, 28px) clamp(32px, 3.2vw, 46px);
+  color: var(--aerial-ink);
+  font-size: clamp(1.02rem, 1.24vw, 1.28rem);
+  font-weight: 620;
+  line-height: 1.34;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-music-list li + li {
+  border-top: 1px solid var(--aerial-line);
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-music-list li::before {
+  position: absolute;
+  top: clamp(26px, 2.8vw, 36px);
+  left: clamp(4px, 0.8vw, 10px);
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--aerial-pink);
+  content: "";
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-music-list a {
+  color: var(--aerial-pink);
+  font-weight: 780;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+.rules-page--aerial.levitate-home-redesign .rules-aerial-music-list a:hover {
+  color: var(--aerial-ink);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-levels {
@@ -34045,14 +34843,28 @@ button {
     gap: 28px;
   }
 
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__head,
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row {
-    grid-template-columns: minmax(88px, 0.34fr) minmax(0, 0.66fr);
-    gap: 16px;
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table {
+    display: grid;
+    gap: 10px;
+    border-top: 0;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__head {
+    display: none;
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row {
-    min-height: 64px;
+    grid-template-columns: 1fr;
+    gap: 13px;
+    min-height: 0;
+    padding: 18px 0;
+    border-top: 1px solid var(--aerial-line);
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row strong,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row span {
+    display: grid;
+    gap: 4px;
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row strong {
@@ -34061,6 +34873,41 @@ button {
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row span {
     font-size: 1rem;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row [role="cell"]::before {
+    content: attr(data-label);
+    color: var(--aerial-pink);
+    font-size: 0.62rem;
+    font-weight: 860;
+    letter-spacing: 0.14em;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-music-list {
+    grid-template-columns: 1fr;
+    border-top: 1px solid var(--aerial-line);
+    border-bottom: 0;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-music-list li {
+    min-height: 0;
+    padding: 18px 0 18px 28px;
+    border-bottom: 1px solid var(--aerial-line);
+    font-size: 1rem;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-music-list li + li {
+    border-top: 0;
+    border-left: 0;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-music-list li::before {
+    top: 24px;
+    left: 0;
+    width: 8px;
+    height: 8px;
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-level-list {

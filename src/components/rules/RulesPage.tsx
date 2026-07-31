@@ -301,12 +301,12 @@ const aerialCategories = [
 ];
 
 const aerialDivisions = [
-  { division: "Baby", ages: "Hasta los 6 años" },
-  { division: "Petite", ages: "De 7 a 10 años" },
-  { division: "Junior", ages: "De 11 a 13 años" },
-  { division: "Teen", ages: "De 14 a 17 años" },
-  { division: "Senior", ages: "18 años en adelante" },
-  { division: "Legacy", ages: "+40 años Amateur" },
+  { division: "Baby", ages: "Hasta los 6 años", soloDuoTrioTime: "2:00 - 3:00" },
+  { division: "Petite", ages: "De 7 a 10 años", soloDuoTrioTime: "2:00 - 3:00" },
+  { division: "Junior", ages: "De 11 a 13 años", soloDuoTrioTime: "2:30 - 3:30" },
+  { division: "Teen", ages: "De 14 a 17 años", soloDuoTrioTime: "2:30 - 3:30" },
+  { division: "Senior", ages: "18 años en adelante.", soloDuoTrioTime: "2:30 - 3:30" },
+  { division: "Legacy", ages: "+40 años Amateur", soloDuoTrioTime: "2:00 - 3:00" },
 ];
 
 const aerialLevels = [
@@ -316,6 +316,22 @@ const aerialLevels = [
   { title: "Avanzado" },
   { title: "Elite" },
   { title: "Relevé", label: "Nueva" },
+];
+
+const aerialMusicRequirements = [
+  {
+    id: "deadline",
+    content: (
+      <>
+        Deberá ser subida por el responsable de academia en el <a href="/registro/academias">registro</a> a más tardar 15 días antes del evento.
+      </>
+    ),
+  },
+  { id: "format", content: "Formato MP3." },
+  {
+    id: "name",
+    content: "Debe nombrar el archivo de la siguiente forma: Nombre de la coreografía - Academia/Escuela - Modalidad y género - Categoría - División.",
+  },
 ];
 
 type RulesPageProps = {
@@ -380,11 +396,19 @@ function AerialProgram() {
           <div className="rules-aerial-division-table__head" role="row">
             <span role="columnheader">División</span>
             <span role="columnheader">Edades</span>
+            <span role="columnheader">Tiempo de ejecución solos - dúos - tríos</span>
           </div>
           {aerialDivisions.map((item) => (
             <div className="rules-aerial-division-table__row" role="row" key={item.division}>
-              <strong role="cell">{item.division}</strong>
-              <span role="cell">{item.ages}</span>
+              <strong role="cell" data-label="División">
+                {item.division}
+              </strong>
+              <span role="cell" data-label="Edades">
+                {item.ages}
+              </span>
+              <span role="cell" data-label="Solos - dúos - tríos">
+                {item.soloDuoTrioTime}
+              </span>
             </div>
           ))}
         </div>
@@ -417,6 +441,18 @@ function AerialProgram() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="rules-aerial-program__section rules-aerial-program__section--music">
+        <div className="rules-aerial-program__heading">
+          <p className="rules-aerial-kicker">Entrega</p>
+          <h3>Música.</h3>
+        </div>
+        <ul className="rules-aerial-music-list">
+          {aerialMusicRequirements.map((requirement) => (
+            <li key={requirement.id}>{requirement.content}</li>
+          ))}
+        </ul>
       </div>
     </section>
   );

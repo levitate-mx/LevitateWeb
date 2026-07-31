@@ -28,11 +28,23 @@ const registrationCategoriesByGenre = {
   aereo: new Set(["solo", "dupla_1_aparato", "duo_2_aparatos", "terna_1_aparato", "trio_3_aparatos"]),
   motion: new Set(["solo", "duo", "trio", "grupo"]),
 };
+const registrationCategoryParticipantRequirements = {
+  solo: 1,
+  duo: 2,
+  dueto: 2,
+  dupla_1_aparato: 2,
+  duo_2_aparatos: 2,
+  trio: 3,
+  terna_1_aparato: 3,
+  trio_3_aparatos: 3,
+};
 const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanzado", "elite"]);
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
 const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const maxRegistrationPaymentProofBytes = 1800000;
+const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
+const maxRegistrationMusicUploadBytes = 12000000;
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
 const registrationInscriptionPrices = {
   normal: {
@@ -345,6 +357,10 @@ export default {
 
     if (url.pathname === "/api/registration/dances") {
       return handleRegistrationDances(request, env);
+    }
+
+    if (url.pathname === "/api/registration/music") {
+      return handleRegistrationMusic(request, env);
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -962,19 +978,34 @@ async function handleRegistrationParticipants(request, env) {
     const session = await getRegistrationStateFromRequest({ db, request });
     const academyId = session.academy.id;
 
+    await ensureRegistrationParticipantInternationalColumn(db);
+    await ensureRegistrationParticipantReleveTeacherColumn(db);
+
     if (request.method === "GET") {
       return sendJson({ participants: await getRegistrationParticipants(db, academyId) });
     }
 
     const body = await readJsonBody(request);
     const fullName = requireString(body.fullName, "fullName");
-    const curp = normalizeCurp(requireString(body.curp, "curp"));
-    const birthDate = optionalString(body.birthDate);
+    const isInternational = optionalBoolean(body.isInternational);
+    const curp = isInternational
+      ? normalizeRegistrationDocument(requireString(body.curp, "documentNumber"))
+      : normalizeCurp(requireString(body.curp, "curp"));
+    const birthDate = requireString(body.birthDate, "birthDate");
     const age = optionalInteger(body.age, "age");
     const division = requireRegistrationChoice(body.division, "division", registrationDivisions);
     const shirtSize = requireRegistrationChoice(body.shirtSize, "shirtSize", registrationShirtSizes);
+    const isReleveTeacher = optionalBoolean(body.isReleveTeacher);
 
-    if (curp.length !== 18) {
+    if (age == null) {
+      throwHttpError("validation_error", "age is required", 400);
+    }
+
+    if (isInternational && curp.length < 3) {
+      throwHttpError("invalid_document_number", "Ingresa un número de documento válido", 400);
+    }
+
+    if (!isInternational && curp.length !== 18) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
@@ -990,12 +1021,26 @@ async function handleRegistrationParticipants(request, env) {
             age,
             division,
             shirt_size,
+            is_international,
+            is_releve_teacher,
             created_by_user_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
-      .bind(crypto.randomUUID(), academyId, fullName, curp, birthDate || null, age, division, shirtSize, session.user.id)
+      .bind(
+        crypto.randomUUID(),
+        academyId,
+        fullName,
+        curp,
+        birthDate,
+        age,
+        division,
+        shirtSize,
+        isInternational ? 1 : 0,
+        isReleveTeacher ? 1 : 0,
+        session.user.id,
+      )
       .run();
 
     const participant = await db
@@ -1471,7 +1516,8 @@ async function handleRegistrationChoreographers(request, env) {
     const body = await readJsonBody(request);
     const fullName = requireString(body.fullName, "fullName");
     const email = optionalEmail(body.email);
-    const phone = optionalString(body.phone);
+    const phone = requireString(body.phone, "phone");
+    const shirtSize = requireRegistrationChoice(body.shirtSize, "shirtSize", registrationShirtSizes);
     const choreographerId = crypto.randomUUID();
 
     await db
@@ -1483,12 +1529,13 @@ async function handleRegistrationChoreographers(request, env) {
             full_name,
             email,
             phone,
+            shirt_size,
             created_by_user_id
           )
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
       )
-      .bind(choreographerId, academyId, fullName, email || null, phone || null, session.user.id)
+      .bind(choreographerId, academyId, fullName, email || null, phone, shirtSize, session.user.id)
       .run();
 
     const choreographer = await db
@@ -1537,6 +1584,16 @@ async function handleRegistrationDances(request, env) {
 
     if (participantIds.length === 0) {
       throwHttpError("missing_participants", "Selecciona al menos un participante", 400);
+    }
+
+    const participantRequirement = registrationCategoryParticipantRequirements[category] || null;
+
+    if (participantRequirement && participantIds.length !== participantRequirement) {
+      throwHttpError(
+        "invalid_participant_count",
+        `Esta categoría requiere exactamente ${participantRequirement} ${participantRequirement === 1 ? "participante" : "participantes"}.`,
+        400,
+      );
     }
 
     await assertRegistrationIdsBelongToAcademy(
@@ -1605,6 +1662,65 @@ async function handleRegistrationDances(request, env) {
     await db.batch(statements);
 
     return sendJson({ dance: await getRegistrationDanceById(db, academyId, danceId) }, 201);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationMusic(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const session = await getRegistrationStateFromRequest({ db, request });
+    const academyId = session.academy.id;
+    const body = await readJsonBody(request);
+    const danceId = requireString(body.danceId, "danceId");
+    const musicUpload = getRegistrationMusicUploadInput(body);
+
+    await ensureRegistrationMusicUploadsTable(db);
+    await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
+
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_music_uploads (
+            id,
+            academy_id,
+            dance_id,
+            file_name,
+            content_type,
+            file_size,
+            data_url,
+            uploaded_by_user_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(dance_id) DO UPDATE SET
+            file_name = excluded.file_name,
+            content_type = excluded.content_type,
+            file_size = excluded.file_size,
+            data_url = excluded.data_url,
+            uploaded_by_user_id = excluded.uploaded_by_user_id,
+            uploaded_at = datetime('now'),
+            updated_at = datetime('now')
+        `,
+      )
+      .bind(
+        crypto.randomUUID(),
+        academyId,
+        danceId,
+        musicUpload.fileName,
+        musicUpload.contentType,
+        musicUpload.fileSize,
+        musicUpload.dataUrl,
+        session.user.id,
+      )
+      .run();
+
+    return sendJson({
+      dance: await getRegistrationDanceById(db, academyId, danceId),
+      musicUpload: await getRegistrationMusicUploadByDanceId(db, academyId, danceId),
+    });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -3415,6 +3531,24 @@ async function getRegistrationDanceById(db, academyId, danceId) {
   return serializedDance;
 }
 
+async function assertRegistrationDanceBelongsToAcademy(db, academyId, danceId) {
+  const dance = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_dances
+        WHERE academy_id = ? AND id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(academyId, danceId)
+    .first();
+
+  if (!dance) {
+    throwHttpError("registration_dance_not_found", "Coreografía no encontrada", 404);
+  }
+}
+
 async function serializeRegistrationDances(db, academyId, dances) {
   if (dances.length === 0) {
     return [];
@@ -3459,6 +3593,7 @@ async function serializeRegistrationDances(db, academyId, dances) {
     .all();
   const choreographersByDance = groupRegistrationRelations(choreographers, danceIds);
   const participantsByDance = groupRegistrationRelations(participants, danceIds);
+  const musicUploadsByDance = await getRegistrationMusicUploadsByDance(db, academyId, danceIds);
 
   return dances.map((dance) => ({
     id: dance.id,
@@ -3471,7 +3606,63 @@ async function serializeRegistrationDances(db, academyId, dances) {
     createdAt: dance.created_at,
     choreographers: choreographersByDance.get(dance.id) || [],
     participants: participantsByDance.get(dance.id) || [],
+    musicUpload: musicUploadsByDance.get(dance.id) || null,
   }));
+}
+
+async function getRegistrationMusicUploadsByDance(db, academyId, danceIds) {
+  const uploadsByDance = new Map();
+
+  if (danceIds.size === 0) {
+    return uploadsByDance;
+  }
+
+  try {
+    const { results: uploads = [] } = await db
+      .prepare(
+        `
+          SELECT registration_music_uploads.*
+          FROM registration_music_uploads
+          INNER JOIN registration_dances
+            ON registration_dances.id = registration_music_uploads.dance_id
+          WHERE registration_dances.academy_id = ?
+          ORDER BY registration_music_uploads.uploaded_at DESC, registration_music_uploads.created_at DESC
+        `,
+      )
+      .bind(academyId)
+      .all();
+
+    for (const upload of uploads) {
+      if (danceIds.has(upload.dance_id) && !uploadsByDance.has(upload.dance_id)) {
+        uploadsByDance.set(upload.dance_id, serializeRegistrationMusicUpload(upload));
+      }
+    }
+  } catch (error) {
+    if (!isMissingRegistrationMusicUploadsTable(error)) {
+      throw error;
+    }
+  }
+
+  return uploadsByDance;
+}
+
+async function getRegistrationMusicUploadByDanceId(db, academyId, danceId) {
+  const upload = await db
+    .prepare(
+      `
+        SELECT registration_music_uploads.*
+        FROM registration_music_uploads
+        INNER JOIN registration_dances
+          ON registration_dances.id = registration_music_uploads.dance_id
+        WHERE registration_dances.academy_id = ?
+          AND registration_music_uploads.dance_id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(academyId, danceId)
+    .first();
+
+  return upload ? serializeRegistrationMusicUpload(upload) : null;
 }
 
 function groupRegistrationRelations(rows, danceIds) {
@@ -3549,6 +3740,8 @@ function serializeRegistrationParticipant(participant) {
     age: participant.age,
     division: participant.division,
     shirtSize: participant.shirt_size,
+    isInternational: Boolean(participant.is_international),
+    isReleveTeacher: Boolean(participant.is_releve_teacher),
     createdAt: participant.created_at,
   };
 }
@@ -3679,6 +3872,54 @@ async function ensureRegistrationInscriptionOrderBuyerPhoneColumns(db) {
           throw error;
         }
       }
+    }
+  }
+}
+
+async function ensureRegistrationParticipantInternationalColumn(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_participants)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+
+  if (existingColumns.has("is_international")) {
+    return;
+  }
+
+  try {
+    await db
+      .prepare(
+        `
+          ALTER TABLE registration_participants
+          ADD COLUMN is_international INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1))
+        `,
+      )
+      .run();
+  } catch (error) {
+    if (!String(error?.message || error).match(/duplicate column name/i)) {
+      throw error;
+    }
+  }
+}
+
+async function ensureRegistrationParticipantReleveTeacherColumn(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_participants)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+
+  if (existingColumns.has("is_releve_teacher")) {
+    return;
+  }
+
+  try {
+    await db
+      .prepare(
+        `
+          ALTER TABLE registration_participants
+          ADD COLUMN is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))
+        `,
+      )
+      .run();
+  } catch (error) {
+    if (!String(error?.message || error).match(/duplicate column name/i)) {
+      throw error;
     }
   }
 }
@@ -3936,6 +4177,47 @@ function isMissingRegistrationShopPaymentProofsTable(error) {
   return String(error?.message || error).includes("registration_shop_payment_proofs");
 }
 
+function isMissingRegistrationMusicUploadsTable(error) {
+  return String(error?.message || error).includes("registration_music_uploads");
+}
+
+async function ensureRegistrationMusicUploadsTable(db) {
+  await db
+    .prepare(
+      `
+        CREATE TABLE IF NOT EXISTS registration_music_uploads (
+          id TEXT PRIMARY KEY,
+          academy_id TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE,
+          dance_id TEXT NOT NULL REFERENCES registration_dances(id) ON DELETE CASCADE,
+          file_name TEXT NOT NULL,
+          content_type TEXT NOT NULL CHECK (content_type IN ('audio/mpeg', 'audio/mp3')),
+          file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 12000000),
+          data_url TEXT NOT NULL,
+          uploaded_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+          uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE (dance_id)
+        )
+      `,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id)`).run();
+}
+
+function serializeRegistrationMusicUpload(upload) {
+  return {
+    id: upload.id,
+    danceId: upload.dance_id,
+    fileName: upload.file_name,
+    contentType: upload.content_type,
+    fileSize: Number(upload.file_size || 0),
+    dataUrl: upload.data_url,
+    uploadedAt: upload.uploaded_at,
+  };
+}
+
 function serializeRegistrationStudentResource(resource) {
   return {
     id: resource.id,
@@ -3952,6 +4234,7 @@ function serializeRegistrationChoreographer(choreographer) {
     fullName: choreographer.full_name,
     email: choreographer.email,
     phone: choreographer.phone,
+    shirtSize: choreographer.shirt_size || "m",
     createdAt: choreographer.created_at,
   };
 }
@@ -4040,6 +4323,38 @@ function getRegistrationPaymentProofInput(body) {
   };
 }
 
+function getRegistrationMusicUploadInput(body) {
+  const fileName = requireString(body.fileName, "fileName").slice(0, 180);
+  const contentType = requireRegistrationChoice(body.contentType || "audio/mpeg", "contentType", registrationMusicUploadContentTypes);
+  const dataUrl = requireString(body.dataUrl, "dataUrl");
+  const estimatedFileSize = estimateBase64DataUrlSize(dataUrl);
+  const providedFileSize = optionalInteger(body.fileSize, "fileSize");
+  const fileSize = providedFileSize || estimatedFileSize;
+
+  if (!fileName.toLowerCase().endsWith(".mp3")) {
+    throwHttpError("invalid_music_file", "La canción debe estar en formato MP3", 400);
+  }
+
+  if (!dataUrl.startsWith(`data:${contentType};base64,`)) {
+    throwHttpError("invalid_music_file", "La canción no coincide con el formato MP3", 400);
+  }
+
+  if (!Number.isInteger(fileSize) || fileSize <= 0 || fileSize > maxRegistrationMusicUploadBytes) {
+    throwHttpError("music_file_too_large", "La canción debe pesar menos de 12 MB", 400);
+  }
+
+  if (estimatedFileSize > maxRegistrationMusicUploadBytes || dataUrl.length > maxRegistrationMusicUploadBytes * 1.45) {
+    throwHttpError("music_file_too_large", "La canción debe pesar menos de 12 MB", 400);
+  }
+
+  return {
+    contentType,
+    dataUrl,
+    fileName,
+    fileSize,
+  };
+}
+
 function estimateBase64DataUrlSize(dataUrl) {
   const base64 = String(dataUrl).split(",")[1] || "";
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
@@ -4056,6 +4371,10 @@ function requireStringArray(value, fieldName) {
 
 function optionalString(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function optionalBoolean(value) {
+  return value === true || value === 1 || value === "1" || value === "true" || value === "on";
 }
 
 function optionalEmail(value) {
@@ -4087,6 +4406,10 @@ function normalizeEmail(value) {
 
 function normalizeCurp(value) {
   return value.trim().toUpperCase();
+}
+
+function normalizeRegistrationDocument(value) {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 32);
 }
 
 async function hashPassword(password) {

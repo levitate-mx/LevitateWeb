@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS registration_participants (
   age INTEGER CHECK (age IS NULL OR (age >= 0 AND age <= 120)),
   division TEXT NOT NULL CHECK (division IN ('baby', 'mini', 'petite', 'junior', 'teen', 'adulto', 'senior', 'legacy', 'releve')),
   shirt_size TEXT NOT NULL CHECK (shirt_size IN ('6', '8', '10', '12', 'xs', 's', 'm', 'l')),
+  is_international INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1)),
+  is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1)),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -200,6 +202,7 @@ CREATE TABLE IF NOT EXISTS registration_choreographers (
   full_name TEXT NOT NULL,
   email TEXT COLLATE NOCASE,
   phone TEXT,
+  shirt_size TEXT NOT NULL DEFAULT 'm' CHECK (shirt_size IN ('6', '8', '10', '12', 'xs', 's', 'm', 'l')),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -270,6 +273,21 @@ CREATE TABLE IF NOT EXISTS registration_dance_participants (
   PRIMARY KEY (dance_id, participant_id)
 );
 
+CREATE TABLE IF NOT EXISTS registration_music_uploads (
+  id TEXT PRIMARY KEY,
+  academy_id TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE,
+  dance_id TEXT NOT NULL REFERENCES registration_dances(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('audio/mpeg', 'audio/mp3')),
+  file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 12000000),
+  data_url TEXT NOT NULL,
+  uploaded_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (dance_id)
+);
+
 CREATE TABLE IF NOT EXISTS registration_recognition_documents (
   id TEXT PRIMARY KEY,
   document_type TEXT NOT NULL CHECK (document_type IN ('academy_recognition', 'participant_diploma', 'choreographer_diploma')),
@@ -323,6 +341,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   WHERE email IS NOT NULL AND email <> '';
 CREATE INDEX IF NOT EXISTS idx_registration_dances_academy_id ON registration_dances(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_dances_venue ON registration_dances(venue);
+CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id);
+CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_academy_id ON registration_recognition_documents(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_venue ON registration_recognition_documents(venue);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_status ON registration_recognition_documents(status);
