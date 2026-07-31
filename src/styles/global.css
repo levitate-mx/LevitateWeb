@@ -23187,9 +23187,9 @@ button {
 }
 
 .inscripciones-query-message.is-success {
-  border: 1px solid rgba(87, 189, 209, 0.32);
-  background: rgba(87, 189, 209, 0.14);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(87, 189, 209, 0.48);
+  background: rgba(226, 247, 250, 0.94);
+  color: rgba(42, 41, 40, 0.9);
 }
 
 .inscripciones-confirmation-card h3,
@@ -24122,8 +24122,52 @@ button {
   clip: rect(0 0 0 0);
 }
 
+.inscripciones-proof-selection {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(87, 189, 209, 0.32);
+  border-radius: 8px;
+  background: rgba(87, 189, 209, 0.1);
+}
+
+.inscripciones-proof-selection span {
+  color: var(--home-blue);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.inscripciones-proof-selection strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.92rem;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
 .inscripciones-proof-uploader .inscripciones-button {
   justify-self: start;
+}
+
+.inscripciones-proof-change {
+  justify-self: start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--home-blue);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 820;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.inscripciones-proof-change:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .inscripciones-proof-uploader .inscripciones-query-message {
@@ -30603,6 +30647,15 @@ button {
   min-height: 46px;
   border-style: solid;
   border-radius: 6px;
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-selection {
+  border-color: rgba(87, 189, 209, 0.36);
+  background: rgba(226, 247, 250, 0.72);
+}
+
+.inscripciones-payment-sidepanel .inscripciones-proof-selection strong {
+  color: rgba(42, 41, 40, 0.88);
 }
 
 .inscripciones-payment-sidepanel .inscripciones-button {

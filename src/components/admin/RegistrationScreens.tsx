@@ -951,7 +951,7 @@ function getInscriptionOrderStatusLabel(status: string) {
   return getOptionLabel(inscriptionOrderStatusOptions, status);
 }
 
-function getAdminOrderType(order: RegistrationInscriptionOrder) {
+function getAdminOrderType(order: Pick<RegistrationInscriptionOrder, "orderType">) {
   return order.orderType === "shop" ? "shop" : "registration";
 }
 
@@ -1016,14 +1016,25 @@ function getDefaultPaymentRejectionReason(order: RegistrationInscriptionOrder): 
   return "invalid_or_unreadable_proof";
 }
 
+function getRegistrationInscriptionPaymentReference(order: Pick<RegistrationInscriptionOrder, "curp" | "orderType" | "reference">) {
+  if (getAdminOrderType(order) === "shop") {
+    return order.reference;
+  }
+
+  const curpPrefix = String(order.curp || "").replace(/\s/g, "").toUpperCase().slice(0, 4);
+
+  return curpPrefix ? `LEVITATE-${curpPrefix}-26` : order.reference;
+}
+
 function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reason: RegistrationPaymentRejectionReason) {
   const amount = formatAdminCurrency(order.amount);
+  const paymentReference = getRegistrationInscriptionPaymentReference(order);
 
   const messages: Record<RegistrationPaymentRejectionReason, string> = {
-    incomplete_amount: `No pudimos aprobar tu pago porque el monto recibido no cubre el total de la orden ${order.reference}. El total correcto es ${amount}. Te reenviamos los datos de transferencia para completar el pago y volver a subir tu comprobante.`,
-    invalid_or_unreadable_proof: `No pudimos aprobar tu pago porque el comprobante de la orden ${order.reference} no es legible o no corresponde al pago. Te reenviamos los datos de transferencia para que puedas revisar la operación y subir el comprobante correcto.`,
-    missing_proof: `No pudimos aprobar tu pago porque falta subir el comprobante de la orden ${order.reference}. Te reenviamos los datos de transferencia para que puedas realizar o confirmar el pago y cargar el comprobante.`,
-    payment_not_found: `No pudimos aprobar tu pago porque no encontramos una transferencia asociada a la referencia ${order.reference}. Te reenviamos los datos de transferencia para que puedas realizar el pago y subir el comprobante.`,
+    incomplete_amount: `No pudimos aprobar tu pago porque el monto recibido no cubre el total de la orden ${paymentReference}. El total correcto es ${amount}. Te reenviamos los datos de transferencia para completar el pago y volver a subir tu comprobante.`,
+    invalid_or_unreadable_proof: `No pudimos aprobar tu pago porque el comprobante de la orden ${paymentReference} no es legible o no corresponde al pago. Te reenviamos los datos de transferencia para que puedas revisar la operación y subir el comprobante correcto.`,
+    missing_proof: `No pudimos aprobar tu pago porque falta subir el comprobante de la orden ${paymentReference}. Te reenviamos los datos de transferencia para que puedas realizar o confirmar el pago y cargar el comprobante.`,
+    payment_not_found: `No pudimos aprobar tu pago porque no encontramos una transferencia asociada a la referencia ${paymentReference}. Te reenviamos los datos de transferencia para que puedas realizar el pago y subir el comprobante.`,
   };
 
   return messages[reason];
@@ -1046,6 +1057,7 @@ function buildWhatsAppUrl(phone: string, message: string) {
 
 function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
   const amount = formatAdminCurrency(order.paidAmount || order.amount);
+  const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const ticketCount = order.tickets?.length ?? 0;
   const isShopOrder = getAdminOrderType(order) === "shop";
   const ticketLine =
@@ -1058,7 +1070,7 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
   return [
     `Hola, te confirmamos que el pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName} fue aprobado.`,
     "",
-    `Orden: ${order.reference}`,
+    `Orden: ${paymentReference}`,
     `Monto confirmado: ${amount}`,
     `Academia: ${order.academyName}`,
     "",
@@ -1070,6 +1082,7 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
 
 function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrder, correctionMessage: string) {
   const isShopOrder = getAdminOrderType(order) === "shop";
+  const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const message =
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
 
@@ -1078,9 +1091,9 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     "",
     message,
     "",
-    `Orden: ${order.reference}`,
+    `Orden: ${paymentReference}`,
     `Monto esperado: ${formatAdminCurrency(order.amount)}`,
-    `Concepto para transferencia: ${order.reference}`,
+    `Concepto para transferencia: ${paymentReference}`,
     "",
     `Cuando tengas el comprobante correcto, vuelve a entrar a ${isShopOrder ? "Tienda" : "Inscripciones"} con la CURP y súbelo nuevamente.`,
   ].join("\n");
@@ -1435,7 +1448,7 @@ async function createTicketArtwork(order: RegistrationInscriptionOrder, ticket: 
   drawText("Estado", padding + 430, 614, 16, muted, 780);
   drawText(getTicketStatusLabel(ticket.status), padding + 430, 654, 30, ticket.status === "active" ? "#35734c" : "#a62c45", 820);
   drawText("Orden", padding + 430, 720, 16, muted, 780);
-  drawWrappedText(order.reference, padding + 430, 760, width - padding * 2 - 430, 24, 28, ink, 780);
+  drawWrappedText(getRegistrationInscriptionPaymentReference(order), padding + 430, 760, width - padding * 2 - 430, 24, 28, ink, 780);
 
   const detailsY = 900;
   drawText("Comprador / Participante", padding, detailsY, 16, muted, 780);
@@ -1584,7 +1597,7 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   ];
   const rows = orders.map((order) => [
     getAdminOrderTypeLabel(order),
-    order.reference,
+    getRegistrationInscriptionPaymentReference(order),
     order.curp,
     order.buyerPhone ?? "",
     order.participantName,
@@ -3145,7 +3158,7 @@ function InscriptionOrderCard({
     <form className="levitate-admin-payment-card" onSubmit={handleSubmit}>
       <header>
         <div>
-          <span>{order.reference}</span>
+          <span>{getRegistrationInscriptionPaymentReference(order)}</span>
           <h3>{order.participantName}</h3>
           <p>
             {order.curp} · {getOptionLabel(venueOptions, order.venue)}
@@ -3281,7 +3294,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       const matchesPurchaseType = purchaseTypeFilter === "all" || getAdminOrderType(order) === purchaseTypeFilter;
       const matchesQuery =
         !normalizedQuery ||
-        [order.reference, order.curp, order.participantName, order.academyName, order.venue]
+        [getRegistrationInscriptionPaymentReference(order), order.reference, order.curp, order.participantName, order.academyName, order.venue]
           .join(" ")
           .toLowerCase()
           .includes(normalizedQuery);
@@ -3639,7 +3652,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                         type="button"
                       >
                         <span role="cell">
-                          {order.reference}
+                          {getRegistrationInscriptionPaymentReference(order)}
                           <small>{getAdminOrderTypeLabel(order)}</small>
                         </span>
                         <span role="cell">{order.participantName}</span>
@@ -3682,7 +3695,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
       </section>
 
       {selectedOrder ? (
-        <div className="registration-admin-drawer" role="dialog" aria-modal="true" aria-label={`Detalle de pago ${selectedOrder.reference}`}>
+        <div
+          className="registration-admin-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Detalle de pago ${getRegistrationInscriptionPaymentReference(selectedOrder)}`}
+        >
           <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedOrderId("")} type="button" aria-label="Cerrar detalle" />
           <aside className="registration-admin-sidepanel">
             <RegistrationAdminOrderDetail onClose={() => setSelectedOrderId("")} onOrderUpdated={handleOrderUpdated} order={selectedOrder} />
@@ -3798,7 +3816,7 @@ function RegistrationAdminOrderDetail({
         throw new Error("No pudimos generar el PDF de boletos.");
       }
 
-      downloadBlob(pdf, `boletos-${order.reference.toLowerCase()}.pdf`);
+      downloadBlob(pdf, `boletos-${getRegistrationInscriptionPaymentReference(order).toLowerCase()}.pdf`);
       setStatusMessage("PDF de boletos generado.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No pudimos generar el PDF de boletos."));
@@ -3825,7 +3843,7 @@ function RegistrationAdminOrderDetail({
       <header>
         <div>
           <span>Orden</span>
-          <h2>{order.reference}</h2>
+          <h2>{getRegistrationInscriptionPaymentReference(order)}</h2>
           <p>{getAdminOrderTypeLabel(order)}</p>
         </div>
         <button className="registration-admin-detail__close" onClick={onClose} type="button" aria-label="Cerrar detalle">
@@ -3893,7 +3911,7 @@ function RegistrationAdminOrderDetail({
         {order.proof ? (
           <>
             {order.proof.contentType.startsWith("image/") ? (
-              <img alt={`Comprobante ${order.reference}`} src={order.proof.dataUrl} />
+              <img alt={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`} src={order.proof.dataUrl} />
             ) : (
               <div className="registration-admin-proof-file">
                 <FileText aria-hidden="true" size={38} />

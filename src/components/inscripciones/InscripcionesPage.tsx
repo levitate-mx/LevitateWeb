@@ -327,15 +327,15 @@ function formatPhoneNumber(value: string) {
   const digits = normalizePhoneNumber(value);
 
   if (digits.length <= 2) {
-    return digits;
+    return digits ? `(${digits}` : "";
   }
 
   if (digits.length <= 6) {
-    return `${digits.slice(0, 2)} ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   }
 
   if (digits.length <= 10) {
-    return `${digits.slice(0, 2)} ${digits.slice(2, 6)} ${digits.slice(6)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   }
 
   return digits;
@@ -681,7 +681,7 @@ function InscriptionLookupPanel() {
     setIsLookupLoading(true);
 
     try {
-      const response = await fetch("/api/registration/inscription/lookup", {
+      const response = await fetch("/api/registration/inscription/payment-lookup", {
         body: JSON.stringify({ curp: normalizedCurp }),
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -750,7 +750,7 @@ function InscriptionLookupPanel() {
         return;
       }
 
-      const response = await fetch("/api/registration/inscription/order/proof", {
+      const response = await fetch("/api/registration/inscription/payment-proof", {
         body: JSON.stringify({
           contentType: proofFile.type,
           curp: lookup.curp,
@@ -812,7 +812,17 @@ function InscriptionLookupPanel() {
       return;
     }
 
-    void uploadProofFile(file);
+    setSelectedProofFile(file);
+    input.value = "";
+  };
+
+  const handleProofSubmit = () => {
+    if (!selectedProofFile) {
+      proofFileInputRef.current?.click();
+      return;
+    }
+
+    void uploadProofFile(selectedProofFile);
   };
 
   const getPaymentShareData = () => {
@@ -1419,7 +1429,7 @@ function InscriptionLookupPanel() {
     setIsOrderLoading(true);
 
     try {
-      const response = await fetch("/api/registration/inscription/order", {
+      const response = await fetch("/api/registration/inscription/payment-order", {
         body: JSON.stringify({
           buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
           buyerPhoneCountryCode: phoneCountryCode,
@@ -1628,7 +1638,7 @@ function InscriptionLookupPanel() {
                     inputMode="tel"
                     maxLength={17}
                     onChange={handlePhoneNumberChange}
-                    placeholder="55 1234 5678"
+                    placeholder="(XX) XXXX-XXXX"
                     type="tel"
                     value={formatPhoneNumber(phoneNumber)}
                   />
@@ -1803,15 +1813,31 @@ function InscriptionLookupPanel() {
                         ref={proofFileInputRef}
                         type="file"
                       />
+                      {selectedProofFile ? (
+                        <p className="inscripciones-proof-selection">
+                          <span>Archivo seleccionado</span>
+                          <strong>{selectedProofFile.name}</strong>
+                        </p>
+                      ) : null}
                       <button
                         className="inscripciones-button inscripciones-button--solid"
                         disabled={isProofUploading}
-                        onClick={() => proofFileInputRef.current?.click()}
+                        onClick={handleProofSubmit}
                         type="button"
                       >
-                        {isProofUploading ? "Subiendo..." : "Subir comprobante"}
+                        {isProofUploading ? "Enviando..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
                         <ArrowRight aria-hidden="true" size={18} />
                       </button>
+                      {selectedProofFile ? (
+                        <button
+                          className="inscripciones-proof-change"
+                          disabled={isProofUploading}
+                          onClick={() => proofFileInputRef.current?.click()}
+                          type="button"
+                        >
+                          Cambiar archivo
+                        </button>
+                      ) : null}
                       {proofError ? (
                         <p className="inscripciones-query-message is-error" role="alert">
                           {proofError}
