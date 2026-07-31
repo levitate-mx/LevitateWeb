@@ -3040,7 +3040,6 @@ function ParticipantRegistrationPanel({
           <input checked={isInternational} name="isInternational" onChange={handleInternationalChange} type="checkbox" />
           <span>
             <strong>Internacional</strong>
-            <small>Usa número de documento y fecha de nacimiento manual.</small>
           </span>
         </label>
         <AdminField helper={curpHelper} icon={ClipboardList} label={documentFieldLabel}>
@@ -3093,7 +3092,6 @@ function ParticipantRegistrationPanel({
           <input name="isReleveTeacher" type="checkbox" />
           <span>
             <strong>Soy Maestro Relevé</strong>
-            <small>Marca esta casilla si corresponde.</small>
           </span>
         </label>
         <div className="levitate-admin-form__wide-block">
@@ -4626,15 +4624,19 @@ function AdminLookupPanel({
             <span role="columnheader">Pago</span>
             {participants.map((participant) => {
               const isPaid = isParticipantInscriptionPaid(participant, inscriptionOrders);
+              const divisionLabel = getProgramDivisionLabel(participant.division);
+              const compactDivisionLabel = divisionLabel.split(":")[0];
 
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={participant.id}>
                   <span role="cell">{participant.fullName}</span>
-                  <span role="cell">
-                    {participant.curp}
-                    {participant.isInternational ? " · Internacional" : ""}
+                  <span className="levitate-admin-lookup-table__document" role="cell">
+                    <strong>{participant.curp}</strong>
+                    {participant.isInternational ? <small>Internacional</small> : null}
                   </span>
-                  <span role="cell">{getProgramDivisionLabel(participant.division)}</span>
+                  <span role="cell" title={divisionLabel}>
+                    {compactDivisionLabel}
+                  </span>
                   <span role="cell">{participant.age || "Sin edad"}</span>
                   <span role="cell">{participant.isReleveTeacher ? "Sí" : "No"}</span>
                   <span className={`levitate-admin-payment-badge${isPaid ? " is-paid" : ""}`} role="cell">

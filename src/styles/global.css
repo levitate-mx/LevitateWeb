@@ -22099,7 +22099,7 @@ button {
 }
 
 .levitate-admin-lookup-table--participants {
-  --admin-lookup-columns: minmax(180px, 1.1fr) minmax(172px, 0.9fr) minmax(132px, 0.72fr) minmax(76px, 0.38fr) minmax(120px, 0.58fr) minmax(128px, 0.62fr);
+  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(128px, 0.56fr);
 }
 
 .levitate-admin-lookup-table--choreographers {
@@ -22112,10 +22112,12 @@ button {
 
 .levitate-admin-lookup-table > span[role="columnheader"] {
   align-self: end;
+  min-width: 0;
   min-height: 24px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--admin-border-soft);
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .levitate-admin-lookup-table__row {
@@ -22132,6 +22134,37 @@ button {
   letter-spacing: 0;
   line-height: 1.35;
   text-transform: none;
+}
+
+.levitate-admin-lookup-table__row > span[role="cell"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.levitate-admin-lookup-table__document {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+
+.levitate-admin-lookup-table__document strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgba(39, 37, 37, 0.78);
+  font-size: 0.86rem;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  line-height: 1.22;
+}
+
+.levitate-admin-lookup-table__document small {
+  width: fit-content;
+  color: var(--admin-cyan-muted);
+  font-size: 0.68rem;
+  font-weight: 820;
+  letter-spacing: 0.12em;
+  line-height: 1.15;
+  text-transform: uppercase;
 }
 
 .levitate-admin-lookup-table > .levitate-admin-lookup-table__row:first-of-type {
