@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS registration_participants (
   curp TEXT NOT NULL COLLATE NOCASE,
   birth_date TEXT,
   age INTEGER CHECK (age IS NULL OR (age >= 0 AND age <= 120)),
-  division TEXT NOT NULL CHECK (division IN ('baby', 'mini', 'junior', 'teen', 'adulto')),
+  division TEXT NOT NULL CHECK (division IN ('baby', 'mini', 'petite', 'junior', 'teen', 'adulto', 'senior', 'legacy', 'releve')),
   shirt_size TEXT NOT NULL CHECK (shirt_size IN ('6', '8', '10', '12', 'xs', 's', 'm', 'l')),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -137,6 +137,46 @@ CREATE TABLE IF NOT EXISTS registration_inscription_payment_proofs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS registration_shop_orders (
+  id TEXT PRIMARY KEY,
+  curp TEXT NOT NULL COLLATE NOCASE,
+  participant_name TEXT NOT NULL,
+  academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
+  academy_name TEXT NOT NULL,
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
+  paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+  status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
+  payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+  buyer_phone_country_code TEXT,
+  buyer_phone_number TEXT,
+  buyer_phone TEXT,
+  discount_code TEXT,
+  discount_amount INTEGER NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+  line_items_json TEXT NOT NULL DEFAULT '[]',
+  notes TEXT,
+  paid_at TEXT,
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  rejection_reason TEXT,
+  rejection_message TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_shop_payment_proofs (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES registration_shop_orders(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
+  file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 1800000),
+  data_url TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
+  uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS registration_event_tickets (
   id TEXT PRIMARY KEY,
   source_order_type TEXT NOT NULL DEFAULT 'registration' CHECK (source_order_type IN ('registration', 'shop')),
@@ -176,6 +216,13 @@ CREATE TABLE IF NOT EXISTS registration_dances (
       'tela',
       'trapecio',
       'open_aerial',
+      'open_trapecio',
+      'open_cuna',
+      'open_luna',
+      'open_esfera',
+      'open_pole_aereo',
+      'open_suspension_capilar',
+      'open_otro',
       'acrojazz',
       'ballet',
       'belly_dance',
@@ -187,7 +234,18 @@ CREATE TABLE IF NOT EXISTS registration_dances (
       'urbanos'
     )
   ),
-  category TEXT NOT NULL CHECK (category IN ('solo', 'duo', 'trio', 'grupo')),
+  category TEXT NOT NULL CHECK (
+    category IN (
+      'solo',
+      'duo',
+      'trio',
+      'grupo',
+      'dupla_1_aparato',
+      'duo_2_aparatos',
+      'terna_1_aparato',
+      'trio_3_aparatos'
+    )
+  ),
   level TEXT CHECK (
     (genre = 'motion' AND level IS NULL)
     OR (genre = 'aereo' AND level IN ('nudo', 'principiante', 'intermedio', 'avanzado', 'elite'))
@@ -212,6 +270,30 @@ CREATE TABLE IF NOT EXISTS registration_dance_participants (
   PRIMARY KEY (dance_id, participant_id)
 );
 
+CREATE TABLE IF NOT EXISTS registration_recognition_documents (
+  id TEXT PRIMARY KEY,
+  document_type TEXT NOT NULL CHECK (document_type IN ('academy_recognition', 'participant_diploma', 'choreographer_diploma')),
+  academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
+  academy_name TEXT NOT NULL,
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  recipient_type TEXT NOT NULL CHECK (recipient_type IN ('academy', 'participant', 'choreographer')),
+  recipient_id TEXT,
+  recipient_name TEXT NOT NULL,
+  participant_id TEXT REFERENCES registration_participants(id) ON DELETE SET NULL,
+  choreographer_id TEXT REFERENCES registration_choreographers(id) ON DELETE SET NULL,
+  dance_id TEXT REFERENCES registration_dances(id) ON DELETE SET NULL,
+  dance_title TEXT,
+  shirt_size TEXT CHECK (shirt_size IS NULL OR shirt_size IN ('6', '8', '10', '12', 'xs', 's', 'm', 'l')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'generated', 'sent', 'cancelled')),
+  file_url TEXT,
+  notes TEXT,
+  generated_at TEXT,
+  delivered_at TEXT,
+  created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_registration_users_academy_id ON registration_users(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_user_id ON registration_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_expires_at ON registration_sessions(expires_at);
@@ -228,6 +310,10 @@ CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_curp ON registrat
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_academy_id ON registration_inscription_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_status ON registration_inscription_orders(status);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id);
+CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp);
+CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id);
+CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status);
+CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON registration_shop_payment_proofs(order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_source_order ON registration_event_tickets(source_order_type, source_order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_ticket_code ON registration_event_tickets(ticket_code);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_status ON registration_event_tickets(status);
@@ -237,3 +323,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   WHERE email IS NOT NULL AND email <> '';
 CREATE INDEX IF NOT EXISTS idx_registration_dances_academy_id ON registration_dances(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_dances_venue ON registration_dances(venue);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_academy_id ON registration_recognition_documents(academy_id);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_venue ON registration_recognition_documents(venue);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_status ON registration_recognition_documents(status);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_document_type ON registration_recognition_documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_participant_id ON registration_recognition_documents(participant_id);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_choreographer_id ON registration_recognition_documents(choreographer_id);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_dance_id ON registration_recognition_documents(dance_id);

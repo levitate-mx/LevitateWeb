@@ -260,7 +260,14 @@ const subgenreLabels: Record<string, string> = {
   jazz: "JAZZ",
   lirico: "LÍRICO",
   open_aerial: "OPEN: AERIAL",
+  open_cuna: "OPEN: Cuna",
+  open_esfera: "OPEN: Esfera",
+  open_luna: "OPEN: Luna",
   open_motion: "OPEN: MOTION",
+  open_otro: "OPEN: Otro",
+  open_pole_aereo: "OPEN: Pole Aereo",
+  open_suspension_capilar: "OPEN: Suspensión Capilar",
+  open_trapecio: "OPEN: Trapecio",
   tela: "TELA",
   trapecio: "TRAPECIO",
   urbanos: "URBANOS",
@@ -268,9 +275,13 @@ const subgenreLabels: Record<string, string> = {
 
 const categoryLabels: Record<string, string> = {
   duo: "Dúo",
+  duo_2_aparatos: "Duo: 2 Aparatos",
+  dupla_1_aparato: "Duplas: 1 Aparato",
   grupo: "Grupo",
   solo: "Solo",
+  terna_1_aparato: "Ternas: 1 Aparato",
   trio: "Trío",
+  trio_3_aparatos: "Trios: 3 Aparatos",
 };
 
 const levelLabels: Record<string, string> = {
@@ -345,10 +356,8 @@ function isPhoneNumberValid(phoneNumber: string) {
   return normalizedPhoneNumber.length >= 7 && normalizedPhoneNumber.length <= 15;
 }
 
-function getPaymentConcept(curp: string) {
-  const curpPrefix = normalizeCurp(curp).slice(0, 4) || "CURP";
-
-  return `LEVITATE-${curpPrefix}-26`;
+function getPaymentConcept(lookup: InscriptionLookup) {
+  return lookup.order?.reference || lookup.reference;
 }
 
 function getVenueLabel(venue?: string | null) {
@@ -811,7 +820,7 @@ function InscriptionLookupPanel() {
       return null;
     }
 
-    const concept = getPaymentConcept(lookup.curp);
+    const concept = getPaymentConcept(lookup);
 
     return {
       concept,
@@ -1200,7 +1209,7 @@ function InscriptionLookupPanel() {
     context.strokeStyle = "rgba(42, 41, 40, 0.42)";
     context.stroke();
     drawText("i", infoX - 2, detailY + 45, 14, ink, 820);
-    drawRightFittedText(getPaymentConcept(lookup.curp), rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, 840);
+    drawRightFittedText(getPaymentConcept(lookup), rightX + rightWidth - 24, detailY + 46, rightWidth - 214, 22, ink, 840);
     detailY += 88;
 
     drawWrappedText(
@@ -1745,7 +1754,7 @@ function InscriptionLookupPanel() {
                           </button>
                         </dt>
                         <dd>
-                          <strong>{getPaymentConcept(lookup.curp)}</strong>
+                          <strong>{getPaymentConcept(lookup)}</strong>
                         </dd>
                       </div>
                     </dl>

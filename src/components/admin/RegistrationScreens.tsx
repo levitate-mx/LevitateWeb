@@ -44,7 +44,8 @@ import {
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
-type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "payments";
+type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "program" | "payments";
+type RegistrationAdminDashboardSection = "payments" | "tickets";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error";
 
@@ -53,6 +54,12 @@ type AdminNavItem = {
   icon: LucideIcon;
   screen?: AdminScreenId;
   action?: "logout";
+};
+
+type RegistrationAdminDashboardNavItem = {
+  label: string;
+  icon: LucideIcon;
+  section?: RegistrationAdminDashboardSection;
 };
 
 type FieldOption = {
@@ -116,8 +123,10 @@ type RegistrationChoreographer = {
 };
 
 type RegistrationDanceRelation = {
+  division?: string;
   id: string;
   fullName: string;
+  shirtSize?: string;
 };
 
 type RegistrationDance = {
@@ -165,18 +174,29 @@ type RegistrationEventTicket = {
 };
 
 type RegistrationInscriptionLineItem = {
+  count?: number;
   id: string;
+  itemType?: string;
+  name?: string;
   title: string;
   genre: string;
   subgenre: string;
   category: string;
+  productCategory?: string;
+  productId?: string;
+  productName?: string;
+  quantity?: number;
+  qty?: number;
   level?: string | null;
+  type?: string;
   venue: string;
+  visual?: string;
   academyName: string;
   amount: number;
 };
 
 type RegistrationInscriptionOrder = {
+  orderType?: "registration" | "shop";
   id: string;
   curp: string;
   participantName: string;
@@ -192,6 +212,8 @@ type RegistrationInscriptionOrder = {
   buyerPhoneCountryCode?: string | null;
   buyerPhoneNumber?: string | null;
   buyerPhone?: string | null;
+  discountCode?: string | null;
+  discountAmount?: number;
   notes?: string | null;
   paidAt?: string | null;
   reviewedBy?: string | null;
@@ -225,6 +247,26 @@ type RegistrationAdminOrderTotals = {
 type RegistrationAdminOrdersPayload = {
   orders: RegistrationInscriptionOrder[];
   totals: RegistrationAdminOrderTotals;
+};
+
+type TicketDashboardRow = {
+  activeTickets: number;
+  academyName: string;
+  cancelledTickets: number;
+  curp: string;
+  generatedTickets: number;
+  latestOrderId: string;
+  latestReference: string;
+  latestStatus: RegistrationInscriptionOrderStatus;
+  orderCount: number;
+  paidTickets: number;
+  participantName: string;
+  pendingTickets: number;
+  rejectedTickets: number;
+  requestedTickets: number;
+  updatedAt: string;
+  usedTickets: number;
+  venue: string;
 };
 
 type StudentRegistrationRecord = {
@@ -288,15 +330,29 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar alumnos", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
+  { label: "Programa", icon: ClipboardList, screen: "program" },
   { label: "Salir", icon: LogOut, action: "logout" },
+];
+
+const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
+  { label: "Dashboard", icon: LayoutDashboard },
+  { label: "Pagos", icon: CreditCard, section: "payments" },
+  { label: "Órdenes", icon: ClipboardList },
+  { label: "Inscripciones", icon: FileText },
+  { label: "Boletos", icon: Ticket, section: "tickets" },
+  { label: "Foto/Video", icon: Music2 },
+  { label: "Hojas de jueceo", icon: BadgeCheck },
+  { label: "Reportes", icon: BarChart3 },
 ];
 
 const divisions: FieldOption[] = [
   { value: "baby", label: "Baby: hasta los 6 años" },
-  { value: "mini", label: "Mini: 7 a 9 años" },
+  { value: "petite", label: "Petite: 7 a 10 años" },
   { value: "junior", label: "Junior: 10 a 12 años" },
   { value: "teen", label: "Teen: 13 a 17 años" },
-  { value: "adulto", label: "Adulto: 18 años en adelante" },
+  { value: "senior", label: "Senior: 18 años en adelante" },
+  { value: "legacy", label: "Legacy: +40 años" },
+  { value: "releve", label: "Relevé" },
 ];
 
 const shirtSizes: FieldOption[] = [
@@ -321,6 +377,13 @@ const danceSubgenresByGenre: Record<string, FieldOption[]> = {
     { value: "tela", label: "TELA" },
     { value: "trapecio", label: "TRAPECIO" },
     { value: "open_aerial", label: "OPEN: AERIAL" },
+    { value: "open_trapecio", label: "OPEN: Trapecio" },
+    { value: "open_cuna", label: "OPEN: Cuna" },
+    { value: "open_luna", label: "OPEN: Luna" },
+    { value: "open_esfera", label: "OPEN: Esfera" },
+    { value: "open_pole_aereo", label: "OPEN: Pole Aereo" },
+    { value: "open_suspension_capilar", label: "OPEN: Suspensión Capilar" },
+    { value: "open_otro", label: "OPEN: Otro" },
   ],
   motion: [
     { value: "acrojazz", label: "ACROJAZZ" },
@@ -338,12 +401,28 @@ const danceSubgenresByGenre: Record<string, FieldOption[]> = {
 const defaultDanceGenre = "aereo";
 const defaultDanceSubgenre = danceSubgenresByGenre[defaultDanceGenre][0].value;
 
-const danceCategories: FieldOption[] = [
+const motionDanceCategories: FieldOption[] = [
   { value: "solo", label: "Solo" },
   { value: "duo", label: "Dúo" },
   { value: "trio", label: "Trío" },
   { value: "grupo", label: "Grupo" },
 ];
+
+const aerialDanceCategories: FieldOption[] = [
+  { value: "solo", label: "Solo" },
+  { value: "dupla_1_aparato", label: "Duplas: 1 Aparato" },
+  { value: "duo_2_aparatos", label: "Duo: 2 Aparatos" },
+  { value: "terna_1_aparato", label: "Ternas: 1 Aparato" },
+  { value: "trio_3_aparatos", label: "Trios: 3 Aparatos" },
+];
+
+const danceCategoriesByGenre: Record<string, FieldOption[]> = {
+  aereo: aerialDanceCategories,
+  motion: motionDanceCategories,
+};
+
+const danceCategories = [...motionDanceCategories, ...aerialDanceCategories.filter((option) => !motionDanceCategories.some((category) => category.value === option.value))];
+const defaultDanceCategory = danceCategoriesByGenre[defaultDanceGenre][0].value;
 
 const danceLevels: FieldOption[] = [
   { value: "nudo", label: "Nudo" },
@@ -505,6 +584,9 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
       paidAmount: 0,
       status: "pending_payment",
       paymentMethod: "bank_transfer",
+      buyerPhoneCountryCode: "+52",
+      buyerPhoneNumber: "5512345678",
+      buyerPhone: "+525512345678",
       notes: null,
       paidAt: null,
       reviewedBy: null,
@@ -627,6 +709,226 @@ function getDanceLevelLabel(level: string | null) {
   return level ? getOptionLabel(danceLevels, level) : "No aplica";
 }
 
+const legacyProgramDivisionMap: Record<string, string> = {
+  adulto: "senior",
+  mini: "petite",
+};
+
+const programDivisionOrder = ["baby", "petite", "junior", "teen", "senior", "legacy", "releve"];
+const programAerialLevelOrder = ["nudo", "principiante", "intermedio", "avanzado", "elite"];
+const programMotionSubgenreOrder = danceSubgenresByGenre.motion.map((option) => option.value);
+const programCategoryOrder: Record<string, number> = {
+  solo: 0,
+  duo: 1,
+  dupla_1_aparato: 1,
+  duo_2_aparatos: 1,
+  trio: 2,
+  terna_1_aparato: 2,
+  trio_3_aparatos: 2,
+  grupo: 3,
+};
+
+type ProgramRow = {
+  academyName: string;
+  blockId: number;
+  blockTitle: string;
+  category: string;
+  choreographers: string;
+  danceId: string;
+  danceTitle: string;
+  division: string;
+  genre: string;
+  level: string;
+  participants: string;
+  subgenre: string;
+  venue: string;
+};
+
+type ProgramBlock = {
+  id: number;
+  title: string;
+  rows: ProgramRow[];
+};
+
+function normalizeProgramDivision(division?: string) {
+  const value = String(division || "").trim();
+  return legacyProgramDivisionMap[value] || value;
+}
+
+function getProgramDivisionLabel(division?: string) {
+  return getOptionLabel(divisions, normalizeProgramDivision(division || ""));
+}
+
+function getProgramDivisionRank(division?: string) {
+  const index = programDivisionOrder.indexOf(normalizeProgramDivision(division));
+  return index === -1 ? 999 : index;
+}
+
+function getDanceProgramDivision(dance: RegistrationDance) {
+  const participantDivisions = dance.participants.map((participant) => participant.division).filter(Boolean);
+
+  if (participantDivisions.length === 0) {
+    return "";
+  }
+
+  return participantDivisions.sort((left, right) => getProgramDivisionRank(right) - getProgramDivisionRank(left))[0] ?? "";
+}
+
+function getProgramBlock(dance: RegistrationDance, division: string) {
+  const normalizedDivision = normalizeProgramDivision(division);
+
+  if (dance.genre === "aereo") {
+    if (normalizedDivision === "baby" || normalizedDivision === "petite") {
+      return { id: 4, title: "BLOQUE 4: BABY + PETITE" };
+    }
+
+    if (normalizedDivision === "junior") {
+      return { id: 5, title: "BLOQUE 5: JUNIOR" };
+    }
+
+    if (normalizedDivision === "teen" || normalizedDivision === "legacy") {
+      return { id: 6, title: "BLOQUE 6: TEEN + LEGACY" };
+    }
+
+    if (normalizedDivision === "senior" || normalizedDivision === "releve") {
+      return { id: 7, title: "BLOQUE 7: SENIORS + RELEVÉ" };
+    }
+  }
+
+  if (normalizedDivision === "baby" || normalizedDivision === "petite") {
+    return { id: 1, title: "BLOQUE 1: BABY + PETITE" };
+  }
+
+  if (normalizedDivision === "junior" || normalizedDivision === "teen") {
+    return { id: 2, title: "BLOQUE 2: JUNIOR + TEEN" };
+  }
+
+  if (normalizedDivision === "senior" || normalizedDivision === "legacy" || normalizedDivision === "releve") {
+    return { id: 3, title: "BLOQUE 3: SENIOR + LEGACY + RELEVÉ" };
+  }
+
+  return { id: 99, title: "SIN BLOQUE" };
+}
+
+function getAerialSubgenreRank(subgenre: string) {
+  if (subgenre.startsWith("open_")) {
+    return 0;
+  }
+
+  if (subgenre === "aro") {
+    return 1;
+  }
+
+  if (subgenre === "tela") {
+    return 3;
+  }
+
+  return 2;
+}
+
+function getMotionSubgenreRank(subgenre: string) {
+  const index = programMotionSubgenreOrder.indexOf(subgenre);
+  return index === -1 ? 999 : index;
+}
+
+function getAerialLevelRank(level: string) {
+  const index = programAerialLevelOrder.indexOf(level);
+  return index === -1 ? 999 : index;
+}
+
+function getProgramCategoryRank(category: string) {
+  return programCategoryOrder[category] ?? 999;
+}
+
+function compareProgramRows(firstRow: ProgramRow, secondRow: ProgramRow) {
+  if (firstRow.blockId !== secondRow.blockId) {
+    return firstRow.blockId - secondRow.blockId;
+  }
+
+  const divisionDiff = getProgramDivisionRank(firstRow.division) - getProgramDivisionRank(secondRow.division);
+
+  if (divisionDiff !== 0) {
+    return divisionDiff;
+  }
+
+  if (firstRow.genre === "aereo" || secondRow.genre === "aereo") {
+    const subgenreDiff = getAerialSubgenreRank(firstRow.subgenre) - getAerialSubgenreRank(secondRow.subgenre);
+
+    if (subgenreDiff !== 0) {
+      return subgenreDiff;
+    }
+
+    const levelDiff = getAerialLevelRank(firstRow.level) - getAerialLevelRank(secondRow.level);
+
+    if (levelDiff !== 0) {
+      return levelDiff;
+    }
+  } else {
+    const subgenreDiff = getMotionSubgenreRank(firstRow.subgenre) - getMotionSubgenreRank(secondRow.subgenre);
+
+    if (subgenreDiff !== 0) {
+      return subgenreDiff;
+    }
+  }
+
+  const categoryDiff = getProgramCategoryRank(firstRow.category) - getProgramCategoryRank(secondRow.category);
+
+  if (categoryDiff !== 0) {
+    return categoryDiff;
+  }
+
+  return firstRow.danceTitle.localeCompare(secondRow.danceTitle, "es");
+}
+
+function toProgramUpper(value: unknown) {
+  return String(value ?? "").toLocaleUpperCase("es-MX");
+}
+
+function toProgramHtmlValue(value: unknown) {
+  return toProgramUpper(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildProgramRows(dances: RegistrationDance[], academyName: string) {
+  return dances
+    .map((dance) => {
+      const division = getDanceProgramDivision(dance);
+      const block = getProgramBlock(dance, division);
+
+      return {
+        academyName,
+        blockId: block.id,
+        blockTitle: block.title,
+        category: dance.category,
+        choreographers: dance.choreographers.map((choreographer) => choreographer.fullName).join(", "),
+        danceId: dance.id,
+        danceTitle: dance.title,
+        division,
+        genre: dance.genre,
+        level: dance.level || "",
+        participants: dance.participants.map((participant) => participant.fullName).join(", "),
+        subgenre: dance.subgenre,
+        venue: dance.venue,
+      };
+    })
+    .sort(compareProgramRows);
+}
+
+function buildProgramBlocks(rows: ProgramRow[]) {
+  const blocks = new Map<number, ProgramBlock>();
+
+  for (const row of rows) {
+    const current = blocks.get(row.blockId) ?? { id: row.blockId, title: row.blockTitle, rows: [] };
+    current.rows.push(row);
+    blocks.set(row.blockId, current);
+  }
+
+  return Array.from(blocks.values()).sort((left, right) => left.id - right.id);
+}
+
 const adminCurrencyFormatter = new Intl.NumberFormat("es-MX", {
   currency: "MXN",
   maximumFractionDigits: 0,
@@ -649,8 +951,24 @@ function getInscriptionOrderStatusLabel(status: string) {
   return getOptionLabel(inscriptionOrderStatusOptions, status);
 }
 
+function getAdminOrderType(order: RegistrationInscriptionOrder) {
+  return order.orderType === "shop" ? "shop" : "registration";
+}
+
+function getAdminOrderTypeLabel(order: RegistrationInscriptionOrder) {
+  return getAdminOrderType(order) === "shop" ? "Tienda" : "Inscripción";
+}
+
 function getInscriptionOrderConcept(order: RegistrationInscriptionOrder) {
-  return order.lineItems?.[0]?.title || "Inscripción participante";
+  if (!order.lineItems?.length) {
+    return getAdminOrderType(order) === "shop" ? "Compra de tienda" : "Inscripción participante";
+  }
+
+  if (getAdminOrderType(order) === "shop" && order.lineItems.length > 1) {
+    return `${order.lineItems[0].title} + ${order.lineItems.length - 1}`;
+  }
+
+  return order.lineItems[0].title || (getAdminOrderType(order) === "shop" ? "Compra de tienda" : "Inscripción participante");
 }
 
 function getAdminOrderDate(order: RegistrationInscriptionOrder) {
@@ -729,13 +1047,16 @@ function buildWhatsAppUrl(phone: string, message: string) {
 function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
   const amount = formatAdminCurrency(order.paidAmount || order.amount);
   const ticketCount = order.tickets?.length ?? 0;
+  const isShopOrder = getAdminOrderType(order) === "shop";
   const ticketLine =
     ticketCount > 0
       ? `Tus boletos ya quedaron generados. Te enviaremos ${ticketCount === 1 ? "1 boleto" : `${ticketCount} boletos`} en PDF por este chat.`
-      : "Tu inscripción ya quedó confirmada.";
+      : isShopOrder
+        ? "Tu compra ya quedó confirmada."
+        : "Tu inscripción ya quedó confirmada.";
 
   return [
-    `Hola, te confirmamos que el pago de inscripción de ${order.participantName} fue aprobado.`,
+    `Hola, te confirmamos que el pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName} fue aprobado.`,
     "",
     `Orden: ${order.reference}`,
     `Monto confirmado: ${amount}`,
@@ -748,11 +1069,12 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
 }
 
 function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrder, correctionMessage: string) {
+  const isShopOrder = getAdminOrderType(order) === "shop";
   const message =
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
 
   return [
-    `Hola, necesitamos corregir el pago de inscripción de ${order.participantName}.`,
+    `Hola, necesitamos corregir el pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName}.`,
     "",
     message,
     "",
@@ -760,7 +1082,7 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     `Monto esperado: ${formatAdminCurrency(order.amount)}`,
     `Concepto para transferencia: ${order.reference}`,
     "",
-    "Cuando tengas el comprobante correcto, vuelve a entrar a Inscripciones con la CURP y súbelo nuevamente.",
+    `Cuando tengas el comprobante correcto, vuelve a entrar a ${isShopOrder ? "Tienda" : "Inscripciones"} con la CURP y súbelo nuevamente.`,
   ].join("\n");
 }
 
@@ -795,6 +1117,159 @@ function getPaymentWhatsAppAction(order: RegistrationInscriptionOrder, correctio
     message: "Aprueba o rechaza el pago para generar el mensaje de WhatsApp.",
     title: "Pendiente de revisión",
   };
+}
+
+function isAdminTicketLineItem(lineItem: RegistrationInscriptionLineItem) {
+  const category = String(lineItem.productCategory || lineItem.category || "").toLowerCase();
+  const itemType = String(lineItem.itemType || "").toLowerCase();
+  const lineType = String(lineItem.type || "").toLowerCase();
+  const visual = String(lineItem.visual || "").toLowerCase();
+  const productId = String(lineItem.productId || lineItem.id || "").toLowerCase();
+
+  return category === "boletos" || category === "tickets" || itemType === "ticket" || lineType === "ticket" || visual === "ticket" || productId.startsWith("ticket-");
+}
+
+function getAdminTicketLineQuantity(lineItem: RegistrationInscriptionLineItem) {
+  const quantity = Number(lineItem.quantity ?? lineItem.qty ?? lineItem.count ?? 1);
+
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    return 1;
+  }
+
+  return Math.min(100, Math.floor(quantity));
+}
+
+function getOrderRequestedTicketCount(order: RegistrationInscriptionOrder) {
+  const lineItemCount = (order.lineItems ?? []).reduce((total, lineItem) => {
+    if (!isAdminTicketLineItem(lineItem)) {
+      return total;
+    }
+
+    return total + getAdminTicketLineQuantity(lineItem);
+  }, 0);
+
+  return Math.max(lineItemCount, order.tickets?.length ?? 0);
+}
+
+function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
+  const rowMap = new Map<string, TicketDashboardRow>();
+
+  for (const order of orders) {
+    const requestedTickets = getOrderRequestedTicketCount(order);
+
+    if (requestedTickets === 0) {
+      continue;
+    }
+
+    const normalizedCurp = order.curp.trim().toUpperCase();
+    const rowKey = normalizedCurp || order.participantName.trim().toLowerCase() || order.id;
+    const existingRow =
+      rowMap.get(rowKey) ??
+      ({
+        activeTickets: 0,
+        academyName: order.academyName,
+        cancelledTickets: 0,
+        curp: normalizedCurp,
+        generatedTickets: 0,
+        latestOrderId: order.id,
+        latestReference: order.reference,
+        latestStatus: order.status,
+        orderCount: 0,
+        paidTickets: 0,
+        participantName: order.participantName,
+        pendingTickets: 0,
+        rejectedTickets: 0,
+        requestedTickets: 0,
+        updatedAt: order.updatedAt || order.createdAt,
+        usedTickets: 0,
+        venue: order.venue,
+      } satisfies TicketDashboardRow);
+
+    existingRow.orderCount += 1;
+    existingRow.requestedTickets += requestedTickets;
+
+    if (order.status === "paid") {
+      existingRow.paidTickets += requestedTickets;
+    } else if (order.status === "rejected") {
+      existingRow.rejectedTickets += requestedTickets;
+    } else {
+      existingRow.pendingTickets += requestedTickets;
+    }
+
+    for (const ticket of order.tickets ?? []) {
+      existingRow.generatedTickets += 1;
+
+      if (ticket.status === "active") {
+        existingRow.activeTickets += 1;
+      } else if (ticket.status === "used") {
+        existingRow.usedTickets += 1;
+      } else if (ticket.status === "cancelled") {
+        existingRow.cancelledTickets += 1;
+      }
+    }
+
+    const currentDate = Date.parse(existingRow.updatedAt);
+    const orderDate = Date.parse(order.updatedAt || order.createdAt);
+
+    if (!Number.isFinite(currentDate) || (Number.isFinite(orderDate) && orderDate >= currentDate)) {
+      existingRow.latestOrderId = order.id;
+      existingRow.latestReference = order.reference;
+      existingRow.latestStatus = order.status;
+      existingRow.updatedAt = order.updatedAt || order.createdAt;
+    }
+
+    rowMap.set(rowKey, existingRow);
+  }
+
+  return Array.from(rowMap.values()).sort((left, right) => {
+    const paidDiff = right.paidTickets - left.paidTickets;
+
+    if (paidDiff !== 0) {
+      return paidDiff;
+    }
+
+    const requestedDiff = right.requestedTickets - left.requestedTickets;
+
+    if (requestedDiff !== 0) {
+      return requestedDiff;
+    }
+
+    return left.participantName.localeCompare(right.participantName, "es");
+  });
+}
+
+function getTicketDashboardTotals(rows: TicketDashboardRow[]) {
+  return rows.reduce(
+    (totals, row) => ({
+      activeTickets: totals.activeTickets + row.activeTickets,
+      childCount: totals.childCount + 1,
+      generatedTickets: totals.generatedTickets + row.generatedTickets,
+      paidTickets: totals.paidTickets + row.paidTickets,
+      pendingTickets: totals.pendingTickets + row.pendingTickets,
+      rejectedTickets: totals.rejectedTickets + row.rejectedTickets,
+      requestedTickets: totals.requestedTickets + row.requestedTickets,
+      usedTickets: totals.usedTickets + row.usedTickets,
+    }),
+    {
+      activeTickets: 0,
+      childCount: 0,
+      generatedTickets: 0,
+      paidTickets: 0,
+      pendingTickets: 0,
+      rejectedTickets: 0,
+      requestedTickets: 0,
+      usedTickets: 0,
+    },
+  );
+}
+
+function formatTicketAverage(requestedTickets: number, childCount: number) {
+  if (childCount === 0) {
+    return "0";
+  }
+
+  const average = requestedTickets / childCount;
+  return Number.isInteger(average) ? String(average) : average.toFixed(1);
 }
 
 function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
@@ -1089,6 +1564,7 @@ function toRegistrationCsvValue(value: unknown) {
 
 function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   const headers = [
+    "Tipo",
     "Referencia",
     "CURP",
     "WhatsApp",
@@ -1107,6 +1583,7 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     "Mensaje rechazo",
   ];
   const rows = orders.map((order) => [
+    getAdminOrderTypeLabel(order),
     order.reference,
     order.curp,
     order.buyerPhone ?? "",
@@ -1131,6 +1608,94 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
 
   link.href = url;
   link.download = "levitate-inscripciones-pagos.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
+  const headers = [
+    "Niño",
+    "CURP",
+    "Academia",
+    "Sede",
+    "Boletos pedidos",
+    "Boletos aprobados",
+    "QR generados",
+    "QR activos",
+    "QR usados",
+    "Pendientes",
+    "Rechazados",
+    "Órdenes",
+    "Última orden",
+    "Estado última orden",
+  ];
+  const csvRows = rows.map((row) => [
+    row.participantName,
+    row.curp,
+    row.academyName,
+    getOptionLabel(venueOptions, row.venue),
+    row.requestedTickets,
+    row.paidTickets,
+    row.generatedTickets,
+    row.activeTickets,
+    row.usedTickets,
+    row.pendingTickets,
+    row.rejectedTickets,
+    row.orderCount,
+    row.latestReference,
+    getAdminPaymentStatusLabel(row.latestStatus),
+  ]);
+  const csv = [headers, ...csvRows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "levitate-boletos-por-nino.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function getProgramRowDisplay(row: ProgramRow) {
+  return [
+    row.danceTitle,
+    row.academyName,
+    getProgramDivisionLabel(row.division),
+    getOptionLabel(danceSubgenresByGenre[row.genre] ?? [], row.subgenre),
+    getOptionLabel(danceCategories, row.category),
+    row.choreographers,
+    row.participants,
+    getOptionLabel(venueOptions, row.venue),
+  ];
+}
+
+function downloadProgramXls(blocks: ProgramBlock[]) {
+  const headers = ["COREOGRAFÍA", "ACADEMIA", "DIVISIÓN", "SUBGÉNERO", "CATEGORÍA", "COREÓGRAFOS", "PARTICIPANTE", "ESTADO"];
+  const rows = blocks.flatMap((block) => [
+    `<tr><td colspan="${headers.length}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
+    `<tr>${headers.map((header) => `<th>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
+    ...block.rows.map((row) => `<tr>${getProgramRowDisplay(row).map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}</tr>`),
+  ]);
+  const worksheet = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      table { border-collapse: collapse; font-family: Arial, sans-serif; }
+      th, td { border: 1px solid #999; padding: 6px 8px; mso-number-format:"\\@"; }
+      th { background: #111; color: #fff; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <table>${rows.join("")}</table>
+  </body>
+</html>`;
+  const blob = new Blob([worksheet], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "levitate-programa.xls";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -2029,7 +2594,7 @@ function LevitateStudentPortal({
                 <strong>{registration.fullName}</strong>
                 <span>{registration.academyName}</span>
                 <p>
-                  {getOptionLabel(venueOptions, registration.venue)} · {getOptionLabel(divisions, registration.division)} · Playera{" "}
+                  {getOptionLabel(venueOptions, registration.venue)} · {getProgramDivisionLabel(registration.division)} · Playera{" "}
                   {getOptionLabel(shirtSizes, registration.shirtSize)}
                 </p>
               </article>
@@ -2267,10 +2832,12 @@ function DanceRegistrationPanel({
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState(defaultDanceGenre);
   const [selectedSubgenre, setSelectedSubgenre] = useState(defaultDanceSubgenre);
+  const [selectedCategory, setSelectedCategory] = useState(defaultDanceCategory);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const subgenreOptions = danceSubgenresByGenre[selectedGenre] ?? danceSubgenresByGenre[defaultDanceGenre];
+  const categoryOptions = danceCategoriesByGenre[selectedGenre] ?? danceCategoriesByGenre[defaultDanceGenre];
   const shouldShowLevel = selectedGenre !== "motion";
   const choreographerItems = choreographers.map((choreographer) => ({
     id: choreographer.id,
@@ -2285,9 +2852,11 @@ function DanceRegistrationPanel({
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
     const nextSubgenre = danceSubgenresByGenre[nextGenre]?.[0]?.value ?? defaultDanceSubgenre;
+    const nextCategory = danceCategoriesByGenre[nextGenre]?.[0]?.value ?? defaultDanceCategory;
 
     setSelectedGenre(nextGenre);
     setSelectedSubgenre(nextSubgenre);
+    setSelectedCategory(nextCategory);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -2318,6 +2887,7 @@ function DanceRegistrationPanel({
       form.reset();
       setSelectedGenre(defaultDanceGenre);
       setSelectedSubgenre(defaultDanceSubgenre);
+      setSelectedCategory(defaultDanceCategory);
       setSelectedChoreographerIds([]);
       setSelectedParticipantIds([]);
       setStatusMessage("Coreografía guardada en la base.");
@@ -2348,7 +2918,13 @@ function DanceRegistrationPanel({
             />
           </AdminField>
           <AdminField icon={Users} label="Categoría">
-            <AdminSelect defaultValue="solo" id="dance-category" name="category" options={danceCategories} />
+            <AdminSelect
+              id="dance-category"
+              name="category"
+              onChange={(event) => setSelectedCategory(event.target.value)}
+              options={categoryOptions}
+              value={selectedCategory}
+            />
           </AdminField>
           {shouldShowLevel ? (
             <AdminField icon={BadgeCheck} label="Nivel">
@@ -2409,6 +2985,73 @@ function DanceRegistrationPanel({
         </div>
       </section>
     </>
+  );
+}
+
+function ProgramPanel({ academyName, dances }: { academyName: string; dances: RegistrationDance[] }) {
+  const programRows = useMemo(() => buildProgramRows(dances, academyName), [academyName, dances]);
+  const programBlocks = useMemo(() => buildProgramBlocks(programRows), [programRows]);
+  const totalRows = programRows.length;
+
+  return (
+    <section className="levitate-admin-program" aria-label="Programa de competencia">
+      <AdminPanel className="levitate-admin-panel--program" eyebrow="Programa" title="Orden de salida">
+        <div className="levitate-admin-program__toolbar">
+          <p>
+            Columnas listas para programa: coreografía, academia, división, subgénero, categoría, coreógrafos,
+            participante y estado.
+          </p>
+          <button disabled={totalRows === 0} onClick={() => downloadProgramXls(programBlocks)} type="button">
+            <Download aria-hidden="true" size={17} />
+            Exportar .xls
+          </button>
+        </div>
+      </AdminPanel>
+
+      {programBlocks.map((block) => (
+        <section className="levitate-admin-program-block" key={block.id} aria-label={block.title}>
+          <header>
+            <div>
+              <span>{toProgramUpper(block.title)}</span>
+              <strong>
+                {block.rows.length} {block.rows.length === 1 ? "COREOGRAFÍA" : "COREOGRAFÍAS"}
+              </strong>
+            </div>
+          </header>
+
+          <div className="levitate-admin-program-table" role="table" aria-label={`Programa ${block.title}`}>
+            <div className="levitate-admin-program-table__head" role="row">
+              <span role="columnheader">COREOGRAFÍA</span>
+              <span role="columnheader">ACADEMIA</span>
+              <span role="columnheader">DIVISIÓN</span>
+              <span role="columnheader">SUBGÉNERO</span>
+              <span role="columnheader">CATEGORÍA</span>
+              <span role="columnheader">COREÓGRAFOS</span>
+              <span role="columnheader">PARTICIPANTE</span>
+              <span role="columnheader">ESTADO</span>
+            </div>
+            {block.rows.map((row) => {
+              const [danceTitle, rowAcademyName, division, subgenre, category, choreographers, participants, venue] = getProgramRowDisplay(row);
+
+              return (
+                <div className="levitate-admin-program-table__row" key={row.danceId} role="row">
+                  <span role="cell">{toProgramUpper(danceTitle)}</span>
+                  <span role="cell">{toProgramUpper(rowAcademyName)}</span>
+                  <span role="cell">{toProgramUpper(division)}</span>
+                  <span role="cell">{toProgramUpper(subgenre)}</span>
+                  <span role="cell">{toProgramUpper(category)}</span>
+                  <span role="cell">{toProgramUpper(choreographers)}</span>
+                  <span role="cell">{toProgramUpper(participants)}</span>
+                  <span role="cell">{toProgramUpper(venue)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      {totalRows === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreografías para armar el programa.</p> : null}
+    </section>
   );
 }
 
@@ -2575,12 +3218,21 @@ function InscriptionOrderCard({
   );
 }
 
-export function LevitateRegistrationAdminPaymentsRoute() {
+export function LevitateRegistrationAdminPaymentsRoute({
+  initialSection = "payments",
+}: {
+  initialSection?: RegistrationAdminDashboardSection;
+} = {}) {
+  const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
   const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [venueFilter, setVenueFilter] = useState("all");
+  const [purchaseTypeFilter, setPurchaseTypeFilter] = useState("all");
+  const [ticketQuery, setTicketQuery] = useState("");
+  const [ticketVenueFilter, setTicketVenueFilter] = useState("all");
+  const [ticketStatusFilter, setTicketStatusFilter] = useState("all");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [adminError, setAdminError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -2626,6 +3278,7 @@ export function LevitateRegistrationAdminPaymentsRoute() {
     return orders.filter((order) => {
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
       const matchesVenue = venueFilter === "all" || order.venue === venueFilter;
+      const matchesPurchaseType = purchaseTypeFilter === "all" || getAdminOrderType(order) === purchaseTypeFilter;
       const matchesQuery =
         !normalizedQuery ||
         [order.reference, order.curp, order.participantName, order.academyName, order.venue]
@@ -2633,12 +3286,34 @@ export function LevitateRegistrationAdminPaymentsRoute() {
           .toLowerCase()
           .includes(normalizedQuery);
 
-      return matchesStatus && matchesVenue && matchesQuery;
+      return matchesStatus && matchesVenue && matchesPurchaseType && matchesQuery;
     });
-  }, [orders, query, statusFilter, venueFilter]);
+  }, [orders, purchaseTypeFilter, query, statusFilter, venueFilter]);
 
   const visibleOrders = filteredOrders.slice(0, 10);
+  const ticketRows = useMemo(() => getTicketDashboardRows(orders), [orders]);
+  const filteredTicketRows = useMemo(() => {
+    const normalizedQuery = ticketQuery.trim().toLowerCase();
+
+    return ticketRows.filter((row) => {
+      const matchesVenue = ticketVenueFilter === "all" || row.venue === ticketVenueFilter;
+      const matchesStatus =
+        ticketStatusFilter === "all" ||
+        (ticketStatusFilter === "paid" && row.paidTickets > 0) ||
+        (ticketStatusFilter === "pending" && row.pendingTickets > 0) ||
+        (ticketStatusFilter === "rejected" && row.rejectedTickets > 0) ||
+        (ticketStatusFilter === "used" && row.usedTickets > 0);
+      const matchesQuery =
+        !normalizedQuery ||
+        [row.participantName, row.curp, row.academyName, row.latestReference, row.venue].join(" ").toLowerCase().includes(normalizedQuery);
+
+      return matchesVenue && matchesStatus && matchesQuery;
+    });
+  }, [ticketRows, ticketQuery, ticketVenueFilter, ticketStatusFilter]);
+  const visibleTicketRows = filteredTicketRows.slice(0, 10);
+  const ticketTotals = useMemo(() => getTicketDashboardTotals(filteredTicketRows), [filteredTicketRows]);
   const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
+  const isTicketSection = activeSection === "tickets";
 
   const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
     setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
@@ -2646,25 +3321,36 @@ export function LevitateRegistrationAdminPaymentsRoute() {
     void loadAdminOrders();
   };
 
+  const handleSectionChange = (section: RegistrationAdminDashboardSection) => {
+    setActiveSection(section);
+    setSelectedOrderId("");
+
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", section === "tickets" ? "/admin/boletos" : "/admin/inscripciones");
+    }
+  };
+
   return (
     <main className="registration-admin-dashboard">
       <aside className="registration-admin-sidebar" aria-label="Navegación admin">
         <div className="registration-admin-brand">Levitate</div>
         <nav>
-          {[
-            { icon: LayoutDashboard, label: "Dashboard" },
-            { icon: CreditCard, isActive: true, label: "Pagos" },
-            { icon: ClipboardList, label: "Órdenes" },
-            { icon: FileText, label: "Inscripciones" },
-            { icon: Ticket, label: "Boletos" },
-            { icon: Music2, label: "Foto/Video" },
-            { icon: BadgeCheck, label: "Hojas de jueceo" },
-            { icon: BarChart3, label: "Reportes" },
-          ].map((item) => {
+          {registrationAdminDashboardNavItems.map((item) => {
             const Icon = item.icon;
+            const isActive = item.section === activeSection;
 
             return (
-              <button className={item.isActive ? "is-active" : ""} key={item.label} type="button">
+              <button
+                className={isActive ? "is-active" : ""}
+                disabled={!item.section}
+                key={item.label}
+                onClick={() => {
+                  if (item.section) {
+                    handleSectionChange(item.section);
+                  }
+                }}
+                type="button"
+              >
                 <Icon aria-hidden="true" size={17} />
                 {item.label}
               </button>
@@ -2679,10 +3365,22 @@ export function LevitateRegistrationAdminPaymentsRoute() {
       <section className="registration-admin-workspace">
         <header className="registration-admin-header">
           <div>
-            <h1>Pagos</h1>
-            <p>Revisión y confirmación de comprobantes</p>
+            <h1>{isTicketSection ? "Boletos" : "Pagos"}</h1>
+            <p>{isTicketSection ? "Boletos pedidos por niño, estado de pago y QR generados" : "Revisión y confirmación de comprobantes"}</p>
           </div>
-          <button className="registration-admin-export" disabled={filteredOrders.length === 0} onClick={() => downloadRegistrationOrdersCsv(filteredOrders)} type="button">
+          <button
+            className="registration-admin-export"
+            disabled={isTicketSection ? filteredTicketRows.length === 0 : filteredOrders.length === 0}
+            onClick={() => {
+              if (isTicketSection) {
+                downloadTicketDashboardCsv(filteredTicketRows);
+                return;
+              }
+
+              downloadRegistrationOrdersCsv(filteredOrders);
+            }}
+            type="button"
+          >
             <Download aria-hidden="true" size={16} />
             Exportar
           </button>
@@ -2690,152 +3388,297 @@ export function LevitateRegistrationAdminPaymentsRoute() {
 
         {adminError ? <p className="registration-admin-alert">{adminError}</p> : null}
 
-        <section className="registration-admin-summary" aria-label="Resumen de pagos">
-          <article>
-            <span>Pendientes</span>
-            <strong>{totals?.pending ?? "—"}</strong>
-            <Clock aria-hidden="true" size={24} />
-          </article>
-          <article>
-            <span>Pend. confirmación</span>
-            <strong>{totals?.reported ?? "—"}</strong>
-            <CircleAlert aria-hidden="true" size={24} />
-          </article>
-          <article>
-            <span>Aprobados hoy</span>
-            <strong>{totals?.paid ?? "—"}</strong>
-            <CheckCircle2 aria-hidden="true" size={24} />
-          </article>
-          <article>
-            <span>Rechazados</span>
-            <strong>{totals?.rejected ?? "—"}</strong>
-            <XCircle aria-hidden="true" size={24} />
-          </article>
-          <article>
-            <span>Total pendiente</span>
-            <strong>{formatAdminCurrency(getPendingRegistrationAmount(totals))}</strong>
-            <CreditCard aria-hidden="true" size={24} />
-          </article>
-        </section>
+        {isTicketSection ? (
+          <>
+            <section className="registration-admin-summary registration-admin-summary--tickets" aria-label="Resumen de boletos por niño">
+              <article>
+                <span>Niños con boleto</span>
+                <strong>{ticketTotals.childCount}</strong>
+                <Users aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Boletos pedidos</span>
+                <strong>{ticketTotals.requestedTickets}</strong>
+                <Ticket aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Aprobados</span>
+                <strong>{ticketTotals.paidTickets}</strong>
+                <CheckCircle2 aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Pendientes</span>
+                <strong>{ticketTotals.pendingTickets}</strong>
+                <Clock aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Promedio por niño</span>
+                <strong>{formatTicketAverage(ticketTotals.requestedTickets, ticketTotals.childCount)}</strong>
+                <BarChart3 aria-hidden="true" size={24} />
+              </article>
+            </section>
 
-        <section className="registration-admin-filters" aria-label="Filtros de pagos">
-          <label className="registration-admin-search">
-            <Search aria-hidden="true" size={17} />
-            <input
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar nombre, CURP u orden..."
-              type="search"
-              value={query}
-            />
-          </label>
-          <label>
-            <span>Status</span>
-            <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-              <option value="all">Todos</option>
-              {inscriptionOrderStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown aria-hidden="true" size={16} />
-          </label>
-          <label>
-            <span>Evento</span>
-            <select onChange={(event) => setVenueFilter(event.target.value)} value={venueFilter}>
-              <option value="all">Todos</option>
-              {venueOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown aria-hidden="true" size={16} />
-          </label>
-          <label>
-            <span>Bloque</span>
-            <select defaultValue="all">
-              <option value="all">Todos</option>
-            </select>
-            <ChevronDown aria-hidden="true" size={16} />
-          </label>
-          <label>
-            <span>Tipo de compra</span>
-            <select defaultValue="inscription">
-              <option value="inscription">Inscripción</option>
-            </select>
-            <ChevronDown aria-hidden="true" size={16} />
-          </label>
-          <label>
-            <span>Fecha</span>
-            <input readOnly value="01/06/26 - 30/06/26" />
-            <CalendarDays aria-hidden="true" size={16} />
-          </label>
-        </section>
+            <section className="registration-admin-filters registration-admin-filters--tickets" aria-label="Filtros de boletos">
+              <label className="registration-admin-search">
+                <Search aria-hidden="true" size={17} />
+                <input
+                  onChange={(event) => setTicketQuery(event.target.value)}
+                  placeholder="Buscar niño, CURP, academia u orden..."
+                  type="search"
+                  value={ticketQuery}
+                />
+              </label>
+              <label>
+                <span>Evento</span>
+                <select onChange={(event) => setTicketVenueFilter(event.target.value)} value={ticketVenueFilter}>
+                  <option value="all">Todos</option>
+                  {venueOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+              <label>
+                <span>Estado boletos</span>
+                <select onChange={(event) => setTicketStatusFilter(event.target.value)} value={ticketStatusFilter}>
+                  <option value="all">Todos</option>
+                  <option value="paid">Con aprobados</option>
+                  <option value="pending">Con pendientes</option>
+                  <option value="rejected">Con rechazados</option>
+                  <option value="used">Con QR usados</option>
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+            </section>
 
-        <section className="registration-admin-grid">
-          <div className="registration-admin-table-card">
-            <div className="registration-admin-table" role="table" aria-label="Pagos de inscripción">
-              <div className="registration-admin-table__head" role="row">
-                <span role="columnheader">Orden</span>
-                <span role="columnheader">Comprador</span>
-                <span role="columnheader">Participante</span>
-                <span role="columnheader">Academia</span>
-                <span role="columnheader">Concepto</span>
-                <span role="columnheader">Monto</span>
-                <span role="columnheader">Comprobante</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader">Fecha</span>
-                <span role="columnheader">Acción</span>
+            <section className="registration-admin-grid">
+              <div className="registration-admin-table-card">
+                <div className="registration-admin-table registration-admin-ticket-table" role="table" aria-label="Boletos comprados por niño">
+                  <div className="registration-admin-table__head" role="row">
+                    <span role="columnheader">Niño</span>
+                    <span role="columnheader">CURP</span>
+                    <span role="columnheader">Academia</span>
+                    <span role="columnheader">Sede</span>
+                    <span role="columnheader">Pedidos</span>
+                    <span role="columnheader">Comprados</span>
+                    <span role="columnheader">QR activos</span>
+                    <span role="columnheader">Pendientes</span>
+                    <span role="columnheader">Rechazados</span>
+                    <span role="columnheader">Última orden</span>
+                  </div>
+
+                  {visibleTicketRows.map((row) => {
+                    const date = getAdminOrderDate({ createdAt: row.updatedAt, updatedAt: row.updatedAt } as RegistrationInscriptionOrder);
+
+                    return (
+                      <button
+                        className={`registration-admin-table__row${selectedOrder?.id === row.latestOrderId ? " is-selected" : ""}`}
+                        key={row.curp || row.latestOrderId}
+                        onClick={() => setSelectedOrderId(row.latestOrderId)}
+                        role="row"
+                        type="button"
+                      >
+                        <span role="cell">{row.participantName}</span>
+                        <span role="cell">{row.curp || "Sin CURP"}</span>
+                        <span role="cell">{row.academyName}</span>
+                        <span role="cell">{getOptionLabel(venueOptions, row.venue)}</span>
+                        <span role="cell">
+                          <strong className="registration-admin-ticket-number">{row.requestedTickets}</strong>
+                        </span>
+                        <span role="cell">
+                          <strong className="registration-admin-ticket-number registration-admin-ticket-number--primary">{row.paidTickets}</strong>
+                        </span>
+                        <span role="cell">
+                          <strong className="registration-admin-ticket-number">{row.activeTickets}</strong>
+                          <small>{row.usedTickets} usados</small>
+                        </span>
+                        <span role="cell">{row.pendingTickets}</span>
+                        <span role="cell">{row.rejectedTickets}</span>
+                        <span role="cell">
+                          {row.latestReference}
+                          <small>
+                            {getAdminPaymentStatusLabel(row.latestStatus)} · {date.date}
+                          </small>
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {visibleTicketRows.length === 0 ? (
+                    <p className="registration-admin-empty">{isLoading ? "Cargando boletos..." : "No hay compras de boletos con esos filtros."}</p>
+                  ) : null}
+                </div>
+                <footer className="registration-admin-table-footer">
+                  <span>
+                    Mostrando {visibleTicketRows.length > 0 ? 1 : 0} a {visibleTicketRows.length} de {filteredTicketRows.length} niños
+                  </span>
+                  <div>
+                    <button disabled type="button">
+                      1
+                    </button>
+                    <button type="button">10 por página</button>
+                  </div>
+                </footer>
               </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <section className="registration-admin-summary" aria-label="Resumen de pagos">
+              <article>
+                <span>Pendientes</span>
+                <strong>{totals?.pending ?? "—"}</strong>
+                <Clock aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Pend. confirmación</span>
+                <strong>{totals?.reported ?? "—"}</strong>
+                <CircleAlert aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Aprobados hoy</span>
+                <strong>{totals?.paid ?? "—"}</strong>
+                <CheckCircle2 aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Rechazados</span>
+                <strong>{totals?.rejected ?? "—"}</strong>
+                <XCircle aria-hidden="true" size={24} />
+              </article>
+              <article>
+                <span>Total pendiente</span>
+                <strong>{formatAdminCurrency(getPendingRegistrationAmount(totals))}</strong>
+                <CreditCard aria-hidden="true" size={24} />
+              </article>
+            </section>
 
-              {visibleOrders.map((order) => {
-                const date = getAdminOrderDate(order);
+            <section className="registration-admin-filters" aria-label="Filtros de pagos">
+              <label className="registration-admin-search">
+                <Search aria-hidden="true" size={17} />
+                <input
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar nombre, CURP u orden..."
+                  type="search"
+                  value={query}
+                />
+              </label>
+              <label>
+                <span>Status</span>
+                <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+                  <option value="all">Todos</option>
+                  {inscriptionOrderStatusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+              <label>
+                <span>Evento</span>
+                <select onChange={(event) => setVenueFilter(event.target.value)} value={venueFilter}>
+                  <option value="all">Todos</option>
+                  {venueOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+              <label>
+                <span>Bloque</span>
+                <select defaultValue="all">
+                  <option value="all">Todos</option>
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+              <label>
+                <span>Tipo de compra</span>
+                <select onChange={(event) => setPurchaseTypeFilter(event.target.value)} value={purchaseTypeFilter}>
+                  <option value="all">Todas</option>
+                  <option value="registration">Inscripción</option>
+                  <option value="shop">Tienda</option>
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+              <label>
+                <span>Fecha</span>
+                <input readOnly value="01/06/26 - 30/06/26" />
+                <CalendarDays aria-hidden="true" size={16} />
+              </label>
+            </section>
 
-                return (
-                  <button
-                    className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
-                    key={order.id}
-                    onClick={() => setSelectedOrderId(order.id)}
-                    role="row"
-                    type="button"
-                  >
-                    <span role="cell">{order.reference}</span>
-                    <span role="cell">{order.participantName}</span>
-                    <span role="cell">{order.participantName}</span>
-                    <span role="cell">{order.academyName}</span>
-                    <span role="cell">{getInscriptionOrderConcept(order)}</span>
-                    <span role="cell">{formatAdminCurrency(order.amount)}</span>
-                    <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
-                    <span role="cell">
-                      <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
-                    </span>
-                    <span role="cell">
-                      {date.date}
-                      <small>{date.time}</small>
-                    </span>
-                    <span role="cell">
-                      <Eye aria-hidden="true" size={18} />
-                    </span>
-                  </button>
-                );
-              })}
+            <section className="registration-admin-grid">
+              <div className="registration-admin-table-card">
+                <div className="registration-admin-table" role="table" aria-label="Pagos de inscripción">
+                  <div className="registration-admin-table__head" role="row">
+                    <span role="columnheader">Orden</span>
+                    <span role="columnheader">Comprador</span>
+                    <span role="columnheader">Participante</span>
+                    <span role="columnheader">Academia</span>
+                    <span role="columnheader">Concepto</span>
+                    <span role="columnheader">Monto</span>
+                    <span role="columnheader">Comprobante</span>
+                    <span role="columnheader">Status</span>
+                    <span role="columnheader">Fecha</span>
+                    <span role="columnheader">Acción</span>
+                  </div>
 
-              {visibleOrders.length === 0 ? <p className="registration-admin-empty">{isLoading ? "Cargando órdenes..." : "No hay pagos con esos filtros."}</p> : null}
-            </div>
-            <footer className="registration-admin-table-footer">
-              <span>
-                Mostrando {visibleOrders.length > 0 ? 1 : 0} a {visibleOrders.length} de {filteredOrders.length} resultados
-              </span>
-              <div>
-                <button disabled type="button">
-                  1
-                </button>
-                <button type="button">10 por página</button>
+                  {visibleOrders.map((order) => {
+                    const date = getAdminOrderDate(order);
+
+                    return (
+                      <button
+                        className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
+                        key={order.id}
+                        onClick={() => setSelectedOrderId(order.id)}
+                        role="row"
+                        type="button"
+                      >
+                        <span role="cell">
+                          {order.reference}
+                          <small>{getAdminOrderTypeLabel(order)}</small>
+                        </span>
+                        <span role="cell">{order.participantName}</span>
+                        <span role="cell">{order.participantName}</span>
+                        <span role="cell">{order.academyName}</span>
+                        <span role="cell">{getInscriptionOrderConcept(order)}</span>
+                        <span role="cell">{formatAdminCurrency(order.amount)}</span>
+                        <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
+                        <span role="cell">
+                          <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
+                        </span>
+                        <span role="cell">
+                          {date.date}
+                          <small>{date.time}</small>
+                        </span>
+                        <span role="cell">
+                          <Eye aria-hidden="true" size={18} />
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {visibleOrders.length === 0 ? <p className="registration-admin-empty">{isLoading ? "Cargando órdenes..." : "No hay pagos con esos filtros."}</p> : null}
+                </div>
+                <footer className="registration-admin-table-footer">
+                  <span>
+                    Mostrando {visibleOrders.length > 0 ? 1 : 0} a {visibleOrders.length} de {filteredOrders.length} resultados
+                  </span>
+                  <div>
+                    <button disabled type="button">
+                      1
+                    </button>
+                    <button type="button">10 por página</button>
+                  </div>
+                </footer>
               </div>
-            </footer>
-          </div>
-        </section>
+            </section>
+          </>
+        )}
       </section>
 
       {selectedOrder ? (
@@ -2910,6 +3753,7 @@ function RegistrationAdminOrderDetail({
           body: JSON.stringify({
             id: order.id,
             notes: notes.trim(),
+            orderType: getAdminOrderType(order),
             paidAmount,
             rejectionMessage: status === "rejected" ? review?.rejectionMessage?.trim() : undefined,
             rejectionReason: status === "rejected" ? review?.rejectionReason : undefined,
@@ -2982,6 +3826,7 @@ function RegistrationAdminOrderDetail({
         <div>
           <span>Orden</span>
           <h2>{order.reference}</h2>
+          <p>{getAdminOrderTypeLabel(order)}</p>
         </div>
         <button className="registration-admin-detail__close" onClick={onClose} type="button" aria-label="Cerrar detalle">
           <X aria-hidden="true" size={18} />
@@ -3203,6 +4048,13 @@ function AdminWelcomePanel({
       label: "Coreografías",
       screen: "dance",
     },
+    {
+      count: danceCount,
+      helper: "Ordena bloques y exporta el .xls.",
+      icon: ClipboardList,
+      label: "Programa",
+      screen: "program",
+    },
   ];
 
   return (
@@ -3276,6 +4128,10 @@ function getAdminScreen({
         participants={participants}
       />
     );
+  }
+
+  if (screen === "program") {
+    return <ProgramPanel academyName={session.academy.name} dances={dances} />;
   }
 
   if (screen === "payments") {

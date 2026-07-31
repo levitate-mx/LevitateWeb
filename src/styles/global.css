@@ -14350,6 +14350,234 @@ button {
   transform: none;
 }
 
+.shop-checkout {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid rgba(87, 189, 209, 0.28);
+  border-radius: 8px;
+  background: rgba(87, 189, 209, 0.1);
+}
+
+.shop-checkout__form,
+.shop-checkout__order {
+  display: grid;
+  gap: 12px;
+}
+
+.shop-checkout__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shop-checkout__heading svg {
+  color: var(--lev-pink);
+}
+
+.shop-checkout__heading span,
+.shop-checkout label > span {
+  display: block;
+  color: var(--lev-pink);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.shop-checkout__heading strong {
+  display: block;
+  margin-top: 3px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 880;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.shop-checkout label {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.shop-checkout input,
+.shop-checkout select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid rgba(247, 243, 239, 0.18);
+  border-radius: 6px;
+  background: rgba(5, 5, 5, 0.32);
+  color: #fff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 780;
+  outline: 0;
+  padding: 0 12px;
+}
+
+.shop-checkout input:focus,
+.shop-checkout select:focus {
+  border-color: rgba(231, 70, 151, 0.72);
+  box-shadow: 0 0 0 3px rgba(231, 70, 151, 0.14);
+}
+
+.shop-checkout input::placeholder {
+  color: rgba(247, 243, 239, 0.34);
+}
+
+.shop-checkout__phone {
+  display: grid;
+  grid-template-columns: minmax(116px, 0.82fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.shop-checkout__phone label:first-child svg {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  color: rgba(247, 243, 239, 0.7);
+  pointer-events: none;
+}
+
+.shop-checkout__phone select {
+  appearance: none;
+  padding-right: 34px;
+}
+
+.shop-checkout__form > small,
+.shop-checkout__proof small {
+  color: rgba(247, 243, 239, 0.62);
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.shop-checkout dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid rgba(247, 243, 239, 0.14);
+}
+
+.shop-checkout dl div {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.52fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(247, 243, 239, 0.11);
+}
+
+.shop-checkout dt,
+.shop-checkout dd {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.shop-checkout dt {
+  color: rgba(247, 243, 239, 0.54);
+  font-weight: 780;
+}
+
+.shop-checkout dd {
+  color: #fff;
+  font-weight: 840;
+  overflow-wrap: anywhere;
+}
+
+.shop-checkout__transfer {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(247, 243, 239, 0.14);
+  border-radius: 8px;
+  background: rgba(5, 5, 5, 0.2);
+}
+
+.shop-checkout__transfer p {
+  margin: 0;
+  color: rgba(247, 243, 239, 0.72);
+  font-size: 0.82rem;
+  font-weight: 720;
+  line-height: 1.38;
+}
+
+.shop-checkout__transfer p strong {
+  color: #fff;
+  font: inherit;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.shop-checkout__transfer article {
+  display: grid;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(247, 243, 239, 0.12);
+}
+
+.shop-checkout__transfer article > strong {
+  color: var(--lev-pink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.shop-checkout__transfer span {
+  color: rgba(247, 243, 239, 0.62);
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.shop-checkout__transfer b {
+  color: #fff;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.shop-checkout__proof input {
+  min-height: auto;
+  padding: 11px;
+  cursor: pointer;
+}
+
+.shop-checkout__proof-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid rgba(247, 243, 239, 0.2);
+  border-radius: 6px;
+  background: rgba(247, 243, 239, 0.08);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.shop-checkout__message {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(87, 189, 209, 0.34);
+  border-radius: 7px;
+  background: rgba(87, 189, 209, 0.12);
+  color: rgba(247, 243, 239, 0.82);
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.36;
+}
+
+.shop-checkout__message--error {
+  border-color: rgba(231, 70, 151, 0.42);
+  background: rgba(231, 70, 151, 0.12);
+}
+
 @media (max-width: 1360px) {
   .shop-hero__content {
     grid-template-columns: 1fr;
@@ -19428,6 +19656,17 @@ button {
   color: #fff;
 }
 
+.registration-admin-sidebar nav button:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
+.registration-admin-sidebar nav button:disabled:hover,
+.registration-admin-sidebar nav button:disabled:focus-visible {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+}
+
 .registration-admin-collapse {
   justify-content: center;
   justify-self: center;
@@ -19622,6 +19861,10 @@ button {
   flex: 0 0 auto;
 }
 
+.registration-admin-filters--tickets {
+  grid-template-columns: minmax(280px, 1fr) minmax(170px, 0.42fr) minmax(190px, 0.45fr);
+}
+
 .registration-admin-grid {
   min-width: 0;
 }
@@ -19694,6 +19937,26 @@ button {
   margin-top: 2px;
   color: rgba(17, 17, 17, 0.58);
   font-size: 0.76rem;
+}
+
+.registration-admin-ticket-table {
+  min-width: 1180px;
+}
+
+.registration-admin-ticket-table .registration-admin-table__head,
+.registration-admin-ticket-table .registration-admin-table__row {
+  grid-template-columns: 1.18fr 1.08fr 1.18fr 0.9fr 0.58fr 0.72fr 0.72fr 0.72fr 0.72fr 1.08fr;
+}
+
+.registration-admin-ticket-number {
+  color: #111;
+  font-size: 1.02rem;
+  font-weight: 920;
+  line-height: 1;
+}
+
+.registration-admin-ticket-number--primary {
+  color: var(--admin-pink);
 }
 
 .registration-admin-status {
@@ -19858,6 +20121,13 @@ button {
   font-weight: 920;
   letter-spacing: 0;
   line-height: 1;
+}
+
+.registration-admin-detail header p {
+  margin: 7px 0 0;
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.82rem;
+  font-weight: 820;
 }
 
 .registration-admin-detail dl {
@@ -21370,6 +21640,147 @@ button {
 .levitate-admin-empty-state {
   border-top-color: var(--admin-border-soft);
   color: rgba(39, 37, 37, 0.5);
+}
+
+.levitate-admin-program {
+  display: grid;
+  gap: 18px;
+}
+
+.levitate-admin-program__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: clamp(22px, 3vw, 32px) clamp(20px, 4vw, 44px);
+}
+
+.levitate-admin-program__toolbar p {
+  max-width: 680px;
+  margin: 0;
+  color: rgba(39, 37, 37, 0.62);
+  font-size: 0.95rem;
+  font-weight: 680;
+  line-height: 1.45;
+}
+
+.levitate-admin-program__toolbar button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  border: 1px solid #111;
+  border-radius: 7px;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 880;
+  letter-spacing: 0.08em;
+  padding: 0 16px;
+  text-transform: uppercase;
+}
+
+.levitate-admin-program__toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.levitate-admin-program-block {
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: var(--admin-soft-shadow);
+}
+
+.levitate-admin-program-block header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(18px, 3vw, 28px);
+  border-bottom: 1px solid var(--admin-border-soft);
+}
+
+.levitate-admin-program-block header div {
+  display: grid;
+  gap: 5px;
+}
+
+.levitate-admin-program-block header span {
+  color: var(--admin-pink);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-program-block header strong {
+  color: rgba(39, 37, 37, 0.84);
+  font-size: 0.9rem;
+  font-weight: 860;
+  letter-spacing: 0.08em;
+}
+
+.levitate-admin-program-table {
+  min-width: 1240px;
+  overflow-x: auto;
+}
+
+.levitate-admin-program-block {
+  overflow-x: auto;
+}
+
+.levitate-admin-program-table__head,
+.levitate-admin-program-table__row {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 0.82fr 0.98fr 0.94fr 1fr 1.22fr 0.86fr;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.levitate-admin-program-table__head {
+  min-height: 50px;
+  color: rgba(39, 37, 37, 0.58);
+  font-size: 0.72rem;
+  font-weight: 920;
+  letter-spacing: 0.1em;
+}
+
+.levitate-admin-program-table__row {
+  min-height: 62px;
+  border-top: 1px solid var(--admin-border-soft);
+  color: rgba(39, 37, 37, 0.78);
+  font-size: 0.78rem;
+  font-weight: 760;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+}
+
+.levitate-admin-program-table__row:nth-child(odd) {
+  background: rgba(247, 243, 239, 0.45);
+}
+
+.levitate-admin-program-table__head span,
+.levitate-admin-program-table__row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 720px) {
+  .levitate-admin-program__toolbar {
+    display: grid;
+  }
+
+  .levitate-admin-program__toolbar button {
+    width: 100%;
+  }
 }
 
 .levitate-admin-payment-card {

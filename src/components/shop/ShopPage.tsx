@@ -70,6 +70,29 @@ type BuyerData = {
   whatsapp: string;
 };
 
+type ShopPaymentProof = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  dataUrl: string;
+  status: string;
+  uploadedAt: string;
+};
+
+type ShopOrder = {
+  id: string;
+  curp: string;
+  participantName: string;
+  academyName: string;
+  venue: string;
+  reference: string;
+  amount: number;
+  paidAmount: number;
+  status: "pending_payment" | "payment_reported" | "paid" | "rejected";
+  proof?: ShopPaymentProof | null;
+};
+
 type MediaParticipantLookupLine = {
   academyName: string;
   category: string;
@@ -173,6 +196,8 @@ const mediaFeatureSlides = [
   "/assets/media-shop-blue-group-stage.jpg",
 ];
 const mediaFeatureSlideDurationSeconds = 4.5;
+const maxPaymentProofBytes = 1800000;
+const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
 
 const mediaDemoParticipantLookup: MediaParticipantLookup = {
   academyName: "Academia Demo Levitate",
@@ -341,6 +366,46 @@ function normalizeCurp(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 18).toUpperCase();
 }
 
+async function requestShopApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    ...init,
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message = payload?.error?.message || payload?.message || "No pudimos completar la operación.";
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
+
+function readPaymentProofFile(file: File) {
+  return new Promise<{ contentType: string; dataUrl: string; fileName: string; fileSize: number }>((resolve, reject) => {
+    if (file.size > maxPaymentProofBytes) {
+      reject(new Error("El comprobante debe pesar menos de 1.8 MB."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("No pudimos leer el comprobante."));
+    reader.onload = () => {
+      resolve({
+        contentType: file.type,
+        dataUrl: String(reader.result || ""),
+        fileName: file.name,
+        fileSize: file.size,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function buildTicketReference(name: string, phone: string) {
   const cleanName = name
     .normalize("NFD")
@@ -440,9 +505,12 @@ function TicketShopPage() {
   const [buyerData, setBuyerData] = useState<BuyerData>({ curp: "", email: "", name: "", whatsapp: "" });
   const [buyerError, setBuyerError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [orderReference, setOrderReference] = useState("");
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
+  const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = paymentMethods[0];
   const cartLines = useMemo(
@@ -492,11 +560,17 @@ function TicketShopPage() {
   const markCheckoutDirty = () => {
     setIsBuyerConfirmed(false);
     setOrderReference("");
+    setShopOrder(null);
     clearPaymentProof();
   };
 
   const markCartUpdated = () => {
     setBuyerError("");
+    if (isBuyerConfirmed) {
+      markCheckoutDirty();
+      return;
+    }
+
     clearPaymentProof();
   };
 
@@ -561,7 +635,7 @@ function TicketShopPage() {
     }
   };
 
-  const handleBuyerSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleBuyerSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (ticketCount === 0) {
@@ -589,12 +663,40 @@ function TicketShopPage() {
       return;
     }
 
-    setOrderReference(buildTicketReference(buyerData.name, buyerData.whatsapp));
-    setIsBuyerConfirmed(true);
+    setIsCreatingOrder(true);
+    setBuyerError("");
     setProofMessage("");
+
+    try {
+      const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order", {
+        body: JSON.stringify({
+          buyerEmail: buyerData.email.trim(),
+          buyerName: buyerData.name.trim(),
+          buyerPhoneCountryCode: "+52",
+          buyerPhoneNumber: normalizePhone(buyerData.whatsapp),
+          curp: normalizeCurp(buyerData.curp),
+          items: cartLines.map((line) => ({
+            optionId: line.optionId,
+            optionLabel: line.option?.label,
+            productId: line.product.id,
+            quantity: line.quantity,
+          })),
+        }),
+        method: "POST",
+      });
+
+      setShopOrder(payload.order);
+      setOrderReference(payload.order.reference);
+      setIsBuyerConfirmed(true);
+      setProofMessage("Orden generada. Usa esta referencia como concepto de transferencia.");
+    } catch (error) {
+      setBuyerError(error instanceof Error ? error.message : "No pudimos generar la orden.");
+    } finally {
+      setIsCreatingOrder(false);
+    }
   };
 
-  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleProofFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -603,8 +705,37 @@ function TicketShopPage() {
       return;
     }
 
+    if (!shopOrder) {
+      setProofFileName("");
+      setProofMessage("");
+      setBuyerError("Primero genera la orden de pago.");
+      return;
+    }
+
+    setIsUploadingProof(true);
+    setBuyerError("");
     setProofFileName(file.name);
-    setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
+    setProofMessage("");
+
+    try {
+      const proof = await readPaymentProofFile(file);
+      const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/proof", {
+        body: JSON.stringify({
+          ...proof,
+          curp: shopOrder.curp,
+          orderId: shopOrder.id,
+        }),
+        method: "POST",
+      });
+
+      setShopOrder(payload.order);
+      setOrderReference(payload.order.reference);
+      setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
+    } catch (error) {
+      setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
+    } finally {
+      setIsUploadingProof(false);
+    }
   };
 
   const renderBoxOfficeIntro = () => (
@@ -645,7 +776,7 @@ function TicketShopPage() {
 
       <div className="ticket-shop-payment__summary">
         <span>Total final</span>
-        <strong>{formatCurrency(total)}</strong>
+        <strong>{formatCurrency(shopOrder?.amount ?? total)}</strong>
         <small>Referencia: {orderReference}</small>
       </div>
 
@@ -664,14 +795,14 @@ function TicketShopPage() {
 
       <div className="ticket-shop-proof">
         <input
-          accept="image/jpeg,image/png,image/webp,application/pdf"
+          accept={paymentProofAccept}
           onChange={handleProofFileChange}
           ref={proofInputRef}
           type="file"
         />
-        <button onClick={() => proofInputRef.current?.click()} type="button">
+        <button disabled={isUploadingProof} onClick={() => proofInputRef.current?.click()} type="button">
           <UploadCloud aria-hidden="true" size={20} />
-          Subir captura de transferencia
+          {isUploadingProof ? "Subiendo comprobante..." : "Subir captura de transferencia"}
         </button>
         {proofFileName ? <strong>{proofFileName}</strong> : null}
         {proofMessage ? <p>{proofMessage}</p> : null}
@@ -884,8 +1015,8 @@ function TicketShopPage() {
               </label>
               {buyerError ? <p role="alert">{buyerError}</p> : null}
               {!isBuyerConfirmed ? (
-                <button disabled={ticketCount === 0} type="submit">
-                  Continuar a checkout <ArrowRight aria-hidden="true" size={18} />
+                <button disabled={ticketCount === 0 || isCreatingOrder} type="submit">
+                  {isCreatingOrder ? "Generando orden..." : "Continuar a checkout"} <ArrowRight aria-hidden="true" size={18} />
                 </button>
               ) : null}
               {isBuyerConfirmed && ticketCount > 0 ? renderTransferCheckout() : null}
@@ -912,12 +1043,15 @@ function PhotoVideoShopPage() {
   const [buyerData, setBuyerData] = useState<BuyerData>({ curp: "", email: "", name: "", whatsapp: "" });
   const [buyerError, setBuyerError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isParticipantLookupLoading, setIsParticipantLookupLoading] = useState(false);
   const [orderReference, setOrderReference] = useState("");
   const [participantLookup, setParticipantLookup] = useState<MediaParticipantLookup | null>(null);
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
   const [selectedDanceId, setSelectedDanceId] = useState("");
+  const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
   const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = paymentMethods[0];
@@ -980,11 +1114,17 @@ function PhotoVideoShopPage() {
   const markCheckoutDirty = () => {
     setIsBuyerConfirmed(false);
     setOrderReference("");
+    setShopOrder(null);
     clearPaymentProof();
   };
 
   const markCartUpdated = () => {
     setBuyerError("");
+    if (isBuyerConfirmed) {
+      markCheckoutDirty();
+      return;
+    }
+
     clearPaymentProof();
   };
 
@@ -1113,7 +1253,7 @@ function PhotoVideoShopPage() {
     }
   };
 
-  const handleBuyerSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleBuyerSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (mediaItemCount === 0) {
@@ -1151,12 +1291,41 @@ function PhotoVideoShopPage() {
       return;
     }
 
-    setOrderReference(buildMediaReference(buyerData.name, buyerData.whatsapp, selectedDance.id));
-    setIsBuyerConfirmed(true);
+    setIsCreatingOrder(true);
+    setBuyerError("");
     setProofMessage("");
+
+    try {
+      const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order", {
+        body: JSON.stringify({
+          buyerEmail: buyerData.email.trim(),
+          buyerName: buyerData.name.trim(),
+          buyerPhoneCountryCode: "+52",
+          buyerPhoneNumber: normalizePhone(buyerData.whatsapp),
+          curp: normalizeCurp(buyerData.curp),
+          danceId: selectedDance.id,
+          items: cartLines.map((line) => ({
+            danceId: selectedDance.id,
+            danceTitle: getMediaLineTitle(selectedDance),
+            productId: line.product.id,
+            quantity: line.quantity,
+          })),
+        }),
+        method: "POST",
+      });
+
+      setShopOrder(payload.order);
+      setOrderReference(payload.order.reference);
+      setIsBuyerConfirmed(true);
+      setProofMessage("Orden generada. Usa esta referencia como concepto de transferencia.");
+    } catch (error) {
+      setBuyerError(error instanceof Error ? error.message : "No pudimos generar la orden.");
+    } finally {
+      setIsCreatingOrder(false);
+    }
   };
 
-  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleProofFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -1165,8 +1334,37 @@ function PhotoVideoShopPage() {
       return;
     }
 
+    if (!shopOrder) {
+      setProofFileName("");
+      setProofMessage("");
+      setBuyerError("Primero genera la orden de pago.");
+      return;
+    }
+
+    setIsUploadingProof(true);
+    setBuyerError("");
     setProofFileName(file.name);
-    setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
+    setProofMessage("");
+
+    try {
+      const proof = await readPaymentProofFile(file);
+      const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/proof", {
+        body: JSON.stringify({
+          ...proof,
+          curp: shopOrder.curp,
+          orderId: shopOrder.id,
+        }),
+        method: "POST",
+      });
+
+      setShopOrder(payload.order);
+      setOrderReference(payload.order.reference);
+      setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
+    } catch (error) {
+      setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
+    } finally {
+      setIsUploadingProof(false);
+    }
   };
 
   const renderIntro = () => (
@@ -1206,7 +1404,7 @@ function PhotoVideoShopPage() {
 
       <div className="ticket-shop-payment__summary">
         <span>Total final</span>
-        <strong>{formatCurrency(total)}</strong>
+        <strong>{formatCurrency(shopOrder?.amount ?? total)}</strong>
         <small>Referencia: {orderReference}</small>
         {selectedDance ? <small>Coreografía: {getMediaLineTitle(selectedDance)}</small> : null}
       </div>
@@ -1232,14 +1430,14 @@ function PhotoVideoShopPage() {
 
       <div className="ticket-shop-proof">
         <input
-          accept="image/jpeg,image/png,image/webp,application/pdf"
+          accept={paymentProofAccept}
           onChange={handleProofFileChange}
           ref={proofInputRef}
           type="file"
         />
-        <button onClick={() => proofInputRef.current?.click()} type="button">
+        <button disabled={isUploadingProof} onClick={() => proofInputRef.current?.click()} type="button">
           <UploadCloud aria-hidden="true" size={20} />
-          Subir captura de transferencia
+          {isUploadingProof ? "Subiendo comprobante..." : "Subir captura de transferencia"}
         </button>
         {proofFileName ? <strong>{proofFileName}</strong> : null}
         {proofMessage ? <p>{proofMessage}</p> : null}
@@ -1490,8 +1688,8 @@ function PhotoVideoShopPage() {
               </label>
               {buyerError ? <p role="alert">{buyerError}</p> : null}
               {!isBuyerConfirmed ? (
-                <button disabled={mediaItemCount === 0} type="submit">
-                  Continuar a checkout <ArrowRight aria-hidden="true" size={18} />
+                <button disabled={mediaItemCount === 0 || isCreatingOrder} type="submit">
+                  {isCreatingOrder ? "Generando orden..." : "Continuar a checkout"} <ArrowRight aria-hidden="true" size={18} />
                 </button>
               ) : null}
               {isBuyerConfirmed && mediaItemCount > 0 ? renderTransferCheckout() : null}
