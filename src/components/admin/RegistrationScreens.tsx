@@ -45,7 +45,7 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "payments";
-type AuthMode = "login" | "register";
+type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error";
 
 type AdminNavItem = {
@@ -74,6 +74,7 @@ type RegistrationSession = {
     name: string;
     username: string;
     email: string;
+    emailConfirmedAt?: string | null;
   };
   academy: {
     id: string;
@@ -82,6 +83,16 @@ type RegistrationSession = {
     contactName: string;
     email: string;
     phone: string | null;
+  };
+};
+
+type RegistrationAuthActionResponse = {
+  ok: boolean;
+  message?: string;
+  debugResetUrl?: string;
+  debugVerificationUrl?: string;
+  user?: {
+    email?: string;
   };
 };
 
@@ -1452,9 +1463,36 @@ function LevitateAuthScreen({
   onAuthenticated: (session: RegistrationSession | RegistrationBootstrap) => void;
   systemMessage?: string;
 }) {
-  const [mode, setMode] = useState<AuthMode>("login");
+  const getInitialToken = (name: string) => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    return new URLSearchParams(window.location.search).get(name) || "";
+  };
+  const [verifyToken] = useState(() => getInitialToken("verifyToken"));
+  const [resetToken] = useState(() => getInitialToken("resetToken"));
+  const [mode, setMode] = useState<AuthMode>(() => {
+    if (getInitialToken("verifyToken")) {
+      return "verify";
+    }
+
+    if (getInitialToken("resetToken")) {
+      return "reset";
+    }
+
+    return "login";
+  });
+  const [loginNotice, setLoginNotice] = useState(() =>
+    getInitialToken("confirmed") ? "Correo confirmado. Ya puedes ingresar al panel." : "",
+  );
   const [loginError, setLoginError] = useState("");
   const [registerError, setRegisterError] = useState("");
+  const [forgotNotice, setForgotNotice] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [debugActionUrl, setDebugActionUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1462,7 +1500,9 @@ function LevitateAuthScreen({
 
     const formData = new FormData(event.currentTarget);
     setIsSubmitting(true);
+    setLoginNotice("");
     setLoginError("");
+    setDebugActionUrl("");
 
     try {
       const username = getFormValue(formData, "username");
@@ -1491,6 +1531,90 @@ function LevitateAuthScreen({
     }
   };
 
+  const handleForgotPasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    setIsSubmitting(true);
+    setForgotNotice("");
+    setForgotError("");
+    setDebugActionUrl("");
+
+    try {
+      const response = await requestRegistrationApi<RegistrationAuthActionResponse>(
+        "/api/registration/auth/forgot-password",
+        {
+          body: JSON.stringify({
+            identifier: getFormValue(formData, "identifier"),
+          }),
+          method: "POST",
+        },
+      );
+
+      setForgotNotice(response.message || "Si encontramos una cuenta confirmada, enviaremos un enlace.");
+      setDebugActionUrl(response.debugResetUrl || "");
+    } catch (error) {
+      setForgotError(getErrorMessage(error, "No se pudo solicitar el cambio de contraseña."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const password = getFormValue(formData, "password");
+    const passwordConfirmation = getFormValue(formData, "passwordConfirmation");
+    setIsSubmitting(true);
+    setResetError("");
+
+    try {
+      if (password !== passwordConfirmation) {
+        throw new Error("Las contraseñas no coinciden.");
+      }
+
+      const session = await requestRegistrationApi<RegistrationSession>("/api/registration/auth/reset-password", {
+        body: JSON.stringify({
+          password,
+          token: resetToken,
+        }),
+        method: "POST",
+      });
+
+      onAuthenticated(session);
+    } catch (error) {
+      setResetError(getErrorMessage(error, "No se pudo cambiar la contraseña."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitEmailVerification = useCallback(async () => {
+    if (!verifyToken) {
+      setVerifyError("El enlace de confirmación no incluye token.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setVerifyError("");
+
+    try {
+      const session = await requestRegistrationApi<RegistrationSession>("/api/registration/auth/verify-email", {
+        body: JSON.stringify({
+          token: verifyToken,
+        }),
+        method: "POST",
+      });
+
+      onAuthenticated(session);
+    } catch (error) {
+      setVerifyError(getErrorMessage(error, "No se pudo confirmar el correo."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [onAuthenticated, verifyToken]);
+
   const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1498,9 +1622,10 @@ function LevitateAuthScreen({
     const formData = new FormData(form);
     setIsSubmitting(true);
     setRegisterError("");
+    setDebugActionUrl("");
 
     try {
-      const session = await requestRegistrationApi<RegistrationSession>("/api/registration/auth/register", {
+      const response = await requestRegistrationApi<RegistrationAuthActionResponse>("/api/registration/auth/register", {
         body: JSON.stringify({
           name: getFormValue(formData, "name"),
           username: getFormValue(formData, "username"),
@@ -1514,13 +1639,17 @@ function LevitateAuthScreen({
       });
 
       form.reset();
-      onAuthenticated(session);
+      setLoginNotice(response.message || "Te enviamos un correo para confirmar tu cuenta antes de ingresar.");
+      setDebugActionUrl(response.debugVerificationUrl || "");
+      setMode("login");
     } catch (error) {
       setRegisterError(getErrorMessage(error, "No se pudo crear el usuario."));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const showTabs = mode === "login" || mode === "register";
 
   return (
     <main className="levitate-admin-page levitate-auth-page">
@@ -1542,38 +1671,51 @@ function LevitateAuthScreen({
         </div>
 
         <section className={`levitate-auth-card levitate-auth-card--${mode}`} aria-label="Acceso de usuario">
-          <div className="levitate-auth-tabs" role="tablist" aria-label="Acceso o registro">
-            <button
-              aria-selected={mode === "login"}
-              className={mode === "login" ? "is-active" : ""}
-              onClick={() => {
-                setMode("login");
-                setLoginError("");
-              }}
-              role="tab"
-              type="button"
-            >
-              <LogIn aria-hidden="true" size={17} />
-              Ingresar
-            </button>
-            <button
-              aria-selected={mode === "register"}
-              className={mode === "register" ? "is-active" : ""}
-              onClick={() => {
-                setMode("register");
-                setRegisterError("");
-              }}
-              role="tab"
-              type="button"
-            >
-              <UserPlus aria-hidden="true" size={17} />
-              Crear usuario
-            </button>
-          </div>
+          {showTabs ? (
+            <div className="levitate-auth-tabs" role="tablist" aria-label="Acceso o registro">
+              <button
+                aria-selected={mode === "login"}
+                className={mode === "login" ? "is-active" : ""}
+                onClick={() => {
+                  setMode("login");
+                  setLoginError("");
+                  setRegisterError("");
+                  setDebugActionUrl("");
+                }}
+                role="tab"
+                type="button"
+              >
+                <LogIn aria-hidden="true" size={17} />
+                Ingresar
+              </button>
+              <button
+                aria-selected={mode === "register"}
+                className={mode === "register" ? "is-active" : ""}
+                onClick={() => {
+                  setMode("register");
+                  setLoginNotice("");
+                  setLoginError("");
+                  setRegisterError("");
+                  setDebugActionUrl("");
+                }}
+                role="tab"
+                type="button"
+              >
+                <UserPlus aria-hidden="true" size={17} />
+                Crear usuario
+              </button>
+            </div>
+          ) : null}
 
           {mode === "login" ? (
             <form className="levitate-auth-form levitate-auth-form--login" onSubmit={handleLoginSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
+              <AdminStatusMessage message={loginNotice} />
+              {debugActionUrl ? (
+                <a className="levitate-auth-debug-link" href={debugActionUrl}>
+                  Abrir enlace local
+                </a>
+              ) : null}
               {isRegistrationDemoEnabled ? (
                 <DemoCredentialsHint
                   label="Demo academia"
@@ -1587,13 +1729,27 @@ function LevitateAuthScreen({
               <AdminField icon={KeyRound} label="Contraseña">
                 <input autoComplete="current-password" name="password" required type="password" />
               </AdminField>
+              <button
+                className="levitate-auth-text-button"
+                onClick={() => {
+                  setMode("forgot");
+                  setForgotNotice("");
+                  setForgotError("");
+                  setDebugActionUrl("");
+                }}
+                type="button"
+              >
+                Olvidé mi contraseña
+              </button>
               <AdminStatusMessage message={loginError} tone="error" />
               <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
                 <LogIn aria-hidden="true" size={18} />
                 {isSubmitting ? "Ingresando..." : "Ingresar"}
               </button>
             </form>
-          ) : (
+          ) : null}
+
+          {mode === "register" ? (
             <form className="levitate-auth-form levitate-auth-form--register" onSubmit={handleRegisterSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
               <span className="levitate-auth-form__section-label">Responsable</span>
@@ -1622,7 +1778,111 @@ function LevitateAuthScreen({
                 {isSubmitting ? "Creando..." : "Crear usuario"}
               </button>
             </form>
-          )}
+          ) : null}
+
+          {mode === "forgot" ? (
+            <form className="levitate-auth-form levitate-auth-form--forgot" onSubmit={handleForgotPasswordSubmit}>
+              <div className="levitate-auth-action-heading">
+                <Mail aria-hidden="true" size={20} />
+                <div>
+                  <span>Recuperar contraseña</span>
+                  <p>Escribe tu usuario o correo confirmado y te enviaremos un enlace temporal.</p>
+                </div>
+              </div>
+              <AdminField icon={AtSign} label="Usuario o correo">
+                <input autoComplete="username" name="identifier" required type="text" />
+              </AdminField>
+              <AdminStatusMessage message={forgotNotice} />
+              {debugActionUrl ? (
+                <a className="levitate-auth-debug-link" href={debugActionUrl}>
+                  Abrir enlace local
+                </a>
+              ) : null}
+              <AdminStatusMessage message={forgotError} tone="error" />
+              <button className="levitate-auth-submit" disabled={isSubmitting} type="submit">
+                <Mail aria-hidden="true" size={18} />
+                {isSubmitting ? "Enviando..." : "Enviar enlace"}
+              </button>
+              <button
+                className="levitate-auth-text-button levitate-auth-text-button--center"
+                onClick={() => {
+                  setMode("login");
+                  setForgotNotice("");
+                  setForgotError("");
+                  setDebugActionUrl("");
+                }}
+                type="button"
+              >
+                Volver al login
+              </button>
+            </form>
+          ) : null}
+
+          {mode === "reset" ? (
+            <form className="levitate-auth-form levitate-auth-form--reset" onSubmit={handleResetPasswordSubmit}>
+              <div className="levitate-auth-action-heading">
+                <KeyRound aria-hidden="true" size={20} />
+                <div>
+                  <span>Nueva contraseña</span>
+                  <p>Define una contraseña nueva para entrar al panel de academias.</p>
+                </div>
+              </div>
+              <AdminField helper="Mínimo 8 caracteres." icon={KeyRound} label="Contraseña nueva">
+                <input autoComplete="new-password" minLength={8} name="password" required type="password" />
+              </AdminField>
+              <AdminField icon={KeyRound} label="Confirmar contraseña">
+                <input autoComplete="new-password" minLength={8} name="passwordConfirmation" required type="password" />
+              </AdminField>
+              <AdminStatusMessage message={resetError} tone="error" />
+              <button className="levitate-auth-submit" disabled={isSubmitting || !resetToken} type="submit">
+                <KeyRound aria-hidden="true" size={18} />
+                {isSubmitting ? "Guardando..." : "Cambiar contraseña"}
+              </button>
+              <button
+                className="levitate-auth-text-button levitate-auth-text-button--center"
+                onClick={() => {
+                  setMode("login");
+                  setResetError("");
+                }}
+                type="button"
+              >
+                Volver al login
+              </button>
+            </form>
+          ) : null}
+
+          {mode === "verify" ? (
+            <form
+              className="levitate-auth-form levitate-auth-form--verify"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitEmailVerification();
+              }}
+            >
+              <div className="levitate-auth-action-heading">
+                <ShieldCheck aria-hidden="true" size={20} />
+                <div>
+                  <span>Confirmando correo</span>
+                  <p>Estamos validando el enlace para activar tu acceso de academia.</p>
+                </div>
+              </div>
+              <AdminStatusMessage message={verifyError} tone="error" />
+              <button className="levitate-auth-submit" disabled={isSubmitting || !verifyToken} type="submit">
+                <ShieldCheck aria-hidden="true" size={18} />
+                {isSubmitting ? "Confirmando..." : "Confirmar correo"}
+              </button>
+              <button
+                className="levitate-auth-text-button levitate-auth-text-button--center"
+                onClick={() => {
+                  setMode("login");
+                  setVerifyError("");
+                }}
+                type="button"
+              >
+                Volver al login
+              </button>
+            </form>
+          ) : null}
         </section>
       </section>
     </main>

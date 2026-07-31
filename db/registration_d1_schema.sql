@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS registration_users (
   email TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  email_confirmed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -31,6 +32,24 @@ CREATE TABLE IF NOT EXISTS registration_sessions (
   user_agent TEXT,
   last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_email_verification_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES registration_users(id) ON DELETE CASCADE,
+  verification_token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_password_reset_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES registration_users(id) ON DELETE CASCADE,
+  reset_token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -196,6 +215,10 @@ CREATE TABLE IF NOT EXISTS registration_dance_participants (
 CREATE INDEX IF NOT EXISTS idx_registration_users_academy_id ON registration_users(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_user_id ON registration_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_expires_at ON registration_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_registration_email_verification_tokens_user_id ON registration_email_verification_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_registration_email_verification_tokens_expires_at ON registration_email_verification_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_registration_password_reset_tokens_user_id ON registration_password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_registration_password_reset_tokens_expires_at ON registration_password_reset_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_user_id ON registration_student_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_expires_at ON registration_student_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_participants_academy_id ON registration_participants(academy_id);

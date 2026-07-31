@@ -18678,6 +18678,79 @@ button {
   content: "";
 }
 
+.levitate-auth-action-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding-bottom: 2px;
+}
+
+.levitate-auth-action-heading > svg {
+  color: var(--admin-cyan-muted-soft);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.levitate-auth-action-heading span {
+  display: block;
+  margin: 0 0 7px;
+  color: var(--admin-cream);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.levitate-auth-action-heading p {
+  margin: 0;
+  color: rgba(247, 243, 239, 0.58);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.levitate-auth-text-button,
+.levitate-auth-debug-link {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: rgba(134, 199, 210, 0.92);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.levitate-auth-text-button {
+  margin-top: -8px;
+  padding: 0;
+}
+
+.levitate-auth-text-button--center {
+  justify-self: center;
+  margin-top: 0;
+}
+
+.levitate-auth-text-button:hover,
+.levitate-auth-text-button:focus-visible,
+.levitate-auth-debug-link:hover,
+.levitate-auth-debug-link:focus-visible {
+  color: var(--admin-cream);
+  outline: 0;
+}
+
+.levitate-auth-debug-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(134, 199, 210, 0.34);
+  border-radius: 999px;
+  background: rgba(134, 199, 210, 0.08);
+}
+
 .levitate-auth-demo {
   display: flex;
   flex-wrap: wrap;

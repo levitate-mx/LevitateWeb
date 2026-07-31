@@ -2,6 +2,8 @@ const passportSessionCookieName = "levitate_passport_session";
 const registrationSessionCookieName = "levitate_registration_session";
 const registrationStudentSessionCookieName = "levitate_registration_student_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
+const registrationEmailVerificationMaxAgeMinutes = 60 * 24 * 2;
+const registrationPasswordResetMaxAgeMinutes = 60;
 const registrationVenues = new Set(["cdmx", "puebla", "edomex"]);
 const registrationDivisions = new Set(["baby", "mini", "junior", "teen", "adulto"]);
 const registrationShirtSizes = new Set(["6", "8", "10", "12", "xs", "s", "m", "l"]);
@@ -70,6 +72,18 @@ export default {
 
     if (url.pathname === "/api/registration/auth/login") {
       return handleRegistrationLogin(request, env);
+    }
+
+    if (url.pathname === "/api/registration/auth/verify-email") {
+      return handleRegistrationVerifyEmail(request, env);
+    }
+
+    if (url.pathname === "/api/registration/auth/forgot-password") {
+      return handleRegistrationForgotPassword(request, env);
+    }
+
+    if (url.pathname === "/api/registration/auth/reset-password") {
+      return handleRegistrationResetPassword(request, env);
     }
 
     if (url.pathname === "/api/registration/auth/logout") {
@@ -357,17 +371,28 @@ async function handleRegistrationRegister(request, env) {
       .bind(userId, academy.id, name, username, email, passwordHash)
       .run();
 
-    const sessionToken = await createRegistrationSession(db, userId, request);
     const state = await getRegistrationStateByUserId(db, userId);
+    const verification = await createRegistrationEmailVerification(db, userId, request, env);
     const confirmationEmail = await sendRegistrationConfirmationEmail({
       env,
       request,
+      verificationUrl: verification.url,
       session: state,
     });
 
-    return sendJson({ ...state, confirmationEmail }, 201, {
-      "set-cookie": buildRegistrationSessionCookie(request, sessionToken),
-    });
+    return sendJson(
+      {
+        ok: true,
+        status: "pending_email_verification",
+        message: "Te enviamos un correo para confirmar tu cuenta antes de ingresar al panel.",
+        user: {
+          email: state.user.email,
+        },
+        confirmationEmail,
+        ...(verification.debugUrl ? { debugVerificationUrl: verification.debugUrl } : {}),
+      },
+      201,
+    );
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -398,8 +423,211 @@ async function handleRegistrationLogin(request, env) {
       throwHttpError("registration_login_invalid", "Usuario o contraseña incorrectos", 401);
     }
 
+    if (!user.email_confirmed_at) {
+      throwHttpError(
+        "registration_email_unconfirmed",
+        "Confirma tu correo con el enlace que te enviamos para entrar.",
+        403,
+      );
+    }
+
     const sessionToken = await createRegistrationSession(db, user.id, request);
     const state = await getRegistrationStateByUserId(db, user.id);
+
+    return sendJson(state, 200, {
+      "set-cookie": buildRegistrationSessionCookie(request, sessionToken),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationVerifyEmail(request, env) {
+  try {
+    assertMethod(request, ["GET", "POST"]);
+
+    const token =
+      request.method === "GET"
+        ? requireString(new URL(request.url).searchParams.get("token"), "token")
+        : requireString((await readJsonBody(request)).token, "token");
+    const tokenHash = await hashToken(token);
+    const db = getDb(env);
+    const verification = await db
+      .prepare(
+        `
+          SELECT
+            registration_email_verification_tokens.id,
+            registration_email_verification_tokens.user_id
+          FROM registration_email_verification_tokens
+          INNER JOIN registration_users
+            ON registration_users.id = registration_email_verification_tokens.user_id
+          WHERE registration_email_verification_tokens.verification_token_hash = ?
+            AND registration_email_verification_tokens.used_at IS NULL
+            AND registration_email_verification_tokens.expires_at > datetime('now')
+            AND registration_users.status = 'active'
+          LIMIT 1
+        `,
+      )
+      .bind(tokenHash)
+      .first();
+
+    if (!verification) {
+      throwHttpError("registration_email_verification_invalid", "El enlace de confirmación expiró o ya fue usado", 400);
+    }
+
+    await db.batch([
+      db
+        .prepare(
+          `
+            UPDATE registration_users
+            SET email_confirmed_at = COALESCE(email_confirmed_at, datetime('now')),
+                updated_at = datetime('now')
+            WHERE id = ?
+          `,
+        )
+        .bind(verification.user_id),
+      db
+        .prepare(
+          `
+            UPDATE registration_email_verification_tokens
+            SET used_at = datetime('now')
+            WHERE id = ?
+          `,
+        )
+        .bind(verification.id),
+    ]);
+
+    const sessionToken = await createRegistrationSession(db, verification.user_id, request);
+    const state = await getRegistrationStateByUserId(db, verification.user_id);
+
+    if (request.method === "GET") {
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: buildRegistrationAuthLandingUrl(request, env, { confirmed: "1" }),
+          "set-cookie": buildRegistrationSessionCookie(request, sessionToken),
+        },
+      });
+    }
+
+    return sendJson(state, 200, {
+      "set-cookie": buildRegistrationSessionCookie(request, sessionToken),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationForgotPassword(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const identifier = normalizeUsername(requireString(body.identifier, "identifier"));
+    const db = getDb(env);
+    const user = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_users
+          WHERE (username = ? OR email = ?)
+            AND status = 'active'
+            AND email_confirmed_at IS NOT NULL
+          LIMIT 1
+        `,
+      )
+      .bind(identifier, normalizeEmail(identifier))
+      .first();
+
+    const message = "Si encontramos una cuenta confirmada, enviaremos un enlace para cambiar la contraseña.";
+
+    if (!user) {
+      return sendJson({ ok: true, message });
+    }
+
+    const reset = await createRegistrationPasswordReset(db, user.id, request, env);
+    await sendRegistrationPasswordResetEmail({
+      env,
+      request,
+      resetUrl: reset.url,
+      user,
+    });
+
+    return sendJson({
+      ok: true,
+      message,
+      ...(reset.debugUrl ? { debugResetUrl: reset.debugUrl } : {}),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationResetPassword(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const token = requireString(body.token, "token");
+    const password = requireString(body.password, "password");
+
+    if (password.length < 8) {
+      throwHttpError("weak_password", "La contraseña debe tener al menos 8 caracteres", 400);
+    }
+
+    const tokenHash = await hashToken(token);
+    const db = getDb(env);
+    const reset = await db
+      .prepare(
+        `
+          SELECT
+            registration_password_reset_tokens.id,
+            registration_password_reset_tokens.user_id
+          FROM registration_password_reset_tokens
+          INNER JOIN registration_users
+            ON registration_users.id = registration_password_reset_tokens.user_id
+          WHERE registration_password_reset_tokens.reset_token_hash = ?
+            AND registration_password_reset_tokens.used_at IS NULL
+            AND registration_password_reset_tokens.expires_at > datetime('now')
+            AND registration_users.status = 'active'
+            AND registration_users.email_confirmed_at IS NOT NULL
+          LIMIT 1
+        `,
+      )
+      .bind(tokenHash)
+      .first();
+
+    if (!reset) {
+      throwHttpError("registration_password_reset_invalid", "El enlace para cambiar contraseña expiró o ya fue usado", 400);
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    await db.batch([
+      db
+        .prepare(
+          `
+            UPDATE registration_users
+            SET password_hash = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+          `,
+        )
+        .bind(passwordHash, reset.user_id),
+      db
+        .prepare(
+          `
+            UPDATE registration_password_reset_tokens
+            SET used_at = datetime('now')
+            WHERE id = ?
+          `,
+        )
+        .bind(reset.id),
+      db.prepare("DELETE FROM registration_sessions WHERE user_id = ?").bind(reset.user_id),
+    ]);
+
+    const sessionToken = await createRegistrationSession(db, reset.user_id, request);
+    const state = await getRegistrationStateByUserId(db, reset.user_id);
 
     return sendJson(state, 200, {
       "set-cookie": buildRegistrationSessionCookie(request, sessionToken),
@@ -1004,7 +1232,7 @@ function getDb(env) {
   return env.DB;
 }
 
-async function sendRegistrationConfirmationEmail({ env, request, session }) {
+async function sendRegistrationConfirmationEmail({ env, request, session, verificationUrl }) {
   const apiKey = env.RESEND_API_KEY;
   const from = env.REGISTRATION_EMAIL_FROM;
 
@@ -1012,25 +1240,26 @@ async function sendRegistrationConfirmationEmail({ env, request, session }) {
     return { sent: false, reason: "email_not_configured" };
   }
 
-  const registrationUrl = `${getPublicSiteUrl(request, env)}/registro`;
   const venueLabel = getRegistrationVenueLabel(session.academy.venue);
-  const subject = "Registro confirmado | Levitate MX";
+  const subject = "Confirma tu correo | Levitate MX";
   const html = buildRegistrationConfirmationHtml({
     name: session.user.name,
     academy: session.academy.name,
     venue: venueLabel,
-    registrationUrl,
+    verificationUrl,
   });
   const text = [
     `Hola ${session.user.name},`,
     "",
-    "Tu usuario del panel de registro Levitate MX ya quedó creado.",
+    "Recibimos el registro de tu academia en el panel Levitate MX.",
     `Academia: ${session.academy.name}`,
     `Sede: ${venueLabel}`,
     "",
-    `Puedes entrar al panel aquí: ${registrationUrl}`,
+    "Para activar el acceso, confirma tu correo con este enlace:",
+    verificationUrl,
     "",
-    "Gracias por registrarte.",
+    "El enlace expira en 48 horas. Si no solicitaste este registro, ignora este mensaje.",
+    "",
     "Levitate MX",
   ].join("\n");
 
@@ -1040,7 +1269,7 @@ async function sendRegistrationConfirmationEmail({ env, request, session }) {
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
-        "idempotency-key": `registration-${session.user.id}`,
+        "idempotency-key": `registration-confirm-email-${session.user.id}-${Date.now()}`,
         "user-agent": "levitate-registration-worker/1.0",
       },
       body: JSON.stringify({
@@ -1072,11 +1301,74 @@ async function sendRegistrationConfirmationEmail({ env, request, session }) {
   }
 }
 
-function buildRegistrationConfirmationHtml({ name, academy, venue, registrationUrl }) {
+async function sendRegistrationPasswordResetEmail({ env, request, user, resetUrl }) {
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.REGISTRATION_EMAIL_FROM;
+
+  if (!apiKey || !from) {
+    return { sent: false, reason: "email_not_configured" };
+  }
+
+  const subject = "Cambia tu contraseña | Levitate MX";
+  const html = buildRegistrationPasswordResetHtml({
+    name: user.name,
+    resetUrl,
+  });
+  const text = [
+    `Hola ${user.name},`,
+    "",
+    "Recibimos una solicitud para cambiar la contraseña de tu acceso Levitate MX.",
+    "Puedes hacerlo con este enlace:",
+    resetUrl,
+    "",
+    "El enlace expira en 60 minutos. Si no solicitaste este cambio, ignora este mensaje.",
+    "",
+    "Levitate MX",
+  ].join("\n");
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        "idempotency-key": `registration-reset-password-${user.id}-${Date.now()}`,
+        "user-agent": "levitate-registration-worker/1.0",
+      },
+      body: JSON.stringify({
+        from,
+        to: [user.email],
+        subject,
+        html,
+        text,
+        ...(env.REGISTRATION_EMAIL_REPLY_TO ? { reply_to: env.REGISTRATION_EMAIL_REPLY_TO } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.warn("Registration password reset email failed", {
+        status: response.status,
+        detail,
+      });
+      return { sent: false, reason: "provider_error" };
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    return { sent: true, id: payload.id || null };
+  } catch (error) {
+    console.warn("Registration password reset email failed", {
+      message: error?.message || String(error),
+    });
+    return { sent: false, reason: "network_error" };
+  }
+}
+
+function buildRegistrationConfirmationHtml({ name, academy, venue, verificationUrl }) {
   const safeName = escapeHtml(name);
   const safeAcademy = escapeHtml(academy);
   const safeVenue = escapeHtml(venue);
-  const safeRegistrationUrl = escapeHtml(registrationUrl);
+  const safeVerificationUrl = escapeHtml(verificationUrl);
 
   return `<!doctype html>
 <html lang="es">
@@ -1093,13 +1385,13 @@ function buildRegistrationConfirmationHtml({ name, academy, venue, registrationU
             <tr>
               <td style="background:#111015;padding:28px 30px;color:#fffaf4;">
                 <p style="margin:0 0 10px;color:#e74697;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;">Levitate MX</p>
-                <h1 style="margin:0;font-size:34px;line-height:1.05;font-weight:700;">Registro confirmado</h1>
+                <h1 style="margin:0;font-size:34px;line-height:1.05;font-weight:700;">Confirma tu correo</h1>
               </td>
             </tr>
             <tr>
               <td style="padding:30px;color:#111015;">
                 <p style="margin:0 0 16px;font-size:17px;line-height:1.5;">Hola ${safeName},</p>
-                <p style="margin:0 0 18px;font-size:16px;line-height:1.55;">Tu usuario del panel de registro Levitate MX ya quedó creado.</p>
+                <p style="margin:0 0 18px;font-size:16px;line-height:1.55;">Recibimos el registro de tu academia. Para activar el acceso al panel, confirma que este correo es correcto.</p>
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;border:1px solid rgba(17,16,21,.12);border-radius:8px;">
                   <tr>
                     <td style="padding:14px 16px;border-bottom:1px solid rgba(17,16,21,.1);font-size:14px;color:rgba(17,16,21,.64);">Academia</td>
@@ -1110,10 +1402,50 @@ function buildRegistrationConfirmationHtml({ name, academy, venue, registrationU
                     <td style="padding:14px 16px;font-size:14px;font-weight:700;text-align:right;">${safeVenue}</td>
                   </tr>
                 </table>
-                <p style="margin:0 0 26px;font-size:16px;line-height:1.55;">Desde el panel puedes registrar participantes, coreógrafos y bailes.</p>
+                <p style="margin:0 0 26px;font-size:16px;line-height:1.55;">Este enlace expira en 48 horas. Si no solicitaste este registro, puedes ignorar este mensaje.</p>
                 <p style="margin:0;">
-                  <a href="${safeRegistrationUrl}" style="display:inline-block;background:#e74697;color:#ffffff;padding:14px 18px;border-radius:7px;font-size:13px;font-weight:700;letter-spacing:.1em;text-decoration:none;text-transform:uppercase;">Ir al panel</a>
+                  <a href="${safeVerificationUrl}" style="display:inline-block;background:#e74697;color:#ffffff;padding:14px 18px;border-radius:7px;font-size:13px;font-weight:700;letter-spacing:.1em;text-decoration:none;text-transform:uppercase;">Confirmar correo</a>
                 </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function buildRegistrationPasswordResetHtml({ name, resetUrl }) {
+  const safeName = escapeHtml(name);
+  const safeResetUrl = escapeHtml(resetUrl);
+
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cambia tu contraseña | Levitate MX</title>
+  </head>
+  <body style="margin:0;background:#050505;color:#111015;font-family:Arial,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#050505;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#fffaf4;border-radius:8px;overflow:hidden;">
+            <tr>
+              <td style="background:#111015;padding:28px 30px;color:#fffaf4;">
+                <p style="margin:0 0 10px;color:#e74697;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;">Levitate MX</p>
+                <h1 style="margin:0;font-size:34px;line-height:1.05;font-weight:700;">Cambia tu contraseña</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:30px;color:#111015;">
+                <p style="margin:0 0 16px;font-size:17px;line-height:1.5;">Hola ${safeName},</p>
+                <p style="margin:0 0 26px;font-size:16px;line-height:1.55;">Recibimos una solicitud para cambiar la contraseña de tu acceso Levitate MX. El enlace expira en 60 minutos.</p>
+                <p style="margin:0 0 20px;">
+                  <a href="${safeResetUrl}" style="display:inline-block;background:#e74697;color:#ffffff;padding:14px 18px;border-radius:7px;font-size:13px;font-weight:700;letter-spacing:.1em;text-decoration:none;text-transform:uppercase;">Cambiar contraseña</a>
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.55;color:rgba(17,16,21,.58);">Si no solicitaste este cambio, ignora este mensaje.</p>
               </td>
             </tr>
           </table>
@@ -1174,6 +1506,124 @@ async function createRegistrationSession(db, userId, request) {
     .run();
 
   return sessionToken;
+}
+
+async function createRegistrationEmailVerification(db, userId, request, env) {
+  await db
+    .prepare(
+      `
+        UPDATE registration_email_verification_tokens
+        SET used_at = datetime('now')
+        WHERE user_id = ?
+          AND used_at IS NULL
+      `,
+    )
+    .bind(userId)
+    .run();
+
+  const token = createSessionToken();
+  const tokenHash = await hashToken(token);
+
+  await db
+    .prepare(
+      `
+        INSERT INTO registration_email_verification_tokens (
+          id,
+          user_id,
+          verification_token_hash,
+          expires_at
+        )
+        VALUES (?, ?, ?, datetime('now', ?))
+      `,
+    )
+    .bind(crypto.randomUUID(), userId, tokenHash, `+${registrationEmailVerificationMaxAgeMinutes} minutes`)
+    .run();
+
+  const url = buildRegistrationEmailVerificationUrl(request, env, token);
+
+  return {
+    url,
+    debugUrl: isLocalRequest(request) ? url : "",
+  };
+}
+
+async function createRegistrationPasswordReset(db, userId, request, env) {
+  await db
+    .prepare(
+      `
+        UPDATE registration_password_reset_tokens
+        SET used_at = datetime('now')
+        WHERE user_id = ?
+          AND used_at IS NULL
+      `,
+    )
+    .bind(userId)
+    .run();
+
+  const token = createSessionToken();
+  const tokenHash = await hashToken(token);
+
+  await db
+    .prepare(
+      `
+        INSERT INTO registration_password_reset_tokens (
+          id,
+          user_id,
+          reset_token_hash,
+          expires_at
+        )
+        VALUES (?, ?, ?, datetime('now', ?))
+      `,
+    )
+    .bind(crypto.randomUUID(), userId, tokenHash, `+${registrationPasswordResetMaxAgeMinutes} minutes`)
+    .run();
+
+  const url = buildRegistrationAuthActionUrl(request, env, "resetToken", token);
+
+  return {
+    url,
+    debugUrl: isLocalRequest(request) ? url : "",
+  };
+}
+
+function buildRegistrationAuthActionUrl(request, env, tokenParamName, token) {
+  const actionUrl = new URL("/registro/academias", getRegistrationActionBaseUrl(request, env));
+  actionUrl.searchParams.set(tokenParamName, token);
+
+  if (isLocalRequest(request)) {
+    actionUrl.searchParams.set("preview", "site");
+  }
+
+  return actionUrl.toString();
+}
+
+function buildRegistrationEmailVerificationUrl(request, env, token) {
+  const actionUrl = new URL("/api/registration/auth/verify-email", getRegistrationActionBaseUrl(request, env));
+  actionUrl.searchParams.set("token", token);
+  return actionUrl.toString();
+}
+
+function buildRegistrationAuthLandingUrl(request, env, params = {}) {
+  const landingUrl = new URL("/registro/academias", getRegistrationActionBaseUrl(request, env));
+
+  if (isLocalRequest(request)) {
+    landingUrl.searchParams.set("preview", "site");
+  }
+
+  for (const [key, value] of Object.entries(params)) {
+    landingUrl.searchParams.set(key, value);
+  }
+
+  return landingUrl.toString();
+}
+
+function getRegistrationActionBaseUrl(request, env) {
+  if (isLocalRequest(request)) {
+    const url = new URL(request.url);
+    return `${url.protocol}//${url.host}`;
+  }
+
+  return getPublicSiteUrl(request, env);
 }
 
 async function createRegistrationStudentSession(db, userId, request) {
@@ -1252,6 +1702,7 @@ async function getRegistrationStateFromRequest({ db, request }) {
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
+          registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
           registration_academies.venue,
@@ -1264,6 +1715,7 @@ async function getRegistrationStateFromRequest({ db, request }) {
         WHERE registration_sessions.session_token_hash = ?
           AND registration_sessions.expires_at > datetime('now')
           AND registration_users.status = 'active'
+          AND registration_users.email_confirmed_at IS NOT NULL
         LIMIT 1
       `,
     )
@@ -1429,6 +1881,7 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
+          registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
           registration_academies.venue,
@@ -2390,6 +2843,7 @@ function serializeRegistrationSession(row) {
       name: row.user_name,
       username: row.username,
       email: row.user_email,
+      emailConfirmedAt: row.email_confirmed_at || null,
     },
     academy: {
       id: row.academy_id,
@@ -2885,30 +3339,31 @@ function timingSafeEqual(left, right) {
   return result === 0;
 }
 
-function buildRegistrationSessionCookie(request, token) {
+function isLocalRequest(request) {
   const host = new URL(request.url).host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  return host.startsWith("localhost") || host.startsWith("127.0.0.1");
+}
+
+function buildRegistrationSessionCookie(request, token) {
+  const isLocal = isLocalRequest(request);
   const secure = isLocal ? "" : "; Secure";
   return `${registrationSessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${sessionMaxAgeSeconds}${secure}`;
 }
 
 function expireRegistrationSessionCookie(request) {
-  const host = new URL(request.url).host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const isLocal = isLocalRequest(request);
   const secure = isLocal ? "" : "; Secure";
   return `${registrationSessionCookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 function buildRegistrationStudentSessionCookie(request, token) {
-  const host = new URL(request.url).host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const isLocal = isLocalRequest(request);
   const secure = isLocal ? "" : "; Secure";
   return `${registrationStudentSessionCookieName}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${sessionMaxAgeSeconds}${secure}`;
 }
 
 function expireRegistrationStudentSessionCookie(request) {
-  const host = new URL(request.url).host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const isLocal = isLocalRequest(request);
   const secure = isLocal ? "" : "; Secure";
   return `${registrationStudentSessionCookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
 }
