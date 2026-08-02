@@ -45,6 +45,8 @@ const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png",
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
+const registrationGoogleDriveScope = "https://www.googleapis.com/auth/drive.file";
+const registrationGmailSendScope = "https://www.googleapis.com/auth/gmail.send";
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
 const registrationInscriptionPrices = {
   normal: {
@@ -333,6 +335,10 @@ export default {
 
     if (url.pathname === "/api/registration/admin/inscription-orders") {
       return handleRegistrationAdminInscriptionOrders(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/program") {
+      return handleRegistrationAdminProgram(request, env);
     }
 
     if (url.pathname === "/api/registration/admin/inscription-order/status") {
@@ -1211,6 +1217,8 @@ async function handleRegistrationShopOrderProof(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
+    await ensureRegistrationPaymentProofTables(db);
+
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
     const orderId = requireString(body.orderId, "orderId");
@@ -1283,6 +1291,8 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
+    await ensureRegistrationPaymentProofTables(db);
+
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
     const orderId = requireString(body.orderId, "orderId");
@@ -1423,6 +1433,8 @@ async function handleRegistrationAdminInscriptionOrders(request, env) {
 
     const db = getDb(env);
     const admin = await requireRegistrationAdmin(request, env, db);
+    await ensureRegistrationPaymentProofTables(db);
+
     const orders =
       admin.scope === "global"
         ? (await Promise.all([getAllRegistrationInscriptionOrders(db), getAllRegistrationShopOrders(db)]))
@@ -1433,6 +1445,21 @@ async function handleRegistrationAdminInscriptionOrders(request, env) {
     return sendJson({
       orders,
       totals: getRegistrationInscriptionOrderTotals(orders),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminProgram(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+
+    const db = getDb(env);
+    await requireRegistrationAdmin(request, env, db);
+
+    return sendJson({
+      dances: await getAllRegistrationProgramDances(db),
     });
   } catch (error) {
     return sendRegistrationError(error);
@@ -1681,6 +1708,9 @@ async function handleRegistrationMusic(request, env) {
     await ensureRegistrationMusicUploadsTable(db);
     await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
 
+    const dance = await getRegistrationDanceById(db, academyId, danceId);
+    const storedMusicUpload = await storeRegistrationMusicUpload({ dance, env, musicUpload, session });
+
     await db
       .prepare(
         `
@@ -1692,14 +1722,22 @@ async function handleRegistrationMusic(request, env) {
             content_type,
             file_size,
             data_url,
+            storage_provider,
+            drive_file_id,
+            drive_web_view_link,
+            drive_web_content_link,
             uploaded_by_user_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(dance_id) DO UPDATE SET
             file_name = excluded.file_name,
             content_type = excluded.content_type,
             file_size = excluded.file_size,
             data_url = excluded.data_url,
+            storage_provider = excluded.storage_provider,
+            drive_file_id = excluded.drive_file_id,
+            drive_web_view_link = excluded.drive_web_view_link,
+            drive_web_content_link = excluded.drive_web_content_link,
             uploaded_by_user_id = excluded.uploaded_by_user_id,
             uploaded_at = datetime('now'),
             updated_at = datetime('now')
@@ -1712,7 +1750,11 @@ async function handleRegistrationMusic(request, env) {
         musicUpload.fileName,
         musicUpload.contentType,
         musicUpload.fileSize,
-        musicUpload.dataUrl,
+        storedMusicUpload.dataUrl,
+        storedMusicUpload.storageProvider,
+        storedMusicUpload.driveFileId,
+        storedMusicUpload.driveWebViewLink,
+        storedMusicUpload.driveWebContentLink,
         session.user.id,
       )
       .run();
@@ -1735,13 +1777,6 @@ function getDb(env) {
 }
 
 async function sendRegistrationConfirmationEmail({ env, request, session, verificationUrl }) {
-  const apiKey = env.RESEND_API_KEY;
-  const from = env.REGISTRATION_EMAIL_FROM;
-
-  if (!apiKey || !from) {
-    return { sent: false, reason: "email_not_configured" };
-  }
-
   const venueLabel = getRegistrationVenueLabel(session.academy.venue);
   const subject = "Confirma tu correo | Levitate MX";
   const html = buildRegistrationConfirmationHtml({
@@ -1765,52 +1800,17 @@ async function sendRegistrationConfirmationEmail({ env, request, session, verifi
     "Levitate MX",
   ].join("\n");
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        "idempotency-key": `registration-confirm-email-${session.user.id}-${Date.now()}`,
-        "user-agent": "levitate-registration-worker/1.0",
-      },
-      body: JSON.stringify({
-        from,
-        to: [session.user.email],
-        subject,
-        html,
-        text,
-        ...(env.REGISTRATION_EMAIL_REPLY_TO ? { reply_to: env.REGISTRATION_EMAIL_REPLY_TO } : {}),
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn("Registration confirmation email failed", {
-        status: response.status,
-        detail,
-      });
-      return { sent: false, reason: "provider_error" };
-    }
-
-    const payload = await response.json().catch(() => ({}));
-    return { sent: true, id: payload.id || null };
-  } catch (error) {
-    console.warn("Registration confirmation email failed", {
-      message: error?.message || String(error),
-    });
-    return { sent: false, reason: "network_error" };
-  }
+  return sendRegistrationGmailEmail({
+    env,
+    html,
+    kind: "registration_confirmation",
+    subject,
+    text,
+    to: session.user.email,
+  });
 }
 
 async function sendRegistrationPasswordResetEmail({ env, request, user, resetUrl }) {
-  const apiKey = env.RESEND_API_KEY;
-  const from = env.REGISTRATION_EMAIL_FROM;
-
-  if (!apiKey || !from) {
-    return { sent: false, reason: "email_not_configured" };
-  }
-
   const subject = "Cambia tu contraseña | Levitate MX";
   const html = buildRegistrationPasswordResetHtml({
     name: user.name,
@@ -1828,42 +1828,221 @@ async function sendRegistrationPasswordResetEmail({ env, request, user, resetUrl
     "Levitate MX",
   ].join("\n");
 
+  return sendRegistrationGmailEmail({
+    env,
+    html,
+    kind: "registration_password_reset",
+    subject,
+    text,
+    to: user.email,
+  });
+}
+
+async function sendRegistrationGmailEmail({ env, html, kind, subject, text, to }) {
+  const config = getRegistrationGmailConfig(env);
+
+  if (!config) {
+    return { sent: false, reason: "email_not_configured", provider: "gmail" };
+  }
+
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        "idempotency-key": `registration-reset-password-${user.id}-${Date.now()}`,
-        "user-agent": "levitate-registration-worker/1.0",
+    const accessToken =
+      config.authType === "oauth_refresh_token"
+        ? await getGoogleOAuthAccessToken({
+            authFailureCode: "registration_gmail_auth_failed",
+            authFailureMessage: "No pudimos autenticar Gmail.",
+            config,
+          })
+        : await getGoogleAccessToken({
+            authFailureCode: "registration_gmail_auth_failed",
+            authFailureMessage: "No pudimos autenticar Gmail.",
+            config,
+            scope: registrationGmailSendScope,
+            subject: config.senderEmail,
+          });
+    const gmailUser = config.authType === "oauth_refresh_token" ? "me" : encodeURIComponent(config.senderEmail);
+    const response = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/${gmailUser}/messages/send`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+          "user-agent": "levitate-registration-worker/1.0",
+        },
+        body: JSON.stringify({
+          raw: buildGmailRawMessage({
+            fromEmail: config.senderEmail,
+            fromName: config.senderName,
+            html,
+            replyTo: env.REGISTRATION_EMAIL_REPLY_TO,
+            subject,
+            text,
+            to,
+          }),
+        }),
       },
-      body: JSON.stringify({
-        from,
-        to: [user.email],
-        subject,
-        html,
-        text,
-        ...(env.REGISTRATION_EMAIL_REPLY_TO ? { reply_to: env.REGISTRATION_EMAIL_REPLY_TO } : {}),
-      }),
-    });
+    );
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      console.warn("Registration password reset email failed", {
+      console.warn("Registration Gmail email failed", {
+        kind,
         status: response.status,
         detail,
       });
-      return { sent: false, reason: "provider_error" };
+      return { sent: false, reason: "provider_error", provider: "gmail" };
     }
 
     const payload = await response.json().catch(() => ({}));
-    return { sent: true, id: payload.id || null };
+    return { sent: true, id: payload.id || null, provider: "gmail" };
   } catch (error) {
-    console.warn("Registration password reset email failed", {
+    if (error?.statusCode) {
+      throw error;
+    }
+
+    console.warn("Registration Gmail email failed", {
+      kind,
       message: error?.message || String(error),
     });
-    return { sent: false, reason: "network_error" };
+    return { sent: false, reason: "network_error", provider: "gmail" };
   }
+}
+
+function getRegistrationGmailConfig(env) {
+  const hasAnyOauthConfig = Boolean(
+    optionalString(env.GMAIL_OAUTH_CLIENT_ID) ||
+      optionalString(env.GMAIL_OAUTH_CLIENT_SECRET) ||
+      optionalString(env.GMAIL_OAUTH_REFRESH_TOKEN) ||
+      optionalString(env.GMAIL_SENDER_EMAIL),
+  );
+  const oauthClientId = optionalString(env.GMAIL_OAUTH_CLIENT_ID);
+  const oauthClientSecret = optionalString(env.GMAIL_OAUTH_CLIENT_SECRET);
+  const oauthRefreshToken = optionalString(env.GMAIL_OAUTH_REFRESH_TOKEN);
+  const oauthSenderEmail = optionalEmail(env.GMAIL_SENDER_EMAIL);
+  const oauthSenderName = optionalString(env.GMAIL_SENDER_NAME) || "Levitate MX";
+
+  if (hasAnyOauthConfig) {
+    if (!oauthClientId || !oauthClientSecret || !oauthRefreshToken || !oauthSenderEmail) {
+      throwHttpError(
+        "registration_gmail_not_configured",
+        "Faltan variables de Gmail OAuth para enviar correos.",
+        500,
+      );
+    }
+
+    return {
+      authType: "oauth_refresh_token",
+      clientId: oauthClientId,
+      clientSecret: oauthClientSecret,
+      refreshToken: oauthRefreshToken,
+      senderEmail: oauthSenderEmail,
+      senderName: oauthSenderName,
+    };
+  }
+
+  const hasAnyWorkspaceConfig = Boolean(
+    optionalString(env.GOOGLE_WORKSPACE_CLIENT_EMAIL) ||
+      optionalString(env.GOOGLE_WORKSPACE_PRIVATE_KEY) ||
+      optionalString(env.GOOGLE_WORKSPACE_SENDER_EMAIL),
+  );
+  const clientEmail = optionalString(env.GOOGLE_WORKSPACE_CLIENT_EMAIL || env.GOOGLE_DRIVE_CLIENT_EMAIL);
+  const privateKey = optionalString(env.GOOGLE_WORKSPACE_PRIVATE_KEY || env.GOOGLE_DRIVE_PRIVATE_KEY);
+  const senderEmail = optionalEmail(env.GOOGLE_WORKSPACE_SENDER_EMAIL);
+  const senderName = optionalString(env.GOOGLE_WORKSPACE_SENDER_NAME) || "Levitate MX";
+
+  if (!hasAnyWorkspaceConfig) {
+    return null;
+  }
+
+  if (!clientEmail || !privateKey || !senderEmail) {
+    throwHttpError(
+      "registration_gmail_not_configured",
+      "Faltan variables de Google Workspace para enviar correos.",
+      500,
+    );
+  }
+
+  return {
+    authType: "service_account_delegation",
+    clientEmail,
+    privateKey,
+    senderEmail,
+    senderName,
+  };
+}
+
+function buildGmailRawMessage({ fromEmail, fromName, html, replyTo, subject, text, to }) {
+  const boundary = `levitate_${crypto.randomUUID().replace(/-/g, "")}`;
+  const headers = [
+    `From: ${formatEmailAddress(fromName, fromEmail)}`,
+    `To: ${formatEmailAddress("", to)}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+  const cleanReplyTo = optionalEmail(replyTo);
+
+  if (cleanReplyTo) {
+    headers.push(`Reply-To: ${formatEmailAddress("", cleanReplyTo)}`);
+  }
+
+  const message = [
+    ...headers,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    chunkBase64(base64EncodeUtf8(text)),
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    chunkBase64(base64EncodeUtf8(html)),
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+
+  return base64UrlEncodeBytes(new TextEncoder().encode(message));
+}
+
+function formatEmailAddress(name, email) {
+  const cleanEmail = sanitizeEmailHeaderValue(email);
+  const cleanName = sanitizeEmailHeaderValue(name);
+
+  if (!cleanName) {
+    return cleanEmail;
+  }
+
+  return `${encodeMimeHeader(cleanName)} <${cleanEmail}>`;
+}
+
+function encodeMimeHeader(value) {
+  return `=?UTF-8?B?${base64EncodeUtf8(sanitizeEmailHeaderValue(value))}?=`;
+}
+
+function sanitizeEmailHeaderValue(value) {
+  return String(value || "").replace(/[\r\n]+/g, " ").trim();
+}
+
+function base64EncodeUtf8(value) {
+  return base64EncodeBytes(new TextEncoder().encode(String(value || "")));
+}
+
+function base64EncodeBytes(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
+function chunkBase64(value) {
+  return value.match(/.{1,76}/g)?.join("\r\n") || "";
 }
 
 function buildRegistrationConfirmationHtml({ name, academy, venue, verificationUrl }) {
@@ -3380,14 +3559,30 @@ async function getAllRegistrationInscriptionOrders(db) {
     const { results = [] } = await db
       .prepare(
         `
-          SELECT *
+          SELECT
+            registration_inscription_orders.*,
+            payment_proof.id AS proof_id,
+            payment_proof.file_name AS proof_file_name,
+            payment_proof.content_type AS proof_content_type,
+            payment_proof.file_size AS proof_file_size,
+            payment_proof.data_url AS proof_data_url,
+            payment_proof.status AS proof_status,
+            payment_proof.uploaded_at AS proof_uploaded_at
           FROM registration_inscription_orders
+          LEFT JOIN registration_inscription_payment_proofs AS payment_proof
+            ON payment_proof.id = (
+              SELECT latest_proof.id
+              FROM registration_inscription_payment_proofs AS latest_proof
+              WHERE latest_proof.order_id = registration_inscription_orders.id
+              ORDER BY latest_proof.uploaded_at DESC, latest_proof.created_at DESC
+              LIMIT 1
+            )
           ORDER BY updated_at DESC, created_at DESC
         `,
       )
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithProof(db, order)));
+    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithJoinedProof(db, order)));
   } catch (error) {
     if (isMissingRegistrationInscriptionOrdersTable(error)) {
       return [];
@@ -3402,14 +3597,30 @@ async function getAllRegistrationShopOrders(db) {
     const { results = [] } = await db
       .prepare(
         `
-          SELECT *
+          SELECT
+            registration_shop_orders.*,
+            payment_proof.id AS proof_id,
+            payment_proof.file_name AS proof_file_name,
+            payment_proof.content_type AS proof_content_type,
+            payment_proof.file_size AS proof_file_size,
+            payment_proof.data_url AS proof_data_url,
+            payment_proof.status AS proof_status,
+            payment_proof.uploaded_at AS proof_uploaded_at
           FROM registration_shop_orders
+          LEFT JOIN registration_shop_payment_proofs AS payment_proof
+            ON payment_proof.id = (
+              SELECT latest_proof.id
+              FROM registration_shop_payment_proofs AS latest_proof
+              WHERE latest_proof.order_id = registration_shop_orders.id
+              ORDER BY latest_proof.uploaded_at DESC, latest_proof.created_at DESC
+              LIMIT 1
+            )
           ORDER BY updated_at DESC, created_at DESC
         `,
       )
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationShopOrderWithProof(db, order)));
+    return Promise.all(results.map((order) => serializeRegistrationShopOrderWithJoinedProof(db, order)));
   } catch (error) {
     if (isMissingRegistrationShopOrdersTable(error)) {
       return [];
@@ -3510,6 +3721,32 @@ async function getRegistrationDances(db, academyId) {
   return serializeRegistrationDances(db, academyId, dances);
 }
 
+async function getAllRegistrationProgramDances(db) {
+  try {
+    const { results: dances = [] } = await db
+      .prepare(
+        `
+          SELECT
+            registration_dances.*,
+            registration_academies.name AS academy_name
+          FROM registration_dances
+          INNER JOIN registration_academies
+            ON registration_academies.id = registration_dances.academy_id
+          ORDER BY registration_dances.created_at DESC
+        `,
+      )
+      .all();
+
+    return serializeRegistrationProgramDances(db, dances);
+  } catch (error) {
+    if (isMissingRegistrationDancesTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 async function getRegistrationDanceById(db, academyId, danceId) {
   const dance = await db
     .prepare(
@@ -3607,6 +3844,58 @@ async function serializeRegistrationDances(db, academyId, dances) {
     choreographers: choreographersByDance.get(dance.id) || [],
     participants: participantsByDance.get(dance.id) || [],
     musicUpload: musicUploadsByDance.get(dance.id) || null,
+  }));
+}
+
+async function serializeRegistrationProgramDances(db, dances) {
+  if (dances.length === 0) {
+    return [];
+  }
+
+  const danceIds = new Set(dances.map((dance) => dance.id));
+  const { results: choreographers = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_dance_choreographers.dance_id,
+          registration_choreographers.id,
+          registration_choreographers.full_name
+        FROM registration_dance_choreographers
+        INNER JOIN registration_choreographers
+          ON registration_choreographers.id = registration_dance_choreographers.choreographer_id
+      `,
+    )
+    .all();
+  const { results: participants = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_dance_participants.dance_id,
+          registration_participants.id,
+          registration_participants.full_name,
+          registration_participants.division,
+          registration_participants.shirt_size
+        FROM registration_dance_participants
+        INNER JOIN registration_participants
+          ON registration_participants.id = registration_dance_participants.participant_id
+      `,
+    )
+    .all();
+  const choreographersByDance = groupRegistrationRelations(choreographers, danceIds);
+  const participantsByDance = groupRegistrationRelations(participants, danceIds);
+
+  return dances.map((dance) => ({
+    academyName: dance.academy_name,
+    id: dance.id,
+    title: dance.title,
+    genre: dance.genre,
+    subgenre: dance.subgenre,
+    category: dance.category,
+    level: dance.level,
+    venue: dance.venue,
+    createdAt: dance.created_at,
+    choreographers: choreographersByDance.get(dance.id) || [],
+    participants: participantsByDance.get(dance.id) || [],
   }));
 }
 
@@ -4001,10 +4290,26 @@ async function serializeRegistrationInscriptionOrderWithProof(db, order) {
   };
 }
 
+async function serializeRegistrationInscriptionOrderWithJoinedProof(db, order) {
+  return {
+    ...serializeRegistrationInscriptionOrder(order),
+    proof: serializeJoinedRegistrationPaymentProof(order),
+    tickets: await getRegistrationEventTicketsForSource(db, "registration", order.id),
+  };
+}
+
 async function serializeRegistrationShopOrderWithProof(db, order) {
   return {
     ...serializeRegistrationShopOrder(order),
     proof: await getLatestRegistrationShopPaymentProof(db, order.id),
+    tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
+  };
+}
+
+async function serializeRegistrationShopOrderWithJoinedProof(db, order) {
+  return {
+    ...serializeRegistrationShopOrder(order),
+    proof: serializeJoinedRegistrationPaymentProof(order),
     tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
   };
 }
@@ -4089,6 +4394,22 @@ function serializeRegistrationPaymentProof(proof) {
   };
 }
 
+function serializeJoinedRegistrationPaymentProof(row) {
+  if (!row.proof_id) {
+    return null;
+  }
+
+  return {
+    id: row.proof_id,
+    fileName: row.proof_file_name,
+    contentType: row.proof_content_type,
+    fileSize: Number(row.proof_file_size || 0),
+    dataUrl: row.proof_data_url,
+    status: row.proof_status,
+    uploadedAt: row.proof_uploaded_at,
+  };
+}
+
 function serializePublicRegistrationInscriptionLookup(lookup) {
   const { academyId, order, ...publicLookup } = lookup;
 
@@ -4138,6 +4459,7 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     paidAt: order.paidAt,
     reviewedAt: order.reviewedAt,
     rejectionMessage: order.rejectionMessage,
+    proof: order.proof ?? null,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
@@ -4158,6 +4480,10 @@ function isMissingRegistrationInscriptionOrdersTable(error) {
 
 function isMissingRegistrationShopOrdersTable(error) {
   return String(error?.message || error).includes("registration_shop_orders");
+}
+
+function isMissingRegistrationDancesTable(error) {
+  return String(error?.message || error).includes("registration_dances");
 }
 
 function isMissingRegistrationInscriptionOrderReviewColumns(error) {
@@ -4181,6 +4507,45 @@ function isMissingRegistrationMusicUploadsTable(error) {
   return String(error?.message || error).includes("registration_music_uploads");
 }
 
+async function ensureRegistrationPaymentProofTables(db) {
+  await db
+    .prepare(
+      `
+        CREATE TABLE IF NOT EXISTS registration_inscription_payment_proofs (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES registration_inscription_orders(id) ON DELETE CASCADE,
+          file_name TEXT NOT NULL,
+          content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
+          file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 1800000),
+          data_url TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
+          uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `,
+    )
+    .run();
+  await db
+    .prepare(
+      `
+        CREATE TABLE IF NOT EXISTS registration_shop_payment_proofs (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL REFERENCES registration_shop_orders(id) ON DELETE CASCADE,
+          file_name TEXT NOT NULL,
+          content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
+          file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 1800000),
+          data_url TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
+          uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON registration_shop_payment_proofs(order_id)`).run();
+}
+
 async function ensureRegistrationMusicUploadsTable(db) {
   await db
     .prepare(
@@ -4193,6 +4558,10 @@ async function ensureRegistrationMusicUploadsTable(db) {
           content_type TEXT NOT NULL CHECK (content_type IN ('audio/mpeg', 'audio/mp3')),
           file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 12000000),
           data_url TEXT NOT NULL,
+          storage_provider TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive')),
+          drive_file_id TEXT,
+          drive_web_view_link TEXT,
+          drive_web_content_link TEXT,
           uploaded_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
           uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -4202,20 +4571,351 @@ async function ensureRegistrationMusicUploadsTable(db) {
       `,
     )
     .run();
+  await ensureRegistrationMusicUploadsStorageColumns(db);
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id)`).run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id)`).run();
 }
 
+async function ensureRegistrationMusicUploadsStorageColumns(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_music_uploads)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+  const columns = [
+    {
+      definition: "TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive'))",
+      name: "storage_provider",
+    },
+    { definition: "TEXT", name: "drive_file_id" },
+    { definition: "TEXT", name: "drive_web_view_link" },
+    { definition: "TEXT", name: "drive_web_content_link" },
+  ];
+
+  for (const { definition, name } of columns) {
+    if (!existingColumns.has(name)) {
+      try {
+        await db.prepare(`ALTER TABLE registration_music_uploads ADD COLUMN ${name} ${definition}`).run();
+      } catch (error) {
+        if (!String(error?.message || error).match(/duplicate column name/i)) {
+          throw error;
+        }
+      }
+    }
+  }
+}
+
 function serializeRegistrationMusicUpload(upload) {
+  const storageProvider = upload.storage_provider || (upload.drive_file_id ? "google_drive" : "d1");
+
   return {
     id: upload.id,
     danceId: upload.dance_id,
     fileName: upload.file_name,
     contentType: upload.content_type,
     fileSize: Number(upload.file_size || 0),
-    dataUrl: upload.data_url,
+    dataUrl: upload.data_url || null,
+    driveFileId: upload.drive_file_id || null,
+    driveUrl: upload.drive_web_view_link || upload.drive_web_content_link || null,
+    storageProvider,
     uploadedAt: upload.uploaded_at,
   };
+}
+
+async function storeRegistrationMusicUpload({ dance, env, musicUpload, session }) {
+  const driveConfig = getRegistrationMusicDriveConfig(env);
+
+  if (!driveConfig) {
+    return {
+      dataUrl: musicUpload.dataUrl,
+      driveFileId: null,
+      driveWebContentLink: null,
+      driveWebViewLink: null,
+      storageProvider: "d1",
+    };
+  }
+
+  const driveFile = await uploadRegistrationMusicToGoogleDrive({
+    config: driveConfig,
+    dance,
+    musicUpload,
+    session,
+  });
+
+  return {
+    dataUrl: "",
+    driveFileId: driveFile.id,
+    driveWebContentLink: driveFile.webContentLink || null,
+    driveWebViewLink: driveFile.webViewLink || null,
+    storageProvider: "google_drive",
+  };
+}
+
+function getRegistrationMusicDriveConfig(env) {
+  const folderId = optionalString(env.REGISTRATION_MUSIC_DRIVE_FOLDER_ID || env.GOOGLE_DRIVE_MUSIC_FOLDER_ID);
+  const clientEmail = optionalString(env.GOOGLE_DRIVE_CLIENT_EMAIL);
+  const privateKey = optionalString(env.GOOGLE_DRIVE_PRIVATE_KEY);
+  const hasAnyDriveConfig = Boolean(folderId || clientEmail || privateKey);
+
+  if (!hasAnyDriveConfig) {
+    return null;
+  }
+
+  if (!folderId || !clientEmail || !privateKey) {
+    throwHttpError(
+      "registration_music_drive_not_configured",
+      "Faltan variables de Google Drive para subir música.",
+      500,
+    );
+  }
+
+  return {
+    clientEmail,
+    folderId,
+    privateKey,
+  };
+}
+
+async function uploadRegistrationMusicToGoogleDrive({ config, dance, musicUpload, session }) {
+  const accessToken = await getGoogleDriveAccessToken(config);
+  const fileBytes = dataUrlToUint8Array(musicUpload.dataUrl, musicUpload.contentType);
+  const uploadUrl = new URL("https://www.googleapis.com/upload/drive/v3/files");
+  uploadUrl.searchParams.set("uploadType", "resumable");
+  uploadUrl.searchParams.set("fields", "id,webViewLink,webContentLink");
+
+  const metadata = {
+    mimeType: musicUpload.contentType,
+    name: buildRegistrationMusicDriveFileName({ dance, musicUpload, session }),
+    parents: [config.folderId],
+  };
+  const startResponse = await fetch(uploadUrl.toString(), {
+    body: JSON.stringify(metadata),
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json; charset=UTF-8",
+      "x-upload-content-length": String(fileBytes.byteLength),
+      "x-upload-content-type": musicUpload.contentType,
+    },
+    method: "POST",
+  });
+
+  if (!startResponse.ok) {
+    const detail = await startResponse.text().catch(() => "");
+    console.warn("Google Drive music upload session failed", {
+      detail,
+      status: startResponse.status,
+    });
+    throwHttpError("registration_music_drive_upload_failed", "No pudimos iniciar la subida a Google Drive.", 502);
+  }
+
+  const resumableUrl = startResponse.headers.get("location");
+
+  if (!resumableUrl) {
+    throwHttpError("registration_music_drive_upload_failed", "Google Drive no devolvió URL de subida.", 502);
+  }
+
+  const uploadResponse = await fetch(resumableUrl, {
+    body: fileBytes,
+    headers: {
+      "content-type": musicUpload.contentType,
+    },
+    method: "PUT",
+  });
+
+  if (!uploadResponse.ok) {
+    const detail = await uploadResponse.text().catch(() => "");
+    console.warn("Google Drive music upload failed", {
+      detail,
+      status: uploadResponse.status,
+    });
+    throwHttpError("registration_music_drive_upload_failed", "No pudimos subir la música a Google Drive.", 502);
+  }
+
+  const payload = await uploadResponse.json().catch(() => ({}));
+
+  if (!payload.id) {
+    throwHttpError("registration_music_drive_upload_failed", "Google Drive no devolvió el archivo creado.", 502);
+  }
+
+  return payload;
+}
+
+async function getGoogleDriveAccessToken(config) {
+  return getGoogleAccessToken({
+    authFailureCode: "registration_music_drive_auth_failed",
+    authFailureMessage: "No pudimos autenticar Google Drive.",
+    config,
+    scope: registrationGoogleDriveScope,
+  });
+}
+
+async function getGoogleOAuthAccessToken({ authFailureCode, authFailureMessage, config }) {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: config.refreshToken,
+    }),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    console.warn("Google OAuth auth failed", {
+      detail,
+      status: response.status,
+    });
+    throwHttpError(authFailureCode, authFailureMessage, 502);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!payload.access_token) {
+    throwHttpError(authFailureCode, "Google no devolvió token de acceso.", 502);
+  }
+
+  return payload.access_token;
+}
+
+async function getGoogleAccessToken({ authFailureCode, authFailureMessage, config, scope, subject = "" }) {
+  const assertion = await createGoogleServiceAccountAssertion({ config, scope, subject });
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    body: new URLSearchParams({
+      assertion,
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    }),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    console.warn("Google auth failed", {
+      detail,
+      scope,
+      status: response.status,
+      subject: subject || null,
+    });
+    throwHttpError(authFailureCode, authFailureMessage, 502);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!payload.access_token) {
+    throwHttpError(authFailureCode, "Google no devolvió token de acceso.", 502);
+  }
+
+  return payload.access_token;
+}
+
+async function createGoogleServiceAccountAssertion({ config, scope, subject = "" }) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now,
+    iss: config.clientEmail,
+    scope,
+  };
+
+  if (subject) {
+    payload.sub = subject;
+  }
+
+  const unsignedToken = [
+    base64UrlEncodeJson({ alg: "RS256", typ: "JWT" }),
+    base64UrlEncodeJson(payload),
+  ].join(".");
+  const privateKey = await importGoogleServiceAccountPrivateKey(config.privateKey);
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    privateKey,
+    new TextEncoder().encode(unsignedToken),
+  );
+
+  return `${unsignedToken}.${base64UrlEncodeBytes(new Uint8Array(signature))}`;
+}
+
+async function importGoogleServiceAccountPrivateKey(privateKey) {
+  const normalizedPrivateKey = privateKey
+    .replace(/\\n/g, "\n")
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+
+  return crypto.subtle.importKey(
+    "pkcs8",
+    base64ToUint8Array(normalizedPrivateKey),
+    {
+      hash: "SHA-256",
+      name: "RSASSA-PKCS1-v1_5",
+    },
+    false,
+    ["sign"],
+  );
+}
+
+function buildRegistrationMusicDriveFileName({ dance, musicUpload, session }) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const parts = [
+    session.academy.name,
+    getRegistrationVenueLabel(session.academy.venue),
+    dance.title,
+    musicUpload.fileName.replace(/\.mp3$/i, ""),
+    timestamp,
+  ].map(sanitizeRegistrationDriveFileNamePart);
+  const name = parts.filter(Boolean).join(" - ");
+
+  return `${name || "Levitate musica"}.mp3`;
+}
+
+function sanitizeRegistrationDriveFileNamePart(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\\/:*?"<>|#%{}~&]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
+function dataUrlToUint8Array(dataUrl, contentType) {
+  const prefix = `data:${contentType};base64,`;
+
+  if (!dataUrl.startsWith(prefix)) {
+    throwHttpError("invalid_music_file", "La canción no coincide con el formato MP3", 400);
+  }
+
+  return base64ToUint8Array(dataUrl.slice(prefix.length));
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function base64UrlEncodeJson(value) {
+  return base64UrlEncodeBytes(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+function base64UrlEncodeBytes(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function serializeRegistrationStudentResource(resource) {

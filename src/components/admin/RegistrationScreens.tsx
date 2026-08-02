@@ -43,9 +43,9 @@ import {
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
-type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "program" | "feedback" | "payments";
+type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
-type RegistrationAdminDashboardSection = "payments" | "tickets";
+type RegistrationAdminDashboardSection = "payments" | "program" | "tickets";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error";
 
@@ -138,11 +138,15 @@ type RegistrationMusicUpload = {
   fileName: string;
   contentType: string;
   fileSize: number;
-  dataUrl: string;
+  dataUrl?: string | null;
+  driveFileId?: string | null;
+  driveUrl?: string | null;
+  storageProvider?: "d1" | "google_drive" | string;
   uploadedAt: string;
 };
 
 type RegistrationDance = {
+  academyName?: string;
   id: string;
   title: string;
   genre: string;
@@ -263,6 +267,10 @@ type RegistrationAdminOrdersPayload = {
   totals: RegistrationAdminOrderTotals;
 };
 
+type RegistrationAdminProgramPayload = {
+  dances: RegistrationDance[];
+};
+
 type TicketDashboardRow = {
   activeTickets: number;
   academyName: string;
@@ -345,7 +353,6 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
   { label: "Subir música", icon: Upload, screen: "music" },
-  { label: "Programa", icon: ClipboardList, screen: "program" },
   { label: "Feedback", icon: MessageCircle, screen: "feedback" },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
@@ -361,6 +368,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { label: "Pagos", icon: CreditCard, section: "payments" },
   { label: "Órdenes", icon: ClipboardList },
   { label: "Inscripciones", icon: FileText },
+  { label: "Programa", icon: ClipboardList, section: "program" },
   { label: "Boletos", icon: Ticket, section: "tickets" },
   { label: "Foto/Video", icon: Music2 },
   { label: "Hojas de jueceo", icon: BadgeCheck },
@@ -1032,14 +1040,14 @@ function toProgramHtmlValue(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-function buildProgramRows(dances: RegistrationDance[], academyName: string) {
+function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "") {
   return dances
     .map((dance) => {
       const division = getDanceProgramDivision(dance);
       const block = getProgramBlock(dance, division);
 
       return {
-        academyName,
+        academyName: dance.academyName || fallbackAcademyName,
         blockId: block.id,
         blockTitle: block.title,
         category: dance.category,
@@ -3353,7 +3361,15 @@ function DanceRegistrationPanel({
   );
 }
 
-function ProgramPanel({ academyName, dances }: { academyName: string; dances: RegistrationDance[] }) {
+function ProgramPanel({
+  academyName = "",
+  dances,
+  emptyMessage = "Todavía no hay coreografías para armar el programa.",
+}: {
+  academyName?: string;
+  dances: RegistrationDance[];
+  emptyMessage?: string;
+}) {
   const programRows = useMemo(() => buildProgramRows(dances, academyName), [academyName, dances]);
   const programBlocks = useMemo(() => buildProgramBlocks(programRows), [programRows]);
   const totalRows = programRows.length;
@@ -3415,7 +3431,7 @@ function ProgramPanel({ academyName, dances }: { academyName: string; dances: Re
         </section>
       ))}
 
-      {totalRows === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreografías para armar el programa.</p> : null}
+      {totalRows === 0 ? <p className="levitate-admin-empty-state">{emptyMessage}</p> : null}
     </section>
   );
 }
@@ -3563,7 +3579,18 @@ function MusicUploadPanel({
             <span>{getOptionLabel(danceGenres, selectedDance.genre)}</span>
             <strong>{selectedDance.title}</strong>
             <p>{selectedDance.participants.map((participant) => participant.fullName).join(", ") || "Sin participantes asignados"}</p>
-            <small>{currentMusicUpload ? `Música actual: ${currentMusicUpload.fileName}` : `${suggestedFileName}.mp3`}</small>
+            <small>
+              {currentMusicUpload
+                ? `Música actual: ${currentMusicUpload.fileName}${
+                    currentMusicUpload.storageProvider === "google_drive" ? " · Google Drive" : ""
+                  }`
+                : `${suggestedFileName}.mp3`}
+            </small>
+            {currentMusicUpload?.driveUrl ? (
+              <a className="levitate-admin-music-link" href={currentMusicUpload.driveUrl} target="_blank" rel="noreferrer">
+                Abrir archivo en Drive
+              </a>
+            ) : null}
           </div>
         ) : null}
 
@@ -3785,6 +3812,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 } = {}) {
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
+  const [programDances, setProgramDances] = useState<RegistrationDance[]>([]);
   const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -3796,6 +3824,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [adminError, setAdminError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isProgramLoading, setIsProgramLoading] = useState(false);
 
   const loadAdminOrders = useCallback(async () => {
     setIsLoading(true);
@@ -3813,9 +3842,29 @@ export function LevitateRegistrationAdminPaymentsRoute({
     }
   }, []);
 
+  const loadAdminProgram = useCallback(async () => {
+    setIsProgramLoading(true);
+    setAdminError("");
+
+    try {
+      const payload = await requestRegistrationApi<RegistrationAdminProgramPayload>("/api/registration/admin/program");
+      setProgramDances(payload.dances);
+    } catch (error) {
+      setAdminError(getErrorMessage(error, "No se pudo cargar el programa."));
+    } finally {
+      setIsProgramLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadAdminOrders();
   }, [loadAdminOrders]);
+
+  useEffect(() => {
+    if (activeSection === "program") {
+      void loadAdminProgram();
+    }
+  }, [activeSection, loadAdminProgram]);
 
   useEffect(() => {
     if (!selectedOrderId) {
@@ -3874,6 +3923,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const ticketTotals = useMemo(() => getTicketDashboardTotals(filteredTicketRows), [filteredTicketRows]);
   const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
   const isTicketSection = activeSection === "tickets";
+  const isProgramSection = activeSection === "program";
 
   const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
     setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
@@ -3886,9 +3936,17 @@ export function LevitateRegistrationAdminPaymentsRoute({
     setSelectedOrderId("");
 
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", section === "tickets" ? "/admin/boletos" : "/admin/inscripciones");
+      const nextPath = section === "tickets" ? "/admin/boletos" : section === "program" ? "/admin/programa" : "/admin/inscripciones";
+      window.history.replaceState(null, "", nextPath);
     }
   };
+
+  const headerTitle = isTicketSection ? "Boletos" : isProgramSection ? "Programa" : "Pagos";
+  const headerDescription = isTicketSection
+    ? "Boletos pedidos por niño, estado de pago y QR generados"
+    : isProgramSection
+      ? "Orden de salida global con coreografías de todas las academias"
+      : "Revisión y confirmación de comprobantes";
 
   return (
     <main className="registration-admin-dashboard">
@@ -3925,30 +3983,37 @@ export function LevitateRegistrationAdminPaymentsRoute({
       <section className="registration-admin-workspace">
         <header className="registration-admin-header">
           <div>
-            <h1>{isTicketSection ? "Boletos" : "Pagos"}</h1>
-            <p>{isTicketSection ? "Boletos pedidos por niño, estado de pago y QR generados" : "Revisión y confirmación de comprobantes"}</p>
+            <h1>{headerTitle}</h1>
+            <p>{headerDescription}</p>
           </div>
-          <button
-            className="registration-admin-export"
-            disabled={isTicketSection ? filteredTicketRows.length === 0 : filteredOrders.length === 0}
-            onClick={() => {
-              if (isTicketSection) {
-                downloadTicketDashboardCsv(filteredTicketRows);
-                return;
-              }
+          {!isProgramSection ? (
+            <button
+              className="registration-admin-export"
+              disabled={isTicketSection ? filteredTicketRows.length === 0 : filteredOrders.length === 0}
+              onClick={() => {
+                if (isTicketSection) {
+                  downloadTicketDashboardCsv(filteredTicketRows);
+                  return;
+                }
 
-              downloadRegistrationOrdersCsv(filteredOrders);
-            }}
-            type="button"
-          >
-            <Download aria-hidden="true" size={16} />
-            Exportar
-          </button>
+                downloadRegistrationOrdersCsv(filteredOrders);
+              }}
+              type="button"
+            >
+              <Download aria-hidden="true" size={16} />
+              Exportar
+            </button>
+          ) : null}
         </header>
 
         {adminError ? <p className="registration-admin-alert">{adminError}</p> : null}
 
-        {isTicketSection ? (
+        {isProgramSection ? (
+          <ProgramPanel
+            dances={programDances}
+            emptyMessage={isProgramLoading ? "Cargando programa..." : "Todavía no hay coreografías para armar el programa."}
+          />
+        ) : isTicketSection ? (
           <>
             <section className="registration-admin-summary registration-admin-summary--tickets" aria-label="Resumen de boletos por niño">
               <article>
@@ -4766,10 +4831,6 @@ function getAdminScreen({
         participants={participants}
       />
     );
-  }
-
-  if (screen === "program") {
-    return <ProgramPanel academyName={session.academy.name} dances={dances} />;
   }
 
   if (screen === "music") {

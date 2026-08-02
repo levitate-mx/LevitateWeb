@@ -22360,6 +22360,20 @@ button {
   line-height: 1.35;
 }
 
+.levitate-admin-music-link {
+  justify-self: start;
+  color: var(--admin-pink);
+  font-size: 0.86rem;
+  font-weight: 820;
+  letter-spacing: 0;
+  text-decoration: none;
+}
+
+.levitate-admin-music-link:hover,
+.levitate-admin-music-link:focus-visible {
+  text-decoration: underline;
+}
+
 .levitate-admin-music-dropzone {
   position: relative;
   display: grid;

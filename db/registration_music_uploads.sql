@@ -13,5 +13,10 @@ CREATE TABLE IF NOT EXISTS registration_music_uploads (
   UNIQUE (dance_id)
 );
 
+ALTER TABLE registration_music_uploads ADD COLUMN storage_provider TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive'));
+ALTER TABLE registration_music_uploads ADD COLUMN drive_file_id TEXT;
+ALTER TABLE registration_music_uploads ADD COLUMN drive_web_view_link TEXT;
+ALTER TABLE registration_music_uploads ADD COLUMN drive_web_content_link TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id);
