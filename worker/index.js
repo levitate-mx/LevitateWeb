@@ -6,7 +6,7 @@ const registrationEmailVerificationMaxAgeMinutes = 60 * 24 * 2;
 const registrationPasswordResetMaxAgeMinutes = 60;
 const registrationVenues = new Set(["cdmx", "puebla", "edomex"]);
 const registrationDivisions = new Set(["baby", "mini", "petite", "junior", "teen", "adulto", "senior", "legacy", "releve"]);
-const registrationShirtSizes = new Set(["6", "8", "10", "12", "xs", "s", "m", "l"]);
+const registrationShirtSizes = new Set(["6_8", "10_12", "xs", "s", "m", "l", "xl"]);
 const registrationGenres = new Set(["aereo", "motion"]);
 const registrationSubgenresByGenre = {
   aereo: new Set([
@@ -28,6 +28,56 @@ const registrationCategoriesByGenre = {
   aereo: new Set(["solo", "dupla_1_aparato", "duo_2_aparatos", "terna_1_aparato", "trio_3_aparatos"]),
   motion: new Set(["solo", "duo", "trio", "grupo"]),
 };
+const registrationDriveGenreLabels = {
+  aereo: "Aerial",
+  motion: "Motion",
+};
+const registrationDriveSubgenreLabels = {
+  acrojazz: "ACROJAZZ",
+  aro: "ARO",
+  ballet: "BALLET",
+  belly_dance: "BELLY DANCE",
+  contemporaneo: "CONTEMPORANEO",
+  folklore: "FOLKLORE",
+  jazz: "JAZZ",
+  lirico: "LIRICO",
+  open_aerial: "OPEN AERIAL",
+  open_cuna: "OPEN Cuna",
+  open_esfera: "OPEN Esfera",
+  open_luna: "OPEN Luna",
+  open_motion: "OPEN MOTION",
+  open_otro: "OPEN Otro",
+  open_pole_aereo: "OPEN Pole Aereo",
+  open_suspension_capilar: "OPEN Suspension Capilar",
+  open_trapecio: "OPEN Trapecio",
+  tela: "TELA",
+  trapecio: "TRAPECIO",
+  urbanos: "URBANOS",
+};
+const registrationDriveCategoryLabels = {
+  duo: "Duo",
+  duo_2_aparatos: "Duo 2 Aparatos",
+  dupla_1_aparato: "Duplas 1 Aparato",
+  grupo: "Grupo",
+  solo: "Solo",
+  terna_1_aparato: "Ternas 1 Aparato",
+  trio: "Trio",
+  trio_3_aparatos: "Trios 3 Aparatos",
+};
+const registrationDriveDivisionLabels = {
+  baby: "Baby",
+  legacy: "Legacy",
+  petite: "Petite",
+  releve: "Releve",
+  senior: "Senior",
+  junior: "Junior",
+  teen: "Teen",
+};
+const registrationDriveLegacyDivisionMap = {
+  adulto: "senior",
+  mini: "petite",
+};
+const registrationDriveDivisionOrder = ["baby", "petite", "junior", "teen", "senior", "legacy", "releve"];
 const registrationCategoryParticipantRequirements = {
   solo: 1,
   duo: 2,
@@ -1777,12 +1827,10 @@ function getDb(env) {
 }
 
 async function sendRegistrationConfirmationEmail({ env, request, session, verificationUrl }) {
-  const venueLabel = getRegistrationVenueLabel(session.academy.venue);
   const subject = "Confirma tu correo | Levitate MX";
   const html = buildRegistrationConfirmationHtml({
     name: session.user.name,
     academy: session.academy.name,
-    venue: venueLabel,
     verificationUrl,
   });
   const text = [
@@ -1790,7 +1838,6 @@ async function sendRegistrationConfirmationEmail({ env, request, session, verifi
     "",
     "Recibimos el registro de tu academia en el panel Levitate MX.",
     `Academia: ${session.academy.name}`,
-    `Sede: ${venueLabel}`,
     "",
     "Para activar el acceso, confirma tu correo con este enlace:",
     verificationUrl,
@@ -2045,10 +2092,9 @@ function chunkBase64(value) {
   return value.match(/.{1,76}/g)?.join("\r\n") || "";
 }
 
-function buildRegistrationConfirmationHtml({ name, academy, venue, verificationUrl }) {
+function buildRegistrationConfirmationHtml({ name, academy, verificationUrl }) {
   const safeName = escapeHtml(name);
   const safeAcademy = escapeHtml(academy);
-  const safeVenue = escapeHtml(venue);
   const safeVerificationUrl = escapeHtml(verificationUrl);
 
   return `<!doctype html>
@@ -2075,12 +2121,8 @@ function buildRegistrationConfirmationHtml({ name, academy, venue, verificationU
                 <p style="margin:0 0 18px;font-size:16px;line-height:1.55;">Recibimos el registro de tu academia. Para activar el acceso al panel, confirma que este correo es correcto.</p>
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;border:1px solid rgba(17,16,21,.12);border-radius:8px;">
                   <tr>
-                    <td style="padding:14px 16px;border-bottom:1px solid rgba(17,16,21,.1);font-size:14px;color:rgba(17,16,21,.64);">Academia</td>
-                    <td style="padding:14px 16px;border-bottom:1px solid rgba(17,16,21,.1);font-size:14px;font-weight:700;text-align:right;">${safeAcademy}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:14px 16px;font-size:14px;color:rgba(17,16,21,.64);">Sede</td>
-                    <td style="padding:14px 16px;font-size:14px;font-weight:700;text-align:right;">${safeVenue}</td>
+                    <td style="padding:14px 16px;font-size:14px;color:rgba(17,16,21,.64);">Academia</td>
+                    <td style="padding:14px 16px;font-size:14px;font-weight:700;text-align:right;">${safeAcademy}</td>
                   </tr>
                 </table>
                 <p style="margin:0 0 26px;font-size:16px;line-height:1.55;">Este enlace expira en 48 horas. Si no solicitaste este registro, puedes ignorar este mensaje.</p>
@@ -4709,7 +4751,7 @@ async function uploadRegistrationMusicToGoogleDrive({ config, dance, musicUpload
 
   const metadata = {
     mimeType: musicUpload.contentType,
-    name: buildRegistrationMusicDriveFileName({ dance, musicUpload, session }),
+    name: buildRegistrationMusicDriveFileName({ dance, session }),
     parents: [config.folderId],
   };
   const startResponse = await fetch(uploadUrl.toString(), {
@@ -4893,18 +4935,55 @@ async function importGoogleServiceAccountPrivateKey(privateKey) {
   );
 }
 
-function buildRegistrationMusicDriveFileName({ dance, musicUpload, session }) {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+function buildRegistrationMusicDriveFileName({ dance, session }) {
+  const modalityAndGenre = [
+    getRegistrationDriveOptionLabel(registrationDriveGenreLabels, dance.genre),
+    getRegistrationDriveOptionLabel(registrationDriveSubgenreLabels, dance.subgenre),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const division = getRegistrationMusicDriveDivision(dance);
   const parts = [
-    session.academy.name,
-    getRegistrationVenueLabel(session.academy.venue),
     dance.title,
-    musicUpload.fileName.replace(/\.mp3$/i, ""),
-    timestamp,
+    session.academy.name,
+    modalityAndGenre,
+    getRegistrationDriveOptionLabel(registrationDriveCategoryLabels, dance.category),
+    registrationDriveDivisionLabels[division] || "Sin division",
   ].map(sanitizeRegistrationDriveFileNamePart);
   const name = parts.filter(Boolean).join(" - ");
 
   return `${name || "Levitate musica"}.mp3`;
+}
+
+function getRegistrationMusicDriveDivision(dance) {
+  const divisions = Array.isArray(dance.participants)
+    ? dance.participants.map((participant) => participant.division).filter(Boolean)
+    : [];
+
+  if (divisions.length === 0) {
+    return "";
+  }
+
+  const [highestDivision = ""] = divisions.sort(
+    (left, right) => getRegistrationDriveDivisionRank(right) - getRegistrationDriveDivisionRank(left),
+  );
+
+  return normalizeRegistrationDriveDivision(highestDivision);
+}
+
+function getRegistrationDriveDivisionRank(division) {
+  const index = registrationDriveDivisionOrder.indexOf(normalizeRegistrationDriveDivision(division));
+  return index === -1 ? 999 : index;
+}
+
+function normalizeRegistrationDriveDivision(division) {
+  const value = String(division || "").trim();
+  return registrationDriveLegacyDivisionMap[value] || value;
+}
+
+function getRegistrationDriveOptionLabel(labels, value) {
+  const key = String(value || "").trim();
+  return labels[key] || key.replace(/_/g, " ");
 }
 
 function sanitizeRegistrationDriveFileNamePart(value) {

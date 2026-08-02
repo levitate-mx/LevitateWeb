@@ -388,14 +388,13 @@ const divisions: FieldOption[] = [
 ];
 
 const shirtSizes: FieldOption[] = [
-  { value: "6", label: "6 años" },
-  { value: "8", label: "8 años" },
-  { value: "10", label: "10 años" },
-  { value: "12", label: "12 años" },
+  { value: "6_8", label: "6/8 años" },
+  { value: "10_12", label: "10/12" },
   { value: "xs", label: "XS" },
   { value: "s", label: "S" },
   { value: "m", label: "M" },
   { value: "l", label: "L" },
+  { value: "xl", label: "XL" },
 ];
 
 const danceGenres: FieldOption[] = [
@@ -3094,7 +3093,7 @@ function ParticipantRegistrationPanel({
           />
         </AdminField>
         <AdminField icon={Shirt} label="Talla playera">
-          <AdminSelect defaultValue="8" id="participant-shirt" name="shirtSize" options={shirtSizes} />
+          <AdminSelect defaultValue="6_8" id="participant-shirt" name="shirtSize" options={shirtSizes} />
         </AdminField>
         <label className="levitate-admin-check-card">
           <input name="isReleveTeacher" type="checkbox" />

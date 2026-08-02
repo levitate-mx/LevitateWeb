@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS registration_recognition_documents (
   choreographer_id TEXT REFERENCES registration_choreographers(id) ON DELETE SET NULL,
   dance_id TEXT REFERENCES registration_dances(id) ON DELETE SET NULL,
   dance_title TEXT,
-  shirt_size TEXT CHECK (shirt_size IS NULL OR shirt_size IN ('6', '8', '10', '12', 'xs', 's', 'm', 'l')),
+  shirt_size TEXT CHECK (shirt_size IS NULL OR shirt_size IN ('6_8', '10_12', 'xs', 's', 'm', 'l', 'xl')),
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'generated', 'sent', 'cancelled')),
   file_url TEXT,
   notes TEXT,

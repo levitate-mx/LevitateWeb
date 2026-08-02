@@ -10,7 +10,9 @@ CREATE TABLE registration_participants_next (
   birth_date TEXT,
   age INTEGER CHECK (age IS NULL OR (age >= 0 AND age <= 120)),
   division TEXT NOT NULL CHECK (division IN ('baby', 'mini', 'petite', 'junior', 'teen', 'adulto', 'senior', 'legacy', 'releve')),
-  shirt_size TEXT NOT NULL CHECK (shirt_size IN ('6', '8', '10', '12', 'xs', 's', 'm', 'l')),
+  shirt_size TEXT NOT NULL CHECK (shirt_size IN ('6_8', '10_12', 'xs', 's', 'm', 'l', 'xl')),
+  is_international INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1)),
+  is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1)),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -26,6 +28,8 @@ INSERT INTO registration_participants_next (
   age,
   division,
   shirt_size,
+  is_international,
+  is_releve_teacher,
   created_by_user_id,
   created_at,
   updated_at
@@ -38,7 +42,13 @@ SELECT
   birth_date,
   age,
   division,
-  shirt_size,
+  CASE
+    WHEN shirt_size IN ('6', '8') THEN '6_8'
+    WHEN shirt_size IN ('10', '12') THEN '10_12'
+    ELSE shirt_size
+  END,
+  is_international,
+  is_releve_teacher,
   created_by_user_id,
   created_at,
   updated_at
