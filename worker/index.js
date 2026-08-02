@@ -4612,8 +4612,8 @@ function serializeRegistrationMusicUpload(upload) {
     contentType: upload.content_type,
     fileSize: Number(upload.file_size || 0),
     dataUrl: upload.data_url || null,
-    driveFileId: upload.drive_file_id || null,
-    driveUrl: upload.drive_web_view_link || upload.drive_web_content_link || null,
+    driveFileId: null,
+    driveUrl: null,
     storageProvider,
     uploadedAt: upload.uploaded_at,
   };

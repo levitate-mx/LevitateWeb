@@ -3202,6 +3202,7 @@ function DanceRegistrationPanel({
   const [selectedCategory, setSelectedCategory] = useState(defaultDanceCategory);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const subgenreOptions = danceSubgenresByGenre[selectedGenre] ?? danceSubgenresByGenre[defaultDanceGenre];
   const categoryOptions = danceCategoriesByGenre[selectedGenre] ?? danceCategoriesByGenre[defaultDanceGenre];
@@ -3227,8 +3228,7 @@ function DanceRegistrationPanel({
   const cannotSave =
     isSaving ||
     choreographers.length === 0 ||
-    participants.length === 0 ||
-    Boolean(choreographerSelectionMessage || participantSelectionMessage);
+    participants.length === 0;
 
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
@@ -3245,6 +3245,7 @@ function DanceRegistrationPanel({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    setHasAttemptedSubmit(true);
     setStatusMessage("");
     setErrorMessage("");
 
@@ -3277,6 +3278,7 @@ function DanceRegistrationPanel({
       setSelectedCategory(defaultDanceCategory);
       setSelectedChoreographerIds([]);
       setSelectedParticipantIds([]);
+      setHasAttemptedSubmit(false);
       setStatusMessage("Coreografía guardada en la base.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo guardar la coreografía."));
@@ -3349,8 +3351,8 @@ function DanceRegistrationPanel({
 
         <div className="levitate-admin-form__wide-block">
           <AdminStatusMessage message={statusMessage} />
-          <AdminStatusMessage message={choreographerSelectionMessage} tone="error" />
-          <AdminStatusMessage message={participantSelectionMessage} tone="error" />
+          <AdminStatusMessage message={hasAttemptedSubmit ? choreographerSelectionMessage : ""} tone="error" />
+          <AdminStatusMessage message={hasAttemptedSubmit ? participantSelectionMessage : ""} tone="error" />
           <AdminStatusMessage message={errorMessage} tone="error" />
         </div>
         <div className="levitate-admin-form__actions">
@@ -3586,11 +3588,6 @@ function MusicUploadPanel({
                   }`
                 : `${suggestedFileName}.mp3`}
             </small>
-            {currentMusicUpload?.driveUrl ? (
-              <a className="levitate-admin-music-link" href={currentMusicUpload.driveUrl} target="_blank" rel="noreferrer">
-                Abrir archivo en Drive
-              </a>
-            ) : null}
           </div>
         ) : null}
 
