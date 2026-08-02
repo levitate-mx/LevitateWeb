@@ -4650,12 +4650,38 @@ async function storeRegistrationMusicUpload({ dance, env, musicUpload, session }
 
 function getRegistrationMusicDriveConfig(env) {
   const folderId = optionalString(env.REGISTRATION_MUSIC_DRIVE_FOLDER_ID || env.GOOGLE_DRIVE_MUSIC_FOLDER_ID);
+  const oauthClientId = optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_ID || env.GMAIL_OAUTH_CLIENT_ID);
+  const oauthClientSecret = optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET || env.GMAIL_OAUTH_CLIENT_SECRET);
+  const oauthRefreshToken = optionalString(env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN);
+  const hasAnyDriveOauthConfig = Boolean(
+    optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_ID) ||
+      optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET) ||
+      oauthRefreshToken,
+  );
   const clientEmail = optionalString(env.GOOGLE_DRIVE_CLIENT_EMAIL);
   const privateKey = optionalString(env.GOOGLE_DRIVE_PRIVATE_KEY);
-  const hasAnyDriveConfig = Boolean(folderId || clientEmail || privateKey);
+  const hasAnyDriveConfig = Boolean(folderId || hasAnyDriveOauthConfig || clientEmail || privateKey);
 
   if (!hasAnyDriveConfig) {
     return null;
+  }
+
+  if (hasAnyDriveOauthConfig) {
+    if (!folderId || !oauthClientId || !oauthClientSecret || !oauthRefreshToken) {
+      throwHttpError(
+        "registration_music_drive_not_configured",
+        "Faltan variables de Google Drive OAuth para subir música.",
+        500,
+      );
+    }
+
+    return {
+      authType: "oauth_refresh_token",
+      clientId: oauthClientId,
+      clientSecret: oauthClientSecret,
+      folderId,
+      refreshToken: oauthRefreshToken,
+    };
   }
 
   if (!folderId || !clientEmail || !privateKey) {
@@ -4667,6 +4693,7 @@ function getRegistrationMusicDriveConfig(env) {
   }
 
   return {
+    authType: "service_account",
     clientEmail,
     folderId,
     privateKey,
@@ -4738,6 +4765,14 @@ async function uploadRegistrationMusicToGoogleDrive({ config, dance, musicUpload
 }
 
 async function getGoogleDriveAccessToken(config) {
+  if (config.authType === "oauth_refresh_token") {
+    return getGoogleOAuthAccessToken({
+      authFailureCode: "registration_music_drive_auth_failed",
+      authFailureMessage: "No pudimos autenticar Google Drive.",
+      config,
+    });
+  }
+
   return getGoogleAccessToken({
     authFailureCode: "registration_music_drive_auth_failed",
     authFailureMessage: "No pudimos autenticar Google Drive.",
