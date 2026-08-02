@@ -225,20 +225,13 @@ const demoInscriptionLookup: InscriptionLookup = {
 
 const paymentMethodSections = [
   {
-    id: "banamex",
-    title: "Banamex",
+    id: "bbva",
+    title: "BBVA",
     rows: [
-      { label: "A nombre de", value: "María Laura Ponce" },
-      { label: "Número de cuenta", value: "26988 - Sucursal 4770" },
-      { label: "CLABE interbancaria", value: "002540477000269880" },
-    ],
-  },
-  {
-    id: "spin",
-    title: "Spin by Oxxo",
-    rows: [
-      { label: "A nombre de", value: "Rodolfo Javier Serrano" },
-      { label: "CLABE interbancaria", value: "728969000061103602" },
+      { label: "A nombre de", value: "Daniel Emiliano Jaimes Ponce" },
+      { label: "Banco", value: "BBVA" },
+      { label: "CLABE interbancaria", value: "012180015274110441" },
+      { label: "Tarjeta", value: "4152313990777117" },
     ],
   },
 ];
@@ -1320,7 +1313,7 @@ function InscriptionLookupPanel() {
     const scrollTop = window.scrollY;
     const restoreScroll = () => window.scrollTo({ behavior: "auto", left: scrollLeft, top: scrollTop });
 
-    setSelectedPaymentMethodId("");
+    setSelectedPaymentMethodId(paymentMethodSections[0]?.id ?? "");
     setIsTransferVisible(true);
     window.requestAnimationFrame(() => {
       restoreScroll();

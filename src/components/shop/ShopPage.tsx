@@ -279,13 +279,13 @@ const boxOfficeSteps = [
 
 const paymentMethods = [
   {
-    id: "banco-azteca",
-    title: "Banco Azteca",
+    id: "bbva",
+    title: "BBVA",
     rows: [
-      { label: "A nombre de", value: "Alexia Sofía Jaimes Ponce" },
-      { label: "Banco", value: "Banco Azteca" },
-      { label: "Número de cuenta", value: "42291362894301" },
-      { label: "CLABE interbancaria", value: "127540013628943018" },
+      { label: "A nombre de", value: "Daniel Emiliano Jaimes Ponce" },
+      { label: "Banco", value: "BBVA" },
+      { label: "CLABE interbancaria", value: "012180015274110441" },
+      { label: "Tarjeta", value: "4152313990777117" },
     ],
   },
 ];
