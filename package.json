@@ -29,6 +29,8 @@
     "db:migrate:registration:auth:local": "wrangler d1 execute levitate-passport --local --file db/registration_auth_tokens.sql",
     "db:migrate:registration:aerial-open-subgenres": "wrangler d1 execute levitate-passport --remote --file db/registration_aerial_open_subgenres.sql",
     "db:migrate:registration:aerial-open-subgenres:local": "wrangler d1 execute levitate-passport --local --file db/registration_aerial_open_subgenres.sql",
+    "db:migrate:registration:remove-aerial-trapecio": "wrangler d1 execute levitate-passport --remote --file db/registration_remove_aerial_trapecio.sql",
+    "db:migrate:registration:remove-aerial-trapecio:local": "wrangler d1 execute levitate-passport --local --file db/registration_remove_aerial_trapecio.sql",
     "db:migrate:registration:recognition-documents": "wrangler d1 execute levitate-passport --remote --file db/registration_recognition_documents.sql",
     "db:migrate:registration:recognition-documents:local": "wrangler d1 execute levitate-passport --local --file db/registration_recognition_documents.sql",
     "db:migrate:registration:music-uploads": "wrangler d1 execute levitate-passport --remote --file db/registration_music_uploads.sql",

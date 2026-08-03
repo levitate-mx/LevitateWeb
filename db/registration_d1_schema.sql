@@ -217,7 +217,6 @@ CREATE TABLE IF NOT EXISTS registration_dances (
     subgenre IN (
       'aro',
       'tela',
-      'trapecio',
       'open_aerial',
       'open_trapecio',
       'open_cuna',

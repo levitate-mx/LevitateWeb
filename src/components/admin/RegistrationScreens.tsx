@@ -406,7 +406,6 @@ const danceSubgenresByGenre: Record<string, FieldOption[]> = {
   aereo: [
     { value: "aro", label: "ARO" },
     { value: "tela", label: "TELA" },
-    { value: "trapecio", label: "TRAPECIO" },
     { value: "open_aerial", label: "OPEN: AERIAL" },
     { value: "open_trapecio", label: "OPEN: Trapecio" },
     { value: "open_cuna", label: "OPEN: Cuna" },

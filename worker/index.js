@@ -12,7 +12,6 @@ const registrationSubgenresByGenre = {
   aereo: new Set([
     "aro",
     "tela",
-    "trapecio",
     "open_aerial",
     "open_trapecio",
     "open_cuna",
@@ -51,7 +50,6 @@ const registrationDriveSubgenreLabels = {
   open_suspension_capilar: "OPEN Suspension Capilar",
   open_trapecio: "OPEN Trapecio",
   tela: "TELA",
-  trapecio: "TRAPECIO",
   urbanos: "URBANOS",
 };
 const registrationDriveCategoryLabels = {
