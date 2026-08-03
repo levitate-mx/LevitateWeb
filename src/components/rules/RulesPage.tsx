@@ -247,7 +247,7 @@ const rulesContent: Record<RulesModality, RulesContent> = {
     heroEyebrow: "MODALIDAD",
     heroTitle: { text: "Levitate", accent: "Aerial" },
     heroIntro: [
-      "Evaluación clara para telas, aro, trapecio y propuestas open.",
+      "Evaluación clara para telas, aro y propuestas open.",
       "Técnica, ejecución y performance se leen de acuerdo con aparato, división y nivel.",
     ],
     heroImage: assets.communityAerial,
@@ -276,10 +276,6 @@ const aerialCompetitionGenres = [
   {
     title: "Aro",
     text: "Trabajo sobre un aro aéreo en el que se trabaja equilibrio, líneas corporales, control y presencia aérea.",
-  },
-  {
-    title: "Trapecio",
-    text: "Figuras, balanceos y transiciones sobre barra suspendida, con fuerza, control y limpieza técnica.",
   },
   {
     title: "Open",

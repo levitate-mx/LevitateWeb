@@ -61,7 +61,7 @@ const sharedGenres = [
   {
     title: "Aerial",
     description: "Formatos aéreos con técnica, presencia y control escénico.",
-    items: ["Tela", "Aro", "Trapecio", "Cuerda", "Cintas", "Cadenas", "Espiral", "Luna", "Pole"],
+    items: ["Tela", "Aro", "Cuerda", "Cintas", "Cadenas", "Espiral", "Luna", "Pole"],
   },
   {
     title: "Motion",
