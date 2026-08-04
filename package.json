@@ -41,6 +41,8 @@
     "db:migrate:registration:shop-orders:local": "wrangler d1 execute levitate-passport --local --file db/registration_shop_orders.sql",
     "db:migrate:registration:event-venues": "wrangler d1 execute levitate-passport --remote --file db/registration_event_venues.sql",
     "db:migrate:registration:event-venues:local": "wrangler d1 execute levitate-passport --local --file db/registration_event_venues.sql",
+    "db:migrate:registration:shop-buyer-contact": "wrangler d1 execute levitate-passport --remote --file db/registration_shop_order_buyer_contact.sql",
+    "db:migrate:registration:shop-buyer-contact:local": "wrangler d1 execute levitate-passport --local --file db/registration_shop_order_buyer_contact.sql",
     "db:migrate:registration:user-roles": "wrangler d1 execute levitate-passport --remote --file db/registration_user_roles.sql",
     "db:migrate:registration:user-roles:local": "wrangler d1 execute levitate-passport --local --file db/registration_user_roles.sql",
     "db:migrate": "npm run db:migrate:codi",

@@ -1328,7 +1328,7 @@ function PhotoVideoShopPage() {
     setIsParticipantLookupLoading(true);
 
     try {
-      const response = await fetch("/api/registration/inscription/lookup", {
+      const response = await fetch("/api/registration/inscription/payment-lookup", {
         body: JSON.stringify({ curp: normalizedCurp }),
         headers: { "content-type": "application/json" },
         method: "POST",

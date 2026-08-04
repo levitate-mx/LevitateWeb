@@ -1297,6 +1297,7 @@ async function handleRegistrationShopOrder(request, env) {
     const db = getDb(env);
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
+    const buyerContact = getRegistrationShopBuyerContact(body);
     const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
 
     if (curp.length !== 18) {
@@ -1304,6 +1305,7 @@ async function handleRegistrationShopOrder(request, env) {
     }
 
     const order = await createRegistrationShopOrder(db, {
+      buyerContact,
       buyerPhoneContact,
       curp,
       discountCode: optionalString(body.discountCode),
@@ -2985,7 +2987,9 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
   };
 }
 
-async function createRegistrationShopOrder(db, { buyerPhoneContact, curp, discountCode, items }) {
+async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact, curp, discountCode, items }) {
+  await ensureRegistrationShopOrderBuyerContactColumns(db);
+
   const participant = await getRegistrationShopParticipantByCurp(db, curp);
   const normalizedCart = normalizeRegistrationShopCart(items, discountCode);
   const reference = await createRegistrationShopReference(db, curp);
@@ -3004,6 +3008,8 @@ async function createRegistrationShopOrder(db, { buyerPhoneContact, curp, discou
           reference,
           amount,
           payment_method,
+          buyer_name,
+          buyer_email,
           buyer_phone_country_code,
           buyer_phone_number,
           buyer_phone,
@@ -3011,7 +3017,7 @@ async function createRegistrationShopOrder(db, { buyerPhoneContact, curp, discou
           discount_amount,
           line_items_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .bind(
@@ -3023,6 +3029,8 @@ async function createRegistrationShopOrder(db, { buyerPhoneContact, curp, discou
       participant.venue,
       reference,
       normalizedCart.amount,
+      buyerContact.name,
+      buyerContact.email,
       buyerPhoneContact.countryCode,
       buyerPhoneContact.number,
       buyerPhoneContact.phone,
@@ -4357,6 +4365,45 @@ function getRegistrationBuyerPhoneContact(body) {
   };
 }
 
+function getRegistrationShopBuyerContact(body) {
+  const name = optionalString(body.buyerName ?? body.name ?? body.buyerFullName);
+  const email = optionalEmail(body.buyerEmail ?? body.email);
+
+  if (!name) {
+    throwHttpError("invalid_buyer_name", "Ingresa el nombre del titular o responsable.", 400);
+  }
+
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+    throwHttpError("invalid_buyer_email", "Ingresa un correo válido.", 400);
+  }
+
+  return {
+    email,
+    name,
+  };
+}
+
+async function ensureRegistrationShopOrderBuyerContactColumns(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_shop_orders)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+  const requiredColumns = [
+    ["buyer_name", "TEXT"],
+    ["buyer_email", "TEXT"],
+  ];
+
+  for (const [name, definition] of requiredColumns) {
+    if (!existingColumns.has(name)) {
+      try {
+        await db.prepare(`ALTER TABLE registration_shop_orders ADD COLUMN ${name} ${definition}`).run();
+      } catch (error) {
+        if (!String(error?.message || error).match(/duplicate column name/i)) {
+          throw error;
+        }
+      }
+    }
+  }
+}
+
 async function ensureRegistrationInscriptionOrderBuyerPhoneColumns(db) {
   const { results = [] } = await db.prepare("PRAGMA table_info(registration_inscription_orders)").all();
   const existingColumns = new Set(results.map((column) => column.name));
@@ -4503,6 +4550,8 @@ function serializeRegistrationInscriptionOrder(order) {
     status: order.status,
     paymentMethod: order.payment_method,
     lineItems: parseRegistrationOrderLineItems(order.line_items_json),
+    buyerName: order.buyer_name,
+    buyerEmail: order.buyer_email,
     buyerPhoneCountryCode: order.buyer_phone_country_code,
     buyerPhoneNumber: order.buyer_phone_number,
     buyerPhone: order.buyer_phone,
@@ -4532,6 +4581,8 @@ function serializeRegistrationShopOrder(order) {
     status: order.status,
     paymentMethod: order.payment_method,
     lineItems: parseRegistrationOrderLineItems(order.line_items_json),
+    buyerName: order.buyer_name,
+    buyerEmail: order.buyer_email,
     buyerPhoneCountryCode: order.buyer_phone_country_code,
     buyerPhoneNumber: order.buyer_phone_number,
     buyerPhone: order.buyer_phone,

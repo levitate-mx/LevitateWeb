@@ -155,6 +155,8 @@ CREATE TABLE IF NOT EXISTS registration_shop_orders (
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
   payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+  buyer_name TEXT,
+  buyer_email TEXT,
   buyer_phone_country_code TEXT,
   buyer_phone_number TEXT,
   buyer_phone TEXT,

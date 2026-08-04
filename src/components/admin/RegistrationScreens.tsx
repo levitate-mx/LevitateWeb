@@ -247,6 +247,8 @@ type RegistrationInscriptionOrder = {
   status: RegistrationInscriptionOrderStatus;
   paymentMethod: string;
   lineItems?: RegistrationInscriptionLineItem[];
+  buyerName?: string | null;
+  buyerEmail?: string | null;
   buyerPhoneCountryCode?: string | null;
   buyerPhoneNumber?: string | null;
   buyerPhone?: string | null;
@@ -1424,6 +1426,15 @@ function getRegistrationOrderWhatsAppPhone(order: RegistrationInscriptionOrder) 
   return phone.length >= 8 ? phone : "";
 }
 
+function getRegistrationOrderBuyerLabel(order: RegistrationInscriptionOrder) {
+  return order.buyerName || order.buyerPhone || order.participantName;
+}
+
+function getRegistrationOrderBuyerMeta(order: RegistrationInscriptionOrder) {
+  const details = [order.buyerEmail, order.buyerPhone].filter(Boolean);
+  return details.length ? details.join(" · ") : order.curp;
+}
+
 function buildWhatsAppUrl(phone: string, message: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
@@ -2018,6 +2029,8 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   const headers = [
     "Tipo",
     "Referencia",
+    "Comprador",
+    "Correo comprador",
     "CURP",
     "WhatsApp",
     "Participante",
@@ -2037,6 +2050,8 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   const rows = orders.map((order) => [
     getAdminOrderTypeLabel(order),
     getRegistrationInscriptionPaymentReference(order),
+    getRegistrationOrderBuyerLabel(order),
+    order.buyerEmail ?? "",
     order.curp,
     order.buyerPhone ?? "",
     order.participantName,
@@ -2111,6 +2126,8 @@ function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
 function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   const headers = [
     "Referencia",
+    "Comprador",
+    "Correo comprador",
     "CURP",
     "WhatsApp",
     "Participante",
@@ -2126,6 +2143,8 @@ function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   ];
   const csvRows = orders.map((order) => [
     getRegistrationInscriptionPaymentReference(order),
+    getRegistrationOrderBuyerLabel(order),
+    order.buyerEmail ?? "",
     order.curp,
     order.buyerPhone ?? "",
     order.participantName,
@@ -4338,7 +4357,17 @@ export function LevitateRegistrationAdminPaymentsRoute({
       const matchesPurchaseType = purchaseTypeFilter === "all" || getAdminOrderType(order) === purchaseTypeFilter;
       const matchesQuery =
         !normalizedQuery ||
-        [getRegistrationInscriptionPaymentReference(order), order.reference, order.curp, order.participantName, order.academyName, order.venue]
+        [
+          getRegistrationInscriptionPaymentReference(order),
+          order.reference,
+          order.curp,
+          order.participantName,
+          order.buyerName ?? "",
+          order.buyerEmail ?? "",
+          order.buyerPhone ?? "",
+          order.academyName,
+          order.venue,
+        ]
           .join(" ")
           .toLowerCase()
           .includes(normalizedQuery);
@@ -4428,6 +4457,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
           order.reference,
           order.curp,
           order.participantName,
+          order.buyerName ?? "",
+          order.buyerEmail ?? "",
           order.academyName,
           order.buyerPhone ?? "",
           order.venue,
@@ -4972,8 +5003,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           <small>Tienda</small>
                         </span>
                         <span role="cell">
-                          {order.buyerPhone || "Sin WhatsApp"}
-                          <small>{order.curp || "Sin CURP"}</small>
+                          {getRegistrationOrderBuyerLabel(order)}
+                          <small>{getRegistrationOrderBuyerMeta(order)}</small>
                         </span>
                         <span role="cell">{order.participantName}</span>
                         <span role="cell">{order.academyName}</span>
@@ -5133,7 +5164,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           {getRegistrationInscriptionPaymentReference(order)}
                           <small>{getAdminOrderTypeLabel(order)}</small>
                         </span>
-                        <span role="cell">{order.participantName}</span>
+                        <span role="cell">
+                          {getRegistrationOrderBuyerLabel(order)}
+                          <small>{getRegistrationOrderBuyerMeta(order)}</small>
+                        </span>
                         <span role="cell">{order.participantName}</span>
                         <span role="cell">{order.academyName}</span>
                         <span role="cell">{getInscriptionOrderConcept(order)}</span>
