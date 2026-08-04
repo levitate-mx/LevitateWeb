@@ -19698,6 +19698,10 @@ button {
   color: var(--admin-pink);
 }
 
+.registration-admin-summary article:nth-child(5) svg {
+  color: #5c8f72;
+}
+
 .registration-admin-filters {
   display: grid;
   grid-template-columns:
@@ -19863,12 +19867,12 @@ button {
 }
 
 .registration-admin-ticket-table {
-  min-width: 1180px;
+  min-width: 1280px;
 }
 
 .registration-admin-ticket-table .registration-admin-table__head,
 .registration-admin-ticket-table .registration-admin-table__row {
-  grid-template-columns: 1.18fr 1.08fr 1.18fr 0.9fr 0.58fr 0.72fr 0.72fr 0.72fr 0.72fr 1.08fr;
+  grid-template-columns: 1.16fr 1.04fr 1.14fr 0.82fr 0.54fr 1fr 0.68fr 0.64fr 0.64fr 1.04fr;
 }
 
 .registration-admin-media-table .registration-admin-table__head,
@@ -19963,6 +19967,29 @@ button {
 
 .registration-admin-ticket-number--primary {
   color: var(--admin-pink);
+}
+
+.registration-admin-table__row small.registration-admin-ticket-readiness {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 5px;
+  padding: 4px 7px;
+  border: 1px solid rgba(17, 17, 17, 0.14);
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.06);
+  color: rgba(17, 17, 17, 0.64);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.registration-admin-table__row small.registration-admin-ticket-readiness--ready {
+  border-color: rgba(73, 136, 97, 0.35);
+  background: rgba(73, 136, 97, 0.12);
+  color: #35734c;
 }
 
 .registration-admin-status {

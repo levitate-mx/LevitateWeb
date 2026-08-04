@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   AtSign,
   BadgeCheck,
-  BarChart3,
   Building2,
   CalendarDays,
   Camera,
@@ -51,6 +50,8 @@ type AdminLookupTab = "participants" | "choreographers" | "dances";
 type RegistrationAdminDashboardSection = "payments" | "program" | "tickets" | "media" | "registrations";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error";
+
+const TICKET_BLOCK_MINIMUM = 3;
 
 type AdminNavItem = {
   label: string;
@@ -1493,6 +1494,7 @@ function getTicketDashboardTotals(rows: TicketDashboardRow[]) {
   return rows.reduce(
     (totals, row) => ({
       activeTickets: totals.activeTickets + row.activeTickets,
+      blockReadyChildren: totals.blockReadyChildren + (isTicketBlockReady(row) ? 1 : 0),
       childCount: totals.childCount + 1,
       generatedTickets: totals.generatedTickets + row.generatedTickets,
       paidTickets: totals.paidTickets + row.paidTickets,
@@ -1503,6 +1505,7 @@ function getTicketDashboardTotals(rows: TicketDashboardRow[]) {
     }),
     {
       activeTickets: 0,
+      blockReadyChildren: 0,
       childCount: 0,
       generatedTickets: 0,
       paidTickets: 0,
@@ -1514,13 +1517,12 @@ function getTicketDashboardTotals(rows: TicketDashboardRow[]) {
   );
 }
 
-function formatTicketAverage(requestedTickets: number, childCount: number) {
-  if (childCount === 0) {
-    return "0";
-  }
+function isTicketBlockReady(row: TicketDashboardRow) {
+  return row.paidTickets >= TICKET_BLOCK_MINIMUM;
+}
 
-  const average = requestedTickets / childCount;
-  return Number.isInteger(average) ? String(average) : average.toFixed(1);
+function getTicketBlockMissingCount(row: TicketDashboardRow) {
+  return Math.max(0, TICKET_BLOCK_MINIMUM - row.paidTickets);
 }
 
 function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
@@ -1869,12 +1871,13 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
 
 function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
   const headers = [
-    "Niño",
+    "Alumno",
     "CURP",
     "Academia",
     "Sede",
     "Boletos pedidos",
-    "Boletos aprobados",
+    "Boletos confirmados",
+    "Listo para bloque",
     "QR generados",
     "QR activos",
     "QR usados",
@@ -1891,6 +1894,7 @@ function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
     getVenueLabel(row.venue),
     row.requestedTickets,
     row.paidTickets,
+    isTicketBlockReady(row) ? "Sí" : "No",
     row.generatedTickets,
     row.activeTickets,
     row.usedTickets,
@@ -4252,6 +4256,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       const matchesVenue = ticketVenueFilter === "all" || row.venue === ticketVenueFilter;
       const matchesStatus =
         ticketStatusFilter === "all" ||
+        (ticketStatusFilter === "block-ready" && isTicketBlockReady(row)) ||
         (ticketStatusFilter === "paid" && row.paidTickets > 0) ||
         (ticketStatusFilter === "pending" && row.pendingTickets > 0) ||
         (ticketStatusFilter === "rejected" && row.rejectedTickets > 0) ||
@@ -4336,7 +4341,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
   if (isTicketSection) {
     headerTitle = "Boletos";
-    headerDescription = "Boletos pedidos por niño, estado de pago y QR generados";
+    headerDescription = "Boletos confirmados por alumno y quiénes ya llegan a 3+ para bloque de competencia";
   } else if (isProgramSection) {
     headerTitle = "Programa";
     headerDescription = "Orden de salida global con coreografías de todas las academias";
@@ -4598,7 +4603,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           <>
             <section className="registration-admin-summary registration-admin-summary--tickets" aria-label="Resumen de boletos por niño">
               <article>
-                <span>Niños con boleto</span>
+                <span>Alumnos con boleto</span>
                 <strong>{ticketTotals.childCount}</strong>
                 <Users aria-hidden="true" size={24} />
               </article>
@@ -4608,7 +4613,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <Ticket aria-hidden="true" size={24} />
               </article>
               <article>
-                <span>Aprobados</span>
+                <span>Confirmados</span>
                 <strong>{ticketTotals.paidTickets}</strong>
                 <CheckCircle2 aria-hidden="true" size={24} />
               </article>
@@ -4618,9 +4623,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <Clock aria-hidden="true" size={24} />
               </article>
               <article>
-                <span>Promedio por niño</span>
-                <strong>{formatTicketAverage(ticketTotals.requestedTickets, ticketTotals.childCount)}</strong>
-                <BarChart3 aria-hidden="true" size={24} />
+                <span>Listos para bloque</span>
+                <strong>{ticketTotals.blockReadyChildren}</strong>
+                <BadgeCheck aria-hidden="true" size={24} />
               </article>
             </section>
 
@@ -4650,7 +4655,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <span>Estado boletos</span>
                 <select onChange={(event) => setTicketStatusFilter(event.target.value)} value={ticketStatusFilter}>
                   <option value="all">Todos</option>
-                  <option value="paid">Con aprobados</option>
+                  <option value="block-ready">Listos para bloque</option>
+                  <option value="paid">Con confirmados</option>
                   <option value="pending">Con pendientes</option>
                   <option value="rejected">Con rechazados</option>
                   <option value="used">Con QR usados</option>
@@ -4661,14 +4667,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
             <section className="registration-admin-grid">
               <div className="registration-admin-table-card">
-                <div className="registration-admin-table registration-admin-ticket-table" role="table" aria-label="Boletos comprados por niño">
+                <div className="registration-admin-table registration-admin-ticket-table" role="table" aria-label="Boletos comprados por alumno">
                   <div className="registration-admin-table__head" role="row">
-                    <span role="columnheader">Niño</span>
+                    <span role="columnheader">Alumno</span>
                     <span role="columnheader">CURP</span>
                     <span role="columnheader">Academia</span>
                     <span role="columnheader">Sede</span>
                     <span role="columnheader">Pedidos</span>
-                    <span role="columnheader">Comprados</span>
+                    <span role="columnheader">Confirmados</span>
                     <span role="columnheader">QR activos</span>
                     <span role="columnheader">Pendientes</span>
                     <span role="columnheader">Rechazados</span>
@@ -4677,6 +4683,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
                   {visibleTicketRows.map((row) => {
                     const date = getAdminOrderDate({ createdAt: row.updatedAt, updatedAt: row.updatedAt } as RegistrationInscriptionOrder);
+                    const isBlockReady = isTicketBlockReady(row);
 
                     return (
                       <button
@@ -4695,6 +4702,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
                         </span>
                         <span role="cell">
                           <strong className="registration-admin-ticket-number registration-admin-ticket-number--primary">{row.paidTickets}</strong>
+                          <small
+                            className={`registration-admin-ticket-readiness${
+                              isBlockReady ? " registration-admin-ticket-readiness--ready" : ""
+                            }`}
+                          >
+                            {isBlockReady ? "Listo para bloque" : `Faltan ${getTicketBlockMissingCount(row)}`}
+                          </small>
                         </span>
                         <span role="cell">
                           <strong className="registration-admin-ticket-number">{row.activeTickets}</strong>
@@ -4718,7 +4732,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 </div>
                 <footer className="registration-admin-table-footer">
                   <span>
-                    Mostrando {visibleTicketRows.length > 0 ? 1 : 0} a {visibleTicketRows.length} de {filteredTicketRows.length} niños
+                    Mostrando {visibleTicketRows.length > 0 ? 1 : 0} a {visibleTicketRows.length} de {filteredTicketRows.length} alumnos
                   </span>
                   <div>
                     <button disabled type="button">
