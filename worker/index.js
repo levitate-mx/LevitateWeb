@@ -414,10 +414,6 @@ export default {
       return handleRegistrationShopOrder(request, env);
     }
 
-    if (url.pathname === "/api/registration/shop/orders/lookup") {
-      return handleRegistrationShopOrdersLookup(request, env);
-    }
-
     if (url.pathname === "/api/registration/shop/order/proof") {
       return handleRegistrationShopOrderProof(request, env);
     }
@@ -1317,29 +1313,6 @@ async function handleRegistrationShopOrder(request, env) {
     });
 
     return sendJson({ order: await serializeRegistrationShopOrderWithProof(db, order) }, 201);
-  } catch (error) {
-    return sendRegistrationError(error);
-  }
-}
-
-async function handleRegistrationShopOrdersLookup(request, env) {
-  try {
-    assertMethod(request, ["POST"]);
-
-    const db = getDb(env);
-    const body = await readJsonBody(request);
-    const curp = normalizeCurp(requireString(body.curp, "curp"));
-
-    if (curp.length !== 18) {
-      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
-    }
-
-    const orders = await getRegistrationShopOrderRecordsByCurp(db, curp);
-    const serializedOrders = await Promise.all(
-      orders.map(async (order) => serializePublicRegistrationShopOrder(await serializeRegistrationShopOrderWithProof(db, order))),
-    );
-
-    return sendJson({ orders: serializedOrders });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -3016,9 +2989,62 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
 
 async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact, curp, discountCode, items }) {
   await ensureRegistrationShopOrderBuyerContactColumns(db);
+  await ensureRegistrationPaymentProofTables(db);
 
   const participant = await getRegistrationShopParticipantByCurp(db, curp);
   const normalizedCart = normalizeRegistrationShopCart(items, discountCode);
+  const reusableOrder = await getReusableRegistrationShopOrderWithoutProof(db, curp);
+
+  if (reusableOrder) {
+    await db
+      .prepare(
+        `
+          UPDATE registration_shop_orders
+          SET participant_name = ?,
+            academy_id = ?,
+            academy_name = ?,
+            venue = ?,
+            amount = ?,
+            paid_amount = 0,
+            status = 'pending_payment',
+            buyer_name = ?,
+            buyer_email = ?,
+            buyer_phone_country_code = ?,
+            buyer_phone_number = ?,
+            buyer_phone = ?,
+            discount_code = ?,
+            discount_amount = ?,
+            line_items_json = ?,
+            paid_at = NULL,
+            reviewed_by = NULL,
+            reviewed_at = NULL,
+            rejection_reason = NULL,
+            rejection_message = NULL,
+            updated_at = datetime('now')
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        participant.full_name,
+        participant.academy_id || null,
+        participant.academy_name,
+        participant.venue,
+        normalizedCart.amount,
+        buyerContact.name,
+        buyerContact.email,
+        buyerPhoneContact.countryCode,
+        buyerPhoneContact.number,
+        buyerPhoneContact.phone,
+        normalizedCart.discountCode || null,
+        normalizedCart.discountAmount,
+        JSON.stringify(normalizedCart.lineItems),
+        reusableOrder.id,
+      )
+      .run();
+
+    return getRegistrationShopOrderRecordById(db, reusableOrder.id);
+  }
+
   const reference = await createRegistrationShopReference(db, curp);
   const orderId = crypto.randomUUID();
 
@@ -3277,25 +3303,33 @@ async function getRegistrationShopOrderRecordById(db, orderId) {
   return order;
 }
 
-async function getRegistrationShopOrderRecordsByCurp(db, curp) {
-  const { results = [] } = await db
-    .prepare(
-      `
-        SELECT *
-        FROM registration_shop_orders
-        WHERE curp = ?
-        ORDER BY updated_at DESC, created_at DESC
-        LIMIT 25
-      `,
-    )
-    .bind(curp)
-    .all();
+async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
+  try {
+    return await db
+      .prepare(
+        `
+          SELECT registration_shop_orders.*
+          FROM registration_shop_orders
+          WHERE registration_shop_orders.curp = ?
+            AND registration_shop_orders.status IN ('pending_payment', 'rejected')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM registration_shop_payment_proofs
+              WHERE registration_shop_payment_proofs.order_id = registration_shop_orders.id
+            )
+          ORDER BY registration_shop_orders.updated_at DESC, registration_shop_orders.created_at DESC
+          LIMIT 1
+        `,
+      )
+      .bind(curp)
+      .first();
+  } catch (error) {
+    if (isMissingRegistrationShopPaymentProofsTable(error)) {
+      return null;
+    }
 
-  if (results.length === 0) {
-    throwHttpError("registration_shop_order_not_found", "No encontramos órdenes de tienda para esa CURP.", 404);
+    throw error;
   }
-
-  return results;
 }
 
 async function getRegistrationInscriptionOrderRecordById(db, orderId) {
@@ -4827,44 +4861,6 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     proof: order.proof ?? null,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
-  };
-}
-
-function serializePublicRegistrationShopOrder(order) {
-  return {
-    id: order.id,
-    curp: order.curp,
-    participantName: order.participantName,
-    academyName: order.academyName,
-    venue: order.venue,
-    reference: order.reference,
-    amount: order.amount,
-    paidAmount: order.paidAmount,
-    status: order.status,
-    paymentMethod: order.paymentMethod,
-    lineItems: order.lineItems ?? [],
-    buyerPhoneCountryCode: order.buyerPhoneCountryCode,
-    buyerPhoneNumber: order.buyerPhoneNumber,
-    buyerPhone: order.buyerPhone,
-    discountCode: order.discountCode,
-    discountAmount: order.discountAmount,
-    paidAt: order.paidAt,
-    reviewedAt: order.reviewedAt,
-    rejectionMessage: order.rejectionMessage,
-    proof: order.proof ? serializePublicRegistrationPaymentProof(order.proof) : null,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-  };
-}
-
-function serializePublicRegistrationPaymentProof(proof) {
-  return {
-    id: proof.id,
-    fileName: proof.fileName,
-    contentType: proof.contentType,
-    fileSize: proof.fileSize,
-    status: proof.status,
-    uploadedAt: proof.uploadedAt,
   };
 }
 

@@ -80,13 +80,6 @@ type ShopPaymentProof = {
   uploadedAt: string;
 };
 
-type ShopOrderLineItem = {
-  amount?: number;
-  productName?: string;
-  quantity?: number;
-  title?: string;
-};
-
 type ShopOrder = {
   id: string;
   curp: string;
@@ -97,7 +90,6 @@ type ShopOrder = {
   amount: number;
   paidAmount: number;
   status: "pending_payment" | "payment_reported" | "paid" | "rejected";
-  lineItems?: ShopOrderLineItem[];
   proof?: ShopPaymentProof | null;
 };
 
@@ -363,27 +355,12 @@ const mediaVenueLabels: Record<string, string> = {
   veracruz: "Primavera 2027 - Veracruz",
 };
 
-const shopOrderStatusLabels: Record<ShopOrder["status"], string> = {
-  paid: "Pago aprobado",
-  payment_reported: "Comprobante en revisión",
-  pending_payment: "Pendiente de comprobante",
-  rejected: "Pago rechazado",
-};
+const ticketCartCookieName = "levitate_ticket_cart";
+const mediaCartCookieName = "levitate_media_cart";
+const cartCookieMaxAgeSeconds = 60 * 60 * 24 * 30;
 
 function formatCurrency(value: number) {
   return currencyFormatter.format(value);
-}
-
-function getShopOrderStatusLabel(status: ShopOrder["status"]) {
-  return shopOrderStatusLabels[status] ?? "Orden";
-}
-
-function getShopOrderConcept(order: ShopOrder) {
-  const firstItem = order.lineItems?.[0];
-  const firstTitle = firstItem?.title || firstItem?.productName || "Compra de tienda";
-  const extraCount = Math.max((order.lineItems?.length ?? 0) - 1, 0);
-
-  return extraCount > 0 ? `${firstTitle} + ${extraCount}` : firstTitle;
 }
 
 function getProduct(productId: TicketProduct["id"]) {
@@ -400,6 +377,93 @@ function getOption(product: TicketProduct, optionId?: string) {
 
 function getCartItemId(productId: TicketProduct["id"], optionId?: string) {
   return `${productId}:${optionId ?? "general"}`;
+}
+
+function readCookieValue(name: string) {
+  if (typeof document === "undefined") {
+    return "";
+  }
+
+  const prefix = `${name}=`;
+  const cookie = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix));
+  return cookie ? cookie.slice(prefix.length) : "";
+}
+
+function writeCookieValue(name: string, value: string) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${cartCookieMaxAgeSeconds}; Path=/; SameSite=Lax`;
+}
+
+function clearCookieValue(name: string) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+function readCartCookie<T>(name: string, normalizeItem: (item: unknown) => T | null) {
+  const storedValue = readCookieValue(name);
+
+  if (!storedValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(decodeURIComponent(storedValue));
+    return Array.isArray(parsedValue)
+      ? parsedValue.map(normalizeItem).filter((item): item is T => Boolean(item))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCartCookie<T>(name: string, items: T[]) {
+  if (!items.length) {
+    clearCookieValue(name);
+    return;
+  }
+
+  writeCookieValue(name, JSON.stringify(items));
+}
+
+function normalizeStoredTicketCartItem(item: unknown): TicketCartItem | null {
+  const candidate = item as Partial<TicketCartItem> | null;
+  const productId = candidate?.productId;
+  const product = ticketProducts.find((ticketProduct) => ticketProduct.id === productId);
+  const optionId = typeof candidate?.optionId === "string" ? candidate.optionId : undefined;
+  const hasValidOption = !optionId || product?.options?.some((option) => option.id === optionId);
+  const quantity = Number(candidate?.quantity);
+
+  if (!product || !hasValidOption || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+    return null;
+  }
+
+  return {
+    id: getCartItemId(product.id, optionId),
+    optionId,
+    productId: product.id,
+    quantity,
+  };
+}
+
+function normalizeStoredMediaCartItem(item: unknown): MediaCartItem | null {
+  const candidate = item as Partial<MediaCartItem> | null;
+  const product = mediaProducts.find((mediaProduct) => mediaProduct.id === candidate?.id);
+  const quantity = Number(candidate?.quantity);
+
+  if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+    return null;
+  }
+
+  return {
+    id: product.id,
+    quantity,
+  };
 }
 
 function normalizePhone(value: string) {
@@ -553,76 +617,6 @@ export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
   return shopMode === "media" ? <PhotoVideoShopPage /> : <TicketShopPage />;
 }
 
-function ShopOrderLookupPanel({
-  curp,
-  isLoading,
-  onCurpChange,
-  onSelectOrder,
-  onSubmit,
-  orders,
-  selectedOrderId,
-}: {
-  curp: string;
-  isLoading: boolean;
-  onCurpChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onSelectOrder: (order: ShopOrder) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  orders: ShopOrder[];
-  selectedOrderId?: string;
-}) {
-  return (
-    <form className="ticket-shop-buyer ticket-shop-order-lookup" onSubmit={onSubmit}>
-      <header>
-        <FileCheck2 aria-hidden="true" size={22} />
-        <span>Ya tengo una orden</span>
-      </header>
-      <div className="ticket-shop-buyer__notice">
-        <Info aria-hidden="true" size={18} />
-        <span>Consulta por CURP para continuar una compra pendiente y cargar el comprobante.</span>
-      </div>
-      <label>
-        <span>CURP del participante</span>
-        <div>
-          <FileCheck2 aria-hidden="true" size={17} />
-          <input
-            autoCapitalize="characters"
-            autoComplete="off"
-            inputMode="text"
-            maxLength={18}
-            onChange={onCurpChange}
-            type="text"
-            value={curp}
-          />
-        </div>
-      </label>
-      <button disabled={isLoading} type="submit">
-        {isLoading ? "Buscando órdenes..." : "Consultar órdenes"} <ArrowRight aria-hidden="true" size={18} />
-      </button>
-      {orders.length ? (
-        <div className="ticket-shop-order-list" aria-label="Órdenes encontradas">
-          {orders.map((order) => (
-            <button
-              className={selectedOrderId === order.id ? "is-selected" : ""}
-              key={order.id}
-              onClick={() => onSelectOrder(order)}
-              type="button"
-            >
-              <span>
-                <strong>{order.reference}</strong>
-                <small>{getShopOrderConcept(order)}</small>
-              </span>
-              <span>
-                <b>{formatCurrency(order.amount)}</b>
-                <small>{getShopOrderStatusLabel(order.status)}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </form>
-  );
-}
-
 function TicketShopPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
@@ -634,15 +628,14 @@ function TicketShopPage() {
     day: 1,
     full: 1,
   });
-  const [cartItems, setCartItems] = useState<TicketCartItem[]>([]);
+  const [cartItems, setCartItems] = useState<TicketCartItem[]>(() => (
+    readCartCookie(ticketCartCookieName, normalizeStoredTicketCartItem)
+  ));
   const [buyerData, setBuyerData] = useState<BuyerData>({ curp: "", email: "", name: "", whatsapp: "" });
   const [buyerError, setBuyerError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [isOrderLookupLoading, setIsOrderLookupLoading] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
-  const [orderLookupCurp, setOrderLookupCurp] = useState("");
-  const [recoveredOrders, setRecoveredOrders] = useState<ShopOrder[]>([]);
   const [orderReference, setOrderReference] = useState("");
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
@@ -666,6 +659,10 @@ function TicketShopPage() {
   const ticketCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
   const hasUploadedProof = (Boolean(shopOrder?.proof) || isProofSubmitted) && shopOrder?.status !== "rejected";
+
+  useEffect(() => {
+    writeCartCookie(ticketCartCookieName, cartItems);
+  }, [cartItems]);
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -764,68 +761,6 @@ function TicketShopPage() {
     setBuyerError("");
     if (isBuyerConfirmed) {
       markCheckoutDirty();
-    }
-  };
-
-  const updateOrderLookupCurp = (event: ChangeEvent<HTMLInputElement>) => {
-    setOrderLookupCurp(normalizeCurp(event.target.value));
-    setRecoveredOrders([]);
-    setBuyerError("");
-
-    if (isBuyerConfirmed) {
-      markCheckoutDirty();
-    }
-  };
-
-  const selectRecoveredOrder = (order: ShopOrder) => {
-    setShopOrder(order);
-    setOrderReference(order.reference);
-    setBuyerData((current) => ({ ...current, curp: order.curp }));
-    setOrderLookupCurp(order.curp);
-    setIsBuyerConfirmed(true);
-    setProofFileName(order.status === "rejected" ? "" : order.proof?.fileName ?? "");
-    setIsProofSubmitted(Boolean(order.proof) && order.status !== "rejected");
-    setSelectedProofFile(null);
-    setBuyerError("");
-    setProofMessage(
-      order.status === "rejected"
-        ? "Esta orden fue rechazada. Puedes subir un comprobante corregido."
-        : order.proof
-        ? "Esta orden ya tiene un comprobante cargado. Administración revisará tu pago."
-        : "Orden recuperada. Puedes subir el comprobante de transferencia.",
-    );
-  };
-
-  const handleOrderLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const normalizedCurp = normalizeCurp(orderLookupCurp);
-    setOrderLookupCurp(normalizedCurp);
-    setBuyerError("");
-    setProofMessage("");
-
-    if (normalizedCurp.length !== 18) {
-      setBuyerError("Ingresa la CURP completa para consultar sus órdenes.");
-      return;
-    }
-
-    setIsOrderLookupLoading(true);
-
-    try {
-      const payload = await requestShopApi<{ orders: ShopOrder[] }>("/api/registration/shop/orders/lookup", {
-        body: JSON.stringify({ curp: normalizedCurp }),
-        method: "POST",
-      });
-
-      setRecoveredOrders(payload.orders);
-      if (payload.orders.length === 1) {
-        selectRecoveredOrder(payload.orders[0]);
-      }
-    } catch (error) {
-      setRecoveredOrders([]);
-      setBuyerError(error instanceof Error ? error.message : "No pudimos consultar las órdenes.");
-    } finally {
-      setIsOrderLookupLoading(false);
     }
   };
 
@@ -979,6 +914,8 @@ function TicketShopPage() {
       setProofFileName(payload.order.proof?.fileName ?? file.name);
       setIsProofSubmitted(true);
       setSelectedProofFile(null);
+      setCartItems([]);
+      clearCookieValue(ticketCartCookieName);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
@@ -1232,16 +1169,6 @@ function TicketShopPage() {
               </dl>
             </section>
 
-            <ShopOrderLookupPanel
-              curp={orderLookupCurp}
-              isLoading={isOrderLookupLoading}
-              onCurpChange={updateOrderLookupCurp}
-              onSelectOrder={selectRecoveredOrder}
-              onSubmit={handleOrderLookupSubmit}
-              orders={recoveredOrders}
-              selectedOrderId={shopOrder?.id}
-            />
-
             <form className="ticket-shop-buyer" onSubmit={handleBuyerSubmit}>
               <header>
                 <ReceiptText aria-hidden="true" size={22} />
@@ -1316,16 +1243,16 @@ function PhotoVideoShopPage() {
     trio: 1,
     group: 1,
   });
-  const [cartItems, setCartItems] = useState<MediaCartItem[]>([]);
+  const [cartItems, setCartItems] = useState<MediaCartItem[]>(() => (
+    readCartCookie(mediaCartCookieName, normalizeStoredMediaCartItem)
+  ));
   const [buyerData, setBuyerData] = useState<BuyerData>({ curp: "", email: "", name: "", whatsapp: "" });
   const [buyerError, setBuyerError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [isOrderLookupLoading, setIsOrderLookupLoading] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isParticipantLookupLoading, setIsParticipantLookupLoading] = useState(false);
   const [orderReference, setOrderReference] = useState("");
-  const [orderLookupCurp, setOrderLookupCurp] = useState("");
   const [participantLookup, setParticipantLookup] = useState<MediaParticipantLookup | null>(null);
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
@@ -1333,7 +1260,6 @@ function PhotoVideoShopPage() {
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [selectedDanceId, setSelectedDanceId] = useState("");
   const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
-  const [recoveredOrders, setRecoveredOrders] = useState<ShopOrder[]>([]);
   const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = photoVideoPaymentMethods[0];
@@ -1350,6 +1276,10 @@ function PhotoVideoShopPage() {
   const selectedDance = participantLookup?.lines.find((line) => line.id === selectedDanceId) ?? null;
   const activeMediaFeatureSlide = mediaFeatureSlides[mediaFeatureSlideIndex] ?? mediaFeatureSlides[0];
   const hasUploadedProof = (Boolean(shopOrder?.proof) || isProofSubmitted) && shopOrder?.status !== "rejected";
+
+  useEffect(() => {
+    writeCartCookie(mediaCartCookieName, cartItems);
+  }, [cartItems]);
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -1465,68 +1395,6 @@ function PhotoVideoShopPage() {
 
     if (isBuyerConfirmed) {
       markCheckoutDirty();
-    }
-  };
-
-  const updateOrderLookupCurp = (event: ChangeEvent<HTMLInputElement>) => {
-    setOrderLookupCurp(normalizeCurp(event.target.value));
-    setRecoveredOrders([]);
-    setBuyerError("");
-
-    if (isBuyerConfirmed) {
-      markCheckoutDirty();
-    }
-  };
-
-  const selectRecoveredOrder = (order: ShopOrder) => {
-    setShopOrder(order);
-    setOrderReference(order.reference);
-    setBuyerData((current) => ({ ...current, curp: order.curp }));
-    setOrderLookupCurp(order.curp);
-    setIsBuyerConfirmed(true);
-    setProofFileName(order.status === "rejected" ? "" : order.proof?.fileName ?? "");
-    setIsProofSubmitted(Boolean(order.proof) && order.status !== "rejected");
-    setSelectedProofFile(null);
-    setBuyerError("");
-    setProofMessage(
-      order.status === "rejected"
-        ? "Esta orden fue rechazada. Puedes subir un comprobante corregido."
-        : order.proof
-        ? "Esta orden ya tiene un comprobante cargado. Administración revisará tu pago."
-        : "Orden recuperada. Puedes subir el comprobante de transferencia.",
-    );
-  };
-
-  const handleOrderLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const normalizedCurp = normalizeCurp(orderLookupCurp);
-    setOrderLookupCurp(normalizedCurp);
-    setBuyerError("");
-    setProofMessage("");
-
-    if (normalizedCurp.length !== 18) {
-      setBuyerError("Ingresa la CURP completa para consultar sus órdenes.");
-      return;
-    }
-
-    setIsOrderLookupLoading(true);
-
-    try {
-      const payload = await requestShopApi<{ orders: ShopOrder[] }>("/api/registration/shop/orders/lookup", {
-        body: JSON.stringify({ curp: normalizedCurp }),
-        method: "POST",
-      });
-
-      setRecoveredOrders(payload.orders);
-      if (payload.orders.length === 1) {
-        selectRecoveredOrder(payload.orders[0]);
-      }
-    } catch (error) {
-      setRecoveredOrders([]);
-      setBuyerError(error instanceof Error ? error.message : "No pudimos consultar las órdenes.");
-    } finally {
-      setIsOrderLookupLoading(false);
     }
   };
 
@@ -1762,6 +1630,8 @@ function PhotoVideoShopPage() {
       setProofFileName(payload.order.proof?.fileName ?? file.name);
       setIsProofSubmitted(true);
       setSelectedProofFile(null);
+      setCartItems([]);
+      clearCookieValue(mediaCartCookieName);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
@@ -2022,16 +1892,6 @@ function PhotoVideoShopPage() {
                 </div>
               </dl>
             </section>
-
-            <ShopOrderLookupPanel
-              curp={orderLookupCurp}
-              isLoading={isOrderLookupLoading}
-              onCurpChange={updateOrderLookupCurp}
-              onSelectOrder={selectRecoveredOrder}
-              onSubmit={handleOrderLookupSubmit}
-              orders={recoveredOrders}
-              selectedOrderId={shopOrder?.id}
-            />
 
             <form className="ticket-shop-buyer" onSubmit={handleBuyerSubmit}>
               <header>
