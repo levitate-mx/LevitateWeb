@@ -508,7 +508,7 @@ const studentPortalModules = [
     title: "Tienda Levitate",
     text: "Compra boletos y paquetes de fotografía o video por separado.",
     action: "Ir a tienda",
-    href: "/tienda#boletos",
+    href: "/tienda/taquilla",
     icon: ShoppingBag,
   },
   {

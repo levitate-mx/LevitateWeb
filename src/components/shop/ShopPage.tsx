@@ -118,6 +118,8 @@ type ApiErrorResponse = {
   };
 };
 
+type ShopMode = "tickets" | "media";
+
 const demoBuyerData: BuyerData = {
   curp: "LORM950624MDFPZR09",
   email: "demo.taquilla@levitate.mx",
@@ -495,15 +497,20 @@ function getShopModeFromHash() {
     : "tickets";
 }
 
-function useShopMode() {
-  const [shopMode, setShopMode] = useState(getShopModeFromHash);
+function useShopMode(initialMode?: ShopMode) {
+  const [shopMode, setShopMode] = useState<ShopMode>(() => initialMode ?? getShopModeFromHash());
 
   useEffect(() => {
+    if (initialMode) {
+      setShopMode(initialMode);
+      return undefined;
+    }
+
     const updateShopMode = () => setShopMode(getShopModeFromHash());
 
     window.addEventListener("hashchange", updateShopMode);
     return () => window.removeEventListener("hashchange", updateShopMode);
-  }, []);
+  }, [initialMode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -512,8 +519,8 @@ function useShopMode() {
   return shopMode;
 }
 
-export function ShopPage() {
-  const shopMode = useShopMode();
+export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
+  const shopMode = useShopMode(initialMode);
 
   return shopMode === "media" ? <PhotoVideoShopPage /> : <TicketShopPage />;
 }

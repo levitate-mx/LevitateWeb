@@ -49,6 +49,8 @@ export default function App() {
   const passportMatch = window.location.pathname.match(/^\/passport\/?$/);
   const passportStationMatch = window.location.pathname.match(/^\/e\/([^/]+)\/station\/([^/]+)\/?$/);
   const sedesMatch = window.location.pathname.match(/^\/sedes\/?$/);
+  const shopTicketsMatch = window.location.pathname.match(/^\/(?:taquilla|tienda\/(?:boletos|taquilla))\/?$/);
+  const shopMediaMatch = window.location.pathname.match(/^\/(?:foto-video|fotografia-video|fotografia-y-video|tienda\/(?:foto-video|fotografia-video|fotografia-y-video))\/?$/);
   const shopMatch = window.location.pathname.match(/^\/tienda\/?$/);
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
   const venueMatch = window.location.pathname.match(/^\/sedes\/([^/]+)\/?$/);
@@ -152,6 +154,14 @@ export default function App() {
 
   if (sedesMatch) {
     return <SedesPage />;
+  }
+
+  if (shopTicketsMatch) {
+    return <ShopPage initialMode="tickets" />;
+  }
+
+  if (shopMediaMatch) {
+    return <ShopPage initialMode="media" />;
   }
 
   if (shopMatch) {
