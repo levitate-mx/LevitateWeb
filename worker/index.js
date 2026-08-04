@@ -1282,6 +1282,12 @@ async function handleRegistrationShopOrderProof(request, env) {
     }
 
     const order = await getRegistrationShopOrderRecordByIdAndCurp(db, orderId, curp);
+    const existingProof = await getLatestRegistrationShopPaymentProof(db, order.id);
+
+    if (existingProof) {
+      throwHttpError("payment_proof_already_uploaded", "Esta orden ya tiene un comprobante cargado.", 409);
+    }
+
     const proof = getRegistrationPaymentProofInput(body);
 
     await db
@@ -1365,6 +1371,12 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
 }
 
 async function saveRegistrationInscriptionPaymentProof(db, order, body) {
+  const existingProof = await getLatestRegistrationPaymentProof(db, order.id);
+
+  if (existingProof) {
+    throwHttpError("payment_proof_already_uploaded", "Esta orden ya tiene un comprobante cargado.", 409);
+  }
+
   const proof = getRegistrationPaymentProofInput(body);
 
   await db

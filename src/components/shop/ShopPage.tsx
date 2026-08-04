@@ -198,6 +198,7 @@ const mediaFeatureSlides = [
 const mediaFeatureSlideDurationSeconds = 4.5;
 const maxPaymentProofBytes = 1800000;
 const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
+const allowedPaymentProofTypes = paymentProofAccept.split(",");
 
 const mediaDemoParticipantLookup: MediaParticipantLookup = {
   academyName: "Academia Demo Levitate",
@@ -277,7 +278,20 @@ const boxOfficeSteps = [
   },
 ];
 
-const paymentMethods = [
+const ticketPaymentMethods = [
+  {
+    id: "banco-azteca",
+    title: "Banco Azteca",
+    rows: [
+      { label: "A nombre de", value: "Alexia Sofía Jaimes Ponce" },
+      { label: "Banco", value: "Banco Azteca" },
+      { label: "Número de cuenta", value: "42291362894301" },
+      { label: "CLABE interbancaria", value: "127540013628943018" },
+    ],
+  },
+];
+
+const photoVideoPaymentMethods = [
   {
     id: "bbva",
     title: "BBVA",
@@ -384,10 +398,24 @@ async function requestShopApi<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+function getPaymentProofFileError(file: File) {
+  if (file.size > maxPaymentProofBytes) {
+    return "El comprobante debe pesar menos de 1.8 MB.";
+  }
+
+  if (!allowedPaymentProofTypes.includes(file.type)) {
+    return "Sube una imagen JPG, PNG, WEBP o un PDF.";
+  }
+
+  return "";
+}
+
 function readPaymentProofFile(file: File) {
   return new Promise<{ contentType: string; dataUrl: string; fileName: string; fileSize: number }>((resolve, reject) => {
-    if (file.size > maxPaymentProofBytes) {
-      reject(new Error("El comprobante debe pesar menos de 1.8 MB."));
+    const validationError = getPaymentProofFileError(file);
+
+    if (validationError) {
+      reject(new Error(validationError));
       return;
     }
 
@@ -510,9 +538,11 @@ function TicketShopPage() {
   const [orderReference, setOrderReference] = useState("");
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
+  const [isProofSubmitted, setIsProofSubmitted] = useState(false);
+  const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
-  const selectedPaymentMethod = paymentMethods[0];
+  const selectedPaymentMethod = ticketPaymentMethods[0];
   const cartLines = useMemo(
     () =>
       cartItems.map((item) => {
@@ -527,6 +557,7 @@ function TicketShopPage() {
   );
   const ticketCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+  const hasUploadedProof = Boolean(shopOrder?.proof) || isProofSubmitted;
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -552,6 +583,8 @@ function TicketShopPage() {
   const clearPaymentProof = () => {
     setProofFileName("");
     setProofMessage("");
+    setIsProofSubmitted(false);
+    setSelectedProofFile(null);
     if (proofInputRef.current) {
       proofInputRef.current.value = "";
     }
@@ -688,6 +721,8 @@ function TicketShopPage() {
       setShopOrder(payload.order);
       setOrderReference(payload.order.reference);
       setIsBuyerConfirmed(true);
+      setProofFileName(payload.order.proof?.fileName ?? "");
+      setIsProofSubmitted(Boolean(payload.order.proof));
       setProofMessage("Orden generada. Usa esta referencia como concepto de transferencia.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos generar la orden.");
@@ -696,25 +731,66 @@ function TicketShopPage() {
     }
   };
 
-  const handleProofFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0] ?? null;
+
+    if (hasUploadedProof) {
+      setSelectedProofFile(null);
+      input.value = "";
+      return;
+    }
 
     if (!file) {
-      setProofFileName("");
+      setSelectedProofFile(null);
       setProofMessage("");
       return;
     }
 
     if (!shopOrder) {
-      setProofFileName("");
+      setSelectedProofFile(null);
       setProofMessage("");
+      setBuyerError("Primero genera la orden de pago.");
+      input.value = "";
+      return;
+    }
+
+    const validationError = getPaymentProofFileError(file);
+
+    if (validationError) {
+      setSelectedProofFile(null);
+      setProofMessage("");
+      setBuyerError(validationError);
+      input.value = "";
+      return;
+    }
+
+    setSelectedProofFile(file);
+    setBuyerError("");
+    setProofMessage("");
+    input.value = "";
+  };
+
+  const handleProofSubmit = async () => {
+    if (hasUploadedProof) {
+      setSelectedProofFile(null);
+      return;
+    }
+
+    if (!selectedProofFile) {
+      proofInputRef.current?.click();
+      return;
+    }
+
+    if (!shopOrder) {
       setBuyerError("Primero genera la orden de pago.");
       return;
     }
 
+    const file = selectedProofFile;
+
     setIsUploadingProof(true);
     setBuyerError("");
-    setProofFileName(file.name);
     setProofMessage("");
 
     try {
@@ -730,6 +806,9 @@ function TicketShopPage() {
 
       setShopOrder(payload.order);
       setOrderReference(payload.order.reference);
+      setProofFileName(payload.order.proof?.fileName ?? file.name);
+      setIsProofSubmitted(true);
+      setSelectedProofFile(null);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
@@ -793,20 +872,38 @@ function TicketShopPage() {
         </div>
       </dl>
 
-      <div className="ticket-shop-proof">
-        <input
-          accept={paymentProofAccept}
-          onChange={handleProofFileChange}
-          ref={proofInputRef}
-          type="file"
-        />
-        <button disabled={isUploadingProof} onClick={() => proofInputRef.current?.click()} type="button">
-          <UploadCloud aria-hidden="true" size={20} />
-          {isUploadingProof ? "Subiendo comprobante..." : "Subir captura de transferencia"}
-        </button>
-        {proofFileName ? <strong>{proofFileName}</strong> : null}
-        {proofMessage ? <p>{proofMessage}</p> : null}
-      </div>
+      {hasUploadedProof ? (
+        <div className="ticket-shop-proof">
+          <strong>Comprobante cargado</strong>
+          {proofFileName ? <p>{proofFileName}</p> : null}
+          {proofMessage ? <p>{proofMessage}</p> : null}
+        </div>
+      ) : (
+        <div className="ticket-shop-proof">
+          <input
+            accept={paymentProofAccept}
+            onChange={handleProofFileChange}
+            ref={proofInputRef}
+            type="file"
+          />
+          <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
+            <UploadCloud aria-hidden="true" size={20} />
+            {isUploadingProof ? "Subiendo comprobante..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
+          </button>
+          {selectedProofFile ? <strong>{selectedProofFile.name}</strong> : null}
+          {selectedProofFile ? (
+            <button
+              className="ticket-shop-proof__change"
+              disabled={isUploadingProof}
+              onClick={() => proofInputRef.current?.click()}
+              type="button"
+            >
+              Cambiar archivo
+            </button>
+          ) : null}
+          {proofMessage ? <p>{proofMessage}</p> : null}
+        </div>
+      )}
 
       <div className="ticket-shop-confirmation-note">
         <ShieldCheck aria-hidden="true" size={21} />
@@ -1050,11 +1147,13 @@ function PhotoVideoShopPage() {
   const [participantLookup, setParticipantLookup] = useState<MediaParticipantLookup | null>(null);
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
+  const [isProofSubmitted, setIsProofSubmitted] = useState(false);
+  const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [selectedDanceId, setSelectedDanceId] = useState("");
   const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
   const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
-  const selectedPaymentMethod = paymentMethods[0];
+  const selectedPaymentMethod = photoVideoPaymentMethods[0];
   const cartLines = useMemo(
     () =>
       cartItems.map((item) => ({
@@ -1067,6 +1166,7 @@ function PhotoVideoShopPage() {
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
   const selectedDance = participantLookup?.lines.find((line) => line.id === selectedDanceId) ?? null;
   const activeMediaFeatureSlide = mediaFeatureSlides[mediaFeatureSlideIndex] ?? mediaFeatureSlides[0];
+  const hasUploadedProof = Boolean(shopOrder?.proof) || isProofSubmitted;
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -1106,6 +1206,8 @@ function PhotoVideoShopPage() {
   const clearPaymentProof = () => {
     setProofFileName("");
     setProofMessage("");
+    setIsProofSubmitted(false);
+    setSelectedProofFile(null);
     if (proofInputRef.current) {
       proofInputRef.current.value = "";
     }
@@ -1317,6 +1419,8 @@ function PhotoVideoShopPage() {
       setShopOrder(payload.order);
       setOrderReference(payload.order.reference);
       setIsBuyerConfirmed(true);
+      setProofFileName(payload.order.proof?.fileName ?? "");
+      setIsProofSubmitted(Boolean(payload.order.proof));
       setProofMessage("Orden generada. Usa esta referencia como concepto de transferencia.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos generar la orden.");
@@ -1325,25 +1429,66 @@ function PhotoVideoShopPage() {
     }
   };
 
-  const handleProofFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleProofFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0] ?? null;
+
+    if (hasUploadedProof) {
+      setSelectedProofFile(null);
+      input.value = "";
+      return;
+    }
 
     if (!file) {
-      setProofFileName("");
+      setSelectedProofFile(null);
       setProofMessage("");
       return;
     }
 
     if (!shopOrder) {
-      setProofFileName("");
+      setSelectedProofFile(null);
       setProofMessage("");
+      setBuyerError("Primero genera la orden de pago.");
+      input.value = "";
+      return;
+    }
+
+    const validationError = getPaymentProofFileError(file);
+
+    if (validationError) {
+      setSelectedProofFile(null);
+      setProofMessage("");
+      setBuyerError(validationError);
+      input.value = "";
+      return;
+    }
+
+    setSelectedProofFile(file);
+    setBuyerError("");
+    setProofMessage("");
+    input.value = "";
+  };
+
+  const handleProofSubmit = async () => {
+    if (hasUploadedProof) {
+      setSelectedProofFile(null);
+      return;
+    }
+
+    if (!selectedProofFile) {
+      proofInputRef.current?.click();
+      return;
+    }
+
+    if (!shopOrder) {
       setBuyerError("Primero genera la orden de pago.");
       return;
     }
 
+    const file = selectedProofFile;
+
     setIsUploadingProof(true);
     setBuyerError("");
-    setProofFileName(file.name);
     setProofMessage("");
 
     try {
@@ -1359,6 +1504,9 @@ function PhotoVideoShopPage() {
 
       setShopOrder(payload.order);
       setOrderReference(payload.order.reference);
+      setProofFileName(payload.order.proof?.fileName ?? file.name);
+      setIsProofSubmitted(true);
+      setSelectedProofFile(null);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
@@ -1428,20 +1576,38 @@ function PhotoVideoShopPage() {
         ) : null}
       </dl>
 
-      <div className="ticket-shop-proof">
-        <input
-          accept={paymentProofAccept}
-          onChange={handleProofFileChange}
-          ref={proofInputRef}
-          type="file"
-        />
-        <button disabled={isUploadingProof} onClick={() => proofInputRef.current?.click()} type="button">
-          <UploadCloud aria-hidden="true" size={20} />
-          {isUploadingProof ? "Subiendo comprobante..." : "Subir captura de transferencia"}
-        </button>
-        {proofFileName ? <strong>{proofFileName}</strong> : null}
-        {proofMessage ? <p>{proofMessage}</p> : null}
-      </div>
+      {hasUploadedProof ? (
+        <div className="ticket-shop-proof">
+          <strong>Comprobante cargado</strong>
+          {proofFileName ? <p>{proofFileName}</p> : null}
+          {proofMessage ? <p>{proofMessage}</p> : null}
+        </div>
+      ) : (
+        <div className="ticket-shop-proof">
+          <input
+            accept={paymentProofAccept}
+            onChange={handleProofFileChange}
+            ref={proofInputRef}
+            type="file"
+          />
+          <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
+            <UploadCloud aria-hidden="true" size={20} />
+            {isUploadingProof ? "Subiendo comprobante..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
+          </button>
+          {selectedProofFile ? <strong>{selectedProofFile.name}</strong> : null}
+          {selectedProofFile ? (
+            <button
+              className="ticket-shop-proof__change"
+              disabled={isUploadingProof}
+              onClick={() => proofInputRef.current?.click()}
+              type="button"
+            >
+              Cambiar archivo
+            </button>
+          ) : null}
+          {proofMessage ? <p>{proofMessage}</p> : null}
+        </div>
+      )}
 
       <div className="ticket-shop-confirmation-note">
         <ShieldCheck aria-hidden="true" size={21} />

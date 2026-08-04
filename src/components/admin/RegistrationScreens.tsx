@@ -1214,10 +1214,10 @@ function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reaso
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
 
   const messages: Record<RegistrationPaymentRejectionReason, string> = {
-    incomplete_amount: `No pudimos aprobar tu pago porque el monto recibido no cubre el total de la orden ${paymentReference}. El total correcto es ${amount}. Te reenviamos los datos de transferencia para completar el pago y volver a subir tu comprobante.`,
-    invalid_or_unreadable_proof: `No pudimos aprobar tu pago porque el comprobante de la orden ${paymentReference} no es legible o no corresponde al pago. Te reenviamos los datos de transferencia para que puedas revisar la operación y subir el comprobante correcto.`,
+    incomplete_amount: `No pudimos aprobar tu pago porque el monto recibido no cubre el total de la orden ${paymentReference}. El total correcto es ${amount}. Te reenviamos los datos de transferencia para completar el pago y contactar a administración con el seguimiento de la diferencia.`,
+    invalid_or_unreadable_proof: `No pudimos aprobar tu pago porque el comprobante de la orden ${paymentReference} no es legible o no corresponde al pago. Te reenviamos los datos de transferencia para que puedas revisar la operación y contactar a administración con la corrección.`,
     missing_proof: `No pudimos aprobar tu pago porque falta subir el comprobante de la orden ${paymentReference}. Te reenviamos los datos de transferencia para que puedas realizar o confirmar el pago y cargar el comprobante.`,
-    payment_not_found: `No pudimos aprobar tu pago porque no encontramos una transferencia asociada a la referencia ${paymentReference}. Te reenviamos los datos de transferencia para que puedas realizar el pago y subir el comprobante.`,
+    payment_not_found: `No pudimos aprobar tu pago porque no encontramos una transferencia asociada a la referencia ${paymentReference}. Te reenviamos los datos de transferencia para que puedas revisar o realizar el pago y contactar a administración.`,
   };
 
   return messages[reason];
@@ -1278,7 +1278,7 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     `Monto esperado: ${formatAdminCurrency(order.amount)}`,
     `Concepto para transferencia: ${paymentReference}`,
     "",
-    `Cuando tengas el comprobante correcto, vuelve a entrar a ${isShopOrder ? "Tienda" : "Inscripciones"} con la CURP y súbelo nuevamente.`,
+    "Cuando tengas la corrección, contacta a administración para que podamos revisar tu caso.",
   ].join("\n");
 }
 

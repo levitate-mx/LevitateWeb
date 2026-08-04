@@ -225,13 +225,20 @@ const demoInscriptionLookup: InscriptionLookup = {
 
 const paymentMethodSections = [
   {
-    id: "bbva",
-    title: "BBVA",
+    id: "banamex",
+    title: "Banamex",
     rows: [
-      { label: "A nombre de", value: "Daniel Emiliano Jaimes Ponce" },
-      { label: "Banco", value: "BBVA" },
-      { label: "CLABE interbancaria", value: "012180015274110441" },
-      { label: "Tarjeta", value: "4152313990777117" },
+      { label: "A nombre de", value: "María Laura Ponce" },
+      { label: "Número de cuenta", value: "26988 - Sucursal 4770" },
+      { label: "CLABE interbancaria", value: "002540477000269880" },
+    ],
+  },
+  {
+    id: "spin",
+    title: "Spin by Oxxo",
+    rows: [
+      { label: "A nombre de", value: "Rodolfo Javier Serrano" },
+      { label: "CLABE interbancaria", value: "728969000061103602" },
     ],
   },
 ];
@@ -594,6 +601,7 @@ function InscriptionLookupPanel() {
   const visibleSubtotal = lookup?.subtotal ?? 0;
   const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
   const visibleDiscount = Math.max(0, visibleOriginalSubtotal - visibleSubtotal);
+  const hasUploadedPaymentProof = Boolean(lookup?.order?.proof);
 
   useEffect(() => {
     if (!isTransferVisible) {
@@ -709,6 +717,13 @@ function InscriptionLookupPanel() {
       return;
     }
 
+    if (lookup.order.proof) {
+      setSelectedProofFile(null);
+      setProofError("");
+      setProofMessage("");
+      return;
+    }
+
     setProofError("");
     setProofMessage("");
     setSelectedProofFile(proofFile);
@@ -786,6 +801,12 @@ function InscriptionLookupPanel() {
     setProofError("");
     setProofMessage("");
 
+    if (lookup?.order?.proof) {
+      setSelectedProofFile(null);
+      input.value = "";
+      return;
+    }
+
     if (!file) {
       setSelectedProofFile(null);
       return;
@@ -810,6 +831,11 @@ function InscriptionLookupPanel() {
   };
 
   const handleProofSubmit = () => {
+    if (lookup?.order?.proof) {
+      setSelectedProofFile(null);
+      return;
+    }
+
     if (!selectedProofFile) {
       proofFileInputRef.current?.click();
       return;
@@ -1793,7 +1819,7 @@ function InscriptionLookupPanel() {
                     </div>
                   ) : null}
 
-                  {lookup.order ? (
+                  {lookup.order && !hasUploadedPaymentProof ? (
                     <div className="inscripciones-proof-uploader">
                       <header>
                         <UploadCloud aria-hidden="true" size={34} />

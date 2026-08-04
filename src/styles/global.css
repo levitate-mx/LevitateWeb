@@ -15831,6 +15831,13 @@ button {
   color: var(--ticket-shop-blue);
 }
 
+.ticket-shop-proof button.ticket-shop-proof__change {
+  min-height: 44px;
+  border: 1px solid rgba(45, 43, 40, 0.16);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ticket-shop-ink);
+}
+
 .ticket-shop-confirmation-note,
 .ticket-shop-deadline {
   display: grid;
