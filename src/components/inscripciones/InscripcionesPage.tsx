@@ -1660,7 +1660,7 @@ function InscriptionLookupPanel() {
                         {formatProofSize(lookup.order.proof.fileSize)}
                       </p>
                       <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
-                        Ver comprobante
+                        Descargar comprobante
                       </a>
                     </div>
                   ) : null}

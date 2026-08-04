@@ -2208,6 +2208,113 @@ function AdminStatusMessage({ message, tone = "success" }: { message: string; to
   );
 }
 
+function PaymentProofViewer({
+  onClose,
+  proof,
+  title = "Comprobante de pago",
+}: {
+  onClose: () => void;
+  proof: RegistrationPaymentProof | null;
+  title?: string;
+}) {
+  const [objectUrl, setObjectUrl] = useState("");
+
+  useEffect(() => {
+    if (!proof) {
+      setObjectUrl("");
+      return undefined;
+    }
+
+    let isMounted = true;
+    let nextObjectUrl = "";
+
+    fetch(proof.dataUrl)
+      .then((response) => response.blob())
+      .then((blob) => {
+        if (!isMounted) {
+          return;
+        }
+
+        nextObjectUrl = URL.createObjectURL(blob);
+        setObjectUrl(nextObjectUrl);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setObjectUrl(proof.dataUrl);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      if (nextObjectUrl) {
+        URL.revokeObjectURL(nextObjectUrl);
+      }
+    };
+  }, [proof]);
+
+  useEffect(() => {
+    if (!proof) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, proof]);
+
+  if (!proof) {
+    return null;
+  }
+
+  const viewerSource = objectUrl || proof.dataUrl;
+  const isImage = proof.contentType.startsWith("image/");
+  const isPdf = proof.contentType === "application/pdf";
+
+  return (
+    <div className="registration-admin-proof-viewer" role="dialog" aria-modal="true" aria-label={title}>
+      <button className="registration-admin-proof-viewer__backdrop" onClick={onClose} type="button" aria-label="Cerrar comprobante" />
+      <section className="registration-admin-proof-viewer__panel">
+        <header>
+          <div>
+            <span>{title}</span>
+            <strong>{proof.fileName}</strong>
+            <p>{formatAdminFileSize(proof.fileSize)}</p>
+          </div>
+          <button onClick={onClose} type="button" aria-label="Cerrar comprobante">
+            <X aria-hidden="true" size={20} />
+          </button>
+        </header>
+        <div className="registration-admin-proof-viewer__body">
+          {isImage ? (
+            <img alt={title} src={viewerSource} />
+          ) : isPdf ? (
+            <iframe src={viewerSource} title={title} />
+          ) : (
+            <div className="registration-admin-proof-viewer__file">
+              <FileText aria-hidden="true" size={46} />
+              <strong>{proof.fileName}</strong>
+              <p>Este tipo de archivo no tiene vista previa directa.</p>
+            </div>
+          )}
+        </div>
+        <footer>
+          <a download={proof.fileName} href={proof.dataUrl}>
+            Descargar
+          </a>
+          <button onClick={onClose} type="button">
+            Cerrar
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function SaveButton({
   disabled = false,
   isSaving = false,
@@ -3814,11 +3921,13 @@ function InscriptionOrderCard({
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isProofViewerOpen, setIsProofViewerOpen] = useState(false);
 
   useEffect(() => {
     setStatus(order.status);
     setPaidAmount(String(order.paidAmount || ""));
     setNotes(order.notes ?? "");
+    setIsProofViewerOpen(false);
   }, [order]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -3890,11 +3999,16 @@ function InscriptionOrderCard({
               {new Date(order.proof.uploadedAt).toLocaleDateString("es-MX")} · {formatAdminFileSize(order.proof.fileSize)}
             </p>
           </div>
-          <a download={order.proof.fileName} href={order.proof.dataUrl}>
+          <button onClick={() => setIsProofViewerOpen(true)} type="button">
             Ver comprobante
-          </a>
+          </button>
         </div>
       ) : null}
+      <PaymentProofViewer
+        onClose={() => setIsProofViewerOpen(false)}
+        proof={isProofViewerOpen ? order.proof ?? null : null}
+        title={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`}
+      />
 
       <div className="levitate-admin-payment-card__fields">
         <AdminField icon={CreditCard} label="Estado">
@@ -4981,6 +5095,7 @@ function RegistrationAdminOrderDetail({
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isTicketPdfLoading, setIsTicketPdfLoading] = useState(false);
+  const [isProofViewerOpen, setIsProofViewerOpen] = useState(false);
 
   useEffect(() => {
     const nextRejectionReason = order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof");
@@ -4991,6 +5106,7 @@ function RegistrationAdminOrderDetail({
     setStatusMessage("");
     setErrorMessage("");
     setIsTicketPdfLoading(false);
+    setIsProofViewerOpen(false);
   }, [order]);
 
   const updateOrder = async (
@@ -5168,14 +5284,19 @@ function RegistrationAdminOrderDetail({
                 <strong>{order.proof.fileName}</strong>
               </div>
             )}
-            <div>
-              <a href={order.proof.dataUrl} target="_blank" rel="noreferrer">
+            <div className="registration-admin-proof-preview__actions">
+              <button onClick={() => setIsProofViewerOpen(true)} type="button">
                 Ver comprobante
-              </a>
+              </button>
               <a download={order.proof.fileName} href={order.proof.dataUrl}>
                 Descargar
               </a>
             </div>
+            <PaymentProofViewer
+              onClose={() => setIsProofViewerOpen(false)}
+              proof={isProofViewerOpen ? order.proof : null}
+              title={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`}
+            />
           </>
         ) : (
           <p>Sin comprobante cargado.</p>
