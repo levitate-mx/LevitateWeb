@@ -52,8 +52,6 @@ type SedeContent = {
   eventName: string;
   venueName: string;
   heroImage: string;
-  motionImage?: string;
-  aerialImage?: string;
   location: string;
   mapsUrl: string;
   date: string;
@@ -61,7 +59,7 @@ type SedeContent = {
   metaValue: string;
   motionGenres: string[];
   aerialGenres: string[];
-  competitionBlocks: CompetitionBlockDay[];
+  competitionBlocks?: CompetitionBlockDay[];
   competitionBlockLegend?: CompetitionBlockLegendItem[];
   workshops?: {
     title: string;
@@ -71,11 +69,12 @@ type SedeContent = {
     coaches: WorkshopCoach[];
   };
   hotel?: HotelFeature;
-  jury: JuryMember[];
+  jury?: JuryMember[];
 };
 
 const defaultMotionGenres = ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"];
 const defaultAerialGenres = ["Tela", "Aro", "Open"];
+const convocatoriaPdfHref = "/assets/convocatoria-nacional-otono-2026.pdf";
 const hotelDocumentDownloads = [
   {
     fileName: "Hotel_Levitate2026.pdf",
@@ -96,124 +95,17 @@ function downloadHotelDocuments() {
   });
 }
 
-const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
-  cdmx: {
-    heroTitle: "CDMX",
-    eventName: "CAO Tiempo Nuevo",
-    venueName: "CAO Tiempo Nuevo",
-    heroImage: "/assets/sedes-cdmx-hero.jpg",
-    motionImage: "/assets/sedes-cdmx-motion.jpg",
-    aerialImage: "/assets/sedes-cdmx-aerial.jpg",
-    location: "Miguel Hidalgo, Tlalpan",
-    mapsUrl: "https://share.google/gU1NBVUQocefpnxPP",
-    date: "29 · 30 · 31\nmayo 2026",
-    metaLabel: "Status",
-    metaValue: "Convocatoria\nfinalizada",
-    motionGenres: defaultMotionGenres,
-    aerialGenres: defaultAerialGenres,
-    competitionBlocks: [
-      { date: "30 de mayo", items: [
-        { title: "Bloque 1", text: "Baby · Aéreo\nPetite · Aro · Open\nJunior · Tela" },
-        { title: "Bloque 2", text: "Petite · Tela" },
-        { title: "Bloque 3", text: "Junior · Tela" },
-      ] },
-      { date: "31 de mayo", items: [
-        { title: "Bloque 4", text: "Danza\nno aérea" },
-        { title: "Bloque 5", text: "Teens\nLegacy" },
-        { title: "Bloque 6", text: "Senior" },
-      ] },
-    ],
-    workshops: {
-      title: "Viernes 29 de mayo",
-      location: "CAO Tiempo Nuevo, Miguel Hidalgo, Tlalpan",
-      groups: [
-        { label: "Grupo A", text: "Menores de 12 años\nDanza aérea" },
-        { label: "Grupo B", text: "Mayores de 13 años\nDanza aérea" },
-        { label: "Grupo C", text: "Flex" },
-      ],
-      footnote: "*Cada participante podrá tomar 3 clases.",
-      coaches: [
-        {
-          name: "Alex Nájera",
-          specialty: "Telas",
-          sessions: [
-            { time: "10:00 AM - 11:30 AM", group: "Grupo A" },
-            { time: "11:45 AM - 1:15 PM", group: "Grupo B" },
-          ],
-        },
-        {
-          name: "Vladimir Garza",
-          sessions: [
-            { label: "Aro", time: "11:45 AM - 1:15 PM", group: "Grupo A" },
-            { label: "Trapecio", time: "10:00 AM - 11:30 AM", group: "Grupo B" },
-          ],
-        },
-        {
-          name: "Luis Raio",
-          specialty: "Cintas",
-          sessions: [
-            { time: "2:00 PM - 4:00 PM", group: "Grupo B" },
-          ],
-        },
-        {
-          name: "Yoli Campos",
-          specialty: "Flex",
-          sessions: [
-            { time: "2:00 PM - 4:00 PM", group: "Grupo A" },
-            { time: "2:00 PM - 4:00 PM", group: "Grupo B" },
-          ],
-        },
-      ],
-    },
-    jury: [
-      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
-      { name: "Alex Nájera", specialty: "Artista circense", image: "/assets/alex-najera.jpg" },
-      { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: "/assets/vladimir-garza.jpg" },
-      { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
-      { name: "Ángela Kryuff", specialty: "Maestra de danza · Técnica y composición escénica", image: "/assets/angela-kryuff.jpg" },
-    ],
-  },
-  puebla: {
-    heroTitle: "Puebla",
-    eventName: "Auditorio Daniel Forcelledo",
-    venueName: "Auditorio Daniel Forcelledo",
-    heroImage: "/assets/sedes-puebla-hero.jpg",
-    motionImage: "/assets/sedes-cdmx-motion.jpg",
-    aerialImage: "/assets/sedes-cdmx-aerial.jpg",
-    location: "Tlatempa, San Pedro Cholula",
-    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Auditorio%20Daniel%20Forcelledo%20Puebla",
-    date: "7 junio 2026",
-    metaLabel: "Status",
-    metaValue: "Inscripciones abiertas",
-    motionGenres: defaultMotionGenres,
-    aerialGenres: defaultAerialGenres,
-    competitionBlocks: [
-      { date: "7 de junio", items: [
-        { title: "Bloque 1", text: "Baby y Petite - Motion" },
-        { title: "Bloque 2", text: "Junior, Teen y Senior - Motion" },
-        { title: "Bloque 3", text: "Baby y Petite - Aerial" },
-        { title: "Bloque 4", text: "Junior, Teen y Senior - Aerial" },
-      ] },
-    ],
-    jury: [
-      { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
-      { name: "Yoli Campos", specialty: "Artista circense · Danza escénica", image: "/assets/yoli-campos.jpg" },
-      { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
-      { name: "Luis Raio", specialty: "Especialista en aéreos · Aerial straps", image: "/assets/luis-raio.jpg" },
-    ],
-  },
+const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
   edomex: {
     heroTitle: "Estado de México",
     eventName: "Teatro Gran Recinto",
     venueName: "Teatro Gran Recinto",
     heroImage: "/assets/sedes-edomex-hero.jpg",
-    motionImage: "/assets/sedes-cdmx-motion.jpg",
-    aerialImage: "/assets/sedes-cdmx-aerial.jpg",
     location: "Tlalnepantla, Edo. Méx.",
     mapsUrl: "https://www.google.com/maps/search/?api=1&query=Teatro%20El%20Gran%20Recinto%20Tlalnepantla%20Estado%20de%20Mexico",
     date: "13 · 14 · 15\nnoviembre 2026",
     metaLabel: "Status",
-    metaValue: "Convocatoria próxima",
+    metaValue: "Inscripciones abiertas",
     motionGenres: defaultMotionGenres,
     aerialGenres: defaultAerialGenres,
     competitionBlocks: [
@@ -307,6 +199,19 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
       { name: "Ivonne Robles", specialty: "Maestra de danza clásica y neoclásica", image: "/assets/ivonne-robles.jpg" },
       { name: "Pablo Emmanuel", specialty: "Performance urbano", image: "/assets/pablo-emmanuel.jpg" },
     ],
+  },
+  veracruz: {
+    heroTitle: "Veracruz",
+    eventName: "Primavera 2027",
+    venueName: "Sede por confirmar",
+    heroImage: "/assets/sedes-veracruz-primavera-2027.png",
+    location: "Veracruz",
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Veracruz%20Mexico",
+    date: "Primavera\n2027",
+    metaLabel: "Status",
+    metaValue: "Próximamente",
+    motionGenres: defaultMotionGenres,
+    aerialGenres: defaultAerialGenres,
   },
 };
 
@@ -420,7 +325,9 @@ type SedesPageProps = {
 
 export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
   const venue = sedesContent[venueKey] ?? sedesContent.edomex;
-  const juryLineup = buildJuryLineup(venue.jury);
+  const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
+  const hasPublishedConvocation = venueKey === "edomex";
+  const juryLineup = venue.jury?.length ? buildJuryLineup(venue.jury) : [];
   const workshopTimeGroups = venue.workshops ? buildWorkshopTimeGroups(venue.workshops) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
@@ -537,12 +444,24 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <h1>{venue.heroTitle}</h1>
             <strong>{venue.eventName}</strong>
             <div className="sedes-hero__actions">
-              <a className="sedes-button sedes-button--primary" href="/inscripciones">
-                Inscribirme <ArrowRight aria-hidden="true" size={18} />
-              </a>
-              <a className="sedes-button sedes-button--ghost" href="#convocatoria-sede">
-                Descargar convocatoria <ArrowRight aria-hidden="true" size={18} />
-              </a>
+              {hasPublishedConvocation ? (
+                <>
+                  <a className="sedes-button sedes-button--primary" href="/inscripciones">
+                    Inscribirme <ArrowRight aria-hidden="true" size={18} />
+                  </a>
+                  <a
+                    className="sedes-button sedes-button--ghost"
+                    download="Convocatoria_Nacional_Otono_2026.pdf"
+                    href={convocatoriaPdfHref}
+                  >
+                    Descargar convocatoria <ArrowRight aria-hidden="true" size={18} />
+                  </a>
+                </>
+              ) : (
+                <span className="sedes-button sedes-button--primary sedes-button--disabled">
+                  Próximamente
+                </span>
+              )}
             </div>
           </div>
 
@@ -595,35 +514,37 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
           </div>
         </section>
 
-        <section className="sedes-light-section sedes-blocks">
-          <SectionHeading kicker="Cronograma" title="Bloques de competencia." />
-          {venue.competitionBlockLegend ? (
-            <div className="sedes-block-legend" aria-label="Distribución de modalidades por bloque">
-              {venue.competitionBlockLegend.map((item) => (
-                <article className={`sedes-block-legend__item sedes-block-legend__item--${item.tone}`} key={item.range}>
-                  <span>{item.range}</span>
-                  <strong>{item.label}</strong>
+        {hasCompetitionBlocks ? (
+          <section className="sedes-light-section sedes-blocks">
+            <SectionHeading kicker="Cronograma" title="Bloques de competencia." />
+            {venue.competitionBlockLegend ? (
+              <div className="sedes-block-legend" aria-label="Distribución de modalidades por bloque">
+                {venue.competitionBlockLegend.map((item) => (
+                  <article className={`sedes-block-legend__item sedes-block-legend__item--${item.tone}`} key={item.range}>
+                    <span>{item.range}</span>
+                    <strong>{item.label}</strong>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            <div className={`sedes-block-columns${venue.competitionBlocks?.length === 1 ? " sedes-block-columns--single" : ""}`}>
+              {venue.competitionBlocks?.map((day) => (
+                <article className="sedes-block-day" key={day.date}>
+                  <h3>{day.date}</h3>
+                  <div>
+                    {day.items.map((item) => (
+                      <article key={item.title}>
+                        <h4>{item.title}</h4>
+                        <p>{renderBlockText(item.text)}</p>
+                      </article>
+                    ))}
+                  </div>
                 </article>
               ))}
             </div>
-          ) : null}
-          <div className={`sedes-block-columns${venue.competitionBlocks.length === 1 ? " sedes-block-columns--single" : ""}`}>
-            {venue.competitionBlocks.map((day) => (
-              <article className="sedes-block-day" key={day.date}>
-                <h3>{day.date}</h3>
-                <div>
-                  {day.items.map((item) => (
-                    <article key={item.title}>
-                      <h4>{item.title}</h4>
-                      <p>{renderBlockText(item.text)}</p>
-                    </article>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-          <p className="sedes-note">*Horarios a definir. La logística puede cambiar.</p>
-        </section>
+            <p className="sedes-note">*Horarios a definir. La logística puede cambiar.</p>
+          </section>
+        ) : null}
       </div>
 
       {venue.workshops ? (
@@ -686,46 +607,48 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
         </section>
       ) : null}
 
-      <section className="sedes-light-section sedes-jury">
-        <div className="sedes-jury__header">
-          <SectionHeading kicker="LINEUP" title="Panel de Jurados." />
-        </div>
-        <div className="sedes-jury-sticky" ref={juryScrollRegionRef}>
-          <div className="sedes-jury-sticky__visual" aria-hidden="true">
-            {juryLineup.map((judge, index) => (
-              <figure className={index === activeJudgeIndex ? "is-active" : ""} key={`${judge.name}-visual-${index}`}>
-                <img src={judge.image} alt="" loading={index === 0 ? "eager" : "lazy"} />
-                <figcaption>
-                  <strong>{judge.name}</strong>
-                </figcaption>
-              </figure>
-            ))}
+      {juryLineup.length ? (
+        <section className="sedes-light-section sedes-jury">
+          <div className="sedes-jury__header">
+            <SectionHeading kicker="LINEUP" title="Panel de Jurados." />
           </div>
+          <div className="sedes-jury-sticky" ref={juryScrollRegionRef}>
+            <div className="sedes-jury-sticky__visual" aria-hidden="true">
+              {juryLineup.map((judge, index) => (
+                <figure className={index === activeJudgeIndex ? "is-active" : ""} key={`${judge.name}-visual-${index}`}>
+                  <img src={judge.image} alt="" loading={index === 0 ? "eager" : "lazy"} />
+                  <figcaption>
+                    <strong>{judge.name}</strong>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
 
-          <div className="sedes-jury-sticky__list">
-            {juryLineup.map((judge, index) => (
-              <button
-                className={`sedes-jury-step${index === activeJudgeIndex ? " is-active" : ""}`}
-                data-jury-index={index}
-                key={`${judge.name}-${index}`}
-                aria-pressed={index === activeJudgeIndex}
-                onClick={() => setActiveJudgeIndex(index)}
-                onFocus={() => setActiveJudgeIndex(index)}
-                onMouseEnter={() => setActiveJudgeIndex(index)}
-                ref={(node) => {
-                  juryStepRefs.current[index] = node;
-                }}
-                type="button"
-              >
-                <span className="sedes-jury-step__copy">
-                  <span>{judge.name}</span>
-                  <small>{judge.specialty}</small>
-                </span>
-              </button>
-            ))}
+            <div className="sedes-jury-sticky__list">
+              {juryLineup.map((judge, index) => (
+                <button
+                  className={`sedes-jury-step${index === activeJudgeIndex ? " is-active" : ""}`}
+                  data-jury-index={index}
+                  key={`${judge.name}-${index}`}
+                  aria-pressed={index === activeJudgeIndex}
+                  onClick={() => setActiveJudgeIndex(index)}
+                  onFocus={() => setActiveJudgeIndex(index)}
+                  onMouseEnter={() => setActiveJudgeIndex(index)}
+                  ref={(node) => {
+                    juryStepRefs.current[index] = node;
+                  }}
+                  type="button"
+                >
+                  <span className="sedes-jury-step__copy">
+                    <span>{judge.name}</span>
+                    <small>{judge.specialty}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {venue.hotel ? (
         <section className="sedes-hotel-cta" id="hotel-sede">
@@ -753,11 +676,15 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             aria-hidden="true"
           />
           <div className="sedes-final-cta__content">
-            <p>Siguiente paso</p>
-            <h2>Asegura tu lugar.</h2>
-            <a href="/inscripciones">
-              Inscribirme <ArrowRight aria-hidden="true" size={18} />
-            </a>
+            <p>{hasPublishedConvocation ? "Siguiente paso" : "Próxima sede"}</p>
+            <h2>{hasPublishedConvocation ? "Asegura tu lugar." : "Veracruz está en camino."}</h2>
+            {hasPublishedConvocation ? (
+              <a href="/inscripciones">
+                Inscribirme <ArrowRight aria-hidden="true" size={18} />
+              </a>
+            ) : (
+              <span>Muy pronto compartiremos convocatoria y fechas finales.</span>
+            )}
           </div>
         </section>
       )}

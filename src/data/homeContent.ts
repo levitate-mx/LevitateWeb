@@ -93,7 +93,7 @@ export const events = [
     name: "Levitate MX",
     venue: "Veracruz",
     location: "Veracruz",
-    image: assets.competition,
+    image: "/assets/sedes-veracruz-primavera-2027.png",
   },
 ];
 

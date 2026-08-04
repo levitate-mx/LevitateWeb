@@ -6,8 +6,8 @@ const contactEmail = "info.levitatemx@gmail.com";
 
 const socialLinks = [
   { label: "Instagram", href: "https://www.instagram.com/levitate.mx/" },
-  { label: "Facebook", href: "https://www.facebook.com/mx.levitate" },
-  { label: "WhatsApp", href: "https://wa.me/5217774920775" },
+  { label: "Facebook", href: "https://www.facebook.com/mx.levitate/" },
+  { label: "WhatsApp", href: "https://whatsapp.com/channel/0029Vb92P9iBvvsmXv0crE0L" },
 ];
 
 export function LevitateFooter(_props: LevitateFooterProps) {

@@ -12012,12 +12012,6 @@ button {
   animation: levitate-media-in 1500ms var(--ease-out) forwards;
 }
 
-.sedes-hero__image--puebla {
-  object-position: 50% 56%;
-  transform: translateY(-4%) scale(1.12);
-  animation: none;
-}
-
 .sedes-hero__shade {
   z-index: -2;
   background:
@@ -18421,7 +18415,8 @@ button {
   gap: clamp(16px, 2vw, 24px);
 }
 
-.levitate-admin-socials span {
+.levitate-admin-socials span,
+.levitate-admin-socials a {
   display: grid;
   width: 30px;
   height: 30px;
@@ -18430,6 +18425,7 @@ button {
   font-size: 1.02rem;
   font-weight: 900;
   line-height: 1;
+  text-decoration: none;
 }
 
 .levitate-admin-rule {
@@ -25898,9 +25894,8 @@ button {
   object-position: 62% 48%;
 }
 
-.sedes-hero__image--puebla {
-  object-position: 50% 56%;
-  transform: none;
+.sedes-hero__image--veracruz {
+  object-position: 50% 50%;
 }
 
 .sedes-hero__shade {
@@ -26056,6 +26051,11 @@ button {
     0 18px 50px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
   --sedes-button-surface: rgba(255, 255, 255, 0.1);
+}
+
+.sedes-button--disabled {
+  cursor: default;
+  pointer-events: none;
 }
 
 .sedes-event-info {

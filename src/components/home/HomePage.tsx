@@ -23,10 +23,11 @@ const venues = [
     href: "/sedes/estado-de-mexico",
   },
   {
-    title: "Primavera 2027",
-    city: "",
-    date: "",
-    image: "/assets/sedes-primavera-2027-theater.jpeg",
+    title: "Veracruz",
+    city: "Veracruz",
+    date: "Primavera 2027",
+    image: "/assets/sedes-veracruz-primavera-2027.png",
+    href: "/sedes/veracruz",
   },
 ];
 
@@ -58,7 +59,7 @@ const stats = [
   { icon: Star, value: "+250", label: "academias" },
   { icon: MapPin, value: "16", label: "Estados de la República" },
   { icon: CalendarDays, value: "90%", label: "repite la experiencia" },
-  { icon: Building2, value: "6", label: "sedes nacionales" },
+  { icon: Building2, value: "2", label: "sedes actuales" },
 ];
 
 const sponsors = [

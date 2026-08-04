@@ -22,9 +22,7 @@ import { RelevePage } from "./components/releve/RelevePage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
 import { ShopPage } from "./components/shop/ShopPage";
-import { VenuePage } from "./components/venue/VenuePage";
 import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
-import { getVenueBySlug } from "./data/venueContent";
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -167,19 +165,15 @@ export default function App() {
   if (venueMatch) {
     const venueSlug = venueMatch[1];
 
-    if (venueSlug === "ciudad-de-mexico" || venueSlug === "cdmx") {
+    if (venueSlug === "estado-de-mexico" || venueSlug === "edomex") {
       return <SedesPage venueKey="edomex" />;
     }
 
-    if (venueSlug === "puebla" || venueSlug === "monterrey") {
-      return <SedesPage venueKey="puebla" />;
+    if (venueSlug === "veracruz") {
+      return <SedesPage venueKey="veracruz" />;
     }
 
-    if (venueSlug === "estado-de-mexico" || venueSlug === "edomex" || venueSlug === "silo-dallas") {
-      return <SedesPage venueKey="edomex" />;
-    }
-
-    return <VenuePage venue={getVenueBySlug(venueMatch[1])} />;
+    return <HomePage />;
   }
 
   return <HomePage />;

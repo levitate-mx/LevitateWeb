@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
     href: "/sedes/estado-de-mexico",
     children: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-      { label: "Veracruz", disabled: true },
+      { label: "Veracruz", href: "/sedes/veracruz" },
     ],
   },
   {
@@ -120,7 +120,7 @@ const pillMenuSections: PillMenuSection[] = [
     title: "Sedes",
     links: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-      { label: "Veracruz", disabled: true },
+      { label: "Veracruz", href: "/sedes/veracruz" },
     ],
   },
   {
@@ -646,14 +646,14 @@ export function LevitateHeader({
                 <div className="levitate-pill-menu__contact-links">
                   <a
                     className="levitate-pill-menu__social-button"
-                    href="https://wa.me/+5217774920775"
+                    href="https://whatsapp.com/channel/0029Vb92P9iBvvsmXv0crE0L"
                     aria-label="WhatsApp Levitate MX"
                   >
                     <img src="/assets/icons/whatsapp.png" alt="" aria-hidden="true" />
                   </a>
                   <a
                     className="levitate-pill-menu__social-button"
-                    href="https://www.facebook.com/mx.levitate"
+                    href="https://www.facebook.com/mx.levitate/"
                     aria-label="Facebook Levitate MX"
                   >
                     <img src="/assets/icons/facebook.png" alt="" aria-hidden="true" />

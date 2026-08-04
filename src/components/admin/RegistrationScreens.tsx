@@ -474,15 +474,11 @@ const danceLevels: FieldOption[] = [
 ];
 
 const venueOptions: FieldOption[] = [
-  { value: "cdmx", label: "CDMX - 29 /31 mayo 2026" },
-  { value: "puebla", label: "Puebla - 7 junio 2026" },
   { value: "edomex", label: "Edo. Méx. - 13 /15 noviembre 2026" },
 ];
 
 const venueEventDates: Record<string, string> = {
-  cdmx: "2026-05-29",
   edomex: "2026-11-13",
-  puebla: "2026-06-07",
 };
 
 const inscriptionOrderStatusOptions: FieldOption[] = [
@@ -1919,8 +1915,12 @@ function LevitateAdminLogo() {
 function AdminSocials() {
   return (
     <div className="levitate-admin-socials" aria-label="Redes sociales">
-      <span aria-label="Facebook">f</span>
-      <span aria-label="Instagram">◎</span>
+      <a href="https://www.facebook.com/mx.levitate/" aria-label="Facebook" rel="noreferrer" target="_blank">
+        f
+      </a>
+      <a href="https://www.instagram.com/levitate.mx/" aria-label="Instagram" rel="noreferrer" target="_blank">
+        ◎
+      </a>
       <span aria-label="YouTube">▶</span>
     </div>
   );
@@ -2444,7 +2444,7 @@ function LevitateAuthScreen({
           password: getFormValue(formData, "password"),
           academy: getFormValue(formData, "academy"),
           phone: getFormValue(formData, "phone"),
-          venue: "cdmx",
+          venue: "edomex",
         }),
         method: "POST",
       });
@@ -2926,7 +2926,7 @@ function ParticipantRegistrationPanel({
   registeredDanceCount: number;
   onParticipantCreated: (participant: RegistrationParticipant) => void;
 }) {
-  const eventDate = venueEventDates[academyVenue] ?? venueEventDates.cdmx;
+  const eventDate = venueEventDates[academyVenue] ?? venueEventDates.edomex;
   const releveTeacherMinimumDances = 3;
   const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
   const releveTeacherHelper = canRegisterReleveTeacher
@@ -3396,19 +3396,6 @@ function ProgramPanel({
 
   return (
     <section className="levitate-admin-program" aria-label="Programa de competencia">
-      <AdminPanel className="levitate-admin-panel--program" eyebrow="Programa" title="Orden de salida">
-        <div className="levitate-admin-program__toolbar">
-          <p>
-            Columnas listas para programa: coreografía, academia, división, subgénero, categoría, coreógrafos,
-            participante y estado.
-          </p>
-          <button disabled={totalRows === 0} onClick={() => downloadProgramXls(programBlocks)} type="button">
-            <Download aria-hidden="true" size={17} />
-            Exportar .xls
-          </button>
-        </div>
-      </AdminPanel>
-
       {programBlocks.map((block) => (
         <section className="levitate-admin-program-block" key={block.id} aria-label={block.title}>
           <header>
@@ -5172,7 +5159,7 @@ export function LevitateAuthRoute() {
 export function LevitateParticipantRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ParticipantRegistrationPanel academyVenue="cdmx" onParticipantCreated={() => undefined} registeredDanceCount={0} />
+      <ParticipantRegistrationPanel academyVenue="edomex" onParticipantCreated={() => undefined} registeredDanceCount={0} />
     </RegistrationPageScaffold>
   );
 }
@@ -5189,7 +5176,7 @@ export function LevitateDanceRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
       <DanceRegistrationPanel
-        academyVenue="cdmx"
+        academyVenue="edomex"
         choreographers={[]}
         onDanceCreated={() => undefined}
         participants={[]}
