@@ -125,20 +125,6 @@ type ApiErrorResponse = {
 
 type ShopMode = "tickets" | "media";
 
-const demoBuyerData: BuyerData = {
-  curp: "LORM950624MDFPZR09",
-  email: "demo.taquilla@levitate.mx",
-  name: "María Fernanda López Ruiz",
-  whatsapp: "5512345678",
-};
-
-const mediaDemoBuyerData: BuyerData = {
-  curp: "DEMO010101MDFLVT09",
-  email: "demo.fotovideo@levitate.mx",
-  name: "María Fernanda López Ruiz",
-  whatsapp: "5512345678",
-};
-
 const blockOptions: TicketOption[] = [
   { id: "bloque-1", label: "Bloque 1", detail: "14 noviembre · Baby + Petite" },
   { id: "bloque-2", label: "Bloque 2", detail: "14 noviembre · Junior + Teen" },
@@ -207,35 +193,6 @@ const maxPaymentProofBytes = 1800000;
 const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const allowedPaymentProofTypes = paymentProofAccept.split(",");
 const noMediaDancesLinkedMessage = "No hay coreografías vinculadas a este CURP";
-
-const mediaDemoParticipantLookup: MediaParticipantLookup = {
-  academyName: "Academia Demo Levitate",
-  curp: mediaDemoBuyerData.curp,
-  participantName: "Sofía Martínez Demo",
-  venue: "edomex",
-  lines: [
-    {
-      academyName: "Academia Demo Levitate",
-      category: "solo",
-      genre: "aereo",
-      id: "demo-aerial-solo",
-      level: "principiante",
-      subgenre: "tela",
-      title: "Demo Aerial Solo",
-      venue: "edomex",
-    },
-    {
-      academyName: "Academia Demo Levitate",
-      category: "grupo",
-      genre: "motion",
-      id: "demo-motion-crew",
-      level: null,
-      subgenre: "jazz",
-      title: "Demo Motion Crew",
-      venue: "edomex",
-    },
-  ],
-};
 
 const mediaProducts: MediaProduct[] = [
   {
@@ -864,15 +821,6 @@ function TicketShopPage() {
     }
   };
 
-  const autofillDemoBuyerData = () => {
-    setBuyerData(demoBuyerData);
-    setBuyerError("");
-
-    if (isBuyerConfirmed) {
-      markCheckoutDirty();
-    }
-  };
-
   const handleBuyerSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1288,9 +1236,6 @@ function TicketShopPage() {
                 <Info aria-hidden="true" size={18} />
                 <span>Asegúrate de tener acceso al WhatsApp y correo que registres: tus boletos se entregarán por esos medios.</span>
               </div>
-              <button className="ticket-shop-buyer__demo" onClick={autofillDemoBuyerData} type="button">
-                Autocompletar demo
-              </button>
               <label>
                 <span>Nombre del titular o responsable</span>
                 <div>
@@ -1517,17 +1462,6 @@ function PhotoVideoShopPage() {
     }
   };
 
-  const autofillDemoBuyerData = () => {
-    setBuyerData(mediaDemoBuyerData);
-    setBuyerError("");
-    setParticipantLookup(mediaDemoParticipantLookup);
-    setSelectedDanceId("");
-
-    if (isBuyerConfirmed) {
-      markCheckoutDirty();
-    }
-  };
-
   const lookupParticipantDances = async () => {
     const normalizedCurp = normalizeCurp(buyerData.curp);
     setBuyerData((current) => ({ ...current, curp: normalizedCurp }));
@@ -1541,11 +1475,6 @@ function PhotoVideoShopPage() {
 
     if (normalizedCurp.length !== 18) {
       setBuyerError("Ingresa la CURP completa para buscar sus coreografías.");
-      return;
-    }
-
-    if (normalizedCurp === mediaDemoBuyerData.curp) {
-      setParticipantLookup(mediaDemoParticipantLookup);
       return;
     }
 
@@ -2031,9 +1960,6 @@ function PhotoVideoShopPage() {
                 <Info aria-hidden="true" size={18} />
                 <span>Asegúrate de tener acceso al WhatsApp y correo que registres: por esos medios recibirás confirmaciones.</span>
               </div>
-              <button className="ticket-shop-buyer__demo" onClick={autofillDemoBuyerData} type="button">
-                Autocompletar demo
-              </button>
               <label>
                 <span>Nombre del titular o responsable</span>
                 <div>

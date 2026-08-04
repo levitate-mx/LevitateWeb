@@ -497,11 +497,6 @@ export function PassportOverviewPage() {
             <a className="passport-button" href={getPassportStationPath(passportPilotEvent.slug, firstStation.slug)}>
               Abrir primera estación <ArrowRight aria-hidden="true" size={18} />
             </a>
-            {!passportState ? (
-              <a className="passport-button passport-button--ghost" href={passportPilotEvent.claimPath}>
-                Activar demo <QrCode aria-hidden="true" size={18} />
-              </a>
-            ) : null}
             <a className="passport-button passport-button--ghost" href="/passport/certificate">
               Ver certificado <Award aria-hidden="true" size={18} />
             </a>
@@ -587,11 +582,6 @@ export function PassportStationPage({ eventSlug, stationSlug }: PassportStationP
           <p>{station.description}</p>
           {scanError ? <p className="passport-status-note">{scanError}</p> : null}
           <div className="passport-actions">
-            {scanError ? (
-              <a className="passport-button passport-button--ghost" href={passportPilotEvent.claimPath}>
-                Activar demo <QrCode aria-hidden="true" size={18} />
-              </a>
-            ) : null}
             <a className="passport-button" href="/passport">
               Ver progreso <ArrowRight aria-hidden="true" size={18} />
             </a>

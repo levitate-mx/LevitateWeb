@@ -607,191 +607,6 @@ const studentPortalModules = [
   icon: LucideIcon;
 }>;
 
-const registrationDemoPassword = import.meta.env.DEV ? (import.meta.env.VITE_REGISTRATION_DEMO_PASSWORD ?? "") : "";
-const isRegistrationDemoEnabled = import.meta.env.DEV && registrationDemoPassword.length > 0;
-const isRegistrationStudentDemoEnabled = import.meta.env.DEV;
-
-const demoAcademyCredentials = {
-  username: "demo_academia",
-  password: registrationDemoPassword,
-};
-
-const demoStudentCredentials = {
-  curp: "DEMO010101MDFLVT09",
-};
-const demoRegistrationSessionStorageKey = "levitate_demo_registration_session";
-type DemoRegistrationSessionKind = "academy" | "student";
-
-const demoRegistrationBootstrap: RegistrationBootstrap = {
-  user: {
-    id: "demo-academy-user",
-    name: "Demo Academia",
-    username: demoAcademyCredentials.username,
-    email: "demo.academia@levitate.mx",
-    role: "academy",
-  },
-  academy: {
-    id: "demo-academy",
-    name: "Academia Demo Levitate",
-    venue: "edomex",
-    contactName: "Demo Academia",
-    email: "demo.academia@levitate.mx",
-    phone: "55 0000 0000",
-  },
-  participants: [
-    {
-      id: "demo-participant-1",
-      fullName: "Sofia Martinez Demo",
-      curp: demoStudentCredentials.curp,
-      birthDate: "2011-01-01",
-      age: 15,
-      division: "teen",
-      shirtSize: "m",
-      isInternational: false,
-      isReleveTeacher: false,
-      createdAt: "2026-07-04T00:00:00Z",
-    },
-    {
-      id: "demo-participant-2",
-      fullName: "Valentina Ruiz Demo",
-      curp: "DEMO020202MDFLVT08",
-      birthDate: "2014-02-02",
-      age: 12,
-      division: "junior",
-      shirtSize: "s",
-      isInternational: false,
-      isReleveTeacher: false,
-      createdAt: "2026-07-04T00:00:00Z",
-    },
-  ],
-  choreographers: [
-    {
-      id: "demo-choreographer-1",
-      fullName: "Camila Torres Demo",
-      email: "camila.demo@levitate.mx",
-      phone: "55 1111 1111",
-      shirtSize: "m",
-      createdAt: "2026-07-04T00:00:00Z",
-    },
-  ],
-  dances: [
-    {
-      id: "demo-dance-1",
-      title: "Elevate Demo",
-      genre: "motion",
-      subgenre: "contemporaneo",
-      category: "duo",
-      level: null,
-      venue: "edomex",
-      createdAt: "2026-07-04T00:00:00Z",
-      choreographers: [{ id: "demo-choreographer-1", fullName: "Camila Torres Demo" }],
-      participants: [
-        { id: "demo-participant-1", fullName: "Sofia Martinez Demo" },
-        { id: "demo-participant-2", fullName: "Valentina Ruiz Demo" },
-      ],
-    },
-  ],
-  inscriptionOrders: [
-    {
-      id: "demo-inscription-order",
-      curp: demoStudentCredentials.curp,
-      participantName: "Sofia Martinez Demo",
-      academyId: "demo-academy",
-      academyName: "Academia Demo Levitate",
-      venue: "edomex",
-      reference: "LEV-EDOMEX-DEMO-VT09",
-      amount: 2300,
-      paidAmount: 0,
-      status: "pending_payment",
-      paymentMethod: "bank_transfer",
-      buyerPhoneCountryCode: "+52",
-      buyerPhoneNumber: "5512345678",
-      buyerPhone: "+525512345678",
-      notes: null,
-      paidAt: null,
-      reviewedBy: null,
-      reviewedAt: null,
-      rejectionReason: null,
-      rejectionMessage: null,
-      createdAt: "2026-07-04T00:00:00Z",
-      updatedAt: "2026-07-04T00:00:00Z",
-      proof: null,
-    },
-  ],
-};
-
-const demoStudentSession: StudentRegistrationSession = {
-  user: {
-    id: "demo-student-user",
-    curp: demoStudentCredentials.curp,
-  },
-  registrations: [
-    {
-      id: "demo-participant-1",
-      fullName: "Sofia Martinez Demo",
-      curp: demoStudentCredentials.curp,
-      academyName: "Academia Demo Levitate",
-      venue: "edomex",
-      division: "teen",
-      shirtSize: "m",
-    },
-  ],
-  dances: [
-    {
-      id: "demo-dance-1",
-      title: "Elevate Demo",
-      category: "duo",
-      level: null,
-      venue: "edomex",
-      academyName: "Academia Demo Levitate",
-    },
-  ],
-  resources: [
-    {
-      id: "demo-payment",
-      type: "payment",
-      title: "Pago de inscripción demo para Sofia Martinez",
-      url: "/inscripciones/consulta-curp",
-      status: "available",
-    },
-    {
-      id: "demo-judge-sheet",
-      type: "judge_sheet",
-      title: "Hoja de jueceo demo",
-      url: "/evaluaciones",
-      status: "available",
-    },
-    {
-      id: "demo-media",
-      type: "media_drive",
-      title: "Drive demo de fotos y videos",
-      url: "https://drive.google.com/",
-      status: "available",
-    },
-  ],
-};
-
-function persistDemoRegistrationSession(kind: DemoRegistrationSessionKind) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(demoRegistrationSessionStorageKey, kind);
-  }
-}
-
-function getPersistedDemoRegistrationSession() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const value = window.localStorage.getItem(demoRegistrationSessionStorageKey);
-  return value === "academy" || value === "student" ? value : null;
-}
-
-function clearPersistedDemoRegistrationSession() {
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(demoRegistrationSessionStorageKey);
-  }
-}
-
 async function requestRegistrationApi<T>(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
 
@@ -2393,27 +2208,6 @@ function AdminStatusMessage({ message, tone = "success" }: { message: string; to
   );
 }
 
-function DemoCredentialsHint({
-  label,
-  username,
-  password,
-  curp,
-}: {
-  label: string;
-  username?: string;
-  password?: string;
-  curp?: string;
-}) {
-  return (
-    <p className="levitate-auth-demo">
-      <span>{label}</span>
-      {username ? <code>{username}</code> : null}
-      {curp ? <code>{curp}</code> : null}
-      {password ? <code>{password}</code> : null}
-    </p>
-  );
-}
-
 function SaveButton({
   disabled = false,
   isSaving = false,
@@ -2681,13 +2475,6 @@ function LevitateAuthScreen({
       const username = getFormValue(formData, "username");
       const password = getFormValue(formData, "password");
 
-      if (isRegistrationDemoEnabled && username.toLowerCase() === demoAcademyCredentials.username && password === demoAcademyCredentials.password) {
-        persistDemoRegistrationSession("academy");
-        onAuthenticated(demoRegistrationBootstrap);
-        return;
-      }
-
-      clearPersistedDemoRegistrationSession();
       const session = await requestRegistrationApi<RegistrationSession>("/api/registration/auth/login", {
         body: JSON.stringify({
           username,
@@ -2892,13 +2679,6 @@ function LevitateAuthScreen({
                 <a className="levitate-auth-debug-link" href={debugActionUrl}>
                   Abrir enlace local
                 </a>
-              ) : null}
-              {allowRegistration && isRegistrationDemoEnabled ? (
-                <DemoCredentialsHint
-                  label="Demo academia"
-                  password={demoAcademyCredentials.password}
-                  username={demoAcademyCredentials.username}
-                />
               ) : null}
               <AdminField icon={AtSign} label="Usuario o correo">
                 <input autoComplete="username" name="username" required type="text" />
@@ -3107,13 +2887,6 @@ function LevitateStudentAuthScreen({
     try {
       const curp = getFormValue(formData, "curp").toUpperCase();
 
-      if (isRegistrationStudentDemoEnabled && curp === demoStudentCredentials.curp) {
-        persistDemoRegistrationSession("student");
-        onAuthenticated(demoStudentSession);
-        return;
-      }
-
-      clearPersistedDemoRegistrationSession();
       const session = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/login", {
         body: JSON.stringify({
           curp,
@@ -3148,7 +2921,6 @@ function LevitateStudentAuthScreen({
         <section className="levitate-auth-card" aria-label="Acceso de participante">
           <form className="levitate-auth-form" onSubmit={handleAccessSubmit}>
             <AdminStatusMessage message={systemMessage} tone="error" />
-            {isRegistrationStudentDemoEnabled ? <DemoCredentialsHint curp={demoStudentCredentials.curp} label="Demo participante" /> : null}
             <AdminField helper="La CURP debe tener 18 caracteres." icon={ClipboardList} label="CURP">
               <input autoComplete="off" maxLength={18} minLength={18} name="curp" required type="text" />
             </AdminField>
@@ -3902,24 +3674,6 @@ function MusicUploadPanel({
     try {
       const musicFile = await readMusicFileAsDataUrl(selectedFile);
 
-      if (getPersistedDemoRegistrationSession() === "academy") {
-        const demoUpload: RegistrationMusicUpload = {
-          ...musicFile,
-          id: `demo-music-upload-${selectedDance.id}`,
-          danceId: selectedDance.id,
-          uploadedAt: new Date().toISOString(),
-        };
-
-        onDanceUpdated({
-          ...selectedDance,
-          musicUpload: demoUpload,
-        });
-        setUploadMessage("Música subida para la coreografía seleccionada.");
-        setSelectedFile(null);
-        setFileInputVersion((current) => current + 1);
-        return;
-      }
-
       const response = await requestRegistrationApi<{ dance: RegistrationDance; musicUpload: RegistrationMusicUpload }>(
         "/api/registration/music",
         {
@@ -4076,22 +3830,6 @@ function InscriptionOrderCard({
     const nextPaidAmount = paidAmount === "" ? null : Number(paidAmount);
 
     try {
-      if (order.id.startsWith("demo-")) {
-        const now = new Date().toISOString();
-        const nextOrder: RegistrationInscriptionOrder = {
-          ...order,
-          status,
-          paidAmount: nextPaidAmount ?? order.paidAmount,
-          notes: notes.trim() || null,
-          paidAt: status === "paid" ? (order.paidAt ?? now) : null,
-          updatedAt: now,
-        };
-
-        onOrderUpdated(nextOrder);
-        setStatusMessage("Orden demo actualizada.");
-        return;
-      }
-
       const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>("/api/registration/inscription/order/status", {
         body: JSON.stringify({
           id: order.id,
@@ -5778,21 +5516,6 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   const loadRegistrationData = useCallback(async () => {
     setIsLoadingData(true);
 
-    if (getPersistedDemoRegistrationSession() === "academy") {
-      setSession({
-        user: demoRegistrationBootstrap.user,
-        academy: demoRegistrationBootstrap.academy,
-      });
-      setParticipants(demoRegistrationBootstrap.participants);
-      setChoreographers(demoRegistrationBootstrap.choreographers);
-      setDances(demoRegistrationBootstrap.dances);
-      setInscriptionOrders(demoRegistrationBootstrap.inscriptionOrders);
-      setLoadError("");
-      setIsCheckingSession(false);
-      setIsLoadingData(false);
-      return;
-    }
-
     try {
       const bootstrap = await requestRegistrationApi<RegistrationBootstrap>("/api/registration/bootstrap");
       setSession({
@@ -5850,7 +5573,6 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   };
 
   const handleLogout = async () => {
-    clearPersistedDemoRegistrationSession();
     await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" }).catch(() => null);
     setSession(null);
     setParticipants([]);
@@ -5932,13 +5654,6 @@ export function LevitateStudentRegistrationRoute() {
   const [session, setSession] = useState<StudentRegistrationSession | null>(null);
 
   const loadStudentData = useCallback(async () => {
-    if (getPersistedDemoRegistrationSession() === "student") {
-      setSession(demoStudentSession);
-      setLoadError("");
-      setIsCheckingSession(false);
-      return;
-    }
-
     try {
       const studentSession = await requestRegistrationApi<StudentRegistrationSession>("/api/registration/student/me");
       setSession(studentSession);
@@ -5964,7 +5679,6 @@ export function LevitateStudentRegistrationRoute() {
   };
 
   const handleLogout = async () => {
-    clearPersistedDemoRegistrationSession();
     await requestRegistrationApi<{ ok: boolean }>("/api/registration/student/logout", { method: "POST" }).catch(() => null);
     setSession(null);
   };

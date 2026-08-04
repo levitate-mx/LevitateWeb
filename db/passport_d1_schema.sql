@@ -171,13 +171,3 @@ ON CONFLICT (event_id, slug) DO UPDATE SET
   stamp_label = excluded.stamp_label,
   highlights = excluded.highlights,
   updated_at = datetime('now');
-
-INSERT INTO passports (id, event_id, code, claim_token_hash, status)
-VALUES (
-  'passport-demo-colibri',
-  'event-levitate-cdmx-2026',
-  'COL-DEMO',
-  '5e940fee0eae2737bf50dac823e9aebbdae4a528dcd40d0f4448dcf0742eccb0',
-  'available'
-)
-ON CONFLICT (code) DO NOTHING;

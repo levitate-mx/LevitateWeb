@@ -113,7 +113,6 @@ type ApiErrorResponse = {
 };
 
 const consultationPath = "/inscripciones/consulta-curp";
-const demoCurp = "DEMO010101MDFLVT09";
 const proofUploadAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const maxProofUploadBytes = 1800000;
 const defaultPhoneCountryCode = "+52";
@@ -169,59 +168,6 @@ const inscriptionIncludes = [
   "Acceso a 3 talleres de la elección del participante",
   "Kit de bienvenida Oficial LevitateMX",
 ];
-
-const demoInscriptionLookup: InscriptionLookup = {
-  curp: demoCurp,
-  participantName: "Sofía Martínez Demo",
-  academyName: "Academia Demo Levitate",
-  venue: "edomex",
-  reference: "LEV-EDOMEX-DEMO-VT09",
-  registrations: [
-    {
-      id: "demo-participant",
-      fullName: "Sofía Martínez Demo",
-      curp: demoCurp,
-      academyName: "Academia Demo Levitate",
-      venue: "edomex",
-      division: "teen",
-      shirtSize: "m",
-    },
-  ],
-  lines: [
-    {
-      id: "demo-aerial",
-      title: "Demo Aerial Solo",
-      genre: "aereo",
-      subgenre: "tela",
-      category: "solo",
-      level: "principiante",
-      venue: "edomex",
-      academyName: "Academia Demo Levitate",
-      baseAmount: 1500,
-      discountAmount: 0,
-      discountRate: 0,
-      pricingPosition: 1,
-      amount: 1500,
-    },
-    {
-      id: "demo-motion",
-      title: "Demo Motion Crew",
-      genre: "motion",
-      subgenre: "jazz",
-      category: "grupo",
-      level: null,
-      venue: "edomex",
-      academyName: "Academia Demo Levitate",
-      baseAmount: 800,
-      discountAmount: 400,
-      discountRate: 0.5,
-      pricingPosition: 2,
-      amount: 400,
-    },
-  ],
-  subtotal: 1900,
-  order: null,
-};
 
 const paymentMethodSections = [
   {
@@ -413,37 +359,6 @@ function resetLookupScroll() {
   window.requestAnimationFrame(() => {
     window.scrollTo({ behavior: "auto", left: 0, top: 0 });
   });
-}
-
-function buildDemoInscriptionOrder(lookup: InscriptionLookup, buyerPhoneCountryCode = defaultPhoneCountryCode, buyerPhoneNumber = "5512345678"): InscriptionOrder {
-  const now = new Date().toISOString();
-  const normalizedPhoneNumber = normalizePhoneNumber(buyerPhoneNumber);
-
-  return {
-    id: "demo-inscription-order",
-    curp: lookup.curp,
-    participantName: lookup.participantName,
-    academyId: "demo-academy",
-    academyName: lookup.academyName,
-    venue: lookup.venue,
-    reference: lookup.reference,
-    amount: lookup.subtotal,
-    paidAmount: 0,
-    status: "pending_payment",
-    paymentMethod: "bank_transfer",
-    buyerPhoneCountryCode,
-    buyerPhoneNumber: normalizedPhoneNumber,
-    buyerPhone: buildBuyerPhone(buyerPhoneCountryCode, normalizedPhoneNumber),
-    notes: null,
-    paidAt: null,
-    reviewedBy: null,
-    reviewedAt: null,
-    rejectionReason: null,
-    rejectionMessage: null,
-    createdAt: now,
-    updatedAt: now,
-    proof: null,
-  };
 }
 
 export function InscripcionesPage() {
@@ -672,15 +587,6 @@ function InscriptionLookupPanel() {
       return;
     }
 
-    if (normalizedCurp === demoCurp) {
-      setLookup(demoInscriptionLookup);
-      setPhoneCountryCode(demoInscriptionLookup.order?.buyerPhoneCountryCode ?? defaultPhoneCountryCode);
-      setPhoneNumber(demoInscriptionLookup.order?.buyerPhoneNumber ?? "5512345678");
-      setSelectedPaymentMethodId("");
-      resetLookupScroll();
-      return;
-    }
-
     setIsLookupLoading(true);
 
     try {
@@ -733,32 +639,6 @@ function InscriptionLookupPanel() {
 
     try {
       const dataUrl = await readFileAsDataUrl(proofFile);
-
-      if (lookup.curp === demoCurp) {
-        const now = new Date().toISOString();
-        const proof: InscriptionPaymentProof = {
-          id: "demo-payment-proof",
-          contentType: proofFile.type,
-          dataUrl,
-          fileName: proofFile.name,
-          fileSize: proofFile.size,
-          status: "submitted",
-          uploadedAt: now,
-        };
-
-        setLookup({
-          ...lookup,
-          order: {
-            ...lookup.order,
-            proof,
-            status: lookup.order.status === "paid" ? lookup.order.status : "payment_reported",
-            updatedAt: now,
-          },
-        });
-        setSelectedProofFile(null);
-        setProofMessage("Comprobante demo cargado.");
-        return;
-      }
 
       const response = await fetch("/api/registration/inscription/payment-proof", {
         body: JSON.stringify({
@@ -1440,13 +1320,6 @@ function InscriptionLookupPanel() {
       return;
     }
 
-    if (lookup.curp === demoCurp) {
-      setLookup({ ...lookup, order: lookup.order ?? buildDemoInscriptionOrder(lookup, phoneCountryCode, normalizedPhoneNumber) });
-      setSelectedPaymentMethodId("");
-      openPaymentPanel();
-      return;
-    }
-
     setIsOrderLoading(true);
 
     try {
@@ -1525,27 +1398,6 @@ function InscriptionLookupPanel() {
                 </div>
               </div>
             </form>
-            <button
-              className="inscripciones-lookup-search__demo"
-              onClick={() => {
-                setCurp(demoCurp);
-                setPhoneCountryCode(defaultPhoneCountryCode);
-                setPhoneNumber("5512345678");
-                setLookup(null);
-                setLookupError("");
-                setOrderError("");
-                setCopyMessage("");
-                setIsShareFallbackVisible(false);
-                setProofError("");
-                setProofMessage("");
-                setSelectedProofFile(null);
-                setIsTransferVisible(false);
-                setSelectedPaymentMethodId("");
-              }}
-              type="button"
-            >
-              Usar CURP de demostración
-            </button>
             {lookupError ? (
               <p className="inscripciones-query-message is-error" role="alert">
                 {lookupError}

@@ -14,7 +14,6 @@ export type PassportEvent = {
   city: string;
   date: string;
   passportName: string;
-  claimPath: string;
   stations: PassportStation[];
 };
 
@@ -24,7 +23,6 @@ export const passportPilotEvent: PassportEvent = {
   city: "Ciudad de México",
   date: "Piloto Pasaporte Colibrí",
   passportName: "Pasaporte Colibrí",
-  claimPath: "/passport/claim?token=demo-colibri",
   stations: [
     {
       slug: "bienvenida",

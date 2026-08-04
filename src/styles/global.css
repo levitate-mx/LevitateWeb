@@ -15568,23 +15568,6 @@ button {
   color: var(--ticket-shop-blue);
 }
 
-.ticket-shop-buyer .ticket-shop-buyer__demo {
-  justify-self: start;
-  min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--ticket-shop-line);
-  background: #fff;
-  color: var(--ticket-shop-ink);
-  font-size: 0.78rem;
-  font-weight: 820;
-}
-
-.ticket-shop-buyer .ticket-shop-buyer__demo:hover,
-.ticket-shop-buyer .ticket-shop-buyer__demo:focus-visible {
-  border-color: var(--ticket-shop-blue);
-  color: var(--ticket-shop-blue);
-}
-
 .media-shop-lookup-actions {
   display: flex;
   margin-top: -6px;
@@ -18870,39 +18853,6 @@ button {
   border: 1px solid rgba(134, 199, 210, 0.34);
   border-radius: 999px;
   background: rgba(134, 199, 210, 0.08);
-}
-
-.levitate-auth-demo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  justify-self: start;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: rgba(247, 243, 239, 0.52);
-  font-size: 0.76rem;
-  font-weight: 620;
-}
-
-.levitate-auth-demo span {
-  color: rgba(247, 243, 239, 0.48);
-  font-weight: 820;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.levitate-auth-demo code {
-  padding: 3px 7px;
-  border: 1px solid rgba(247, 243, 239, 0.1);
-  border-radius: 999px;
-  background: rgba(247, 243, 239, 0.075);
-  color: rgba(247, 243, 239, 0.74);
-  font: inherit;
-  font-weight: 720;
 }
 
 .levitate-auth-message {
@@ -25237,24 +25187,6 @@ button {
   white-space: nowrap;
 }
 
-.inscripciones-lookup-search__demo {
-  width: fit-content;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: rgba(42, 41, 40, 0.56);
-  cursor: pointer;
-  font-size: 0.76rem;
-  font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.inscripciones-lookup-search__demo:hover,
-.inscripciones-lookup-search__demo:focus-visible {
-  color: var(--home-pink);
-}
-
 .inscripciones-lookup-search .inscripciones-query-message {
   margin: 2px 0 0;
 }
@@ -30950,13 +30882,6 @@ button {
   transform: none;
 }
 
-.inscripciones-payment-main .inscripciones-lookup-search__demo {
-  width: fit-content;
-  margin: 16px 0 0 calc(73px + clamp(14px, 1.6vw, 24px));
-  color: rgba(42, 41, 40, 0.62);
-  font-size: 0.82rem;
-}
-
 @media (max-width: 760px) {
   .inscripciones-payment-main .inscripciones-curp-card__input {
     grid-template-columns: 40px 1px minmax(0, 1fr);
@@ -30988,9 +30913,6 @@ button {
     height: 22px;
   }
 
-  .inscripciones-payment-main .inscripciones-lookup-search__demo {
-    margin-left: 65px;
-  }
 }
 
 .inscripciones-payment-main .inscripciones-lookup-concepts {
