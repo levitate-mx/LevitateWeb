@@ -1786,6 +1786,118 @@ async function createMultiImagePdfBlob(pages: Array<{ canvas: HTMLCanvasElement;
   return new Blob(chunks, { type: "application/pdf" });
 }
 
+async function createPaymentProofImagePdfBlob(proof: RegistrationPaymentProof) {
+  const image = await loadAdminImage(proof.dataUrl);
+  const scale = 2;
+  const width = 842;
+  const height = 1191;
+  const padding = 48;
+  const headerHeight = 92;
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("No se pudo preparar el comprobante.");
+  }
+
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  context.scale(scale, scale);
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#111111";
+  context.font = "900 18px Inter, Arial, sans-serif";
+  context.fillText("COMPROBANTE DE PAGO", padding, 44);
+  context.fillStyle = "rgba(17,17,17,0.58)";
+  context.font = "700 13px Inter, Arial, sans-serif";
+  context.fillText(proof.fileName, padding, 68);
+  context.strokeStyle = "rgba(17,17,17,0.14)";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(padding, headerHeight);
+  context.lineTo(width - padding, headerHeight);
+  context.stroke();
+
+  const areaWidth = width - padding * 2;
+  const areaHeight = height - headerHeight - padding;
+  const imageRatio = image.naturalWidth / image.naturalHeight;
+  const areaRatio = areaWidth / areaHeight;
+  const drawWidth = imageRatio > areaRatio ? areaWidth : areaHeight * imageRatio;
+  const drawHeight = imageRatio > areaRatio ? areaWidth / imageRatio : areaHeight;
+  const drawX = padding + (areaWidth - drawWidth) / 2;
+  const drawY = headerHeight + (areaHeight - drawHeight) / 2;
+
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  return createMultiImagePdfBlob([{ canvas, height, width }]);
+}
+
+async function getPaymentProofPdfBlob(proof: RegistrationPaymentProof) {
+  const sourceBlob = await fetch(proof.dataUrl).then((response) => response.blob());
+  const sourceType = sourceBlob.type || proof.contentType;
+
+  if (sourceType === "application/pdf" || proof.contentType === "application/pdf") {
+    if (sourceBlob.type === "application/pdf") {
+      return sourceBlob;
+    }
+
+    return new Blob([await sourceBlob.arrayBuffer()], { type: "application/pdf" });
+  }
+
+  if (sourceType.startsWith("image/") || proof.contentType.startsWith("image/")) {
+    return createPaymentProofImagePdfBlob(proof);
+  }
+
+  throw new Error("Este comprobante no se puede abrir como PDF.");
+}
+
+function writePaymentProofWindowMessage(targetWindow: Window, title: string, message: string) {
+  targetWindow.document.title = title;
+  targetWindow.document.body.innerHTML = "";
+  targetWindow.document.body.style.margin = "0";
+  targetWindow.document.body.style.fontFamily = "Inter, Arial, sans-serif";
+  targetWindow.document.body.style.background = "#fffaf4";
+  targetWindow.document.body.style.color = "#171717";
+
+  const wrapper = targetWindow.document.createElement("main");
+  wrapper.style.minHeight = "100vh";
+  wrapper.style.display = "grid";
+  wrapper.style.placeItems = "center";
+  wrapper.style.padding = "32px";
+  wrapper.style.boxSizing = "border-box";
+
+  const text = targetWindow.document.createElement("p");
+  text.textContent = message;
+  text.style.margin = "0";
+  text.style.fontSize = "18px";
+  text.style.fontWeight = "800";
+
+  wrapper.append(text);
+  targetWindow.document.body.append(wrapper);
+}
+
+async function openPaymentProofPdfInNewWindow(proof: RegistrationPaymentProof, title: string) {
+  const targetWindow = window.open("", "_blank");
+
+  if (!targetWindow) {
+    throw new Error("No se pudo abrir una ventana nueva. Revisa si el navegador bloqueó popups.");
+  }
+
+  writePaymentProofWindowMessage(targetWindow, title, "Preparando comprobante...");
+
+  try {
+    const pdfBlob = await getPaymentProofPdfBlob(proof);
+    const objectUrl = URL.createObjectURL(pdfBlob);
+
+    targetWindow.location.href = objectUrl;
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  } catch (error) {
+    writePaymentProofWindowMessage(targetWindow, title, "No se pudo preparar el comprobante como PDF.");
+    throw error;
+  }
+}
+
 async function createTicketsPdfBlob(order: RegistrationInscriptionOrder) {
   const tickets = order.tickets ?? [];
 
@@ -2182,113 +2294,6 @@ function AdminStatusMessage({ message, tone = "success" }: { message: string; to
       <Icon aria-hidden="true" size={17} />
       {message}
     </p>
-  );
-}
-
-function PaymentProofViewer({
-  onClose,
-  proof,
-  title = "Comprobante de pago",
-}: {
-  onClose: () => void;
-  proof: RegistrationPaymentProof | null;
-  title?: string;
-}) {
-  const [objectUrl, setObjectUrl] = useState("");
-
-  useEffect(() => {
-    if (!proof) {
-      setObjectUrl("");
-      return undefined;
-    }
-
-    let isMounted = true;
-    let nextObjectUrl = "";
-
-    fetch(proof.dataUrl)
-      .then((response) => response.blob())
-      .then((blob) => {
-        if (!isMounted) {
-          return;
-        }
-
-        nextObjectUrl = URL.createObjectURL(blob);
-        setObjectUrl(nextObjectUrl);
-      })
-      .catch(() => {
-        if (isMounted) {
-          setObjectUrl(proof.dataUrl);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-      if (nextObjectUrl) {
-        URL.revokeObjectURL(nextObjectUrl);
-      }
-    };
-  }, [proof]);
-
-  useEffect(() => {
-    if (!proof) {
-      return undefined;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, proof]);
-
-  if (!proof) {
-    return null;
-  }
-
-  const viewerSource = objectUrl || proof.dataUrl;
-  const isImage = proof.contentType.startsWith("image/");
-  const isPdf = proof.contentType === "application/pdf";
-
-  return (
-    <div className="registration-admin-proof-viewer" role="dialog" aria-modal="true" aria-label={title}>
-      <button className="registration-admin-proof-viewer__backdrop" onClick={onClose} type="button" aria-label="Cerrar comprobante" />
-      <section className="registration-admin-proof-viewer__panel">
-        <header>
-          <div>
-            <span>{title}</span>
-            <strong>{proof.fileName}</strong>
-            <p>{formatAdminFileSize(proof.fileSize)}</p>
-          </div>
-          <button onClick={onClose} type="button" aria-label="Cerrar comprobante">
-            <X aria-hidden="true" size={20} />
-          </button>
-        </header>
-        <div className="registration-admin-proof-viewer__body">
-          {isImage ? (
-            <img alt={title} src={viewerSource} />
-          ) : isPdf ? (
-            <iframe src={viewerSource} title={title} />
-          ) : (
-            <div className="registration-admin-proof-viewer__file">
-              <FileText aria-hidden="true" size={46} />
-              <strong>{proof.fileName}</strong>
-              <p>Este tipo de archivo no tiene vista previa directa.</p>
-            </div>
-          )}
-        </div>
-        <footer>
-          <a download={proof.fileName} href={proof.dataUrl}>
-            Descargar
-          </a>
-          <button onClick={onClose} type="button">
-            Cerrar
-          </button>
-        </footer>
-      </section>
-    </div>
   );
 }
 
@@ -3898,14 +3903,23 @@ function InscriptionOrderCard({
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isProofViewerOpen, setIsProofViewerOpen] = useState(false);
 
   useEffect(() => {
     setStatus(order.status);
     setPaidAmount(String(order.paidAmount || ""));
     setNotes(order.notes ?? "");
-    setIsProofViewerOpen(false);
   }, [order]);
+
+  const handleOpenProof = () => {
+    if (!order.proof) {
+      return;
+    }
+
+    setErrorMessage("");
+    void openPaymentProofPdfInNewWindow(order.proof, `Comprobante ${getRegistrationInscriptionPaymentReference(order)}`).catch((error) => {
+      setErrorMessage(getErrorMessage(error, "No se pudo abrir el comprobante como PDF."));
+    });
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3976,16 +3990,11 @@ function InscriptionOrderCard({
               {new Date(order.proof.uploadedAt).toLocaleDateString("es-MX")} · {formatAdminFileSize(order.proof.fileSize)}
             </p>
           </div>
-          <button onClick={() => setIsProofViewerOpen(true)} type="button">
+          <button onClick={handleOpenProof} type="button">
             Ver comprobante
           </button>
         </div>
       ) : null}
-      <PaymentProofViewer
-        onClose={() => setIsProofViewerOpen(false)}
-        proof={isProofViewerOpen ? order.proof ?? null : null}
-        title={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`}
-      />
 
       <div className="levitate-admin-payment-card__fields">
         <AdminField icon={CreditCard} label="Estado">
@@ -5080,7 +5089,6 @@ function RegistrationAdminOrderDetail({
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isTicketPdfLoading, setIsTicketPdfLoading] = useState(false);
-  const [isProofViewerOpen, setIsProofViewerOpen] = useState(false);
 
   useEffect(() => {
     const nextRejectionReason = order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof");
@@ -5091,8 +5099,18 @@ function RegistrationAdminOrderDetail({
     setStatusMessage("");
     setErrorMessage("");
     setIsTicketPdfLoading(false);
-    setIsProofViewerOpen(false);
   }, [order]);
+
+  const handleOpenProof = () => {
+    if (!order?.proof) {
+      return;
+    }
+
+    setErrorMessage("");
+    void openPaymentProofPdfInNewWindow(order.proof, `Comprobante ${getRegistrationInscriptionPaymentReference(order)}`).catch((error) => {
+      setErrorMessage(getErrorMessage(error, "No se pudo abrir el comprobante como PDF."));
+    });
+  };
 
   const updateOrder = async (
     status: RegistrationInscriptionOrderStatus,
@@ -5359,18 +5377,13 @@ function RegistrationAdminOrderDetail({
               </div>
             )}
             <div className="registration-admin-proof-preview__actions">
-              <button onClick={() => setIsProofViewerOpen(true)} type="button">
+              <button onClick={handleOpenProof} type="button">
                 Ver comprobante
               </button>
               <a download={order.proof.fileName} href={order.proof.dataUrl}>
                 Descargar
               </a>
             </div>
-            <PaymentProofViewer
-              onClose={() => setIsProofViewerOpen(false)}
-              proof={isProofViewerOpen ? order.proof : null}
-              title={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`}
-            />
           </>
         ) : (
           <p>Sin comprobante cargado.</p>
