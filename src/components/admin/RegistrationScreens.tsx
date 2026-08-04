@@ -1257,6 +1257,19 @@ function buildWhatsAppUrl(phone: string, message: string) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
+function buildInscriptionProofCorrectionUrl(order: RegistrationInscriptionOrder) {
+  if (typeof window === "undefined" || getAdminOrderType(order) !== "registration") {
+    return "";
+  }
+
+  const url = new URL("/inscripciones/consulta-curp", window.location.origin);
+  url.searchParams.set("curp", order.curp);
+  url.searchParams.set("orderId", order.id);
+  url.searchParams.set("upload", "proof");
+
+  return url.toString();
+}
+
 function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
   const amount = formatAdminCurrency(order.paidAmount || order.amount);
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
@@ -1289,6 +1302,10 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const message =
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
+  const correctionUrl = buildInscriptionProofCorrectionUrl(order);
+  const correctionLinkLines = correctionUrl
+    ? ["", "Puedes subir nuevamente el comprobante en esta liga:", correctionUrl]
+    : [];
 
   return [
     "Hola, te escribe el equipo de administración de Levitate MX.",
@@ -1300,6 +1317,7 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     `Orden: ${paymentReference}`,
     `Monto esperado: ${formatAdminCurrency(order.amount)}`,
     `Concepto para transferencia: ${paymentReference}`,
+    ...correctionLinkLines,
     "",
     "Por favor revisa la información y, cuando tengas la corrección, responde a este chat para que podamos validar nuevamente tu caso.",
   ].join("\n");

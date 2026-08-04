@@ -1425,7 +1425,7 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
 async function saveRegistrationInscriptionPaymentProof(db, order, body) {
   const existingProof = await getLatestRegistrationPaymentProof(db, order.id);
 
-  if (existingProof) {
+  if (existingProof && order.status !== "rejected") {
     throwHttpError("payment_proof_already_uploaded", "Esta orden ya tiene un comprobante cargado.", 409);
   }
 

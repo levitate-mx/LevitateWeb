@@ -334,6 +334,10 @@ function getOrderStatusLabel(status?: string | null) {
   return status && status in orderStatusLabels ? orderStatusLabels[status as InscriptionOrderStatus] : "Sin generar";
 }
 
+function canSubmitPaymentProof(order?: InscriptionOrder | null) {
+  return Boolean(order && (!order.proof || order.status === "rejected"));
+}
+
 function formatProofSize(bytes: number) {
   if (bytes >= 1000000) {
     return `${(bytes / 1000000).toFixed(1)} MB`;
@@ -519,6 +523,8 @@ function InscriptionLookupPanel() {
   const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
   const visibleDiscount = Math.max(0, visibleOriginalSubtotal - visibleSubtotal);
   const hasUploadedPaymentProof = Boolean(lookup?.order?.proof);
+  const canUploadPaymentProof = canSubmitPaymentProof(lookup?.order);
+  const isRejectedPaymentOrder = lookup?.order?.status === "rejected";
 
   useEffect(() => {
     if (!isTransferVisible) {
@@ -565,28 +571,10 @@ function InscriptionLookupPanel() {
     setWhatsappError("");
   };
 
-  const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const normalizedCurp = normalizeCurp(curp);
-    setCurp(normalizedCurp);
-    setLookupError("");
-    setOrderError("");
-    setCopyMessage("");
-    setIsShareFallbackVisible(false);
-    setProofError("");
-    setProofMessage("");
-    setWhatsappError("");
-    setSelectedProofFile(null);
-    setIsTransferVisible(false);
-    setSelectedPaymentMethodId("");
-
-    if (normalizedCurp.length !== 18) {
-      setLookup(null);
-      setLookupError("La CURP debe tener 18 caracteres.");
-      return;
-    }
-
+  const lookupPaymentByCurp = async (
+    normalizedCurp: string,
+    options: { autoOpenPayment?: boolean; expectedOrderId?: string } = {},
+  ) => {
     setIsLookupLoading(true);
 
     try {
@@ -609,15 +597,68 @@ function InscriptionLookupPanel() {
       setLookup(payload);
       setPhoneCountryCode(payload.order?.buyerPhoneCountryCode ?? defaultPhoneCountryCode);
       setPhoneNumber(payload.order?.buyerPhoneNumber ?? "");
-      setIsTransferVisible(false);
-      setSelectedPaymentMethodId("");
+      setIsTransferVisible(Boolean(options.autoOpenPayment && payload.order));
+      setSelectedPaymentMethodId(options.autoOpenPayment && payload.order ? paymentMethodSections[0]?.id ?? "" : "");
+
+      if (options.expectedOrderId && payload.order?.id && payload.order.id !== options.expectedOrderId) {
+        setProofMessage("Te mostramos la orden vigente asociada a esta CURP.");
+      }
+
       resetLookupScroll();
+      return payload;
     } catch (error) {
       setLookup(null);
       setLookupError(error instanceof Error ? error.message : "No pudimos consultar esa CURP.");
+      return null;
     } finally {
       setIsLookupLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linkedCurp = normalizeCurp(params.get("curp") ?? "");
+
+    if (!linkedCurp) {
+      return;
+    }
+
+    setCurp(linkedCurp);
+
+    if (linkedCurp.length !== 18) {
+      setLookupError("La liga de corrección no tiene una CURP válida.");
+      return;
+    }
+
+    void lookupPaymentByCurp(linkedCurp, {
+      autoOpenPayment: params.get("upload") === "proof",
+      expectedOrderId: params.get("orderId") ?? "",
+    });
+  }, []);
+
+  const handleLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedCurp = normalizeCurp(curp);
+    setCurp(normalizedCurp);
+    setLookupError("");
+    setOrderError("");
+    setCopyMessage("");
+    setIsShareFallbackVisible(false);
+    setProofError("");
+    setProofMessage("");
+    setWhatsappError("");
+    setSelectedProofFile(null);
+    setIsTransferVisible(false);
+    setSelectedPaymentMethodId("");
+
+    if (normalizedCurp.length !== 18) {
+      setLookup(null);
+      setLookupError("La CURP debe tener 18 caracteres.");
+      return;
+    }
+
+    void lookupPaymentByCurp(normalizedCurp);
   };
 
   const uploadProofFile = async (proofFile: File) => {
@@ -625,7 +666,7 @@ function InscriptionLookupPanel() {
       return;
     }
 
-    if (lookup.order.proof) {
+    if (!canSubmitPaymentProof(lookup.order)) {
       setSelectedProofFile(null);
       setProofError("");
       setProofMessage("");
@@ -683,7 +724,7 @@ function InscriptionLookupPanel() {
     setProofError("");
     setProofMessage("");
 
-    if (lookup?.order?.proof) {
+    if (!canSubmitPaymentProof(lookup?.order)) {
       setSelectedProofFile(null);
       input.value = "";
       return;
@@ -713,7 +754,7 @@ function InscriptionLookupPanel() {
   };
 
   const handleProofSubmit = () => {
-    if (lookup?.order?.proof) {
+    if (!canSubmitPaymentProof(lookup?.order)) {
       setSelectedProofFile(null);
       return;
     }
@@ -1653,7 +1694,7 @@ function InscriptionLookupPanel() {
 
                   {lookup.order?.proof ? (
                     <div className="inscripciones-proof-status">
-                      <span>Comprobante cargado</span>
+                      <span>{isRejectedPaymentOrder ? "Comprobante anterior" : "Comprobante cargado"}</span>
                       <strong>{lookup.order.proof.fileName}</strong>
                       <p>
                         Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
@@ -1673,12 +1714,16 @@ function InscriptionLookupPanel() {
                     </div>
                   ) : null}
 
-                  {lookup.order && !hasUploadedPaymentProof ? (
+                  {lookup.order && canUploadPaymentProof ? (
                     <div className="inscripciones-proof-uploader">
                       <header>
                         <UploadCloud aria-hidden="true" size={34} />
-                        <strong>Subir comprobante de pago</strong>
-                        <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
+                        <strong>{hasUploadedPaymentProof ? "Subir nuevo comprobante" : "Subir comprobante de pago"}</strong>
+                        <span>
+                          {hasUploadedPaymentProof
+                            ? "Reemplazará el comprobante anterior para una nueva revisión"
+                            : "JPG, PNG, WEBP o PDF menor a 1.8 MB"}
+                        </span>
                       </header>
                       <input
                         accept={proofUploadAccept}
