@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS registration_users (
   email TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  role TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin')),
   email_confirmed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

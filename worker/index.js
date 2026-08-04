@@ -90,6 +90,7 @@ const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanz
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
 const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const registrationUserRoles = new Set(["academy", "admin"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
@@ -2413,6 +2414,8 @@ async function ensureRegistrationStudentProfile(db, curp) {
 }
 
 async function getRegistrationStateFromRequest({ db, request }) {
+  await ensureRegistrationUserRoleColumn(db);
+
   const sessionToken = readCookie(request, registrationSessionCookieName);
 
   if (!sessionToken) {
@@ -2428,6 +2431,7 @@ async function getRegistrationStateFromRequest({ db, request }) {
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
+          registration_users.role AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
@@ -2599,6 +2603,8 @@ async function requireRegistrationCurpExists(db, curp) {
 }
 
 async function getRegistrationStateByUserId(db, userId) {
+  await ensureRegistrationUserRoleColumn(db);
+
   const row = await db
     .prepare(
       `
@@ -2607,6 +2613,7 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
+          registration_users.role AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
@@ -4081,6 +4088,7 @@ function serializeRegistrationSession(row) {
       name: row.user_name,
       username: row.username,
       email: row.user_email,
+      role: registrationUserRoles.has(row.user_role) ? row.user_role : "academy",
       emailConfirmedAt: row.email_confirmed_at || null,
     },
     academy: {
@@ -4285,6 +4293,34 @@ async function ensureRegistrationParticipantReleveTeacherColumn(db) {
       throw error;
     }
   }
+}
+
+async function ensureRegistrationUserRoleColumn(db) {
+  const existingColumns = await getTableColumnNames(db, "registration_users");
+
+  if (existingColumns.has("role")) {
+    return;
+  }
+
+  await db
+    .prepare(
+      `
+        ALTER TABLE registration_users
+          ADD COLUMN role TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin'))
+      `,
+    )
+    .run();
+}
+
+async function getTableColumnNames(db, tableName) {
+  const allowedTables = new Set(["registration_users"]);
+
+  if (!allowedTables.has(tableName)) {
+    throwHttpError("registration_invalid_table", "Tabla de registro inválida", 500);
+  }
+
+  const { results = [] } = await db.prepare(`PRAGMA table_info(${tableName})`).all();
+  return new Set(results.map((row) => row.name));
 }
 
 function normalizePhoneCountryCode(value) {
@@ -5996,7 +6032,13 @@ function requirePassportAdmin(request, env) {
 }
 
 async function requireRegistrationAdmin(request, env, db) {
-  return { scope: "global", session: null };
+  const session = await getRegistrationStateFromRequest({ db, request });
+
+  if (session.user.role !== "admin") {
+    throwHttpError("registration_admin_forbidden", "Este usuario no tiene acceso al panel admin", 403);
+  }
+
+  return { scope: "global", session };
 }
 
 function toNumber(value) {

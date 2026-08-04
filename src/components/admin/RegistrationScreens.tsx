@@ -81,6 +81,7 @@ type RegistrationSession = {
     name: string;
     username: string;
     email: string;
+    role?: "academy" | "admin";
     emailConfirmedAt?: string | null;
   };
   academy: {
@@ -560,6 +561,7 @@ const demoRegistrationBootstrap: RegistrationBootstrap = {
     name: "Demo Academia",
     username: demoAcademyCredentials.username,
     email: "demo.academia@levitate.mx",
+    role: "academy",
   },
   academy: {
     id: "demo-academy",
@@ -2264,9 +2266,11 @@ export function LevitateRegistrationEntryRoute() {
 }
 
 function LevitateAuthScreen({
+  allowRegistration = true,
   onAuthenticated,
   systemMessage = "",
 }: {
+  allowRegistration?: boolean;
   onAuthenticated: (session: RegistrationSession | RegistrationBootstrap) => void;
   systemMessage?: string;
 }) {
@@ -2456,7 +2460,7 @@ function LevitateAuthScreen({
     }
   };
 
-  const showTabs = mode === "login" || mode === "register";
+  const showTabs = allowRegistration && (mode === "login" || mode === "register");
 
   return (
     <main className="levitate-admin-page levitate-auth-page">
@@ -2523,7 +2527,7 @@ function LevitateAuthScreen({
                   Abrir enlace local
                 </a>
               ) : null}
-              {isRegistrationDemoEnabled ? (
+              {allowRegistration && isRegistrationDemoEnabled ? (
                 <DemoCredentialsHint
                   label="Demo academia"
                   password={demoAcademyCredentials.password}
@@ -2556,7 +2560,7 @@ function LevitateAuthScreen({
             </form>
           ) : null}
 
-          {mode === "register" ? (
+          {allowRegistration && mode === "register" ? (
             <form className="levitate-auth-form levitate-auth-form--register" onSubmit={handleRegisterSubmit}>
               <AdminStatusMessage message={systemMessage} tone="error" />
               <span className="levitate-auth-form__section-label">Responsable</span>
@@ -3821,6 +3825,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 }: {
   initialSection?: RegistrationAdminDashboardSection;
 } = {}) {
+  const [adminSession, setAdminSession] = useState<RegistrationSession | null>(null);
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
   const [programDances, setProgramDances] = useState<RegistrationDance[]>([]);
@@ -3833,11 +3838,51 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [ticketVenueFilter, setTicketVenueFilter] = useState("all");
   const [ticketStatusFilter, setTicketStatusFilter] = useState("all");
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [adminAuthMessage, setAdminAuthMessage] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [isCheckingAdminSession, setIsCheckingAdminSession] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
 
+  const handleAdminAuthenticated = useCallback((nextSession: RegistrationSession | RegistrationBootstrap) => {
+    if (nextSession.user.role !== "admin") {
+      setAdminSession(null);
+      setAdminAuthMessage("Este usuario no tiene acceso al panel admin.");
+      return;
+    }
+
+    setAdminSession({
+      user: nextSession.user,
+      academy: nextSession.academy,
+    });
+    setAdminAuthMessage("");
+  }, []);
+
+  const loadAdminSession = useCallback(async () => {
+    setIsCheckingAdminSession(true);
+
+    try {
+      const session = await requestRegistrationApi<RegistrationSession>("/api/registration/me");
+
+      handleAdminAuthenticated(session);
+    } catch (error) {
+      setAdminSession(null);
+
+      if (isUnauthorizedRegistrationError(error)) {
+        setAdminAuthMessage("");
+      } else {
+        setAdminAuthMessage(getErrorMessage(error, "No se pudo validar el acceso admin."));
+      }
+    } finally {
+      setIsCheckingAdminSession(false);
+    }
+  }, [handleAdminAuthenticated]);
+
   const loadAdminOrders = useCallback(async () => {
+    if (adminSession?.user.role !== "admin") {
+      return;
+    }
+
     setIsLoading(true);
     setAdminError("");
 
@@ -3851,9 +3896,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [adminSession?.user.role]);
 
   const loadAdminProgram = useCallback(async () => {
+    if (adminSession?.user.role !== "admin") {
+      return;
+    }
+
     setIsProgramLoading(true);
     setAdminError("");
 
@@ -3865,17 +3914,23 @@ export function LevitateRegistrationAdminPaymentsRoute({
     } finally {
       setIsProgramLoading(false);
     }
-  }, []);
+  }, [adminSession?.user.role]);
 
   useEffect(() => {
-    void loadAdminOrders();
-  }, [loadAdminOrders]);
+    void loadAdminSession();
+  }, [loadAdminSession]);
 
   useEffect(() => {
-    if (activeSection === "program") {
+    if (adminSession?.user.role === "admin") {
+      void loadAdminOrders();
+    }
+  }, [adminSession?.user.role, loadAdminOrders]);
+
+  useEffect(() => {
+    if (adminSession?.user.role === "admin" && activeSection === "program") {
       void loadAdminProgram();
     }
-  }, [activeSection, loadAdminProgram]);
+  }, [activeSection, adminSession?.user.role, loadAdminProgram]);
 
   useEffect(() => {
     if (!selectedOrderId) {
@@ -3958,6 +4013,20 @@ export function LevitateRegistrationAdminPaymentsRoute({
     : isProgramSection
       ? "Orden de salida global con coreografías de todas las academias"
       : "Revisión y confirmación de comprobantes";
+
+  if (isCheckingAdminSession) {
+    return <LoadingRegistrationScreen />;
+  }
+
+  if (!adminSession) {
+    return (
+      <LevitateAuthScreen
+        allowRegistration={false}
+        onAuthenticated={handleAdminAuthenticated}
+        systemMessage={adminAuthMessage}
+      />
+    );
+  }
 
   return (
     <main className="registration-admin-dashboard">

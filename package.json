@@ -39,6 +39,8 @@
     "db:migrate:registration:program-divisions:local": "wrangler d1 execute levitate-passport --local --file db/registration_program_divisions.sql",
     "db:migrate:registration:shop-orders": "wrangler d1 execute levitate-passport --remote --file db/registration_shop_orders.sql",
     "db:migrate:registration:shop-orders:local": "wrangler d1 execute levitate-passport --local --file db/registration_shop_orders.sql",
+    "db:migrate:registration:user-roles": "wrangler d1 execute levitate-passport --remote --file db/registration_user_roles.sql",
+    "db:migrate:registration:user-roles:local": "wrangler d1 execute levitate-passport --local --file db/registration_user_roles.sql",
     "db:migrate": "npm run db:migrate:codi",
     "db:migrate:all": "npm run db:migrate:codi && npm run db:migrate:passport && npm run db:migrate:registration",
     "passport:generate": "node scripts/generate-passport-qr.mjs",
