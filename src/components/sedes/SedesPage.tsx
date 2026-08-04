@@ -4,22 +4,15 @@ import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-type CompetitionModality = "motion" | "aerial";
-
-type CompetitionBlockItem = {
-  title: string;
-  text: string;
-  modality?: CompetitionModality;
-};
-
-type CompetitionBlockGroup = {
-  modality?: CompetitionModality;
-  items: CompetitionBlockItem[];
-};
-
 type CompetitionBlockDay = {
   date: string;
-  items: CompetitionBlockItem[];
+  items: Array<{ title: string; text: string }>;
+};
+
+type CompetitionBlockLegendItem = {
+  range: string;
+  label: string;
+  tone: "motion" | "aerial";
 };
 
 type WorkshopSession = {
@@ -69,6 +62,7 @@ type SedeContent = {
   motionGenres: string[];
   aerialGenres: string[];
   competitionBlocks: CompetitionBlockDay[];
+  competitionBlockLegend?: CompetitionBlockLegendItem[];
   workshops?: {
     title: string;
     location: string;
@@ -82,10 +76,6 @@ type SedeContent = {
 
 const defaultMotionGenres = ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"];
 const defaultAerialGenres = ["Tela", "Aro", "Open"];
-const competitionModalityLabels: Record<CompetitionModality, string> = {
-  motion: "Levitate Motion",
-  aerial: "Levitate Aerial",
-};
 const hotelDocumentDownloads = [
   {
     fileName: "Hotel_Levitate2026.pdf",
@@ -228,16 +218,20 @@ const sedesContent: Record<"cdmx" | "puebla" | "edomex", SedeContent> = {
     aerialGenres: defaultAerialGenres,
     competitionBlocks: [
       { date: "14 de noviembre 2026", items: [
-        { title: "Bloque 1", text: "Baby + Petite", modality: "motion" },
-        { title: "Bloque 2", text: "Junior + Teen", modality: "motion" },
-        { title: "Bloque 3", text: "Senior + Legacy + Relevé", modality: "motion" },
-        { title: "Bloque 4", text: "Baby + Petite", modality: "aerial" },
+        { title: "Bloque 1", text: "Baby + Petite" },
+        { title: "Bloque 2", text: "Junior + Teen" },
+        { title: "Bloque 3", text: "Senior + Legacy + Relevé" },
+        { title: "Bloque 4", text: "Baby + Petite" },
       ] },
       { date: "15 de noviembre 2026", items: [
-        { title: "Bloque 5", text: "Junior", modality: "aerial" },
-        { title: "Bloque 6", text: "Teen + Legacy", modality: "aerial" },
-        { title: "Bloque 7", text: "Seniors + Relevé", modality: "aerial" },
+        { title: "Bloque 5", text: "Junior" },
+        { title: "Bloque 6", text: "Teen + Legacy" },
+        { title: "Bloque 7", text: "Seniors + Relevé" },
       ] },
+    ],
+    competitionBlockLegend: [
+      { range: "Bloques 1-3", label: "Motion", tone: "motion" },
+      { range: "Bloques 4-7", label: "Aerial", tone: "aerial" },
     ],
     workshops: {
       title: "Viernes 13 de noviembre",
@@ -347,20 +341,6 @@ function renderBlockText(text: string) {
       </span>
     );
   });
-}
-
-function buildCompetitionBlockGroups(items: CompetitionBlockItem[]) {
-  return items.reduce<CompetitionBlockGroup[]>((groups, item) => {
-    const activeGroup = groups.at(-1);
-
-    if (activeGroup && activeGroup.modality === item.modality) {
-      activeGroup.items.push(item);
-      return groups;
-    }
-
-    groups.push({ modality: item.modality, items: [item] });
-    return groups;
-  }, []);
 }
 
 function buildJuryLineup(jury: JuryMember[]) {
@@ -617,28 +597,26 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
 
         <section className="sedes-light-section sedes-blocks">
           <SectionHeading kicker="Cronograma" title="Bloques de competencia." />
+          {venue.competitionBlockLegend ? (
+            <div className="sedes-block-legend" aria-label="Distribución de modalidades por bloque">
+              {venue.competitionBlockLegend.map((item) => (
+                <article className={`sedes-block-legend__item sedes-block-legend__item--${item.tone}`} key={item.range}>
+                  <span>{item.range}</span>
+                  <strong>{item.label}</strong>
+                </article>
+              ))}
+            </div>
+          ) : null}
           <div className={`sedes-block-columns${venue.competitionBlocks.length === 1 ? " sedes-block-columns--single" : ""}`}>
             {venue.competitionBlocks.map((day) => (
               <article className="sedes-block-day" key={day.date}>
                 <h3>{day.date}</h3>
-                <div className="sedes-block-day__groups">
-                  {buildCompetitionBlockGroups(day.items).map((group, groupIndex) => (
-                    <div
-                      className={`sedes-block-group${group.modality ? ` sedes-block-group--${group.modality}` : " sedes-block-group--plain"}`}
-                      key={`${day.date}-${group.modality ?? "general"}-${groupIndex}`}
-                    >
-                      {group.modality ? (
-                        <span className="sedes-block-group__label" aria-label={`Modalidad ${competitionModalityLabels[group.modality]}`} />
-                      ) : null}
-                      <div className="sedes-block-group__items">
-                        {group.items.map((item) => (
-                          <article key={item.title}>
-                            <h4>{item.title}</h4>
-                            <p>{renderBlockText(item.text)}</p>
-                          </article>
-                        ))}
-                      </div>
-                    </div>
+                <div>
+                  {day.items.map((item) => (
+                    <article key={item.title}>
+                      <h4>{item.title}</h4>
+                      <p>{renderBlockText(item.text)}</p>
+                    </article>
                   ))}
                 </div>
               </article>

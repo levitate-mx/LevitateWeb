@@ -1,3 +1,5 @@
+import { LevitateFooter } from "./LevitateFooter";
+
 export function Footer() {
-  return null;
+  return <LevitateFooter />;
 }

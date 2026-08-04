@@ -234,28 +234,28 @@ const mediaProducts: MediaProduct[] = [
     name: "Solos",
     description: "Paquete all inclusive para participación individual.",
     price: 1000,
-    unit: "por participación",
+    unit: "precio final",
   },
   {
     id: "duo",
     name: "Dúos",
-    description: "Paquete all inclusive para cada participante del dúo.",
-    price: 700,
-    unit: "por participante",
+    description: "Paquete all inclusive para el dúo.",
+    price: 1400,
+    unit: "precio final",
   },
   {
     id: "trio",
     name: "Tríos",
-    description: "Paquete all inclusive para cada participante del trío.",
-    price: 600,
-    unit: "por participante",
+    description: "Paquete all inclusive para el trío.",
+    price: 1800,
+    unit: "precio final",
   },
   {
     id: "group",
     name: "Grupos",
-    description: "Paquete all inclusive para cada integrante del grupo.",
-    price: 500,
-    unit: "por participante",
+    description: "Paquete all inclusive para el grupo.",
+    price: 2000,
+    unit: "precio final",
   },
 ];
 
@@ -1569,7 +1569,7 @@ function PhotoVideoShopPage() {
                       <div>
                         <strong>{line.product.name}</strong>
                         <span>Paquete all inclusive · {line.product.unit}</span>
-                        <small>{formatCurrency(line.product.price)} c/u</small>
+                        <small>{formatCurrency(line.product.price)} por paquete</small>
                       </div>
                       <div className="ticket-shop-cart-line__actions">
                         <button aria-label={`Quitar un ${line.product.name}`} onClick={() => changeCartQuantity(line.id, -1)} type="button">

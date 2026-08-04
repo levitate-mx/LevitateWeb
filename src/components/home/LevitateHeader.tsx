@@ -59,7 +59,7 @@ const navItems: NavItem[] = [
       },
       {
         label: "Relevé",
-        href: "/modalidades/levitate-aerial/evaluacion#niveles-aerial",
+        href: "/releve",
       },
     ],
   },
@@ -128,7 +128,7 @@ const pillMenuSections: PillMenuSection[] = [
     links: [
       { label: "Motion", href: "/modalidades/levitate-motion/generos" },
       { label: "Aerial", href: "/modalidades/levitate-aerial/evaluacion" },
-      { label: "Relevé", href: "/modalidades/levitate-aerial/evaluacion#niveles-aerial" },
+      { label: "Relevé", href: "/releve" },
     ],
   },
   {

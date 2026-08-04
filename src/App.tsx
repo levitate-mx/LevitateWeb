@@ -18,6 +18,7 @@ import {
 } from "./components/passport/PassportPages";
 import { HospedajePage } from "./components/hospedaje/HospedajePage";
 import { PremiationPage } from "./components/premiation/PremiationPage";
+import { RelevePage } from "./components/releve/RelevePage";
 import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
 import { ShopPage } from "./components/shop/ShopPage";
@@ -39,6 +40,7 @@ export default function App() {
   const registrationAdminTicketsMatch = window.location.pathname.match(/^\/admin\/boletos\/?$/);
   const registrationAdminProgramMatch = window.location.pathname.match(/^\/admin\/programa\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
+  const releveMatch = window.location.pathname.match(/^\/(?:releve|premio-releve|modalidades\/(?:releve|levitate-releve))\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
   const academyRegistrationMatch = window.location.pathname.match(/^\/registro\/academias\/?$/);
   const studentRegistrationMatch = window.location.pathname.match(/^\/registro\/alumnos\/?$/);
@@ -112,6 +114,10 @@ export default function App() {
 
   if (premiationMatch) {
     return <PremiationPage />;
+  }
+
+  if (releveMatch) {
+    return <RelevePage />;
   }
 
   if (motionGenresMatch) {
