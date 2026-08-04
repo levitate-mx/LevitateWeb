@@ -96,6 +96,7 @@ const maxRegistrationMusicUploadBytes = 12000000;
 const registrationGoogleDriveScope = "https://www.googleapis.com/auth/drive.file";
 const registrationGmailSendScope = "https://www.googleapis.com/auth/gmail.send";
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
+const registrationReleveTeacherMinimumDances = 3;
 const registrationInscriptionPrices = {
   normal: {
     duo: 1400,
@@ -1061,6 +1062,10 @@ async function handleRegistrationParticipants(request, env) {
 
     if (!isInternational && curp.length !== 18) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    }
+
+    if (isReleveTeacher) {
+      await assertRegistrationReleveTeacherEligibility(db, academyId);
     }
 
     await db
@@ -3759,6 +3764,35 @@ async function getRegistrationDances(db, academyId) {
     .all();
 
   return serializeRegistrationDances(db, academyId, dances);
+}
+
+async function getRegistrationAcademyDanceCount(db, academyId) {
+  const row = await db
+    .prepare(
+      `
+        SELECT COUNT(*) AS total
+        FROM registration_dances
+        WHERE academy_id = ?
+      `,
+    )
+    .bind(academyId)
+    .first();
+
+  return Number(row?.total || 0);
+}
+
+async function assertRegistrationReleveTeacherEligibility(db, academyId) {
+  const danceCount = await getRegistrationAcademyDanceCount(db, academyId);
+
+  if (danceCount >= registrationReleveTeacherMinimumDances) {
+    return;
+  }
+
+  throwHttpError(
+    "releve_teacher_requires_dances",
+    `Para registrar un Maestro Relevé, tu academia debe tener al menos ${registrationReleveTeacherMinimumDances} coreografías inscritas. Actualmente tiene ${danceCount}.`,
+    400,
+  );
 }
 
 async function getAllRegistrationProgramDances(db) {

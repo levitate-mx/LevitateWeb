@@ -19088,6 +19088,15 @@ button {
   font-weight: 650;
 }
 
+.levitate-admin-check-card--disabled {
+  color: rgba(17, 16, 21, 0.52);
+  cursor: not-allowed;
+}
+
+.levitate-admin-check-card--disabled input {
+  cursor: not-allowed;
+}
+
 .levitate-admin-field__label {
   display: inline-flex;
   align-items: center;

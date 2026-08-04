@@ -2915,12 +2915,19 @@ function AdminSidebar({
 
 function ParticipantRegistrationPanel({
   academyVenue,
+  registeredDanceCount,
   onParticipantCreated,
 }: {
   academyVenue: string;
+  registeredDanceCount: number;
   onParticipantCreated: (participant: RegistrationParticipant) => void;
 }) {
   const eventDate = venueEventDates[academyVenue] ?? venueEventDates.cdmx;
+  const releveTeacherMinimumDances = 3;
+  const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
+  const releveTeacherHelper = canRegisterReleveTeacher
+    ? "Disponible porque tu academia ya tiene 3 coreografías inscritas."
+    : `Disponible al tener mínimo ${releveTeacherMinimumDances} coreografías inscritas de tu academia. Actualmente tienes ${registeredDanceCount}.`;
   const [curp, setCurp] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [ageValue, setAgeValue] = useState("");
@@ -3003,9 +3010,18 @@ function ParticipantRegistrationPanel({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const wantsReleveTeacher = formData.get("isReleveTeacher") === "on";
     setIsSaving(true);
     setStatusMessage("");
     setErrorMessage("");
+
+    if (wantsReleveTeacher && !canRegisterReleveTeacher) {
+      setErrorMessage(
+        `Para registrar un Maestro Relevé, tu academia debe tener al menos ${releveTeacherMinimumDances} coreografías inscritas.`,
+      );
+      setIsSaving(false);
+      return;
+    }
 
     try {
       const response = await requestRegistrationApi<{ participant: RegistrationParticipant }>("/api/registration/participants", {
@@ -3017,7 +3033,7 @@ function ParticipantRegistrationPanel({
           division: getFormValue(formData, "division"),
           shirtSize: getFormValue(formData, "shirtSize"),
           isInternational: formData.get("isInternational") === "on",
-          isReleveTeacher: formData.get("isReleveTeacher") === "on",
+          isReleveTeacher: wantsReleveTeacher,
         }),
         method: "POST",
       });
@@ -3094,10 +3110,11 @@ function ParticipantRegistrationPanel({
         <AdminField icon={Shirt} label="Talla playera">
           <AdminSelect defaultValue="6_8" id="participant-shirt" name="shirtSize" options={shirtSizes} />
         </AdminField>
-        <label className="levitate-admin-check-card">
-          <input name="isReleveTeacher" type="checkbox" />
+        <label className={`levitate-admin-check-card${canRegisterReleveTeacher ? "" : " levitate-admin-check-card--disabled"}`}>
+          <input disabled={!canRegisterReleveTeacher} name="isReleveTeacher" type="checkbox" />
           <span>
             <strong>Soy Maestro Relevé</strong>
+            <small>{releveTeacherHelper}</small>
           </span>
         </label>
         <div className="levitate-admin-form__wide-block">
@@ -4814,7 +4831,13 @@ function getAdminScreen({
   }
 
   if (screen === "participants") {
-    return <ParticipantRegistrationPanel academyVenue={session.academy.venue} onParticipantCreated={onParticipantCreated} />;
+    return (
+      <ParticipantRegistrationPanel
+        academyVenue={session.academy.venue}
+        onParticipantCreated={onParticipantCreated}
+        registeredDanceCount={dances.length}
+      />
+    );
   }
 
   if (screen === "dance") {
@@ -5081,7 +5104,7 @@ export function LevitateAuthRoute() {
 export function LevitateParticipantRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ParticipantRegistrationPanel academyVenue="cdmx" onParticipantCreated={() => undefined} />
+      <ParticipantRegistrationPanel academyVenue="cdmx" onParticipantCreated={() => undefined} registeredDanceCount={0} />
     </RegistrationPageScaffold>
   );
 }
