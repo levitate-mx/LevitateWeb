@@ -70,6 +70,11 @@ type BuyerData = {
   whatsapp: string;
 };
 
+type PersistedShopCheckout = {
+  buyerData: BuyerData;
+  order: ShopOrder;
+};
+
 type ShopPaymentProof = {
   id: string;
   fileName: string;
@@ -357,6 +362,8 @@ const mediaVenueLabels: Record<string, string> = {
 
 const ticketCartCookieName = "levitate_ticket_cart";
 const mediaCartCookieName = "levitate_media_cart";
+const ticketCheckoutCookieName = "levitate_ticket_checkout";
+const mediaCheckoutCookieName = "levitate_media_checkout";
 const cartCookieMaxAgeSeconds = 60 * 60 * 24 * 30;
 
 function formatCurrency(value: number) {
@@ -464,6 +471,90 @@ function normalizeStoredMediaCartItem(item: unknown): MediaCartItem | null {
     id: product.id,
     quantity,
   };
+}
+
+function normalizeStoredBuyerData(value: unknown): BuyerData | null {
+  const candidate = value as Partial<BuyerData> | null;
+  const curp = normalizeCurp(String(candidate?.curp ?? ""));
+  const email = String(candidate?.email ?? "").trim();
+  const name = String(candidate?.name ?? "").trim();
+  const whatsapp = normalizePhone(String(candidate?.whatsapp ?? ""));
+
+  if (!name || curp.length !== 18 || whatsapp.length < 8 || !/^\S+@\S+\.\S+$/.test(email)) {
+    return null;
+  }
+
+  return {
+    curp,
+    email,
+    name,
+    whatsapp,
+  };
+}
+
+function normalizeStoredShopOrder(value: unknown): ShopOrder | null {
+  const candidate = value as Partial<ShopOrder> | null;
+  const status = candidate?.status;
+  const amount = Number(candidate?.amount);
+  const paidAmount = Number(candidate?.paidAmount ?? 0);
+  const validStatuses: ShopOrder["status"][] = ["pending_payment", "payment_reported", "paid", "rejected"];
+
+  if (
+    typeof candidate?.id !== "string" ||
+    typeof candidate?.reference !== "string" ||
+    typeof candidate?.curp !== "string" ||
+    typeof candidate?.participantName !== "string" ||
+    typeof candidate?.academyName !== "string" ||
+    typeof candidate?.venue !== "string" ||
+    !validStatuses.includes(status as ShopOrder["status"]) ||
+    !Number.isFinite(amount) ||
+    !Number.isFinite(paidAmount)
+  ) {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    curp: normalizeCurp(candidate.curp),
+    participantName: candidate.participantName,
+    academyName: candidate.academyName,
+    venue: candidate.venue,
+    reference: candidate.reference,
+    amount,
+    paidAmount,
+    status: status as ShopOrder["status"],
+    proof: candidate.proof ?? null,
+  };
+}
+
+function readCheckoutCookie(name: string): PersistedShopCheckout | null {
+  const storedValue = readCookieValue(name);
+
+  if (!storedValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue = JSON.parse(decodeURIComponent(storedValue)) as Partial<PersistedShopCheckout>;
+    const buyerData = normalizeStoredBuyerData(parsedValue.buyerData);
+    const order = normalizeStoredShopOrder(parsedValue.order);
+
+    return buyerData && order ? { buyerData, order } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCheckoutCookie(name: string, buyerData: BuyerData, order: ShopOrder) {
+  const storedBuyerData = normalizeStoredBuyerData(buyerData);
+  const storedOrder = normalizeStoredShopOrder(order);
+
+  if (!storedBuyerData || !storedOrder) {
+    clearCookieValue(name);
+    return;
+  }
+
+  writeCookieValue(name, JSON.stringify({ buyerData: storedBuyerData, order: storedOrder }));
 }
 
 function normalizePhone(value: string) {
@@ -631,17 +722,25 @@ function TicketShopPage() {
   const [cartItems, setCartItems] = useState<TicketCartItem[]>(() => (
     readCartCookie(ticketCartCookieName, normalizeStoredTicketCartItem)
   ));
-  const [buyerData, setBuyerData] = useState<BuyerData>({ curp: "", email: "", name: "", whatsapp: "" });
+  const [storedCheckout] = useState<PersistedShopCheckout | null>(() => readCheckoutCookie(ticketCheckoutCookieName));
+  const [buyerData, setBuyerData] = useState<BuyerData>(() => storedCheckout?.buyerData ?? {
+    curp: "",
+    email: "",
+    name: "",
+    whatsapp: "",
+  });
   const [buyerError, setBuyerError] = useState("");
-  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
+  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order));
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
-  const [orderReference, setOrderReference] = useState("");
-  const [proofFileName, setProofFileName] = useState("");
-  const [proofMessage, setProofMessage] = useState("");
-  const [isProofSubmitted, setIsProofSubmitted] = useState(false);
+  const [orderReference, setOrderReference] = useState(storedCheckout?.order.reference ?? "");
+  const [proofFileName, setProofFileName] = useState(storedCheckout?.order.proof?.fileName ?? "");
+  const [proofMessage, setProofMessage] = useState(
+    storedCheckout?.order ? "Orden recuperada. Usa esta referencia como concepto de transferencia." : "",
+  );
+  const [isProofSubmitted, setIsProofSubmitted] = useState(Boolean(storedCheckout?.order.proof));
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
-  const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
+  const [shopOrder, setShopOrder] = useState<ShopOrder | null>(storedCheckout?.order ?? null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = ticketPaymentMethods[0];
   const cartLines = useMemo(
@@ -699,6 +798,7 @@ function TicketShopPage() {
     setIsBuyerConfirmed(false);
     setOrderReference("");
     setShopOrder(null);
+    clearCookieValue(ticketCheckoutCookieName);
     clearPaymentProof();
   };
 
@@ -801,6 +901,13 @@ function TicketShopPage() {
       return;
     }
 
+    const confirmedBuyerData = {
+      curp: normalizeCurp(buyerData.curp),
+      email: buyerData.email.trim(),
+      name: buyerData.name.trim(),
+      whatsapp: normalizePhone(buyerData.whatsapp),
+    };
+
     setIsCreatingOrder(true);
     setBuyerError("");
     setProofMessage("");
@@ -808,11 +915,11 @@ function TicketShopPage() {
     try {
       const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order", {
         body: JSON.stringify({
-          buyerEmail: buyerData.email.trim(),
-          buyerName: buyerData.name.trim(),
+          buyerEmail: confirmedBuyerData.email,
+          buyerName: confirmedBuyerData.name,
           buyerPhoneCountryCode: "+52",
-          buyerPhoneNumber: normalizePhone(buyerData.whatsapp),
-          curp: normalizeCurp(buyerData.curp),
+          buyerPhoneNumber: confirmedBuyerData.whatsapp,
+          curp: confirmedBuyerData.curp,
           items: cartLines.map((line) => ({
             optionId: line.optionId,
             optionLabel: line.option?.label,
@@ -824,10 +931,12 @@ function TicketShopPage() {
       });
 
       setShopOrder(payload.order);
+      setBuyerData(confirmedBuyerData);
       setOrderReference(payload.order.reference);
       setIsBuyerConfirmed(true);
       setProofFileName(payload.order.proof?.fileName ?? "");
       setIsProofSubmitted(Boolean(payload.order.proof));
+      writeCheckoutCookie(ticketCheckoutCookieName, confirmedBuyerData, payload.order);
       setProofMessage("Orden generada. Usa esta referencia como concepto de transferencia.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos generar la orden.");
@@ -916,6 +1025,7 @@ function TicketShopPage() {
       setSelectedProofFile(null);
       setCartItems([]);
       clearCookieValue(ticketCartCookieName);
+      clearCookieValue(ticketCheckoutCookieName);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
@@ -1246,20 +1356,28 @@ function PhotoVideoShopPage() {
   const [cartItems, setCartItems] = useState<MediaCartItem[]>(() => (
     readCartCookie(mediaCartCookieName, normalizeStoredMediaCartItem)
   ));
-  const [buyerData, setBuyerData] = useState<BuyerData>({ curp: "", email: "", name: "", whatsapp: "" });
+  const [storedCheckout] = useState<PersistedShopCheckout | null>(() => readCheckoutCookie(mediaCheckoutCookieName));
+  const [buyerData, setBuyerData] = useState<BuyerData>(() => storedCheckout?.buyerData ?? {
+    curp: "",
+    email: "",
+    name: "",
+    whatsapp: "",
+  });
   const [buyerError, setBuyerError] = useState("");
-  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
+  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order));
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isParticipantLookupLoading, setIsParticipantLookupLoading] = useState(false);
-  const [orderReference, setOrderReference] = useState("");
+  const [orderReference, setOrderReference] = useState(storedCheckout?.order.reference ?? "");
   const [participantLookup, setParticipantLookup] = useState<MediaParticipantLookup | null>(null);
-  const [proofFileName, setProofFileName] = useState("");
-  const [proofMessage, setProofMessage] = useState("");
-  const [isProofSubmitted, setIsProofSubmitted] = useState(false);
+  const [proofFileName, setProofFileName] = useState(storedCheckout?.order.proof?.fileName ?? "");
+  const [proofMessage, setProofMessage] = useState(
+    storedCheckout?.order ? "Orden recuperada. Usa esta referencia como concepto de transferencia." : "",
+  );
+  const [isProofSubmitted, setIsProofSubmitted] = useState(Boolean(storedCheckout?.order.proof));
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [selectedDanceId, setSelectedDanceId] = useState("");
-  const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
+  const [shopOrder, setShopOrder] = useState<ShopOrder | null>(storedCheckout?.order ?? null);
   const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = photoVideoPaymentMethods[0];
@@ -1330,6 +1448,7 @@ function PhotoVideoShopPage() {
     setIsBuyerConfirmed(false);
     setOrderReference("");
     setShopOrder(null);
+    clearCookieValue(mediaCheckoutCookieName);
     clearPaymentProof();
   };
 
@@ -1516,6 +1635,13 @@ function PhotoVideoShopPage() {
       return;
     }
 
+    const confirmedBuyerData = {
+      curp: normalizeCurp(buyerData.curp),
+      email: buyerData.email.trim(),
+      name: buyerData.name.trim(),
+      whatsapp: normalizePhone(buyerData.whatsapp),
+    };
+
     setIsCreatingOrder(true);
     setBuyerError("");
     setProofMessage("");
@@ -1523,11 +1649,11 @@ function PhotoVideoShopPage() {
     try {
       const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order", {
         body: JSON.stringify({
-          buyerEmail: buyerData.email.trim(),
-          buyerName: buyerData.name.trim(),
+          buyerEmail: confirmedBuyerData.email,
+          buyerName: confirmedBuyerData.name,
           buyerPhoneCountryCode: "+52",
-          buyerPhoneNumber: normalizePhone(buyerData.whatsapp),
-          curp: normalizeCurp(buyerData.curp),
+          buyerPhoneNumber: confirmedBuyerData.whatsapp,
+          curp: confirmedBuyerData.curp,
           danceId: selectedDance.id,
           items: cartLines.map((line) => ({
             danceId: selectedDance.id,
@@ -1540,10 +1666,12 @@ function PhotoVideoShopPage() {
       });
 
       setShopOrder(payload.order);
+      setBuyerData(confirmedBuyerData);
       setOrderReference(payload.order.reference);
       setIsBuyerConfirmed(true);
       setProofFileName(payload.order.proof?.fileName ?? "");
       setIsProofSubmitted(Boolean(payload.order.proof));
+      writeCheckoutCookie(mediaCheckoutCookieName, confirmedBuyerData, payload.order);
       setProofMessage("Orden generada. Usa esta referencia como concepto de transferencia.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos generar la orden.");
@@ -1632,6 +1760,7 @@ function PhotoVideoShopPage() {
       setSelectedProofFile(null);
       setCartItems([]);
       clearCookieValue(mediaCartCookieName);
+      clearCookieValue(mediaCheckoutCookieName);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
