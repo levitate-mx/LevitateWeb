@@ -228,17 +228,18 @@ const paymentMethodSections = [
     id: "banamex",
     title: "Banamex",
     rows: [
-      { label: "A nombre de", value: "María Laura Ponce" },
-      { label: "Número de cuenta", value: "26988 - Sucursal 4770" },
-      { label: "CLABE interbancaria", value: "002540477000269880" },
+      { label: "Titular", value: "MARIA LAURA PONCE" },
+      { label: "No. de Cuenta (CLABE)", value: "002540477000269880" },
+      { label: "Cuenta", value: "26988 - Sucursal 4770" },
     ],
   },
   {
-    id: "spin",
-    title: "Spin by Oxxo",
+    id: "oxxo",
+    title: "OXXO",
     rows: [
-      { label: "A nombre de", value: "Rodolfo Javier Serrano" },
-      { label: "CLABE interbancaria", value: "728969000061103602" },
+      { label: "Banco", value: "Spin by Oxxo" },
+      { label: "Cuenta CLABE", value: "728969000061103602" },
+      { label: "Titular", value: "Rodolfo Javier Serrano" },
     ],
   },
 ];

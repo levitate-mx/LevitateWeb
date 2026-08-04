@@ -201,6 +201,7 @@ const mediaFeatureSlideDurationSeconds = 4.5;
 const maxPaymentProofBytes = 1800000;
 const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const allowedPaymentProofTypes = paymentProofAccept.split(",");
+const noMediaDancesLinkedMessage = "No hay coreografías vinculadas a este CURP";
 
 const mediaDemoParticipantLookup: MediaParticipantLookup = {
   academyName: "Academia Demo Levitate",
@@ -282,13 +283,12 @@ const boxOfficeSteps = [
 
 const ticketPaymentMethods = [
   {
-    id: "banco-azteca",
-    title: "Banco Azteca",
+    id: "bbva-taquilla",
+    title: "BBVA",
     rows: [
-      { label: "A nombre de", value: "Alexia Sofía Jaimes Ponce" },
-      { label: "Banco", value: "Banco Azteca" },
-      { label: "Número de cuenta", value: "42291362894301" },
-      { label: "CLABE interbancaria", value: "127540013628943018" },
+      { label: "Titular", value: "Alexia Sofía Jaimes Ponce" },
+      { label: "CLABE", value: "012 180 0150 8687132 1" },
+      { label: "Cuenta", value: "150 868 7132" },
     ],
   },
 ];
@@ -1337,7 +1337,17 @@ function PhotoVideoShopPage() {
 
       if (!response.ok) {
         const errorPayload = payload as ApiErrorResponse | null;
-        throw new Error(errorPayload?.error?.message ?? "No pudimos consultar esa CURP.");
+        const shouldShowMissingDancesMessage =
+          response.status === 401 ||
+          response.status === 403 ||
+          response.status === 404 ||
+          errorPayload?.error?.message === "Inicia sesión para consultar una inscripción";
+
+        throw new Error(
+          shouldShowMissingDancesMessage
+            ? noMediaDancesLinkedMessage
+            : errorPayload?.error?.message ?? "No pudimos consultar esa CURP.",
+        );
       }
 
       if (!payload || !("curp" in payload) || !Array.isArray(payload.lines)) {
@@ -1841,7 +1851,7 @@ function PhotoVideoShopPage() {
                   ) : (
                     <div className="media-shop-choreography-empty">
                       <ReceiptText aria-hidden="true" size={22} />
-                      <strong>No hay coreografías asociadas a esta CURP.</strong>
+                      <strong>{noMediaDancesLinkedMessage}</strong>
                     </div>
                   )}
                 </section>
