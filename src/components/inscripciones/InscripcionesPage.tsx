@@ -516,7 +516,11 @@ function InscriptionLookupPanel() {
   const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isProofUploading, setIsProofUploading] = useState(false);
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
+  const paymentPanelRef = useRef<HTMLElement | null>(null);
+  const proofCorrectionRef = useRef<HTMLDivElement | null>(null);
   const proofFileInputRef = useRef<HTMLInputElement | null>(null);
+  const proofUploaderRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToProofRef = useRef(false);
   const selectedPaymentMethod = paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? null;
   const visibleLines = lookup?.lines ?? [];
   const visibleSubtotal = lookup?.subtotal ?? 0;
@@ -544,6 +548,37 @@ function InscriptionLookupPanel() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isTransferVisible]);
+
+  useEffect(() => {
+    if (!isTransferVisible || !selectedPaymentMethod || !shouldScrollToProofRef.current) {
+      return;
+    }
+
+    const scrollToProofUploader = () => {
+      const panel = paymentPanelRef.current;
+      const target = proofCorrectionRef.current ?? proofUploaderRef.current;
+
+      if (!panel || !target) {
+        return;
+      }
+
+      const panelRect = panel.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextScrollTop = panel.scrollTop + targetRect.top - panelRect.top - 16;
+
+      panel.scrollTo({
+        behavior: "auto",
+        top: Math.max(0, nextScrollTop),
+      });
+      shouldScrollToProofRef.current = false;
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(scrollToProofUploader);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isTransferVisible, selectedPaymentMethod]);
 
   const handleCurpChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextCurp = normalizeCurp(event.target.value);
@@ -597,6 +632,7 @@ function InscriptionLookupPanel() {
       setLookup(payload);
       setPhoneCountryCode(payload.order?.buyerPhoneCountryCode ?? defaultPhoneCountryCode);
       setPhoneNumber(payload.order?.buyerPhoneNumber ?? "");
+      shouldScrollToProofRef.current = Boolean(options.autoOpenPayment && payload.order);
       setIsTransferVisible(Boolean(options.autoOpenPayment && payload.order));
       setSelectedPaymentMethodId(options.autoOpenPayment && payload.order ? paymentMethodSections[0]?.id ?? "" : "");
 
@@ -1575,7 +1611,7 @@ function InscriptionLookupPanel() {
           ) : null}
 
           {isTransferVisible && lookup ? (
-            <section className="inscripciones-payment-sidepanel" aria-labelledby="payment-panel-title">
+            <section className="inscripciones-payment-sidepanel" aria-labelledby="payment-panel-title" ref={paymentPanelRef}>
               <header className="inscripciones-payment-sidepanel__header">
                 <div>
                   <span>Datos para pago</span>
@@ -1707,7 +1743,7 @@ function InscriptionLookupPanel() {
                   ) : null}
 
                   {lookup.order?.status === "rejected" && lookup.order.rejectionMessage ? (
-                    <div className="inscripciones-proof-status inscripciones-proof-status--rejected">
+                    <div className="inscripciones-proof-status inscripciones-proof-status--rejected" ref={proofCorrectionRef}>
                       <span>Pago no aprobado</span>
                       <strong>Hay que corregir el pago</strong>
                       <p>{lookup.order.rejectionMessage}</p>
@@ -1715,7 +1751,7 @@ function InscriptionLookupPanel() {
                   ) : null}
 
                   {lookup.order && canUploadPaymentProof ? (
-                    <div className="inscripciones-proof-uploader">
+                    <div className="inscripciones-proof-uploader" ref={proofUploaderRef}>
                       <header>
                         <UploadCloud aria-hidden="true" size={34} />
                         <strong>{hasUploadedPaymentProof ? "Subir nuevo comprobante" : "Subir comprobante de pago"}</strong>
