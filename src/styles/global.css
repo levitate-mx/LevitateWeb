@@ -20117,7 +20117,6 @@ button {
 
 .registration-admin-detail header span,
 .registration-admin-ticket-pack header span,
-.registration-admin-whatsapp-panel header span,
 .registration-admin-proof-preview > span,
 .registration-admin-note span,
 .registration-admin-review-panel span {
@@ -20446,78 +20445,6 @@ button {
   font-weight: 720;
 }
 
-.registration-admin-whatsapp-panel {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid rgba(37, 211, 102, 0.34);
-  border-radius: 8px;
-  background: rgba(37, 211, 102, 0.08);
-}
-
-.registration-admin-whatsapp-panel header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.registration-admin-whatsapp-panel header div {
-  display: grid;
-  gap: 4px;
-}
-
-.registration-admin-whatsapp-panel header strong {
-  color: #111;
-  font-size: 0.98rem;
-  font-weight: 860;
-}
-
-.registration-admin-whatsapp-panel header svg {
-  color: #16843c;
-}
-
-.registration-admin-whatsapp-panel textarea {
-  color-scheme: light;
-  min-height: 132px;
-  resize: vertical;
-  border: 1px solid rgba(37, 211, 102, 0.34);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.78);
-  padding: 12px;
-  color: #111;
-  font: inherit;
-  font-size: 0.84rem;
-  font-weight: 700;
-  line-height: 1.4;
-  -webkit-text-fill-color: #111;
-}
-
-.registration-admin-whatsapp-panel a,
-.registration-admin-whatsapp-panel button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  border: 1px solid #16843c;
-  border-radius: 6px;
-  background: #16843c;
-  color: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 860;
-  text-align: center;
-}
-
-.registration-admin-whatsapp-panel button:disabled {
-  border-color: rgba(17, 17, 17, 0.14);
-  background: rgba(255, 255, 255, 0.72);
-  color: rgba(17, 17, 17, 0.58);
-  cursor: not-allowed;
-}
-
 .registration-admin-note {
   display: grid;
   gap: 8px;
@@ -20547,7 +20474,7 @@ button {
 
 .registration-admin-review-panel {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 14px;
   border: 1px solid rgba(193, 57, 79, 0.18);
   border-radius: 8px;
@@ -20559,8 +20486,7 @@ button {
   gap: 8px;
 }
 
-.registration-admin-review-panel select,
-.registration-admin-review-panel textarea {
+.registration-admin-review-panel select {
   color-scheme: light;
   width: 100%;
   border: 1px solid #dedede;
@@ -20577,18 +20503,34 @@ button {
   padding: 0 12px;
 }
 
-.registration-admin-review-panel textarea {
-  min-height: 112px;
-  resize: vertical;
-  padding: 12px;
-  line-height: 1.35;
-}
-
-.registration-admin-review-panel select:focus,
-.registration-admin-review-panel textarea:focus {
+.registration-admin-review-panel select:focus {
   border-color: #a62c45;
   outline: 0;
   box-shadow: 0 0 0 3px rgba(193, 57, 79, 0.1);
+}
+
+.registration-admin-review-panel__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid #16843c;
+  border-radius: 6px;
+  background: #16843c;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 860;
+  text-align: center;
+}
+
+.registration-admin-review-panel__submit:disabled {
+  border-color: rgba(17, 17, 17, 0.14);
+  background: rgba(17, 17, 17, 0.12);
+  color: rgba(17, 17, 17, 0.46);
+  cursor: not-allowed;
 }
 
 .registration-admin-detail-actions {

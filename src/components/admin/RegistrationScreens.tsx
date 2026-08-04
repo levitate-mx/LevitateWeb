@@ -1218,13 +1218,15 @@ function getRegistrationInscriptionPaymentReference(order: Pick<RegistrationInsc
 
 function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reason: RegistrationPaymentRejectionReason) {
   const amount = formatAdminCurrency(order.amount);
-  const paymentReference = getRegistrationInscriptionPaymentReference(order);
 
   const messages: Record<RegistrationPaymentRejectionReason, string> = {
-    incomplete_amount: `No pudimos aprobar tu pago porque el monto recibido no cubre el total de la orden ${paymentReference}. El total correcto es ${amount}. Te reenviamos los datos de transferencia para completar el pago y contactar a administración con el seguimiento de la diferencia.`,
-    invalid_or_unreadable_proof: `No pudimos aprobar tu pago porque el comprobante de la orden ${paymentReference} no es legible o no corresponde al pago. Te reenviamos los datos de transferencia para que puedas revisar la operación y contactar a administración con la corrección.`,
-    missing_proof: `No pudimos aprobar tu pago porque falta subir el comprobante de la orden ${paymentReference}. Te reenviamos los datos de transferencia para que puedas realizar o confirmar el pago y cargar el comprobante.`,
-    payment_not_found: `No pudimos aprobar tu pago porque no encontramos una transferencia asociada a la referencia ${paymentReference}. Te reenviamos los datos de transferencia para que puedas revisar o realizar el pago y contactar a administración.`,
+    incomplete_amount: `El monto recibido no cubre el total de la orden. El importe correcto es ${amount}. Por favor completa la diferencia o compártenos la aclaración correspondiente para continuar con la validación.`,
+    invalid_or_unreadable_proof:
+      "El comprobante recibido no es legible o no corresponde a esta orden. Por favor envíanos un comprobante claro y relacionado con esta referencia para poder revisarlo nuevamente.",
+    missing_proof:
+      "No tenemos comprobante cargado para esta orden. Por favor sube o envía el comprobante correspondiente para que podamos validar el pago.",
+    payment_not_found:
+      "No encontramos una transferencia asociada a esta referencia. Por favor verifica los datos de transferencia y compártenos el comprobante correcto o la aclaración correspondiente.",
   };
 
   return messages[reason];
@@ -1261,13 +1263,15 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
   const isShopOrder = getAdminOrderType(order) === "shop";
   const ticketLine =
     ticketCount > 0
-      ? `Tus boletos ya quedaron generados. Te enviaremos ${ticketCount === 1 ? "1 boleto" : `${ticketCount} boletos`} en PDF por este chat.`
+      ? `Tus boletos ya fueron generados. Te enviaremos ${ticketCount === 1 ? "1 boleto" : `${ticketCount} boletos`} en PDF por este chat.`
       : isShopOrder
-        ? "Tu compra ya quedó confirmada."
-        : "Tu inscripción ya quedó confirmada.";
+        ? "Tu compra quedó confirmada correctamente."
+        : "Tu inscripción quedó confirmada correctamente.";
 
   return [
-    `Hola, te confirmamos que el pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName} fue aprobado.`,
+    "Hola, te escribe el equipo de administración de Levitate MX.",
+    "",
+    `Te contactamos con relación al pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName}. Confirmamos que fue aprobado correctamente.`,
     "",
     `Orden: ${paymentReference}`,
     `Monto confirmado: ${amount}`,
@@ -1286,7 +1290,9 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
 
   return [
-    `Hola, necesitamos corregir el pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName}.`,
+    "Hola, te escribe el equipo de administración de Levitate MX.",
+    "",
+    `Te contactamos con relación al pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName}. Por el momento no pudimos aprobarlo por el siguiente motivo:`,
     "",
     message,
     "",
@@ -1294,41 +1300,8 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     `Monto esperado: ${formatAdminCurrency(order.amount)}`,
     `Concepto para transferencia: ${paymentReference}`,
     "",
-    "Cuando tengas la corrección, contacta a administración para que podamos revisar tu caso.",
+    "Por favor revisa la información y, cuando tengas la corrección, responde a este chat para que podamos validar nuevamente tu caso.",
   ].join("\n");
-}
-
-function getPaymentWhatsAppAction(order: RegistrationInscriptionOrder, correctionMessage: string) {
-  const phone = getRegistrationOrderWhatsAppPhone(order);
-
-  if (order.status === "paid") {
-    const message = buildPaymentApprovalWhatsAppMessage(order);
-
-    return {
-      href: phone ? buildWhatsAppUrl(phone, message) : "",
-      label: "Enviar confirmación",
-      message,
-      title: "Pago aprobado",
-    };
-  }
-
-  if (order.status === "rejected") {
-    const message = buildPaymentCorrectionWhatsAppMessage(order, correctionMessage);
-
-    return {
-      href: phone ? buildWhatsAppUrl(phone, message) : "",
-      label: "Enviar corrección",
-      message,
-      title: "Pago rechazado",
-    };
-  }
-
-  return {
-    href: "",
-    label: "WhatsApp no disponible",
-    message: "Aprueba o rechaza el pago para generar el mensaje de WhatsApp.",
-    title: "Pendiente de revisión",
-  };
 }
 
 function isAdminTicketLineItem(lineItem: RegistrationInscriptionLineItem) {
@@ -5088,9 +5061,7 @@ function RegistrationAdminOrderDetail({
   const [rejectionReason, setRejectionReason] = useState<RegistrationPaymentRejectionReason>(
     order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof"),
   );
-  const [rejectionMessage, setRejectionMessage] = useState(
-    order ? order.rejectionMessage ?? buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order)) : "",
-  );
+  const [isRejectionOpen, setIsRejectionOpen] = useState(order?.status === "rejected");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -5102,7 +5073,7 @@ function RegistrationAdminOrderDetail({
 
     setNotes(order?.notes ?? "");
     setRejectionReason(nextRejectionReason);
-    setRejectionMessage(order ? order.rejectionMessage ?? buildPaymentRejectionMessage(order, nextRejectionReason) : "");
+    setIsRejectionOpen(order?.status === "rejected");
     setStatusMessage("");
     setErrorMessage("");
     setIsTicketPdfLoading(false);
@@ -5118,12 +5089,12 @@ function RegistrationAdminOrderDetail({
     },
   ) => {
     if (!order) {
-      return;
+      return null;
     }
 
     if (status === "rejected" && !review?.rejectionMessage?.trim()) {
       setErrorMessage("Escribe qué debe corregir la familia para aprobar el pago.");
-      return;
+      return null;
     }
 
     setIsSaving(true);
@@ -5150,8 +5121,10 @@ function RegistrationAdminOrderDetail({
 
       onOrderUpdated(response.order);
       setStatusMessage(status === "paid" ? "Pago aprobado. La orden quedó lista para confirmar por WhatsApp." : "Pago rechazado. El mensaje de corrección quedó guardado.");
+      return response.order;
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo actualizar la orden."));
+      return null;
     } finally {
       setIsSaving(false);
     }
@@ -5160,9 +5133,98 @@ function RegistrationAdminOrderDetail({
   const handleRejectionReasonChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextReason = event.target.value as RegistrationPaymentRejectionReason;
     setRejectionReason(nextReason);
+  };
 
-    if (order) {
-      setRejectionMessage(buildPaymentRejectionMessage(order, nextReason));
+  const openPendingWhatsAppWindow = () => {
+    if (!whatsappPhone || typeof window === "undefined") {
+      return null;
+    }
+
+    const pendingWindow = window.open("about:blank", "_blank");
+
+    if (pendingWindow) {
+      pendingWindow.document.title = "Abriendo WhatsApp";
+      pendingWindow.document.body.style.fontFamily = "Arial, sans-serif";
+      pendingWindow.document.body.style.padding = "24px";
+      pendingWindow.document.body.textContent = "Preparando WhatsApp...";
+    }
+
+    return pendingWindow;
+  };
+
+  const openWhatsAppForOrder = (updatedOrder: RegistrationInscriptionOrder, message: string, pendingWindow: Window | null) => {
+    const phone = getRegistrationOrderWhatsAppPhone(updatedOrder);
+
+    if (!phone) {
+      pendingWindow?.close();
+      setErrorMessage("La orden se actualizó, pero no tiene WhatsApp cargado.");
+      return false;
+    }
+
+    const href = buildWhatsAppUrl(phone, message);
+
+    if (pendingWindow && !pendingWindow.closed) {
+      pendingWindow.opener = null;
+      pendingWindow.location.href = href;
+    } else if (typeof window !== "undefined") {
+      window.open(href, "_blank", "noopener,noreferrer");
+    }
+
+    return true;
+  };
+
+  const handleApprovePayment = async () => {
+    if (!order) {
+      return;
+    }
+
+    const pendingWindow = openPendingWhatsAppWindow();
+    const updatedOrder = await updateOrder("paid", order.amount);
+
+    if (!updatedOrder) {
+      pendingWindow?.close();
+      return;
+    }
+
+    const didOpenWhatsApp = openWhatsAppForOrder(updatedOrder, buildPaymentApprovalWhatsAppMessage(updatedOrder), pendingWindow);
+
+    if (didOpenWhatsApp) {
+      setIsRejectionOpen(false);
+      setStatusMessage("Pago aprobado. Se abrió WhatsApp con la confirmación.");
+    }
+  };
+
+  const handleRejectToggle = () => {
+    setIsRejectionOpen((currentValue) => !currentValue);
+    setStatusMessage("");
+    setErrorMessage("");
+  };
+
+  const handleRejectPayment = async () => {
+    if (!order) {
+      return;
+    }
+
+    const nextRejectionMessage = buildPaymentRejectionMessage(order, rejectionReason);
+    const pendingWindow = openPendingWhatsAppWindow();
+    const updatedOrder = await updateOrder("rejected", order.paidAmount, {
+      rejectionMessage: nextRejectionMessage,
+      rejectionReason,
+    });
+
+    if (!updatedOrder) {
+      pendingWindow?.close();
+      return;
+    }
+
+    const didOpenWhatsApp = openWhatsAppForOrder(
+      updatedOrder,
+      buildPaymentCorrectionWhatsAppMessage(updatedOrder, nextRejectionMessage),
+      pendingWindow,
+    );
+
+    if (didOpenWhatsApp) {
+      setStatusMessage("Pago rechazado. Se abrió WhatsApp con el motivo.");
     }
   };
 
@@ -5201,8 +5263,6 @@ function RegistrationAdminOrderDetail({
 
   const date = getAdminOrderDate(order);
   const whatsappPhone = getRegistrationOrderWhatsAppPhone(order);
-  const whatsappAction = getPaymentWhatsAppAction(order, rejectionMessage);
-  const whatsappDisabledReason = whatsappPhone ? "Primero aprueba o rechaza el pago." : "Esta orden no tiene WhatsApp cargado.";
 
   return (
     <section className="registration-admin-detail" aria-label="Detalle de pago">
@@ -5332,65 +5392,38 @@ function RegistrationAdminOrderDetail({
         </section>
       ) : null}
 
-      <section className="registration-admin-whatsapp-panel" aria-label="Mensaje de WhatsApp">
-        <header>
-          <div>
-            <span>WhatsApp</span>
-            <strong>{whatsappAction.title}</strong>
-          </div>
-          <MessageCircle aria-hidden="true" size={20} />
-        </header>
-        <textarea readOnly value={whatsappAction.message} aria-label="Mensaje preparado para WhatsApp" />
-        {whatsappAction.href ? (
-          <a href={whatsappAction.href} target="_blank" rel="noreferrer">
-            <MessageCircle aria-hidden="true" size={17} />
-            {whatsappAction.label}
-          </a>
-        ) : (
-          <button disabled type="button">
-            {whatsappDisabledReason}
-          </button>
-        )}
-      </section>
-
       <label className="registration-admin-note">
         <span>Nota interna</span>
         <textarea onChange={(event) => setNotes(event.target.value)} placeholder="Escribe una nota interna (opcional)..." value={notes} />
       </label>
 
-      <section className="registration-admin-review-panel" aria-label="Datos de rechazo">
-        <label>
-          <span>Motivo de rechazo</span>
-          <select onChange={handleRejectionReasonChange} value={rejectionReason}>
-            {paymentRejectionReasonOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Mensaje para WhatsApp</span>
-          <textarea
-            onChange={(event) => setRejectionMessage(event.target.value)}
-            placeholder="Explica qué debe corregir la familia para aprobar el pago."
-            value={rejectionMessage}
-          />
-        </label>
-      </section>
-
       <div className="registration-admin-detail-actions">
-        <button disabled={isSaving} onClick={() => updateOrder("paid", order.amount)} type="button">
+        <button disabled={isSaving} onClick={handleApprovePayment} type="button">
           Aprobar pago
         </button>
-        <button
-          disabled={isSaving}
-          onClick={() => updateOrder("rejected", order.paidAmount, { rejectionMessage, rejectionReason })}
-          type="button"
-        >
+        <button aria-expanded={isRejectionOpen} disabled={isSaving} onClick={handleRejectToggle} type="button">
           Rechazar
         </button>
       </div>
+
+      {isRejectionOpen ? (
+        <section className="registration-admin-review-panel" aria-label="Datos de rechazo">
+          <label>
+            <span>Motivo de rechazo</span>
+            <select onChange={handleRejectionReasonChange} value={rejectionReason}>
+              {paymentRejectionReasonOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="registration-admin-review-panel__submit" disabled={isSaving} onClick={handleRejectPayment} type="button">
+            <MessageCircle aria-hidden="true" size={17} />
+            Enviar rechazo por WhatsApp
+          </button>
+        </section>
+      ) : null}
 
       <AdminStatusMessage message={statusMessage} />
       <AdminStatusMessage message={errorMessage} tone="error" />
