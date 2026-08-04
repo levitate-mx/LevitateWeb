@@ -414,6 +414,10 @@ export default {
       return handleRegistrationShopOrder(request, env);
     }
 
+    if (url.pathname === "/api/registration/shop/orders/lookup") {
+      return handleRegistrationShopOrdersLookup(request, env);
+    }
+
     if (url.pathname === "/api/registration/shop/order/proof") {
       return handleRegistrationShopOrderProof(request, env);
     }
@@ -1318,6 +1322,29 @@ async function handleRegistrationShopOrder(request, env) {
   }
 }
 
+async function handleRegistrationShopOrdersLookup(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const body = await readJsonBody(request);
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+
+    if (curp.length !== 18) {
+      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    }
+
+    const orders = await getRegistrationShopOrderRecordsByCurp(db, curp);
+    const serializedOrders = await Promise.all(
+      orders.map(async (order) => serializePublicRegistrationShopOrder(await serializeRegistrationShopOrderWithProof(db, order))),
+    );
+
+    return sendJson({ orders: serializedOrders });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
 async function handleRegistrationShopOrderProof(request, env) {
   try {
     assertMethod(request, ["POST"]);
@@ -1336,7 +1363,7 @@ async function handleRegistrationShopOrderProof(request, env) {
     const order = await getRegistrationShopOrderRecordByIdAndCurp(db, orderId, curp);
     const existingProof = await getLatestRegistrationShopPaymentProof(db, order.id);
 
-    if (existingProof) {
+    if (existingProof && order.status !== "rejected") {
       throwHttpError("payment_proof_already_uploaded", "Esta orden ya tiene un comprobante cargado.", 409);
     }
 
@@ -3250,6 +3277,27 @@ async function getRegistrationShopOrderRecordById(db, orderId) {
   return order;
 }
 
+async function getRegistrationShopOrderRecordsByCurp(db, curp) {
+  const { results = [] } = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_shop_orders
+        WHERE curp = ?
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 25
+      `,
+    )
+    .bind(curp)
+    .all();
+
+  if (results.length === 0) {
+    throwHttpError("registration_shop_order_not_found", "No encontramos órdenes de tienda para esa CURP.", 404);
+  }
+
+  return results;
+}
+
 async function getRegistrationInscriptionOrderRecordById(db, orderId) {
   const order = await db
     .prepare(
@@ -4779,6 +4827,44 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     proof: order.proof ?? null,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
+  };
+}
+
+function serializePublicRegistrationShopOrder(order) {
+  return {
+    id: order.id,
+    curp: order.curp,
+    participantName: order.participantName,
+    academyName: order.academyName,
+    venue: order.venue,
+    reference: order.reference,
+    amount: order.amount,
+    paidAmount: order.paidAmount,
+    status: order.status,
+    paymentMethod: order.paymentMethod,
+    lineItems: order.lineItems ?? [],
+    buyerPhoneCountryCode: order.buyerPhoneCountryCode,
+    buyerPhoneNumber: order.buyerPhoneNumber,
+    buyerPhone: order.buyerPhone,
+    discountCode: order.discountCode,
+    discountAmount: order.discountAmount,
+    paidAt: order.paidAt,
+    reviewedAt: order.reviewedAt,
+    rejectionMessage: order.rejectionMessage,
+    proof: order.proof ? serializePublicRegistrationPaymentProof(order.proof) : null,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
+}
+
+function serializePublicRegistrationPaymentProof(proof) {
+  return {
+    id: proof.id,
+    fileName: proof.fileName,
+    contentType: proof.contentType,
+    fileSize: proof.fileSize,
+    status: proof.status,
+    uploadedAt: proof.uploadedAt,
   };
 }
 

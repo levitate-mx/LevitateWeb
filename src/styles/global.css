@@ -15585,6 +15585,58 @@ button {
   color: var(--ticket-shop-blue);
 }
 
+.ticket-shop-order-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ticket-shop-buyer .ticket-shop-order-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ticket-shop-ink);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.ticket-shop-buyer .ticket-shop-order-list button:hover,
+.ticket-shop-buyer .ticket-shop-order-list button:focus-visible,
+.ticket-shop-buyer .ticket-shop-order-list button.is-selected {
+  border-color: var(--ticket-shop-pink);
+  color: var(--ticket-shop-ink);
+}
+
+.ticket-shop-order-list span {
+  display: grid;
+  gap: 4px;
+}
+
+.ticket-shop-order-list span:last-child {
+  justify-items: end;
+}
+
+.ticket-shop-order-list strong,
+.ticket-shop-order-list b {
+  font-size: 0.95rem;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.ticket-shop-order-list small {
+  color: var(--ticket-shop-muted);
+  font-size: 0.75rem;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
 .media-shop-lookup-actions {
   display: flex;
   margin-top: -6px;

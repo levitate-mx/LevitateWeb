@@ -75,9 +75,16 @@ type ShopPaymentProof = {
   fileName: string;
   contentType: string;
   fileSize: number;
-  dataUrl: string;
+  dataUrl?: string;
   status: string;
   uploadedAt: string;
+};
+
+type ShopOrderLineItem = {
+  amount?: number;
+  productName?: string;
+  quantity?: number;
+  title?: string;
 };
 
 type ShopOrder = {
@@ -90,6 +97,7 @@ type ShopOrder = {
   amount: number;
   paidAmount: number;
   status: "pending_payment" | "payment_reported" | "paid" | "rejected";
+  lineItems?: ShopOrderLineItem[];
   proof?: ShopPaymentProof | null;
 };
 
@@ -355,8 +363,27 @@ const mediaVenueLabels: Record<string, string> = {
   veracruz: "Primavera 2027 - Veracruz",
 };
 
+const shopOrderStatusLabels: Record<ShopOrder["status"], string> = {
+  paid: "Pago aprobado",
+  payment_reported: "Comprobante en revisión",
+  pending_payment: "Pendiente de comprobante",
+  rejected: "Pago rechazado",
+};
+
 function formatCurrency(value: number) {
   return currencyFormatter.format(value);
+}
+
+function getShopOrderStatusLabel(status: ShopOrder["status"]) {
+  return shopOrderStatusLabels[status] ?? "Orden";
+}
+
+function getShopOrderConcept(order: ShopOrder) {
+  const firstItem = order.lineItems?.[0];
+  const firstTitle = firstItem?.title || firstItem?.productName || "Compra de tienda";
+  const extraCount = Math.max((order.lineItems?.length ?? 0) - 1, 0);
+
+  return extraCount > 0 ? `${firstTitle} + ${extraCount}` : firstTitle;
 }
 
 function getProduct(productId: TicketProduct["id"]) {
@@ -526,6 +553,76 @@ export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
   return shopMode === "media" ? <PhotoVideoShopPage /> : <TicketShopPage />;
 }
 
+function ShopOrderLookupPanel({
+  curp,
+  isLoading,
+  onCurpChange,
+  onSelectOrder,
+  onSubmit,
+  orders,
+  selectedOrderId,
+}: {
+  curp: string;
+  isLoading: boolean;
+  onCurpChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSelectOrder: (order: ShopOrder) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  orders: ShopOrder[];
+  selectedOrderId?: string;
+}) {
+  return (
+    <form className="ticket-shop-buyer ticket-shop-order-lookup" onSubmit={onSubmit}>
+      <header>
+        <FileCheck2 aria-hidden="true" size={22} />
+        <span>Ya tengo una orden</span>
+      </header>
+      <div className="ticket-shop-buyer__notice">
+        <Info aria-hidden="true" size={18} />
+        <span>Consulta por CURP para continuar una compra pendiente y cargar el comprobante.</span>
+      </div>
+      <label>
+        <span>CURP del participante</span>
+        <div>
+          <FileCheck2 aria-hidden="true" size={17} />
+          <input
+            autoCapitalize="characters"
+            autoComplete="off"
+            inputMode="text"
+            maxLength={18}
+            onChange={onCurpChange}
+            type="text"
+            value={curp}
+          />
+        </div>
+      </label>
+      <button disabled={isLoading} type="submit">
+        {isLoading ? "Buscando órdenes..." : "Consultar órdenes"} <ArrowRight aria-hidden="true" size={18} />
+      </button>
+      {orders.length ? (
+        <div className="ticket-shop-order-list" aria-label="Órdenes encontradas">
+          {orders.map((order) => (
+            <button
+              className={selectedOrderId === order.id ? "is-selected" : ""}
+              key={order.id}
+              onClick={() => onSelectOrder(order)}
+              type="button"
+            >
+              <span>
+                <strong>{order.reference}</strong>
+                <small>{getShopOrderConcept(order)}</small>
+              </span>
+              <span>
+                <b>{formatCurrency(order.amount)}</b>
+                <small>{getShopOrderStatusLabel(order.status)}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </form>
+  );
+}
+
 function TicketShopPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
@@ -542,7 +639,10 @@ function TicketShopPage() {
   const [buyerError, setBuyerError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isOrderLookupLoading, setIsOrderLookupLoading] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [orderLookupCurp, setOrderLookupCurp] = useState("");
+  const [recoveredOrders, setRecoveredOrders] = useState<ShopOrder[]>([]);
   const [orderReference, setOrderReference] = useState("");
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
@@ -565,7 +665,7 @@ function TicketShopPage() {
   );
   const ticketCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
-  const hasUploadedProof = Boolean(shopOrder?.proof) || isProofSubmitted;
+  const hasUploadedProof = (Boolean(shopOrder?.proof) || isProofSubmitted) && shopOrder?.status !== "rejected";
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -664,6 +764,68 @@ function TicketShopPage() {
     setBuyerError("");
     if (isBuyerConfirmed) {
       markCheckoutDirty();
+    }
+  };
+
+  const updateOrderLookupCurp = (event: ChangeEvent<HTMLInputElement>) => {
+    setOrderLookupCurp(normalizeCurp(event.target.value));
+    setRecoveredOrders([]);
+    setBuyerError("");
+
+    if (isBuyerConfirmed) {
+      markCheckoutDirty();
+    }
+  };
+
+  const selectRecoveredOrder = (order: ShopOrder) => {
+    setShopOrder(order);
+    setOrderReference(order.reference);
+    setBuyerData((current) => ({ ...current, curp: order.curp }));
+    setOrderLookupCurp(order.curp);
+    setIsBuyerConfirmed(true);
+    setProofFileName(order.status === "rejected" ? "" : order.proof?.fileName ?? "");
+    setIsProofSubmitted(Boolean(order.proof) && order.status !== "rejected");
+    setSelectedProofFile(null);
+    setBuyerError("");
+    setProofMessage(
+      order.status === "rejected"
+        ? "Esta orden fue rechazada. Puedes subir un comprobante corregido."
+        : order.proof
+        ? "Esta orden ya tiene un comprobante cargado. Administración revisará tu pago."
+        : "Orden recuperada. Puedes subir el comprobante de transferencia.",
+    );
+  };
+
+  const handleOrderLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedCurp = normalizeCurp(orderLookupCurp);
+    setOrderLookupCurp(normalizedCurp);
+    setBuyerError("");
+    setProofMessage("");
+
+    if (normalizedCurp.length !== 18) {
+      setBuyerError("Ingresa la CURP completa para consultar sus órdenes.");
+      return;
+    }
+
+    setIsOrderLookupLoading(true);
+
+    try {
+      const payload = await requestShopApi<{ orders: ShopOrder[] }>("/api/registration/shop/orders/lookup", {
+        body: JSON.stringify({ curp: normalizedCurp }),
+        method: "POST",
+      });
+
+      setRecoveredOrders(payload.orders);
+      if (payload.orders.length === 1) {
+        selectRecoveredOrder(payload.orders[0]);
+      }
+    } catch (error) {
+      setRecoveredOrders([]);
+      setBuyerError(error instanceof Error ? error.message : "No pudimos consultar las órdenes.");
+    } finally {
+      setIsOrderLookupLoading(false);
     }
   };
 
@@ -1070,6 +1232,16 @@ function TicketShopPage() {
               </dl>
             </section>
 
+            <ShopOrderLookupPanel
+              curp={orderLookupCurp}
+              isLoading={isOrderLookupLoading}
+              onCurpChange={updateOrderLookupCurp}
+              onSelectOrder={selectRecoveredOrder}
+              onSubmit={handleOrderLookupSubmit}
+              orders={recoveredOrders}
+              selectedOrderId={shopOrder?.id}
+            />
+
             <form className="ticket-shop-buyer" onSubmit={handleBuyerSubmit}>
               <header>
                 <ReceiptText aria-hidden="true" size={22} />
@@ -1124,8 +1296,8 @@ function TicketShopPage() {
                   {isCreatingOrder ? "Generando orden..." : "Continuar a checkout"} <ArrowRight aria-hidden="true" size={18} />
                 </button>
               ) : null}
-              {isBuyerConfirmed && ticketCount > 0 ? renderTransferCheckout() : null}
             </form>
+            {isBuyerConfirmed && shopOrder ? renderTransferCheckout() : null}
           </aside>
         </div>
 
@@ -1149,9 +1321,11 @@ function PhotoVideoShopPage() {
   const [buyerError, setBuyerError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isOrderLookupLoading, setIsOrderLookupLoading] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isParticipantLookupLoading, setIsParticipantLookupLoading] = useState(false);
   const [orderReference, setOrderReference] = useState("");
+  const [orderLookupCurp, setOrderLookupCurp] = useState("");
   const [participantLookup, setParticipantLookup] = useState<MediaParticipantLookup | null>(null);
   const [proofFileName, setProofFileName] = useState("");
   const [proofMessage, setProofMessage] = useState("");
@@ -1159,6 +1333,7 @@ function PhotoVideoShopPage() {
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [selectedDanceId, setSelectedDanceId] = useState("");
   const [shopOrder, setShopOrder] = useState<ShopOrder | null>(null);
+  const [recoveredOrders, setRecoveredOrders] = useState<ShopOrder[]>([]);
   const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = photoVideoPaymentMethods[0];
@@ -1174,7 +1349,7 @@ function PhotoVideoShopPage() {
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
   const selectedDance = participantLookup?.lines.find((line) => line.id === selectedDanceId) ?? null;
   const activeMediaFeatureSlide = mediaFeatureSlides[mediaFeatureSlideIndex] ?? mediaFeatureSlides[0];
-  const hasUploadedProof = Boolean(shopOrder?.proof) || isProofSubmitted;
+  const hasUploadedProof = (Boolean(shopOrder?.proof) || isProofSubmitted) && shopOrder?.status !== "rejected";
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -1290,6 +1465,68 @@ function PhotoVideoShopPage() {
 
     if (isBuyerConfirmed) {
       markCheckoutDirty();
+    }
+  };
+
+  const updateOrderLookupCurp = (event: ChangeEvent<HTMLInputElement>) => {
+    setOrderLookupCurp(normalizeCurp(event.target.value));
+    setRecoveredOrders([]);
+    setBuyerError("");
+
+    if (isBuyerConfirmed) {
+      markCheckoutDirty();
+    }
+  };
+
+  const selectRecoveredOrder = (order: ShopOrder) => {
+    setShopOrder(order);
+    setOrderReference(order.reference);
+    setBuyerData((current) => ({ ...current, curp: order.curp }));
+    setOrderLookupCurp(order.curp);
+    setIsBuyerConfirmed(true);
+    setProofFileName(order.status === "rejected" ? "" : order.proof?.fileName ?? "");
+    setIsProofSubmitted(Boolean(order.proof) && order.status !== "rejected");
+    setSelectedProofFile(null);
+    setBuyerError("");
+    setProofMessage(
+      order.status === "rejected"
+        ? "Esta orden fue rechazada. Puedes subir un comprobante corregido."
+        : order.proof
+        ? "Esta orden ya tiene un comprobante cargado. Administración revisará tu pago."
+        : "Orden recuperada. Puedes subir el comprobante de transferencia.",
+    );
+  };
+
+  const handleOrderLookupSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedCurp = normalizeCurp(orderLookupCurp);
+    setOrderLookupCurp(normalizedCurp);
+    setBuyerError("");
+    setProofMessage("");
+
+    if (normalizedCurp.length !== 18) {
+      setBuyerError("Ingresa la CURP completa para consultar sus órdenes.");
+      return;
+    }
+
+    setIsOrderLookupLoading(true);
+
+    try {
+      const payload = await requestShopApi<{ orders: ShopOrder[] }>("/api/registration/shop/orders/lookup", {
+        body: JSON.stringify({ curp: normalizedCurp }),
+        method: "POST",
+      });
+
+      setRecoveredOrders(payload.orders);
+      if (payload.orders.length === 1) {
+        selectRecoveredOrder(payload.orders[0]);
+      }
+    } catch (error) {
+      setRecoveredOrders([]);
+      setBuyerError(error instanceof Error ? error.message : "No pudimos consultar las órdenes.");
+    } finally {
+      setIsOrderLookupLoading(false);
     }
   };
 
@@ -1786,6 +2023,16 @@ function PhotoVideoShopPage() {
               </dl>
             </section>
 
+            <ShopOrderLookupPanel
+              curp={orderLookupCurp}
+              isLoading={isOrderLookupLoading}
+              onCurpChange={updateOrderLookupCurp}
+              onSelectOrder={selectRecoveredOrder}
+              onSubmit={handleOrderLookupSubmit}
+              orders={recoveredOrders}
+              selectedOrderId={shopOrder?.id}
+            />
+
             <form className="ticket-shop-buyer" onSubmit={handleBuyerSubmit}>
               <header>
                 <ReceiptText aria-hidden="true" size={22} />
@@ -1876,8 +2123,8 @@ function PhotoVideoShopPage() {
                   {isCreatingOrder ? "Generando orden..." : "Continuar a checkout"} <ArrowRight aria-hidden="true" size={18} />
                 </button>
               ) : null}
-              {isBuyerConfirmed && mediaItemCount > 0 ? renderTransferCheckout() : null}
             </form>
+            {isBuyerConfirmed && shopOrder ? renderTransferCheckout() : null}
           </aside>
         </div>
       </section>
