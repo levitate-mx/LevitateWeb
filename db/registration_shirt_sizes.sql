@@ -116,7 +116,7 @@ CREATE TABLE registration_recognition_documents_next (
   document_type TEXT NOT NULL CHECK (document_type IN ('academy_recognition', 'participant_diploma', 'choreographer_diploma')),
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   recipient_type TEXT NOT NULL CHECK (recipient_type IN ('academy', 'participant', 'choreographer')),
   recipient_id TEXT,
   recipient_name TEXT NOT NULL,

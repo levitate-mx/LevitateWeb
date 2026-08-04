@@ -4,7 +4,42 @@ const registrationStudentSessionCookieName = "levitate_registration_student_sess
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const registrationEmailVerificationMaxAgeMinutes = 60 * 24 * 2;
 const registrationPasswordResetMaxAgeMinutes = 60;
-const registrationVenues = new Set(["cdmx", "puebla", "edomex"]);
+const registrationVenues = new Set(["cdmx", "puebla", "edomex", "veracruz"]);
+const registrationAcademyOriginTypes = new Set(["mexico", "international"]);
+const registrationMexicoStates = new Set([
+  "aguascalientes",
+  "baja_california",
+  "baja_california_sur",
+  "campeche",
+  "chiapas",
+  "chihuahua",
+  "ciudad_de_mexico",
+  "coahuila",
+  "colima",
+  "durango",
+  "estado_de_mexico",
+  "guanajuato",
+  "guerrero",
+  "hidalgo",
+  "jalisco",
+  "michoacan",
+  "morelos",
+  "nayarit",
+  "nuevo_leon",
+  "oaxaca",
+  "puebla",
+  "queretaro",
+  "quintana_roo",
+  "san_luis_potosi",
+  "sinaloa",
+  "sonora",
+  "tabasco",
+  "tamaulipas",
+  "tlaxcala",
+  "veracruz",
+  "yucatan",
+  "zacatecas",
+]);
 const registrationDivisions = new Set(["baby", "mini", "petite", "junior", "teen", "adulto", "senior", "legacy", "releve"]);
 const registrationShirtSizes = new Set(["6_8", "10_12", "xs", "s", "m", "l", "xl"]);
 const registrationGenres = new Set(["aereo", "motion"]);
@@ -391,6 +426,10 @@ export default {
       return handleRegistrationAdminProgram(request, env);
     }
 
+    if (url.pathname === "/api/registration/admin/participants") {
+      return handleRegistrationAdminParticipants(request, env);
+    }
+
     if (url.pathname === "/api/registration/admin/inscription-order/status") {
       return handleRegistrationAdminInscriptionOrderStatus(request, env);
     }
@@ -559,12 +598,17 @@ async function handleRegistrationRegister(request, env) {
     const academyName = requireString(body.academy, "academy");
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
     const phone = optionalString(body.phone);
+    const academyOriginType = requireRegistrationChoice(body.academyOriginType || "mexico", "academyOriginType", registrationAcademyOriginTypes);
+    const academyOriginState =
+      academyOriginType === "mexico" ? requireRegistrationChoice(body.academyState, "academyState", registrationMexicoStates) : null;
+    const academyOriginCountry = academyOriginType === "international" ? requireString(body.academyCountry, "academyCountry").slice(0, 90) : "México";
 
     if (password.length < 8) {
       throwHttpError("weak_password", "La contraseña debe tener al menos 8 caracteres", 400);
     }
 
     const db = getDb(env);
+    await ensureRegistrationAcademyOriginColumns(db);
     const existingUser = await db
       .prepare(
         `
@@ -594,17 +638,23 @@ async function handleRegistrationRegister(request, env) {
             venue,
             contact_name,
             email,
-            phone
+            phone,
+            origin_type,
+            origin_state,
+            origin_country
           )
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (name, venue) DO UPDATE SET
             contact_name = excluded.contact_name,
             email = excluded.email,
             phone = excluded.phone,
+            origin_type = excluded.origin_type,
+            origin_state = excluded.origin_state,
+            origin_country = excluded.origin_country,
             updated_at = datetime('now')
         `,
       )
-      .bind(academyId, academyName, venue, name, email, phone || null)
+      .bind(academyId, academyName, venue, name, email, phone || null, academyOriginType, academyOriginState, academyOriginCountry)
       .run();
 
     const academy = await db
@@ -1043,7 +1093,7 @@ async function handleRegistrationParticipants(request, env) {
 
     const body = await readJsonBody(request);
     const fullName = requireString(body.fullName, "fullName");
-    const isInternational = optionalBoolean(body.isInternational);
+    const isInternational = session.academy.originType === "international";
     const curp = isInternational
       ? normalizeRegistrationDocument(requireString(body.curp, "documentNumber"))
       : normalizeCurp(requireString(body.curp, "curp"));
@@ -1526,6 +1576,24 @@ async function handleRegistrationAdminProgram(request, env) {
 
     return sendJson({
       dances: await getAllRegistrationProgramDances(db),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminParticipants(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+
+    const db = getDb(env);
+    await requireRegistrationAdmin(request, env, db);
+    await ensureRegistrationAcademyOriginColumns(db);
+    await ensureRegistrationParticipantInternationalColumn(db);
+    await ensureRegistrationParticipantReleveTeacherColumn(db);
+
+    return sendJson({
+      participants: await getAllRegistrationAdminParticipants(db),
     });
   } catch (error) {
     return sendRegistrationError(error);
@@ -2208,7 +2276,8 @@ function getRegistrationVenueLabel(venue) {
   const labels = {
     cdmx: "CDMX - 29 /31 mayo 2026",
     puebla: "Puebla - 7 junio 2026",
-    edomex: "Edo. Méx. - 13 /15 noviembre 2026",
+    edomex: "Otoño 2026 - Estado de México",
+    veracruz: "Primavera 2027 - Veracruz",
   };
 
   return labels[venue] || venue;
@@ -2427,6 +2496,7 @@ async function ensureRegistrationStudentProfile(db, curp) {
 
 async function getRegistrationStateFromRequest({ db, request }) {
   await ensureRegistrationUserRoleColumn(db);
+  await ensureRegistrationAcademyOriginColumns(db);
 
   const sessionToken = readCookie(request, registrationSessionCookieName);
 
@@ -2450,7 +2520,10 @@ async function getRegistrationStateFromRequest({ db, request }) {
           registration_academies.venue,
           registration_academies.contact_name,
           registration_academies.email AS academy_email,
-          registration_academies.phone
+          registration_academies.phone,
+          registration_academies.origin_type AS academy_origin_type,
+          registration_academies.origin_state AS academy_origin_state,
+          registration_academies.origin_country AS academy_origin_country
         FROM registration_sessions
         INNER JOIN registration_users ON registration_users.id = registration_sessions.user_id
         INNER JOIN registration_academies ON registration_academies.id = registration_users.academy_id
@@ -2616,6 +2689,7 @@ async function requireRegistrationCurpExists(db, curp) {
 
 async function getRegistrationStateByUserId(db, userId) {
   await ensureRegistrationUserRoleColumn(db);
+  await ensureRegistrationAcademyOriginColumns(db);
 
   const row = await db
     .prepare(
@@ -2632,7 +2706,10 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_academies.venue,
           registration_academies.contact_name,
           registration_academies.email AS academy_email,
-          registration_academies.phone
+          registration_academies.phone,
+          registration_academies.origin_type AS academy_origin_type,
+          registration_academies.origin_state AS academy_origin_state,
+          registration_academies.origin_country AS academy_origin_country
         FROM registration_users
         INNER JOIN registration_academies ON registration_academies.id = registration_users.academy_id
         WHERE registration_users.id = ?
@@ -3753,6 +3830,31 @@ async function getRegistrationParticipants(db, academyId) {
   return results.map(serializeRegistrationParticipant);
 }
 
+async function getAllRegistrationAdminParticipants(db) {
+  const { results = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_participants.*,
+          registration_academies.name AS academy_name,
+          registration_academies.venue AS academy_venue,
+          registration_academies.contact_name AS academy_contact_name,
+          registration_academies.email AS academy_email,
+          registration_academies.phone AS academy_phone,
+          registration_academies.origin_type AS academy_origin_type,
+          registration_academies.origin_state AS academy_origin_state,
+          registration_academies.origin_country AS academy_origin_country
+        FROM registration_participants
+        INNER JOIN registration_academies
+          ON registration_academies.id = registration_participants.academy_id
+        ORDER BY registration_academies.name ASC, registration_participants.full_name ASC
+      `,
+    )
+    .all();
+
+  return results.map(serializeRegistrationAdminParticipant);
+}
+
 async function getRegistrationChoreographers(db, academyId) {
   const { results = [] } = await db
     .prepare(
@@ -4110,6 +4212,9 @@ function serializeRegistrationSession(row) {
       contactName: row.contact_name,
       email: row.academy_email,
       phone: row.phone,
+      originType: row.academy_origin_type || "mexico",
+      originState: row.academy_origin_state || null,
+      originCountry: row.academy_origin_country || "México",
     },
   };
 }
@@ -4126,6 +4231,21 @@ function serializeRegistrationParticipant(participant) {
     isInternational: Boolean(participant.is_international),
     isReleveTeacher: Boolean(participant.is_releve_teacher),
     createdAt: participant.created_at,
+  };
+}
+
+function serializeRegistrationAdminParticipant(participant) {
+  return {
+    ...serializeRegistrationParticipant(participant),
+    academyId: participant.academy_id,
+    academyName: participant.academy_name,
+    academyVenue: participant.academy_venue,
+    academyContactName: participant.academy_contact_name,
+    academyEmail: participant.academy_email,
+    academyPhone: participant.academy_phone,
+    academyOriginType: participant.academy_origin_type || "mexico",
+    academyOriginState: participant.academy_origin_state || null,
+    academyOriginCountry: participant.academy_origin_country || "México",
   };
 }
 
@@ -4254,6 +4374,30 @@ async function ensureRegistrationInscriptionOrderBuyerPhoneColumns(db) {
         if (!String(error?.message || error).match(/duplicate column name/i)) {
           throw error;
         }
+      }
+    }
+  }
+}
+
+async function ensureRegistrationAcademyOriginColumns(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_academies)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+  const requiredColumns = [
+    ["origin_type", "TEXT NOT NULL DEFAULT 'mexico' CHECK (origin_type IN ('mexico', 'international'))"],
+    ["origin_state", "TEXT"],
+    ["origin_country", "TEXT NOT NULL DEFAULT 'México'"],
+  ];
+
+  for (const [name, definition] of requiredColumns) {
+    if (existingColumns.has(name)) {
+      continue;
+    }
+
+    try {
+      await db.prepare(`ALTER TABLE registration_academies ADD COLUMN ${name} ${definition}`).run();
+    } catch (error) {
+      if (!String(error?.message || error).match(/duplicate column name/i)) {
+        throw error;
       }
     }
   }

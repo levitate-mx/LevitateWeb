@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS registration_shop_orders (
   participant_name TEXT NOT NULL,
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),

@@ -293,9 +293,10 @@ const levelLabels: Record<string, string> = {
 };
 
 const venueLabels: Record<string, string> = {
-  cdmx: "CDMX",
-  edomex: "Estado de México",
+  cdmx: "CDMX - 29 /31 mayo 2026",
+  edomex: "Otoño 2026 - Estado de México",
   puebla: "Puebla",
+  veracruz: "Primavera 2027 - Veracruz",
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {

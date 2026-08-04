@@ -19825,6 +19825,14 @@ button {
   grid-template-columns: minmax(280px, 1fr) minmax(170px, 0.42fr) minmax(190px, 0.45fr);
 }
 
+.registration-admin-filters--media {
+  grid-template-columns: minmax(280px, 1fr) minmax(170px, 0.42fr) minmax(190px, 0.45fr);
+}
+
+.registration-admin-filters--registrations {
+  grid-template-columns: minmax(280px, 1fr) minmax(220px, 0.8fr) minmax(170px, 0.52fr) minmax(190px, 0.62fr);
+}
+
 .registration-admin-grid {
   min-width: 0;
 }
@@ -19885,6 +19893,10 @@ button {
   background: #f2f2f2;
 }
 
+.registration-admin-table__row--static {
+  cursor: default;
+}
+
 .registration-admin-table__row span {
   min-width: 0;
   overflow: hidden;
@@ -19906,6 +19918,55 @@ button {
 .registration-admin-ticket-table .registration-admin-table__head,
 .registration-admin-ticket-table .registration-admin-table__row {
   grid-template-columns: 1.18fr 1.08fr 1.18fr 0.9fr 0.58fr 0.72fr 0.72fr 0.72fr 0.72fr 1.08fr;
+}
+
+.registration-admin-media-table .registration-admin-table__head,
+.registration-admin-media-table .registration-admin-table__row {
+  grid-template-columns: 1.1fr 1.1fr 1.16fr 1.08fr 1.3fr 0.74fr 0.86fr 0.92fr 0.78fr 0.52fr;
+}
+
+.registration-admin-participants-card {
+  display: grid;
+  gap: 0;
+}
+
+.registration-admin-participant-group + .registration-admin-participant-group {
+  border-top: 1px solid #dedede;
+}
+
+.registration-admin-participant-group > header {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 14px;
+  background: #fff;
+}
+
+.registration-admin-participant-group > header strong {
+  display: block;
+  color: #171717;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.registration-admin-participant-group > header span {
+  display: block;
+  margin-top: 3px;
+  color: rgba(17, 17, 17, 0.56);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.registration-admin-participants-table {
+  min-width: 980px;
+}
+
+.registration-admin-participants-table .registration-admin-table__head,
+.registration-admin-participants-table .registration-admin-table__row {
+  grid-template-columns: 1.35fr 1.15fr 0.88fr 0.46fr 0.56fr 0.56fr 0.92fr 0.72fr;
 }
 
 .registration-admin-ticket-number {
@@ -19954,6 +20015,12 @@ button {
   border-color: rgba(193, 57, 79, 0.34);
   background: rgba(193, 57, 79, 0.08);
   color: #a62c45;
+}
+
+.registration-admin-status--no-order {
+  border-color: rgba(17, 17, 17, 0.18);
+  background: rgba(17, 17, 17, 0.05);
+  color: rgba(17, 17, 17, 0.58);
 }
 
 .registration-admin-empty {

@@ -46,7 +46,7 @@ CREATE TABLE registration_dances_next (
     (genre = 'motion' AND level IS NULL)
     OR (genre = 'aereo' AND level IN ('nudo', 'principiante', 'intermedio', 'avanzado', 'elite'))
   ),
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

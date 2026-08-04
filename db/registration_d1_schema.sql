@@ -3,10 +3,13 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS registration_academies (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   contact_name TEXT NOT NULL,
   email TEXT NOT NULL COLLATE NOCASE,
   phone TEXT,
+  origin_type TEXT NOT NULL DEFAULT 'mexico' CHECK (origin_type IN ('mexico', 'international')),
+  origin_state TEXT,
+  origin_country TEXT NOT NULL DEFAULT 'México',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (name, venue)
@@ -108,7 +111,7 @@ CREATE TABLE IF NOT EXISTS registration_inscription_orders (
   participant_name TEXT NOT NULL,
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
@@ -146,7 +149,7 @@ CREATE TABLE IF NOT EXISTS registration_shop_orders (
   participant_name TEXT NOT NULL,
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
@@ -253,7 +256,7 @@ CREATE TABLE IF NOT EXISTS registration_dances (
     (genre = 'motion' AND level IS NULL)
     OR (genre = 'aereo' AND level IN ('nudo', 'principiante', 'intermedio', 'avanzado', 'elite'))
   ),
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -297,7 +300,7 @@ CREATE TABLE IF NOT EXISTS registration_recognition_documents (
   document_type TEXT NOT NULL CHECK (document_type IN ('academy_recognition', 'participant_diploma', 'choreographer_diploma')),
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex')),
+  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   recipient_type TEXT NOT NULL CHECK (recipient_type IN ('academy', 'participant', 'choreographer')),
   recipient_id TEXT,
   recipient_name TEXT NOT NULL,

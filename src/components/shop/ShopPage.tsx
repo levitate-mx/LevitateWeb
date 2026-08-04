@@ -349,9 +349,10 @@ const mediaLevelLabels: Record<string, string> = {
 };
 
 const mediaVenueLabels: Record<string, string> = {
-  cdmx: "CDMX",
-  edomex: "Estado de México",
+  cdmx: "CDMX - 29 /31 mayo 2026",
+  edomex: "Otoño 2026 - Estado de México",
   puebla: "Puebla",
+  veracruz: "Primavera 2027 - Veracruz",
 };
 
 function formatCurrency(value: number) {

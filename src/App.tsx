@@ -35,8 +35,10 @@ export default function App() {
   const inscripcionesConsultaMatch = window.location.pathname.match(/^\/inscripciones\/consulta-curp\/?$/);
   const inscripcionesMatch = window.location.pathname.match(/^\/inscripciones\/?$/);
   const registrationAdminPaymentsMatch = window.location.pathname.match(/^\/admin\/inscripciones\/?$/);
+  const registrationAdminParticipantsMatch = window.location.pathname.match(/^\/admin\/inscripciones\/participantes\/?$/);
   const registrationAdminTicketsMatch = window.location.pathname.match(/^\/admin\/boletos\/?$/);
   const registrationAdminProgramMatch = window.location.pathname.match(/^\/admin\/programa\/?$/);
+  const registrationAdminPhotoVideoMatch = window.location.pathname.match(/^\/admin\/foto-video\/?$/);
   const premiationMatch = window.location.pathname.match(/^\/premiacion\/?$/);
   const releveMatch = window.location.pathname.match(/^\/(?:releve|premio-releve|modalidades\/(?:releve|levitate-releve))\/?$/);
   const registrationMatch = window.location.pathname.match(/^\/registro\/?$/);
@@ -64,12 +66,20 @@ export default function App() {
     return <LevitateRegistrationAdminPaymentsRoute />;
   }
 
+  if (registrationAdminParticipantsMatch) {
+    return <LevitateRegistrationAdminPaymentsRoute initialSection="registrations" />;
+  }
+
   if (registrationAdminTicketsMatch) {
     return <LevitateRegistrationAdminPaymentsRoute initialSection="tickets" />;
   }
 
   if (registrationAdminProgramMatch) {
     return <LevitateRegistrationAdminPaymentsRoute initialSection="program" />;
+  }
+
+  if (registrationAdminPhotoVideoMatch) {
+    return <LevitateRegistrationAdminPaymentsRoute initialSection="media" />;
   }
 
   if (registrationMatch) {
