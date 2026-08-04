@@ -19927,11 +19927,31 @@ button {
 
 .registration-admin-participants-card {
   display: grid;
-  gap: 0;
+  gap: 10px;
+  padding: 10px;
+  background: #f6f4f5;
+}
+
+.registration-admin-participant-group {
+  --registration-admin-group-accent: rgba(217, 76, 140, 0.48);
+  --registration-admin-group-border: rgba(217, 76, 140, 0.2);
+  --registration-admin-group-header: rgba(217, 76, 140, 0.1);
+  --registration-admin-group-row: rgba(217, 76, 140, 0.035);
+  overflow: hidden;
+  border: 1px solid var(--registration-admin-group-border);
+  border-radius: 6px;
+  background: var(--registration-admin-group-row);
+}
+
+.registration-admin-participant-group:nth-of-type(even) {
+  --registration-admin-group-accent: rgba(86, 172, 187, 0.54);
+  --registration-admin-group-border: rgba(86, 172, 187, 0.24);
+  --registration-admin-group-header: rgba(86, 172, 187, 0.12);
+  --registration-admin-group-row: rgba(86, 172, 187, 0.04);
 }
 
 .registration-admin-participant-group + .registration-admin-participant-group {
-  border-top: 1px solid #dedede;
+  border-top-color: var(--registration-admin-group-border);
 }
 
 .registration-admin-participant-group > header {
@@ -19941,8 +19961,10 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 18px 18px 14px;
-  background: #fff;
+  padding: 18px 18px 14px 22px;
+  border-bottom: 1px solid var(--registration-admin-group-border);
+  background: linear-gradient(90deg, var(--registration-admin-group-header), rgba(255, 255, 255, 0.95));
+  box-shadow: inset 5px 0 0 var(--registration-admin-group-accent);
 }
 
 .registration-admin-participant-group > header strong {
@@ -19964,9 +19986,21 @@ button {
   min-width: 980px;
 }
 
+.registration-admin-participants-table .registration-admin-table__head {
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .registration-admin-participants-table .registration-admin-table__head,
 .registration-admin-participants-table .registration-admin-table__row {
   grid-template-columns: 1.35fr 1.15fr 0.88fr 0.46fr 0.56fr 0.56fr 0.92fr 0.72fr;
+}
+
+.registration-admin-participants-table .registration-admin-table__row {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.registration-admin-participants-table .registration-admin-table__row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .registration-admin-ticket-number {
