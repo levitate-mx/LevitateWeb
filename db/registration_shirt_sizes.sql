@@ -105,6 +105,9 @@ DROP TABLE registration_choreographers;
 ALTER TABLE registration_choreographers_next RENAME TO registration_choreographers;
 
 CREATE INDEX IF NOT EXISTS idx_registration_choreographers_academy_id ON registration_choreographers(academy_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
+  ON registration_choreographers(academy_id, lower(email))
+  WHERE email IS NOT NULL AND email <> '';
 
 DROP TABLE IF EXISTS registration_recognition_documents_next;
 

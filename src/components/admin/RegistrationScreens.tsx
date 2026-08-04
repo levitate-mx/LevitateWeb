@@ -3265,7 +3265,6 @@ function DanceRegistrationPanel({
     setErrorMessage("");
 
     if (choreographerSelectionMessage || participantSelectionMessage) {
-      setErrorMessage(choreographerSelectionMessage || participantSelectionMessage);
       return;
     }
 
