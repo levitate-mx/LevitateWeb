@@ -15630,6 +15630,39 @@ button {
   gap: 8px;
 }
 
+.media-shop-choreography-group {
+  display: grid;
+  gap: 9px;
+}
+
+.media-shop-choreography-group + .media-shop-choreography-group {
+  padding-top: 12px;
+  border-top: 1px solid rgba(90, 166, 180, 0.2);
+}
+
+.media-shop-choreography-group__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ticket-shop-ink);
+}
+
+.media-shop-choreography-group__heading strong {
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 880;
+  line-height: 1.18;
+}
+
+.media-shop-choreography-group__heading small {
+  flex: 0 0 auto;
+  color: var(--ticket-shop-muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
 .ticket-shop-buyer .media-shop-choreography-list button {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
@@ -15698,6 +15731,15 @@ button {
 
 .media-shop-choreography-empty svg {
   color: var(--ticket-shop-blue);
+}
+
+.media-shop-payment-targets {
+  display: grid;
+  gap: 4px;
+}
+
+.media-shop-payment-targets span {
+  min-width: 0;
 }
 
 .ticket-shop-buyer label > div {

@@ -149,6 +149,8 @@ const registrationInscriptionPrices = {
 };
 const registrationShopDiscountCode = "COLIBRI26";
 const registrationShopDiscountRate = 0.1;
+const registrationMediaGroupBaseParticipantCount = 4;
+const registrationMediaGroupExtraParticipantPrice = 300;
 const registrationShopProducts = new Map([
   [
     "ticket-block",
@@ -189,9 +191,10 @@ const registrationShopProducts = new Map([
       id: "photo-solos",
       name: "All inclusive solos",
       category: "Fotografía y video",
-      price: 1000,
+      price: 800,
       visual: "photo",
       itemType: "media",
+      mediaDanceType: "solo",
     },
   ],
   [
@@ -200,9 +203,10 @@ const registrationShopProducts = new Map([
       id: "photo-duos",
       name: "All inclusive dúos",
       category: "Fotografía y video",
-      price: 1400,
+      price: 1200,
       visual: "icon",
       itemType: "media",
+      mediaDanceType: "duo",
     },
   ],
   [
@@ -211,9 +215,10 @@ const registrationShopProducts = new Map([
       id: "photo-trios",
       name: "All inclusive tríos",
       category: "Fotografía y video",
-      price: 1800,
+      price: 1500,
       visual: "icon",
       itemType: "media",
+      mediaDanceType: "trio",
     },
   ],
   [
@@ -225,6 +230,7 @@ const registrationShopProducts = new Map([
       price: 2000,
       visual: "icon",
       itemType: "media",
+      mediaDanceType: "group",
     },
   ],
   [
@@ -266,9 +272,10 @@ const registrationShopProducts = new Map([
       id: "solo",
       name: "Solos",
       category: "Fotografía y video",
-      price: 1000,
+      price: 800,
       visual: "photo",
       itemType: "media",
+      mediaDanceType: "solo",
     },
   ],
   [
@@ -277,9 +284,10 @@ const registrationShopProducts = new Map([
       id: "duo",
       name: "Dúos",
       category: "Fotografía y video",
-      price: 1400,
+      price: 1200,
       visual: "photo",
       itemType: "media",
+      mediaDanceType: "duo",
     },
   ],
   [
@@ -288,9 +296,10 @@ const registrationShopProducts = new Map([
       id: "trio",
       name: "Tríos",
       category: "Fotografía y video",
-      price: 1800,
+      price: 1500,
       visual: "photo",
       itemType: "media",
+      mediaDanceType: "trio",
     },
   ],
   [
@@ -302,6 +311,7 @@ const registrationShopProducts = new Map([
       price: 2000,
       visual: "photo",
       itemType: "media",
+      mediaDanceType: "group",
     },
   ],
 ]);
@@ -2858,6 +2868,11 @@ async function getRegistrationInscriptionLookup(db, curp) {
           registration_dances.subgenre,
           registration_dances.category,
           registration_dances.level,
+          (
+            SELECT COUNT(*)
+            FROM registration_dance_participants AS all_dance_participants
+            WHERE all_dance_participants.dance_id = registration_dances.id
+          ) AS participant_count,
           registration_dances.venue,
           registration_academies.name AS academy_name,
           registration_dances.created_at
@@ -2993,6 +3008,8 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
 
   const participant = await getRegistrationShopParticipantByCurp(db, curp);
   const normalizedCart = normalizeRegistrationShopCart(items, discountCode);
+  normalizedCart.lineItems = await validateRegistrationShopMediaLineItems(db, curp, normalizedCart.lineItems);
+  Object.assign(normalizedCart, getRegistrationShopCartTotals(normalizedCart.lineItems, discountCode));
   const reusableOrder = await getReusableRegistrationShopOrderWithoutProof(db, curp);
 
   if (reusableOrder) {
@@ -3185,6 +3202,15 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
       amount,
     };
   });
+  const totals = getRegistrationShopCartTotals(lineItems, discountCode);
+
+  return {
+    ...totals,
+    lineItems,
+  };
+}
+
+function getRegistrationShopCartTotals(lineItems, discountCode) {
   const subtotal = lineItems.reduce((total, lineItem) => total + lineItem.amount, 0);
   const mediaSubtotal = lineItems.reduce(
     (total, lineItem) => (lineItem.productCategory === "Fotografía y video" ? total + lineItem.amount : total),
@@ -3194,15 +3220,156 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
   const appliedDiscountCode =
     normalizedDiscountCode === registrationShopDiscountCode && mediaSubtotal > 0 ? registrationShopDiscountCode : "";
   const discountAmount = appliedDiscountCode ? Math.round(mediaSubtotal * registrationShopDiscountRate) : 0;
-  const amount = Math.max(0, subtotal - discountAmount);
 
   return {
-    amount,
+    amount: Math.max(0, subtotal - discountAmount),
     discountAmount,
     discountCode: appliedDiscountCode,
-    lineItems,
     subtotal,
   };
+}
+
+async function validateRegistrationShopMediaLineItems(db, curp, lineItems) {
+  const mediaLineItems = lineItems.filter((lineItem) => lineItem.itemType === "media");
+
+  if (mediaLineItems.length === 0) {
+    return lineItems;
+  }
+
+  const lookup = await getRegistrationInscriptionLookup(db, curp);
+  const dancesById = new Map();
+
+  lookup.lines.forEach((line, index) => {
+    dancesById.set(line.id, line);
+    dancesById.set(`concepto-${index + 1}`, line);
+  });
+
+  return lineItems.map((lineItem) => {
+    if (lineItem.itemType !== "media") {
+      return lineItem;
+    }
+
+    const product = registrationShopProducts.get(lineItem.productId);
+    const expectedDanceType = product?.mediaDanceType || "";
+    const danceId = optionalString(lineItem.danceId);
+    const danceTitle = optionalString(lineItem.danceTitle);
+
+    if (!danceId) {
+      throwHttpError("shop_media_dance_required", "Selecciona una coreografía compatible para cada paquete de foto y video.", 400);
+    }
+
+    const dance = getRegistrationShopMediaDanceForLine(lookup.lines, dancesById, danceId, danceTitle, expectedDanceType);
+
+    if (!dance) {
+      throwHttpError("shop_media_dance_not_found", "La coreografía seleccionada no está vinculada a esa CURP.", 400);
+    }
+
+    const actualDanceType = normalizeRegistrationMediaDanceType(dance.category);
+
+    if (!expectedDanceType || expectedDanceType !== actualDanceType) {
+      throwHttpError(
+        "shop_media_dance_mismatch",
+        `El paquete ${lineItem.productName} solo puede asignarse a coreografías de ${getRegistrationMediaDanceTypeLabel(expectedDanceType)}.`,
+        400,
+      );
+    }
+
+    const participantCount = getRegistrationMediaDanceParticipantCount(dance);
+    const unitPrice = getRegistrationShopMediaUnitPrice(product, participantCount);
+
+    return {
+      ...lineItem,
+      amount: unitPrice * lineItem.quantity,
+      id: [lineItem.productId, lineItem.optionId, dance.id].filter(Boolean).join(":"),
+      danceId: dance.id,
+      danceTitle: dance.title || lineItem.danceTitle,
+      participantCount,
+      title: [lineItem.productName, dance.title || lineItem.danceTitle].filter(Boolean).join(" · "),
+      unitPrice,
+    };
+  });
+}
+
+function getRegistrationShopMediaDanceForLine(lines, dancesById, danceId, danceTitle, expectedDanceType) {
+  const dance = dancesById.get(danceId);
+
+  if (!danceTitle) {
+    return dance;
+  }
+
+  const normalizedDanceTitle = normalizeRegistrationMediaDanceTitle(danceTitle);
+
+  if (
+    dance &&
+    normalizeRegistrationMediaDanceTitle(dance.title) === normalizedDanceTitle &&
+    normalizeRegistrationMediaDanceType(dance.category) === expectedDanceType
+  ) {
+    return dance;
+  }
+
+  return lines.find((line) => (
+    normalizeRegistrationMediaDanceTitle(line.title) === normalizedDanceTitle &&
+    normalizeRegistrationMediaDanceType(line.category) === expectedDanceType
+  )) || null;
+}
+
+function normalizeRegistrationMediaDanceTitle(title) {
+  return String(title || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getRegistrationMediaDanceParticipantCount(dance) {
+  const participantCount = Number(dance?.participantCount ?? dance?.participant_count ?? 0);
+  return Number.isFinite(participantCount) && participantCount > 0 ? participantCount : 0;
+}
+
+function getRegistrationShopMediaUnitPrice(product, participantCount) {
+  if (product?.mediaDanceType !== "group") {
+    return product?.price || 0;
+  }
+
+  const extraParticipantCount = Math.max(0, participantCount - registrationMediaGroupBaseParticipantCount);
+  return product.price + extraParticipantCount * registrationMediaGroupExtraParticipantPrice;
+}
+
+function normalizeRegistrationMediaDanceType(category) {
+  const normalizedCategory = String(category || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (["solo", "solos", "solista", "individual"].includes(normalizedCategory)) {
+    return "solo";
+  }
+
+  if (["duo", "duos", "dueto", "duetos", "dupla", "duplas", "dupla_1_aparato", "duo_2_aparatos"].includes(normalizedCategory)) {
+    return "duo";
+  }
+
+  if (["trio", "trios", "terna", "ternas", "terna_1_aparato", "trio_3_aparatos"].includes(normalizedCategory)) {
+    return "trio";
+  }
+
+  if (["grupo", "grupos", "group", "groups", "grupal"].includes(normalizedCategory)) {
+    return "group";
+  }
+
+  return "";
+}
+
+function getRegistrationMediaDanceTypeLabel(danceType) {
+  return {
+    duo: "dúo",
+    group: "grupo",
+    solo: "solo",
+    trio: "trío",
+  }[danceType] || "esa categoría";
 }
 
 async function createRegistrationShopReference(db, curp) {
@@ -4372,6 +4539,7 @@ function serializeRegistrationInscriptionLine(dance) {
     subgenre: dance.subgenre,
     category: dance.category,
     level: dance.level,
+    participantCount: Number(dance.participant_count || 0),
     venue: dance.venue,
     academyName: dance.academy_name,
     baseAmount,

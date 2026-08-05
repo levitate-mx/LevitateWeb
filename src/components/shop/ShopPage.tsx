@@ -63,6 +63,14 @@ type MediaCartItem = {
   quantity: number;
 };
 
+type MediaSelectionSlot = {
+  key: string;
+  position: number;
+  product: MediaProduct;
+  productId: MediaProduct["id"];
+  total: number;
+};
+
 type BuyerData = {
   curp: string;
   email: string;
@@ -95,7 +103,21 @@ type ShopOrder = {
   amount: number;
   paidAmount: number;
   status: "pending_payment" | "payment_reported" | "paid" | "rejected";
+  lineItems?: ShopOrderLineItem[];
   proof?: ShopPaymentProof | null;
+};
+
+type ShopOrderLineItem = {
+  danceId?: string;
+  danceTitle?: string;
+  itemType?: string;
+  participantCount?: number;
+  productCategory?: string;
+  productId?: string;
+  productName?: string;
+  quantity?: number;
+  title?: string;
+  unitPrice?: number;
 };
 
 type MediaParticipantLookupLine = {
@@ -104,6 +126,7 @@ type MediaParticipantLookupLine = {
   genre: string;
   id: string;
   level?: string | null;
+  participantCount?: number;
   subgenre: string;
   title: string;
   venue: string;
@@ -193,35 +216,37 @@ const maxPaymentProofBytes = 1800000;
 const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const allowedPaymentProofTypes = paymentProofAccept.split(",");
 const noMediaDancesLinkedMessage = "No hay coreografías vinculadas a este CURP";
+const mediaGroupBaseParticipantCount = 4;
+const mediaGroupExtraParticipantPrice = 300;
 
 const mediaProducts: MediaProduct[] = [
   {
     id: "solo",
     name: "Solos",
     description: "Paquete all inclusive para participación individual.",
-    price: 1000,
+    price: 800,
     unit: "precio final",
   },
   {
     id: "duo",
     name: "Dúos",
     description: "Paquete all inclusive para el dúo.",
-    price: 1400,
+    price: 1200,
     unit: "precio final",
   },
   {
     id: "trio",
     name: "Tríos",
     description: "Paquete all inclusive para el trío.",
-    price: 1800,
+    price: 1500,
     unit: "precio final",
   },
   {
     id: "group",
     name: "Grupos",
-    description: "Paquete all inclusive para el grupo.",
+    description: "Base para grupos de 4 personas; suma $300 MXN por cada participante extra.",
     price: 2000,
-    unit: "precio final",
+    unit: "base 4 personas",
   },
 ];
 
@@ -297,9 +322,21 @@ const mediaSubgenreLabels: Record<string, string> = {
 
 const mediaCategoryLabels: Record<string, string> = {
   duo: "Dúo",
+  duo_2_aparatos: "Dúo",
+  dueto: "Dúo",
+  dupla_1_aparato: "Dupla",
   grupo: "Grupo",
   solo: "Solo",
+  terna_1_aparato: "Terna",
   trio: "Trío",
+  trio_3_aparatos: "Trío",
+};
+
+const mediaProductCategoryLabels: Record<MediaProduct["id"], string> = {
+  duo: "dúo",
+  group: "grupo",
+  solo: "solo",
+  trio: "trío",
 };
 
 const mediaLevelLabels: Record<string, string> = {
@@ -480,6 +517,7 @@ function normalizeStoredShopOrder(value: unknown): ShopOrder | null {
     amount,
     paidAmount,
     status: status as ShopOrder["status"],
+    lineItems: Array.isArray(candidate.lineItems) ? candidate.lineItems as ShopOrderLineItem[] : [],
     proof: candidate.proof ?? null,
   };
 }
@@ -619,7 +657,135 @@ function getMediaLineMeta(line: MediaParticipantLookupLine) {
     parts.push(mediaLevelLabels[line.level] ?? line.level);
   }
 
+  const participantLabel = getMediaLineParticipantLabel(line);
+
+  if (participantLabel) {
+    parts.push(participantLabel);
+  }
+
   return parts.join(" · ");
+}
+
+function normalizeMediaDanceProductId(category: string): MediaProduct["id"] | "" {
+  const normalizedCategory = category
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (["solo", "solos", "solista", "individual"].includes(normalizedCategory)) {
+    return "solo";
+  }
+
+  if (["duo", "duos", "dueto", "duetos", "dupla", "duplas", "dupla_1_aparato", "duo_2_aparatos"].includes(normalizedCategory)) {
+    return "duo";
+  }
+
+  if (["trio", "trios", "terna", "ternas", "terna_1_aparato", "trio_3_aparatos"].includes(normalizedCategory)) {
+    return "trio";
+  }
+
+  if (["grupo", "grupos", "group", "groups", "grupal"].includes(normalizedCategory)) {
+    return "group";
+  }
+
+  return "";
+}
+
+function isMediaLineCompatibleWithProduct(productId: MediaProduct["id"], line: MediaParticipantLookupLine) {
+  return normalizeMediaDanceProductId(line.category) === productId;
+}
+
+function getCompatibleMediaLines(productId: MediaProduct["id"], lines: MediaParticipantLookupLine[]) {
+  return lines.filter((line) => isMediaLineCompatibleWithProduct(productId, line));
+}
+
+function getMediaLineParticipantCount(line?: MediaParticipantLookupLine | null) {
+  const participantCount = Number(line?.participantCount ?? 0);
+  return Number.isFinite(participantCount) && participantCount > 0 ? participantCount : 0;
+}
+
+function getMediaPackagePrice(product: MediaProduct, line?: MediaParticipantLookupLine | null) {
+  if (product.id !== "group") {
+    return product.price;
+  }
+
+  const participantCount = getMediaLineParticipantCount(line);
+  const extraParticipantCount = Math.max(0, participantCount - mediaGroupBaseParticipantCount);
+  return product.price + extraParticipantCount * mediaGroupExtraParticipantPrice;
+}
+
+function getMediaProductPriceLabel(product: MediaProduct) {
+  return product.id === "group" ? `Desde ${formatCurrency(product.price)}` : formatCurrency(product.price);
+}
+
+function getMediaCartLinePriceLabel(
+  line: MediaCartItem & { product: MediaProduct },
+  selections: Array<MediaSelectionSlot & { dance: MediaParticipantLookupLine }>,
+) {
+  if (line.product.id !== "group") {
+    return `${formatCurrency(line.product.price)} por paquete`;
+  }
+
+  const selectedGroups = selections.filter((selection) => selection.productId === line.product.id);
+
+  if (!selectedGroups.length) {
+    return `${formatCurrency(line.product.price)} base para 4 personas`;
+  }
+
+  if (selectedGroups.length < line.quantity) {
+    return `Desde ${formatCurrency(line.product.price)}; final al elegir coreografías`;
+  }
+
+  const groupPrices = selectedGroups.map((selection) => getMediaPackagePrice(line.product, selection.dance));
+  const uniquePrices = Array.from(new Set(groupPrices));
+
+  return uniquePrices.length === 1
+    ? `${formatCurrency(uniquePrices[0])} por paquete seleccionado`
+    : `${formatCurrency(groupPrices.reduce((sum, price) => sum + price, 0))} en paquetes seleccionados`;
+}
+
+function getMediaLineParticipantLabel(line: MediaParticipantLookupLine) {
+  const participantCount = getMediaLineParticipantCount(line);
+  return participantCount > 0
+    ? `${participantCount} ${participantCount === 1 ? "participante" : "participantes"}`
+    : "";
+}
+
+function getMediaSelectionKey(productId: MediaProduct["id"], position: number) {
+  return `${productId}:${position}`;
+}
+
+function buildInitialMediaDanceSelections(slots: MediaSelectionSlot[], lines: MediaParticipantLookupLine[]) {
+  return slots.reduce<Record<string, string>>((selections, slot) => {
+    const compatibleLines = getCompatibleMediaLines(slot.productId, lines);
+
+    if (compatibleLines.length === 1) {
+      selections[slot.key] = compatibleLines[0].id;
+    }
+
+    return selections;
+  }, {});
+}
+
+function getShopOrderMediaTargets(order?: ShopOrder | null) {
+  return (order?.lineItems ?? [])
+    .filter((lineItem) => lineItem.itemType === "media" || lineItem.productCategory === "Fotografía y video")
+    .map((lineItem) => {
+      const quantity = Number(lineItem.quantity ?? 1);
+      const productName = lineItem.productName || lineItem.productId || "Paquete";
+      const danceTitle = lineItem.danceTitle || lineItem.title || "Coreografía";
+      const participantCount = Number(lineItem.participantCount ?? 0);
+      const participantLabel = participantCount > 0
+        ? ` · ${participantCount} ${participantCount === 1 ? "participante" : "participantes"}`
+        : "";
+      const priceLabel = Number.isFinite(Number(lineItem.unitPrice)) && Number(lineItem.unitPrice) > 0
+        ? ` · ${formatCurrency(Number(lineItem.unitPrice))}`
+        : "";
+
+      return `${productName}: ${danceTitle}${participantLabel}${priceLabel}${quantity > 1 ? ` (${quantity})` : ""}`;
+    });
 }
 
 function getMediaVenueLabel(venue?: string | null) {
@@ -1321,7 +1487,7 @@ function PhotoVideoShopPage() {
   );
   const [isProofSubmitted, setIsProofSubmitted] = useState(Boolean(storedCheckout?.order.proof));
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
-  const [selectedDanceId, setSelectedDanceId] = useState("");
+  const [selectedDanceIdsBySlot, setSelectedDanceIdsBySlot] = useState<Record<string, string>>({});
   const [shopOrder, setShopOrder] = useState<ShopOrder | null>(storedCheckout?.order ?? null);
   const [mediaFeatureSlideIndex, setMediaFeatureSlideIndex] = useState(0);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
@@ -1333,11 +1499,40 @@ function PhotoVideoShopPage() {
         product: getMediaProduct(item.id),
       })),
     [cartItems],
+	  );
+	  const mediaItemCount = cartLines.reduce((total, line) => total + line.quantity, 0);
+	  const mediaSelectionSlots = useMemo(
+	    () =>
+	      cartLines.flatMap((line) => (
+        Array.from({ length: line.quantity }, (_, index) => ({
+          key: getMediaSelectionKey(line.id, index),
+          position: index + 1,
+          product: line.product,
+          productId: line.id,
+          total: line.quantity,
+        }))
+      )),
+    [cartLines],
   );
-  const mediaItemCount = cartLines.reduce((total, line) => total + line.quantity, 0);
-  const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
-  const selectedDance = participantLookup?.lines.find((line) => line.id === selectedDanceId) ?? null;
-  const activeMediaFeatureSlide = mediaFeatureSlides[mediaFeatureSlideIndex] ?? mediaFeatureSlides[0];
+  const selectedMediaSelections = useMemo(() => {
+    if (!participantLookup) {
+      return [];
+    }
+
+    return mediaSelectionSlots
+      .map((slot) => {
+        const selectedDanceId = selectedDanceIdsBySlot[slot.key];
+        const dance = participantLookup.lines.find((line) => line.id === selectedDanceId) ?? null;
+
+        return dance && isMediaLineCompatibleWithProduct(slot.productId, dance) ? { ...slot, dance } : null;
+      })
+	      .filter((selection): selection is MediaSelectionSlot & { dance: MediaParticipantLookupLine } => Boolean(selection));
+	  }, [mediaSelectionSlots, participantLookup, selectedDanceIdsBySlot]);
+	  const total = mediaSelectionSlots.reduce((sum, slot) => {
+	    const selection = selectedMediaSelections.find((selectedSelection) => selectedSelection.key === slot.key);
+	    return sum + getMediaPackagePrice(slot.product, selection?.dance);
+	  }, 0);
+	  const activeMediaFeatureSlide = mediaFeatureSlides[mediaFeatureSlideIndex] ?? mediaFeatureSlides[0];
   const hasUploadedProof = (Boolean(shopOrder?.proof) || isProofSubmitted) && shopOrder?.status !== "rejected";
 
   useEffect(() => {
@@ -1378,6 +1573,49 @@ function PhotoVideoShopPage() {
     const image = new Image();
     image.src = nextSlide;
   }, [mediaFeatureSlideIndex]);
+
+  useEffect(() => {
+    if (!participantLookup) {
+      if (Object.keys(selectedDanceIdsBySlot).length) {
+        setSelectedDanceIdsBySlot({});
+      }
+
+      return;
+    }
+
+    setSelectedDanceIdsBySlot((currentSelections) => {
+      const nextSelections: Record<string, string> = {};
+      let didChange = false;
+
+      for (const slot of mediaSelectionSlots) {
+        const selectedDanceId = currentSelections[slot.key];
+        const compatibleLines = getCompatibleMediaLines(slot.productId, participantLookup.lines);
+        const isCurrentSelectionValid = selectedDanceId
+          ? compatibleLines.some((line) => line.id === selectedDanceId)
+          : false;
+
+        if (isCurrentSelectionValid) {
+          nextSelections[slot.key] = selectedDanceId;
+          continue;
+        }
+
+        if (selectedDanceId) {
+          didChange = true;
+        }
+
+        if (compatibleLines.length === 1) {
+          nextSelections[slot.key] = compatibleLines[0].id;
+          didChange = true;
+        }
+      }
+
+      if (Object.keys(currentSelections).some((key) => !(key in nextSelections))) {
+        didChange = true;
+      }
+
+      return didChange ? nextSelections : currentSelections;
+    });
+  }, [mediaSelectionSlots, participantLookup, selectedDanceIdsBySlot]);
 
   const clearPaymentProof = () => {
     setProofFileName("");
@@ -1454,7 +1692,7 @@ function PhotoVideoShopPage() {
 
     if (field === "curp") {
       setParticipantLookup(null);
-      setSelectedDanceId("");
+      setSelectedDanceIdsBySlot({});
     }
 
     if (isBuyerConfirmed) {
@@ -1467,7 +1705,7 @@ function PhotoVideoShopPage() {
     setBuyerData((current) => ({ ...current, curp: normalizedCurp }));
     setBuyerError("");
     setParticipantLookup(null);
-    setSelectedDanceId("");
+    setSelectedDanceIdsBySlot({});
 
     if (isBuyerConfirmed) {
       markCheckoutDirty();
@@ -1475,6 +1713,11 @@ function PhotoVideoShopPage() {
 
     if (normalizedCurp.length !== 18) {
       setBuyerError("Ingresa la CURP completa para buscar sus coreografías.");
+      return;
+    }
+
+    if (mediaItemCount === 0) {
+      setBuyerError("Agrega un paquete de foto y video para ver coreografías compatibles.");
       return;
     }
 
@@ -1508,7 +1751,7 @@ function PhotoVideoShopPage() {
       }
 
       setParticipantLookup(payload);
-      setSelectedDanceId(payload.lines.length === 1 ? payload.lines[0].id : "");
+      setSelectedDanceIdsBySlot(buildInitialMediaDanceSelections(mediaSelectionSlots, payload.lines));
     } catch (error) {
       setParticipantLookup(null);
       setBuyerError(error instanceof Error ? error.message : "No pudimos consultar esa CURP.");
@@ -1517,8 +1760,8 @@ function PhotoVideoShopPage() {
     }
   };
 
-  const selectDance = (danceId: string) => {
-    setSelectedDanceId(danceId);
+  const selectDance = (slotKey: string, danceId: string) => {
+    setSelectedDanceIdsBySlot((current) => ({ ...current, [slotKey]: danceId }));
     setBuyerError("");
 
     if (isBuyerConfirmed) {
@@ -1549,8 +1792,21 @@ function PhotoVideoShopPage() {
       return;
     }
 
-    if (!selectedDance) {
-      setBuyerError("Selecciona la coreografía a la que irá dirigido el paquete.");
+    const selectedPackageTargets = mediaSelectionSlots
+      .map((slot) => {
+        const compatibleLines = getCompatibleMediaLines(slot.productId, participantLookup.lines);
+        const dance = compatibleLines.find((line) => line.id === selectedDanceIdsBySlot[slot.key]) ?? null;
+        return dance ? { slot, dance } : null;
+      })
+      .filter((target): target is { dance: MediaParticipantLookupLine; slot: MediaSelectionSlot } => Boolean(target));
+
+    if (selectedPackageTargets.length !== mediaSelectionSlots.length) {
+      const missingSlot = mediaSelectionSlots.find((slot) => (
+        !selectedPackageTargets.some((target) => target.slot.key === slot.key)
+      ));
+      const packageLabel = missingSlot ? mediaProductCategoryLabels[missingSlot.productId] : "compatible";
+
+      setBuyerError(`Selecciona una coreografía de ${packageLabel} para cada paquete.`);
       return;
     }
 
@@ -1583,12 +1839,11 @@ function PhotoVideoShopPage() {
           buyerPhoneCountryCode: "+52",
           buyerPhoneNumber: confirmedBuyerData.whatsapp,
           curp: confirmedBuyerData.curp,
-          danceId: selectedDance.id,
-          items: cartLines.map((line) => ({
-            danceId: selectedDance.id,
-            danceTitle: getMediaLineTitle(selectedDance),
-            productId: line.product.id,
-            quantity: line.quantity,
+          items: selectedPackageTargets.map(({ dance, slot }) => ({
+            danceId: dance.id,
+            danceTitle: getMediaLineTitle(dance),
+            productId: slot.product.id,
+            quantity: 1,
           })),
         }),
         method: "POST",
@@ -1726,80 +1981,88 @@ function PhotoVideoShopPage() {
     </section>
   );
 
-  const renderTransferCheckout = () => (
-    <section className="ticket-shop-payment" aria-label="Checkout por transferencia" aria-live="polite">
-      <header>
-        <CreditCard aria-hidden="true" size={22} />
-        <span>Checkout</span>
-      </header>
+	  const renderTransferCheckout = () => {
+	    const selectedTargets = selectedMediaSelections.map((selection) => (
+	      `${selection.product.name}: ${getMediaLineTitle(selection.dance)} · ${getMediaLineMeta(selection.dance)} · ${formatCurrency(getMediaPackagePrice(selection.product, selection.dance))}`
+	    ));
+    const paymentTargets = selectedTargets.length ? selectedTargets : getShopOrderMediaTargets(shopOrder);
 
-      <div className="ticket-shop-payment__summary">
-        <span>Total final</span>
-        <strong>{formatCurrency(shopOrder?.amount ?? total)}</strong>
-        <small>Referencia: {orderReference}</small>
-        {selectedDance ? <small>Coreografía: {getMediaLineTitle(selectedDance)}</small> : null}
-      </div>
+    return (
+      <section className="ticket-shop-payment" aria-label="Checkout por transferencia" aria-live="polite">
+        <header>
+          <CreditCard aria-hidden="true" size={22} />
+          <span>Checkout</span>
+        </header>
 
-      <dl className="ticket-shop-payment__details">
-        {selectedPaymentMethod.rows.map((row) => (
-          <div key={`media-${selectedPaymentMethod.id}-${row.label}`}>
-            <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
-          </div>
-        ))}
-        <div>
-          <dt>Concepto / referencia</dt>
-          <dd>{orderReference}</dd>
+        <div className="ticket-shop-payment__summary">
+          <span>Total final</span>
+          <strong>{formatCurrency(shopOrder?.amount ?? total)}</strong>
+          <small>Referencia: {orderReference}</small>
         </div>
-        {selectedDance ? (
+
+        <dl className="ticket-shop-payment__details">
+          {selectedPaymentMethod.rows.map((row) => (
+            <div key={`media-${selectedPaymentMethod.id}-${row.label}`}>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
           <div>
-            <dt>Paquete dirigido a</dt>
-            <dd>{getMediaLineTitle(selectedDance)} · {getMediaLineMeta(selectedDance)}</dd>
+            <dt>Concepto / referencia</dt>
+            <dd>{orderReference}</dd>
           </div>
-        ) : null}
-      </dl>
-
-      {hasUploadedProof ? (
-        <div className="ticket-shop-proof">
-          <strong>Comprobante cargado</strong>
-          {proofFileName ? <p>{proofFileName}</p> : null}
-          {proofMessage ? <p>{proofMessage}</p> : null}
-        </div>
-      ) : (
-        <div className="ticket-shop-proof">
-          <input
-            accept={paymentProofAccept}
-            onChange={handleProofFileChange}
-            ref={proofInputRef}
-            type="file"
-          />
-          <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
-            <UploadCloud aria-hidden="true" size={20} />
-            {isUploadingProof ? "Subiendo comprobante..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
-          </button>
-          {selectedProofFile ? <strong>{selectedProofFile.name}</strong> : null}
-          {selectedProofFile ? (
-            <button
-              className="ticket-shop-proof__change"
-              disabled={isUploadingProof}
-              onClick={() => proofInputRef.current?.click()}
-              type="button"
-            >
-              Cambiar archivo
-            </button>
+          {paymentTargets.length ? (
+            <div>
+              <dt>Paquetes dirigidos a</dt>
+              <dd className="media-shop-payment-targets">
+                {paymentTargets.map((target, index) => <span key={`${target}-${index}`}>{target}</span>)}
+              </dd>
+            </div>
           ) : null}
-          {proofMessage ? <p>{proofMessage}</p> : null}
-        </div>
-      )}
+        </dl>
 
-      <div className="ticket-shop-confirmation-note">
-        <ShieldCheck aria-hidden="true" size={21} />
-        <span>
-          Al confirmarse el pago, enviaremos la confirmación por correo y WhatsApp.
-        </span>
-      </div>
-    </section>
-  );
+        {hasUploadedProof ? (
+          <div className="ticket-shop-proof">
+            <strong>Comprobante cargado</strong>
+            {proofFileName ? <p>{proofFileName}</p> : null}
+            {proofMessage ? <p>{proofMessage}</p> : null}
+          </div>
+        ) : (
+          <div className="ticket-shop-proof">
+            <input
+              accept={paymentProofAccept}
+              onChange={handleProofFileChange}
+              ref={proofInputRef}
+              type="file"
+            />
+            <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
+              <UploadCloud aria-hidden="true" size={20} />
+              {isUploadingProof ? "Subiendo comprobante..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
+            </button>
+            {selectedProofFile ? <strong>{selectedProofFile.name}</strong> : null}
+            {selectedProofFile ? (
+              <button
+                className="ticket-shop-proof__change"
+                disabled={isUploadingProof}
+                onClick={() => proofInputRef.current?.click()}
+                type="button"
+              >
+                Cambiar archivo
+              </button>
+            ) : null}
+            {proofMessage ? <p>{proofMessage}</p> : null}
+          </div>
+        )}
+
+        <div className="ticket-shop-confirmation-note">
+          <ShieldCheck aria-hidden="true" size={21} />
+          <span>
+            Al confirmarse el pago, enviaremos la confirmación por correo y WhatsApp.
+          </span>
+        </div>
+      </section>
+    );
+  };
 
   return (
     <main className="ticket-shop-page media-shop-page levitate-home-redesign">
@@ -1856,12 +2119,12 @@ function PhotoVideoShopPage() {
               {mediaProducts.map((product) => (
                 <article className="ticket-shop-product media-shop-product" key={product.id}>
                   <div className="ticket-shop-product__copy">
-                    <h2>{product.name}</h2>
-                    <p>{product.description}</p>
-                    <div className="ticket-shop-product__price">
-                      <strong>{formatCurrency(product.price)}</strong>
-                      <small>{product.unit}</small>
-                    </div>
+	                    <h2>{product.name}</h2>
+	                    <p>{product.description}</p>
+	                    <div className="ticket-shop-product__price">
+	                      <strong>{getMediaProductPriceLabel(product)}</strong>
+	                      <small>{product.unit}</small>
+	                    </div>
                   </div>
 
                   <div className="ticket-shop-product__controls">
@@ -1915,11 +2178,11 @@ function PhotoVideoShopPage() {
                 <div className="ticket-shop-cart__lines">
                   {cartLines.map((line) => (
                     <article className="ticket-shop-cart-line" key={line.id}>
-                      <div>
-                        <strong>{line.product.name}</strong>
-                        <span>Paquete all inclusive · {line.product.unit}</span>
-                        <small>{formatCurrency(line.product.price)} por paquete</small>
-                      </div>
+	                      <div>
+	                        <strong>{line.product.name}</strong>
+	                        <span>Paquete all inclusive · {line.product.unit}</span>
+	                        <small>{getMediaCartLinePriceLabel(line, selectedMediaSelections)}</small>
+	                      </div>
                       <div className="ticket-shop-cart-line__actions">
                         <button aria-label={`Quitar un ${line.product.name}`} onClick={() => changeCartQuantity(line.id, -1)} type="button">
                           <Minus aria-hidden="true" size={15} />
@@ -1994,26 +2257,46 @@ function PhotoVideoShopPage() {
                     <strong>{participantLookup.participantName}</strong>
                     <small>{participantLookup.academyName} · {getMediaVenueLabel(participantLookup.venue)}</small>
                   </header>
-                  {participantLookup.lines.length ? (
-                    <div className="media-shop-choreography-list">
-                      {participantLookup.lines.map((line, index) => (
-                        <button
-                          aria-pressed={selectedDanceId === line.id}
-                          className={selectedDanceId === line.id ? "is-selected" : ""}
-                          key={line.id}
-                          onClick={() => selectDance(line.id)}
-                          type="button"
-                        >
-                          <span>{String(index + 1).padStart(2, "0")}</span>
-                          <strong>{getMediaLineTitle(line)}</strong>
-                          <small>{getMediaLineMeta(line)}</small>
-                        </button>
-                      ))}
-                    </div>
+                  {mediaSelectionSlots.length ? (
+                    mediaSelectionSlots.map((slot) => {
+                      const compatibleLines = getCompatibleMediaLines(slot.productId, participantLookup.lines);
+                      const selectedDanceId = selectedDanceIdsBySlot[slot.key] ?? "";
+
+                      return (
+                        <div className="media-shop-choreography-group" key={slot.key}>
+                          <div className="media-shop-choreography-group__heading">
+                            <strong>{slot.product.name}</strong>
+                            <small>{slot.total > 1 ? `Paquete ${slot.position} de ${slot.total}` : "Paquete seleccionado"}</small>
+                          </div>
+                          {compatibleLines.length ? (
+                            <div className="media-shop-choreography-list">
+                              {compatibleLines.map((line, index) => (
+                                <button
+                                  aria-pressed={selectedDanceId === line.id}
+                                  className={selectedDanceId === line.id ? "is-selected" : ""}
+                                  key={line.id}
+                                  onClick={() => selectDance(slot.key, line.id)}
+                                  type="button"
+                                >
+                                  <span>{String(index + 1).padStart(2, "0")}</span>
+                                  <strong>{getMediaLineTitle(line)}</strong>
+                                  <small>{getMediaLineMeta(line)}</small>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="media-shop-choreography-empty">
+                              <ReceiptText aria-hidden="true" size={22} />
+                              <strong>No hay coreografías de {mediaProductCategoryLabels[slot.productId]} vinculadas a este CURP</strong>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="media-shop-choreography-empty">
                       <ReceiptText aria-hidden="true" size={22} />
-                      <strong>{noMediaDancesLinkedMessage}</strong>
+                      <strong>Agrega un paquete para ver coreografías compatibles.</strong>
                     </div>
                   )}
                 </section>
