@@ -100,6 +100,7 @@ type ShopOrder = {
   academyName: string;
   venue: string;
   reference: string;
+  paymentReference?: string;
   amount: number;
   paidAmount: number;
   status: "pending_payment" | "payment_reported" | "paid" | "rejected";
@@ -108,8 +109,11 @@ type ShopOrder = {
 };
 
 type ShopOrderLineItem = {
+  danceCategory?: string;
+  danceDivision?: string | null;
   danceId?: string;
   danceTitle?: string;
+  division?: string | null;
   itemType?: string;
   participantCount?: number;
   productCategory?: string;
@@ -123,6 +127,7 @@ type ShopOrderLineItem = {
 type MediaParticipantLookupLine = {
   academyName: string;
   category: string;
+  division?: string | null;
   genre: string;
   id: string;
   level?: string | null;
@@ -347,6 +352,18 @@ const mediaLevelLabels: Record<string, string> = {
   principiante: "Principiante",
 };
 
+const mediaDivisionLabels: Record<string, string> = {
+  baby: "Baby",
+  legacy: "Legacy",
+  mini: "Petite",
+  adulto: "Senior",
+  petite: "Petite",
+  junior: "Junior",
+  releve: "Relevé",
+  senior: "Senior",
+  teen: "Teen",
+};
+
 const mediaVenueLabels: Record<string, string> = {
   cdmx: "CDMX - 29 /31 mayo 2026",
   edomex: "Otoño 2026 - Estado de México",
@@ -514,6 +531,7 @@ function normalizeStoredShopOrder(value: unknown): ShopOrder | null {
     academyName: candidate.academyName,
     venue: candidate.venue,
     reference: candidate.reference,
+    paymentReference: typeof candidate.paymentReference === "string" ? candidate.paymentReference : undefined,
     amount,
     paidAmount,
     status: status as ShopOrder["status"],
@@ -614,32 +632,54 @@ function readPaymentProofFile(file: File) {
   });
 }
 
-function buildTicketReference(name: string, phone: string) {
-  const cleanName = name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z]/g, "")
-    .slice(0, 4)
-    .toUpperCase();
-  const phoneTail = normalizePhone(phone).slice(-4) || "0000";
+function getShopPaymentReference(order?: Pick<ShopOrder, "curp" | "lineItems" | "paymentReference" | "reference"> | null) {
+  if (!order) {
+    return "";
+  }
 
-  return `LEV-TAQ-${cleanName || "BOLE"}-${phoneTail}`;
+  if (order.paymentReference) {
+    return order.paymentReference;
+  }
+
+  const prefix = getShopPaymentReferencePrefix(order.lineItems ?? []);
+  const normalizedReference = order.reference.toUpperCase();
+  const compactMatch = normalizedReference.match(/^(?:FV|BOL|SHOP)-([A-Z0-9]{4,16})$/);
+
+  if (compactMatch) {
+    return `${prefix}-${compactMatch[1].slice(0, 8)}`;
+  }
+
+  const referenceParts = normalizedReference
+    .split("-")
+    .map((part) => part.replace(/[^A-Z0-9]/g, ""))
+    .filter(Boolean);
+  const trailingCode = referenceParts[referenceParts.length - 1]?.slice(-4) || normalizedReference.replace(/[^A-Z0-9]/g, "").slice(-4);
+  const curpPrefix = normalizeCurp(order.curp).slice(0, 4) || "PAGO";
+
+  return `${prefix}-${curpPrefix}${trailingCode || "0000"}`;
 }
 
-function buildMediaReference(name: string, phone: string, danceId?: string) {
-  const cleanName = name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z]/g, "")
-    .slice(0, 4)
-    .toUpperCase();
-  const phoneTail = normalizePhone(phone).slice(-4) || "0000";
-  const danceCode = (danceId ?? "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(-4)
-    .toUpperCase();
+function getShopPaymentReferencePrefix(lineItems: ShopOrderLineItem[]) {
+  const hasMedia = lineItems.some((lineItem) => (
+    lineItem.itemType === "media" ||
+    lineItem.productCategory?.toLowerCase().includes("fotograf") ||
+    lineItem.productId?.startsWith("photo-")
+  ));
+  const hasTickets = lineItems.some((lineItem) => (
+    lineItem.itemType === "ticket" ||
+    lineItem.productCategory?.toLowerCase().includes("boleto") ||
+    lineItem.productId?.startsWith("ticket-")
+  ));
 
-  return `LEV-FV-${cleanName || "FOTO"}${danceCode ? `-${danceCode}` : ""}-${phoneTail}`;
+  if (hasMedia && !hasTickets) {
+    return "FV";
+  }
+
+  if (hasTickets && !hasMedia) {
+    return "BOL";
+  }
+
+  return "SHOP";
 }
 
 function getMediaLineTitle(line: MediaParticipantLookupLine) {
@@ -664,6 +704,24 @@ function getMediaLineMeta(line: MediaParticipantLookupLine) {
   }
 
   return parts.join(" · ");
+}
+
+function getMediaCategoryLabel(category?: string | null) {
+  const value = String(category || "").trim();
+  return value ? mediaCategoryLabels[value] ?? value : "Sin categoría";
+}
+
+function getMediaDivisionLabel(division?: string | null) {
+  const value = String(division || "").trim();
+  return value ? mediaDivisionLabels[value] ?? value : "Sin división";
+}
+
+function getMediaPaymentTargetLabel(line: MediaParticipantLookupLine) {
+  return [
+    getMediaLineTitle(line),
+    getMediaDivisionLabel(line.division),
+    getMediaCategoryLabel(line.category),
+  ].join(" · ");
 }
 
 function normalizeMediaDanceProductId(category: string): MediaProduct["id"] | "" {
@@ -773,19 +831,38 @@ function getShopOrderMediaTargets(order?: ShopOrder | null) {
   return (order?.lineItems ?? [])
     .filter((lineItem) => lineItem.itemType === "media" || lineItem.productCategory === "Fotografía y video")
     .map((lineItem) => {
-      const quantity = Number(lineItem.quantity ?? 1);
-      const productName = lineItem.productName || lineItem.productId || "Paquete";
-      const danceTitle = lineItem.danceTitle || lineItem.title || "Coreografía";
-      const participantCount = Number(lineItem.participantCount ?? 0);
-      const participantLabel = participantCount > 0
-        ? ` · ${participantCount} ${participantCount === 1 ? "participante" : "participantes"}`
-        : "";
-      const priceLabel = Number.isFinite(Number(lineItem.unitPrice)) && Number(lineItem.unitPrice) > 0
-        ? ` · ${formatCurrency(Number(lineItem.unitPrice))}`
-        : "";
+      const titleParts = String(lineItem.title || "").split(" · ");
+      const danceTitle = lineItem.danceTitle || titleParts[titleParts.length - 1] || "Coreografía";
+      const danceCategory = lineItem.danceCategory || getMediaCategoryFromProductId(lineItem.productId);
 
-      return `${productName}: ${danceTitle}${participantLabel}${priceLabel}${quantity > 1 ? ` (${quantity})` : ""}`;
+      return [
+        danceTitle,
+        getMediaDivisionLabel(lineItem.danceDivision ?? lineItem.division),
+        getMediaCategoryLabel(danceCategory),
+      ].join(" · ");
     });
+}
+
+function getMediaCategoryFromProductId(productId?: string | null) {
+  const normalizedProductId = String(productId || "").toLowerCase();
+
+  if (normalizedProductId.includes("solo")) {
+    return "solo";
+  }
+
+  if (normalizedProductId.includes("duo")) {
+    return "duo";
+  }
+
+  if (normalizedProductId.includes("trio")) {
+    return "trio";
+  }
+
+  if (normalizedProductId.includes("group")) {
+    return "grupo";
+  }
+
+  return "";
 }
 
 function getMediaVenueLabel(venue?: string | null) {
@@ -853,10 +930,11 @@ function TicketShopPage() {
     whatsapp: "",
   });
   const [buyerError, setBuyerError] = useState("");
+  const [proofError, setProofError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order));
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
-  const [orderReference, setOrderReference] = useState(storedCheckout?.order.reference ?? "");
+  const [orderReference, setOrderReference] = useState(getShopPaymentReference(storedCheckout?.order));
   const [proofFileName, setProofFileName] = useState(storedCheckout?.order.proof?.fileName ?? "");
   const [proofMessage, setProofMessage] = useState(
     storedCheckout?.order ? "Orden recuperada. Usa esta referencia como concepto de transferencia." : "",
@@ -908,6 +986,7 @@ function TicketShopPage() {
   }, [isCartOpen]);
 
   const clearPaymentProof = () => {
+    setProofError("");
     setProofFileName("");
     setProofMessage("");
     setIsProofSubmitted(false);
@@ -1024,6 +1103,7 @@ function TicketShopPage() {
 
     setIsCreatingOrder(true);
     setBuyerError("");
+    setProofError("");
     setProofMessage("");
 
     try {
@@ -1046,7 +1126,7 @@ function TicketShopPage() {
 
       setShopOrder(payload.order);
       setBuyerData(confirmedBuyerData);
-      setOrderReference(payload.order.reference);
+      setOrderReference(getShopPaymentReference(payload.order));
       setIsBuyerConfirmed(true);
       setProofFileName(payload.order.proof?.fileName ?? "");
       setIsProofSubmitted(Boolean(payload.order.proof));
@@ -1071,14 +1151,15 @@ function TicketShopPage() {
 
     if (!file) {
       setSelectedProofFile(null);
+      setProofError("");
       setProofMessage("");
       return;
     }
 
     if (!shopOrder) {
       setSelectedProofFile(null);
+      setProofError("Primero genera la orden de pago.");
       setProofMessage("");
-      setBuyerError("Primero genera la orden de pago.");
       input.value = "";
       return;
     }
@@ -1087,14 +1168,15 @@ function TicketShopPage() {
 
     if (validationError) {
       setSelectedProofFile(null);
+      setProofError(validationError);
       setProofMessage("");
-      setBuyerError(validationError);
       input.value = "";
       return;
     }
 
     setSelectedProofFile(file);
     setBuyerError("");
+    setProofError("");
     setProofMessage("");
     input.value = "";
   };
@@ -1111,7 +1193,7 @@ function TicketShopPage() {
     }
 
     if (!shopOrder) {
-      setBuyerError("Primero genera la orden de pago.");
+      setProofError("Primero genera la orden de pago.");
       return;
     }
 
@@ -1119,6 +1201,7 @@ function TicketShopPage() {
 
     setIsUploadingProof(true);
     setBuyerError("");
+    setProofError("");
     setProofMessage("");
 
     try {
@@ -1133,7 +1216,7 @@ function TicketShopPage() {
       });
 
       setShopOrder(payload.order);
-      setOrderReference(payload.order.reference);
+      setOrderReference(getShopPaymentReference(payload.order));
       setProofFileName(payload.order.proof?.fileName ?? file.name);
       setIsProofSubmitted(true);
       setSelectedProofFile(null);
@@ -1142,7 +1225,7 @@ function TicketShopPage() {
       clearCookieValue(ticketCheckoutCookieName);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
-      setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
+      setProofError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
     } finally {
       setIsUploadingProof(false);
     }
@@ -1211,17 +1294,32 @@ function TicketShopPage() {
         </div>
       ) : (
         <div className="ticket-shop-proof">
+          <header className="ticket-shop-proof__header">
+            <UploadCloud aria-hidden="true" size={30} />
+            <strong>Subir comprobante de pago</strong>
+            <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
+          </header>
           <input
             accept={paymentProofAccept}
             onChange={handleProofFileChange}
             ref={proofInputRef}
             type="file"
           />
+          {selectedProofFile ? (
+            <p className="ticket-shop-proof__selection">
+              <span>Archivo seleccionado</span>
+              <strong>{selectedProofFile.name}</strong>
+            </p>
+          ) : null}
           <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
-            <UploadCloud aria-hidden="true" size={20} />
-            {isUploadingProof ? "Subiendo comprobante..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
+            {selectedProofFile ? <ArrowRight aria-hidden="true" size={20} /> : <UploadCloud aria-hidden="true" size={20} />}
+            {isUploadingProof
+              ? "Enviando..."
+              : selectedProofFile
+                ? "Confirmar pago y enviar comprobante"
+                : "Seleccionar comprobante"}
           </button>
-          {selectedProofFile ? <strong>{selectedProofFile.name}</strong> : null}
+          {proofError ? <p className="ticket-shop-proof__error" role="alert">{proofError}</p> : null}
           {selectedProofFile ? (
             <button
               className="ticket-shop-proof__change"
@@ -1475,11 +1573,12 @@ function PhotoVideoShopPage() {
     whatsapp: "",
   });
   const [buyerError, setBuyerError] = useState("");
+  const [proofError, setProofError] = useState("");
   const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order));
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isParticipantLookupLoading, setIsParticipantLookupLoading] = useState(false);
-  const [orderReference, setOrderReference] = useState(storedCheckout?.order.reference ?? "");
+  const [orderReference, setOrderReference] = useState(getShopPaymentReference(storedCheckout?.order));
   const [participantLookup, setParticipantLookup] = useState<MediaParticipantLookup | null>(null);
   const [proofFileName, setProofFileName] = useState(storedCheckout?.order.proof?.fileName ?? "");
   const [proofMessage, setProofMessage] = useState(
@@ -1618,6 +1717,7 @@ function PhotoVideoShopPage() {
   }, [mediaSelectionSlots, participantLookup, selectedDanceIdsBySlot]);
 
   const clearPaymentProof = () => {
+    setProofError("");
     setProofFileName("");
     setProofMessage("");
     setIsProofSubmitted(false);
@@ -1829,6 +1929,7 @@ function PhotoVideoShopPage() {
 
     setIsCreatingOrder(true);
     setBuyerError("");
+    setProofError("");
     setProofMessage("");
 
     try {
@@ -1851,7 +1952,7 @@ function PhotoVideoShopPage() {
 
       setShopOrder(payload.order);
       setBuyerData(confirmedBuyerData);
-      setOrderReference(payload.order.reference);
+      setOrderReference(getShopPaymentReference(payload.order));
       setIsBuyerConfirmed(true);
       setProofFileName(payload.order.proof?.fileName ?? "");
       setIsProofSubmitted(Boolean(payload.order.proof));
@@ -1876,14 +1977,15 @@ function PhotoVideoShopPage() {
 
     if (!file) {
       setSelectedProofFile(null);
+      setProofError("");
       setProofMessage("");
       return;
     }
 
     if (!shopOrder) {
       setSelectedProofFile(null);
+      setProofError("Primero genera la orden de pago.");
       setProofMessage("");
-      setBuyerError("Primero genera la orden de pago.");
       input.value = "";
       return;
     }
@@ -1892,14 +1994,15 @@ function PhotoVideoShopPage() {
 
     if (validationError) {
       setSelectedProofFile(null);
+      setProofError(validationError);
       setProofMessage("");
-      setBuyerError(validationError);
       input.value = "";
       return;
     }
 
     setSelectedProofFile(file);
     setBuyerError("");
+    setProofError("");
     setProofMessage("");
     input.value = "";
   };
@@ -1916,7 +2019,7 @@ function PhotoVideoShopPage() {
     }
 
     if (!shopOrder) {
-      setBuyerError("Primero genera la orden de pago.");
+      setProofError("Primero genera la orden de pago.");
       return;
     }
 
@@ -1924,6 +2027,7 @@ function PhotoVideoShopPage() {
 
     setIsUploadingProof(true);
     setBuyerError("");
+    setProofError("");
     setProofMessage("");
 
     try {
@@ -1938,7 +2042,7 @@ function PhotoVideoShopPage() {
       });
 
       setShopOrder(payload.order);
-      setOrderReference(payload.order.reference);
+      setOrderReference(getShopPaymentReference(payload.order));
       setProofFileName(payload.order.proof?.fileName ?? file.name);
       setIsProofSubmitted(true);
       setSelectedProofFile(null);
@@ -1947,7 +2051,7 @@ function PhotoVideoShopPage() {
       clearCookieValue(mediaCheckoutCookieName);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
-      setBuyerError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
+      setProofError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
     } finally {
       setIsUploadingProof(false);
     }
@@ -1982,9 +2086,7 @@ function PhotoVideoShopPage() {
   );
 
 	  const renderTransferCheckout = () => {
-	    const selectedTargets = selectedMediaSelections.map((selection) => (
-	      `${selection.product.name}: ${getMediaLineTitle(selection.dance)} · ${getMediaLineMeta(selection.dance)} · ${formatCurrency(getMediaPackagePrice(selection.product, selection.dance))}`
-	    ));
+    const selectedTargets = selectedMediaSelections.map((selection) => getMediaPaymentTargetLabel(selection.dance));
     const paymentTargets = selectedTargets.length ? selectedTargets : getShopOrderMediaTargets(shopOrder);
 
     return (
@@ -2013,7 +2115,7 @@ function PhotoVideoShopPage() {
           </div>
           {paymentTargets.length ? (
             <div>
-              <dt>Paquetes dirigidos a</dt>
+              <dt>Coreografías</dt>
               <dd className="media-shop-payment-targets">
                 {paymentTargets.map((target, index) => <span key={`${target}-${index}`}>{target}</span>)}
               </dd>
@@ -2029,17 +2131,32 @@ function PhotoVideoShopPage() {
           </div>
         ) : (
           <div className="ticket-shop-proof">
+            <header className="ticket-shop-proof__header">
+              <UploadCloud aria-hidden="true" size={30} />
+              <strong>Subir comprobante de pago</strong>
+              <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
+            </header>
             <input
               accept={paymentProofAccept}
               onChange={handleProofFileChange}
               ref={proofInputRef}
               type="file"
             />
+            {selectedProofFile ? (
+              <p className="ticket-shop-proof__selection">
+                <span>Archivo seleccionado</span>
+                <strong>{selectedProofFile.name}</strong>
+              </p>
+            ) : null}
             <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
-              <UploadCloud aria-hidden="true" size={20} />
-              {isUploadingProof ? "Subiendo comprobante..." : selectedProofFile ? "Enviar comprobante" : "Seleccionar comprobante"}
+              {selectedProofFile ? <ArrowRight aria-hidden="true" size={20} /> : <UploadCloud aria-hidden="true" size={20} />}
+              {isUploadingProof
+                ? "Enviando..."
+                : selectedProofFile
+                  ? "Confirmar pago y enviar comprobante"
+                  : "Seleccionar comprobante"}
             </button>
-            {selectedProofFile ? <strong>{selectedProofFile.name}</strong> : null}
+            {proofError ? <p className="ticket-shop-proof__error" role="alert">{proofError}</p> : null}
             {selectedProofFile ? (
               <button
                 className="ticket-shop-proof__change"

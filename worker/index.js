@@ -2889,7 +2889,8 @@ async function getRegistrationInscriptionLookup(db, curp) {
     )
     .bind(curp)
     .all();
-  const lines = buildRegistrationInscriptionLines(danceRows);
+  const dancesWithParticipants = await attachRegistrationDanceParticipants(db, danceRows);
+  const lines = buildRegistrationInscriptionLines(dancesWithParticipants);
   const subtotal = lines.reduce((total, line) => total + line.amount, 0);
   const primaryRegistration = registrationRows[0];
   const reference = buildRegistrationInscriptionReference(curp, primaryRegistration.venue);
@@ -2903,6 +2904,7 @@ async function getRegistrationInscriptionLookup(db, curp) {
     academyName: primaryRegistration.academy_name,
     venue: primaryRegistration.venue,
     reference,
+    paymentReference: buildRegistrationInscriptionPaymentReference(curp),
     registrations: registrationRows.map(serializeRegistrationStudentRecord),
     lines,
     subtotal,
@@ -3003,6 +3005,7 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
 }
 
 async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact, curp, discountCode, items }) {
+  await ensureRegistrationShopOrderTables(db);
   await ensureRegistrationShopOrderBuyerContactColumns(db);
   await ensureRegistrationPaymentProofTables(db);
 
@@ -3062,7 +3065,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
     return getRegistrationShopOrderRecordById(db, reusableOrder.id);
   }
 
-  const reference = await createRegistrationShopReference(db, curp);
+  const reference = await createRegistrationShopReference(db, curp, normalizedCart.lineItems);
   const orderId = crypto.randomUUID();
 
   await db
@@ -3283,6 +3286,8 @@ async function validateRegistrationShopMediaLineItems(db, curp, lineItems) {
       id: [lineItem.productId, lineItem.optionId, dance.id].filter(Boolean).join(":"),
       danceId: dance.id,
       danceTitle: dance.title || lineItem.danceTitle,
+      danceCategory: dance.category,
+      danceDivision: dance.division,
       participantCount,
       title: [lineItem.productName, dance.title || lineItem.danceTitle].filter(Boolean).join(" · "),
       unitPrice,
@@ -3372,9 +3377,12 @@ function getRegistrationMediaDanceTypeLabel(danceType) {
   }[danceType] || "esa categoría";
 }
 
-async function createRegistrationShopReference(db, curp) {
+async function createRegistrationShopReference(db, curp, lineItems = []) {
+  const prefix = getRegistrationShopPaymentReferencePrefix(lineItems);
+  const curpPrefix = getRegistrationPaymentCurpPrefix(curp);
+
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const reference = `LEV-SHOP-${curp.slice(0, 4)}-${randomRegistrationTicketSegment(4)}`;
+    const reference = `${prefix}-${curpPrefix}${randomRegistrationTicketSegment(4)}`;
     const existingOrder = await getRegistrationShopOrderByReference(db, reference);
 
     if (!existingOrder) {
@@ -3382,7 +3390,77 @@ async function createRegistrationShopReference(db, curp) {
     }
   }
 
-  return `LEV-SHOP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  return `${prefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+function buildRegistrationInscriptionPaymentReference(curp) {
+  return `INS-${getRegistrationPaymentCurpCode(curp)}`;
+}
+
+function buildRegistrationShopPaymentReference(order) {
+  const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
+  const prefix = getRegistrationShopPaymentReferencePrefix(lineItems);
+  const normalizedReference = optionalString(order.reference).toUpperCase();
+  const compactMatch = normalizedReference.match(/^(?:FV|BOL|SHOP)-([A-Z0-9]{4,16})$/);
+
+  if (compactMatch) {
+    return `${prefix}-${compactMatch[1].slice(0, 8)}`;
+  }
+
+  const referenceParts = normalizedReference
+    .split("-")
+    .map((part) => part.replace(/[^A-Z0-9]/g, ""))
+    .filter(Boolean);
+  const trailingCode = referenceParts[referenceParts.length - 1]?.slice(-4) || normalizedReference.replace(/[^A-Z0-9]/g, "").slice(-4);
+
+  return `${prefix}-${getRegistrationPaymentCurpPrefix(order.curp)}${trailingCode || "0000"}`;
+}
+
+function getRegistrationPaymentCurpCode(curp) {
+  const normalizedCurp = normalizeCurp(curp);
+  const curpPrefix = normalizedCurp.slice(0, 4);
+  const curpTail = normalizedCurp.slice(-4);
+  const code = `${curpPrefix}${curpTail}`.replace(/[^A-Z0-9]/g, "");
+
+  return code || "PAGO";
+}
+
+function getRegistrationPaymentCurpPrefix(curp) {
+  const normalizedCurp = normalizeCurp(curp);
+  const curpPrefix = normalizedCurp.slice(0, 4).replace(/[^A-Z0-9]/g, "");
+
+  return curpPrefix || "PAGO";
+}
+
+function getRegistrationShopPaymentReferencePrefix(lineItems = []) {
+  const hasMedia = lineItems.some(isRegistrationShopMediaPaymentLineItem);
+  const hasTicket = lineItems.some(isRegistrationShopTicketPaymentLineItem);
+
+  if (hasMedia && !hasTicket) {
+    return "FV";
+  }
+
+  if (hasTicket && !hasMedia) {
+    return "BOL";
+  }
+
+  return "SHOP";
+}
+
+function isRegistrationShopMediaPaymentLineItem(lineItem) {
+  const productId = optionalString(lineItem?.productId);
+  const itemType = optionalString(lineItem?.itemType).toLowerCase();
+  const productCategory = optionalString(lineItem?.productCategory ?? lineItem?.category).toLowerCase();
+
+  return itemType === "media" || productCategory.includes("fotograf") || productId.startsWith("photo-");
+}
+
+function isRegistrationShopTicketPaymentLineItem(lineItem) {
+  const productId = optionalString(lineItem?.productId);
+  const itemType = optionalString(lineItem?.itemType).toLowerCase();
+  const productCategory = optionalString(lineItem?.productCategory ?? lineItem?.category).toLowerCase();
+
+  return itemType === "ticket" || productCategory.includes("boleto") || productId.startsWith("ticket-");
 }
 
 async function getRegistrationInscriptionOrderByReference(db, reference) {
@@ -4268,6 +4346,7 @@ async function serializeRegistrationDances(db, academyId, dances) {
           registration_dance_participants.dance_id,
           registration_participants.id,
           registration_participants.full_name,
+          registration_participants.age,
           registration_participants.division,
           registration_participants.shirt_size
         FROM registration_dance_participants
@@ -4325,6 +4404,7 @@ async function serializeRegistrationProgramDances(db, dances) {
           registration_dance_participants.dance_id,
           registration_participants.id,
           registration_participants.full_name,
+          registration_participants.age,
           registration_participants.division,
           registration_participants.shirt_size
         FROM registration_dance_participants
@@ -4347,6 +4427,44 @@ async function serializeRegistrationProgramDances(db, dances) {
     venue: dance.venue,
     createdAt: dance.created_at,
     choreographers: choreographersByDance.get(dance.id) || [],
+    participants: participantsByDance.get(dance.id) || [],
+  }));
+}
+
+async function attachRegistrationDanceParticipants(db, dances) {
+  if (dances.length === 0) {
+    return dances;
+  }
+
+  const danceIds = new Set(dances.map((dance) => dance.id).filter(Boolean));
+
+  if (danceIds.size === 0) {
+    return dances.map((dance) => ({ ...dance, participants: [] }));
+  }
+
+  const placeholders = Array.from(danceIds, () => "?").join(", ");
+  const { results: participants = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_dance_participants.dance_id,
+          registration_participants.id,
+          registration_participants.full_name,
+          registration_participants.age,
+          registration_participants.division,
+          registration_participants.shirt_size
+        FROM registration_dance_participants
+        INNER JOIN registration_participants
+          ON registration_participants.id = registration_dance_participants.participant_id
+        WHERE registration_dance_participants.dance_id IN (${placeholders})
+      `,
+    )
+    .bind(...Array.from(danceIds))
+    .all();
+  const participantsByDance = groupRegistrationRelations(participants, danceIds);
+
+  return dances.map((dance) => ({
+    ...dance,
     participants: participantsByDance.get(dance.id) || [],
   }));
 }
@@ -4416,6 +4534,7 @@ function groupRegistrationRelations(rows, danceIds) {
 
     const current = grouped.get(row.dance_id) || [];
     current.push({
+      age: row.age == null ? null : Number(row.age),
       division: row.division,
       id: row.id,
       fullName: row.full_name,
@@ -4538,6 +4657,7 @@ function serializeRegistrationInscriptionLine(dance) {
     genre: dance.genre,
     subgenre: dance.subgenre,
     category: dance.category,
+    division: getRegistrationMusicDriveDivision(dance),
     level: dance.level,
     participantCount: Number(dance.participant_count || 0),
     venue: dance.venue,
@@ -4795,6 +4915,7 @@ function serializeRegistrationInscriptionOrder(order) {
     academyName: order.academy_name,
     venue: order.venue,
     reference: order.reference,
+    paymentReference: buildRegistrationInscriptionPaymentReference(order.curp),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
     status: order.status,
@@ -4826,6 +4947,7 @@ function serializeRegistrationShopOrder(order) {
     academyName: order.academy_name,
     venue: order.venue,
     reference: order.reference,
+    paymentReference: buildRegistrationShopPaymentReference(order),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
     status: order.status,
@@ -4993,6 +5115,7 @@ function serializePublicRegistrationInscriptionPaymentLookup(lookup) {
     academyName: lookup.academyName,
     venue: lookup.venue,
     reference: lookup.reference,
+    paymentReference: lookup.paymentReference || buildRegistrationInscriptionPaymentReference(lookup.curp),
     registrations: [],
     lines: lookup.lines.map((line, index) => ({
       ...line,
@@ -5016,6 +5139,7 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     academyName: order.academyName,
     venue: order.venue,
     reference: order.reference,
+    paymentReference: order.paymentReference || buildRegistrationInscriptionPaymentReference(order.curp),
     amount: order.amount,
     paidAmount: order.paidAmount,
     status: order.status,
@@ -5072,6 +5196,47 @@ function isMissingRegistrationShopPaymentProofsTable(error) {
 
 function isMissingRegistrationMusicUploadsTable(error) {
   return String(error?.message || error).includes("registration_music_uploads");
+}
+
+async function ensureRegistrationShopOrderTables(db) {
+  await db
+    .prepare(
+      `
+        CREATE TABLE IF NOT EXISTS registration_shop_orders (
+          id TEXT PRIMARY KEY,
+          curp TEXT NOT NULL COLLATE NOCASE,
+          participant_name TEXT NOT NULL,
+          academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
+          academy_name TEXT NOT NULL,
+          venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
+          reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
+          paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+          status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
+          payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+          buyer_name TEXT,
+          buyer_email TEXT,
+          buyer_phone_country_code TEXT,
+          buyer_phone_number TEXT,
+          buyer_phone TEXT,
+          discount_code TEXT,
+          discount_amount INTEGER NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
+          line_items_json TEXT NOT NULL DEFAULT '[]',
+          notes TEXT,
+          paid_at TEXT,
+          reviewed_by TEXT,
+          reviewed_at TEXT,
+          rejection_reason TEXT,
+          rejection_message TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `,
+    )
+    .run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status)`).run();
 }
 
 async function ensureRegistrationPaymentProofTables(db) {
@@ -5481,19 +5646,85 @@ function buildRegistrationMusicDriveFileName({ dance, session }) {
 }
 
 function getRegistrationMusicDriveDivision(dance) {
-  const divisions = Array.isArray(dance.participants)
-    ? dance.participants.map((participant) => participant.division).filter(Boolean)
+  const participants = Array.isArray(dance.participants)
+    ? dance.participants.filter((participant) => Boolean(participant.division))
     : [];
 
-  if (divisions.length === 0) {
+  if (participants.length === 0) {
     return "";
   }
 
-  const [highestDivision = ""] = divisions.sort(
-    (left, right) => getRegistrationDriveDivisionRank(right) - getRegistrationDriveDivisionRank(left),
-  );
+  const participantsByAge = [...participants].sort(compareRegistrationDriveParticipantsByAge);
+  if (dance.category === "grupo") {
+    return getRegistrationDriveGroupDivision(participantsByAge);
+  }
 
-  return normalizeRegistrationDriveDivision(highestDivision);
+  return normalizeRegistrationDriveDivision(participantsByAge[0]?.division || "");
+}
+
+function compareRegistrationDriveParticipantsByAge(left, right) {
+  const leftAge = typeof left.age === "number" ? left.age : getRegistrationDriveDivisionFallbackAge(left.division);
+  const rightAge = typeof right.age === "number" ? right.age : getRegistrationDriveDivisionFallbackAge(right.division);
+
+  if (rightAge !== leftAge) {
+    return rightAge - leftAge;
+  }
+
+  return getRegistrationDriveDivisionRank(right.division) - getRegistrationDriveDivisionRank(left.division);
+}
+
+function getRegistrationDriveGroupDivision(participants) {
+  const divisionCounts = participants.reduce((counts, participant) => {
+    const division = normalizeRegistrationDriveDivision(participant.division);
+
+    if (!division) {
+      return counts;
+    }
+
+    counts.set(division, (counts.get(division) || 0) + 1);
+    return counts;
+  }, new Map());
+  const divisionsByPrevalence = Array.from(divisionCounts.keys()).sort((left, right) => {
+    const countDiff = (divisionCounts.get(right) || 0) - (divisionCounts.get(left) || 0);
+
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+
+    return getRegistrationDriveDivisionRank(right) - getRegistrationDriveDivisionRank(left);
+  });
+  const predominantDivision = divisionsByPrevalence[0] || "";
+  const predominantRank = getRegistrationDriveDivisionRank(predominantDivision);
+  const higherDivisions = Array.from(divisionCounts.keys()).filter((division) => (
+    getRegistrationDriveDivisionRank(division) > predominantRank
+  ));
+  const higherParticipantCount = higherDivisions.reduce((total, division) => total + (divisionCounts.get(division) || 0), 0);
+
+  if (!predominantDivision || higherParticipantCount <= 1) {
+    return predominantDivision;
+  }
+
+  const repeatedHigherDivision = higherDivisions
+    .filter((division) => (divisionCounts.get(division) || 0) >= 2)
+    .sort((left, right) => getRegistrationDriveDivisionRank(right) - getRegistrationDriveDivisionRank(left))[0];
+
+  if (repeatedHigherDivision) {
+    return repeatedHigherDivision;
+  }
+
+  return registrationDriveDivisionOrder[predominantRank + 1] || predominantDivision;
+}
+
+function getRegistrationDriveDivisionFallbackAge(division) {
+  return {
+    baby: 6,
+    petite: 10,
+    junior: 13,
+    teen: 17,
+    senior: 39,
+    legacy: 40,
+    releve: 100,
+  }[normalizeRegistrationDriveDivision(division)] ?? -1;
 }
 
 function getRegistrationDriveDivisionRank(division) {

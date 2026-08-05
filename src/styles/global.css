@@ -15836,11 +15836,33 @@ button {
 
 .ticket-shop-proof {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  padding: 18px 16px 14px;
+  border: 1px dashed rgba(45, 43, 40, 0.22);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.44);
 }
 
 .ticket-shop-proof input {
   display: none;
+}
+
+.ticket-shop-proof__header {
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  text-align: center;
+}
+
+.ticket-shop-proof__header svg {
+  color: var(--ticket-shop-ink);
+}
+
+.ticket-shop-proof__header span {
+  color: var(--ticket-shop-muted);
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.3;
 }
 
 .ticket-shop-proof strong,
@@ -15856,11 +15878,52 @@ button {
   color: var(--ticket-shop-blue);
 }
 
-.ticket-shop-proof button.ticket-shop-proof__change {
-  min-height: 44px;
-  border: 1px solid rgba(45, 43, 40, 0.16);
-  background: rgba(255, 255, 255, 0.72);
+.ticket-shop-proof__selection {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid rgba(87, 189, 209, 0.34);
+  border-radius: 7px;
+  background: rgba(226, 247, 250, 0.72);
+}
+
+.ticket-shop-proof__selection span {
+  color: var(--ticket-shop-blue);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ticket-shop-proof__selection strong {
   color: var(--ticket-shop-ink);
+  overflow-wrap: anywhere;
+}
+
+.ticket-shop-proof p.ticket-shop-proof__error {
+  color: var(--ticket-shop-pink);
+  font-size: 0.95rem;
+  font-weight: 820;
+}
+
+.ticket-shop-proof > button:not(.ticket-shop-proof__change) {
+  min-height: 58px;
+  padding: 12px 18px;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
+}
+
+.ticket-shop-proof button.ticket-shop-proof__change {
+  justify-self: start;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ticket-shop-blue);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .ticket-shop-confirmation-note,
@@ -22074,7 +22137,7 @@ button {
 }
 
 .levitate-admin-lookup-table--dances {
-  --admin-lookup-columns: minmax(190px, 1fr) minmax(112px, 0.55fr) minmax(138px, 0.68fr) minmax(118px, 0.58fr) minmax(220px, 1.1fr);
+  --admin-lookup-columns: minmax(190px, 1fr) minmax(132px, 0.62fr) minmax(132px, 0.62fr) minmax(112px, 0.52fr) minmax(116px, 0.54fr) minmax(320px, 1.55fr);
 }
 
 .levitate-admin-lookup-table > span[role="columnheader"] {

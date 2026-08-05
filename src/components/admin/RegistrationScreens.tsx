@@ -146,6 +146,7 @@ type RegistrationChoreographer = {
 };
 
 type RegistrationDanceRelation = {
+  age?: number | null;
   division?: string;
   id: string;
   fullName: string;
@@ -243,6 +244,7 @@ type RegistrationInscriptionOrder = {
   academyName: string;
   venue: string;
   reference: string;
+  paymentReference?: string;
   amount: number;
   paidAmount: number;
   status: RegistrationInscriptionOrderStatus;
@@ -720,6 +722,74 @@ function getProgramDivisionRank(division?: string) {
   return index === -1 ? 999 : index;
 }
 
+function getParticipantDivisionFallbackAge(participant: RegistrationDanceRelation) {
+  const normalizedDivision = normalizeProgramDivision(participant.division);
+  const divisionAgeFallbacks: Record<string, number> = {
+    baby: 6,
+    petite: 10,
+    junior: 13,
+    teen: 17,
+    senior: 39,
+    legacy: 40,
+    releve: 100,
+  };
+
+  return divisionAgeFallbacks[normalizedDivision] ?? -1;
+}
+
+function compareParticipantsByProgramAge(left: RegistrationDanceRelation, right: RegistrationDanceRelation) {
+  const leftAge = typeof left.age === "number" ? left.age : getParticipantDivisionFallbackAge(left);
+  const rightAge = typeof right.age === "number" ? right.age : getParticipantDivisionFallbackAge(right);
+
+  if (rightAge !== leftAge) {
+    return rightAge - leftAge;
+  }
+
+  return getProgramDivisionRank(right.division) - getProgramDivisionRank(left.division);
+}
+
+function getGroupDanceProgramDivision(participants: RegistrationDanceRelation[]) {
+  const divisionCounts = participants.reduce<Map<string, number>>((counts, participant) => {
+    const division = normalizeProgramDivision(participant.division);
+
+    if (!division) {
+      return counts;
+    }
+
+    counts.set(division, (counts.get(division) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const divisionsByPrevalence = Array.from(divisionCounts.keys()).sort((left, right) => {
+    const countDiff = (divisionCounts.get(right) ?? 0) - (divisionCounts.get(left) ?? 0);
+
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+
+    return getProgramDivisionRank(right) - getProgramDivisionRank(left);
+  });
+  const predominantDivision = divisionsByPrevalence[0] ?? "";
+  const predominantRank = getProgramDivisionRank(predominantDivision);
+  const higherDivisions = Array.from(divisionCounts.keys()).filter((division) => (
+    getProgramDivisionRank(division) > predominantRank
+  ));
+  const higherParticipantCount = higherDivisions.reduce((total, division) => total + (divisionCounts.get(division) ?? 0), 0);
+
+  if (!predominantDivision || higherParticipantCount <= 1) {
+    return predominantDivision;
+  }
+
+  const repeatedHigherDivision = higherDivisions
+    .filter((division) => (divisionCounts.get(division) ?? 0) >= 2)
+    .sort((left, right) => getProgramDivisionRank(right) - getProgramDivisionRank(left))[0];
+
+  if (repeatedHigherDivision) {
+    return repeatedHigherDivision;
+  }
+
+  return programDivisionOrder[predominantRank + 1] ?? predominantDivision;
+}
+
 function normalizeCurpInput(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 18);
 }
@@ -816,13 +886,22 @@ function getBirthDateFromCurp(curp: string, referenceDate: string) {
 }
 
 function getDanceProgramDivision(dance: RegistrationDance) {
-  const participantDivisions = dance.participants.map((participant) => participant.division).filter(Boolean);
+  const participantsWithDivision = dance.participants.filter((participant) => Boolean(participant.division));
 
-  if (participantDivisions.length === 0) {
+  if (participantsWithDivision.length === 0) {
     return "";
   }
 
-  return participantDivisions.sort((left, right) => getProgramDivisionRank(right) - getProgramDivisionRank(left))[0] ?? "";
+  const participantsByAge = [...participantsWithDivision].sort(compareParticipantsByProgramAge);
+  const normalizedCategory = dance.category;
+
+  if (normalizedCategory === "grupo") {
+    return getGroupDanceProgramDivision(participantsByAge);
+  }
+
+  const selectedParticipant = participantsByAge[0];
+
+  return selectedParticipant?.division ?? "";
 }
 
 function getProgramBlock(dance: RegistrationDance, division: string) {
@@ -1207,14 +1286,68 @@ function getDefaultPaymentRejectionReason(order: RegistrationInscriptionOrder): 
   return "invalid_or_unreadable_proof";
 }
 
-function getRegistrationInscriptionPaymentReference(order: Pick<RegistrationInscriptionOrder, "curp" | "orderType" | "reference">) {
-  if (getAdminOrderType(order) === "shop") {
-    return order.reference;
+function getRegistrationInscriptionPaymentReference(
+  order: Pick<RegistrationInscriptionOrder, "curp" | "lineItems" | "orderType" | "paymentReference" | "reference">,
+) {
+  if (order.paymentReference) {
+    return order.paymentReference;
   }
 
-  const curpPrefix = String(order.curp || "").replace(/\s/g, "").toUpperCase().slice(0, 4);
+  if (getAdminOrderType(order) === "shop") {
+    return getAdminShopPaymentReference(order);
+  }
 
-  return curpPrefix ? `LEVITATE-${curpPrefix}-26` : order.reference;
+  const curpCode = getAdminPaymentCurpCode(order.curp);
+
+  return curpCode ? `INS-${curpCode}` : order.reference;
+}
+
+function getAdminPaymentCurpCode(curp: string) {
+  const normalizedCurp = String(curp || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+  return `${normalizedCurp.slice(0, 4)}${normalizedCurp.slice(-4)}`.replace(/[^A-Z0-9]/g, "");
+}
+
+function getAdminShopPaymentReference(order: Pick<RegistrationInscriptionOrder, "curp" | "lineItems" | "reference">) {
+  const prefix = getAdminShopPaymentReferencePrefix(order.lineItems ?? []);
+  const normalizedReference = order.reference.toUpperCase();
+  const compactMatch = normalizedReference.match(/^(?:FV|BOL|SHOP)-([A-Z0-9]{4,16})$/);
+
+  if (compactMatch) {
+    return `${prefix}-${compactMatch[1].slice(0, 8)}`;
+  }
+
+  const referenceParts = normalizedReference
+    .split("-")
+    .map((part) => part.replace(/[^A-Z0-9]/g, ""))
+    .filter(Boolean);
+  const trailingCode = referenceParts[referenceParts.length - 1]?.slice(-4) || normalizedReference.replace(/[^A-Z0-9]/g, "").slice(-4);
+  const curpPrefix = String(order.curp || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 4) || "PAGO";
+
+  return `${prefix}-${curpPrefix}${trailingCode || "0000"}`;
+}
+
+function getAdminShopPaymentReferencePrefix(lineItems: RegistrationInscriptionLineItem[]) {
+  const hasMedia = lineItems.some((lineItem) => (
+    lineItem.itemType === "media" ||
+    lineItem.productCategory?.toLowerCase().includes("fotograf") ||
+    lineItem.productId?.startsWith("photo-")
+  ));
+  const hasTickets = lineItems.some((lineItem) => (
+    lineItem.itemType === "ticket" ||
+    lineItem.productCategory?.toLowerCase().includes("boleto") ||
+    lineItem.productId?.startsWith("ticket-")
+  ));
+
+  if (hasMedia && !hasTickets) {
+    return "FV";
+  }
+
+  if (hasTickets && !hasMedia) {
+    return "BOL";
+  }
+
+  return "SHOP";
 }
 
 function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reason: RegistrationPaymentRejectionReason) {
@@ -1442,7 +1575,7 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
         curp: normalizedCurp,
         generatedTickets: 0,
         latestOrderId: order.id,
-        latestReference: order.reference,
+        latestReference: getRegistrationInscriptionPaymentReference(order),
         latestStatus: order.status,
         orderCount: 0,
         paidTickets: 0,
@@ -1483,7 +1616,7 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
 
     if (!Number.isFinite(currentDate) || (Number.isFinite(orderDate) && orderDate >= currentDate)) {
       existingRow.latestOrderId = order.id;
-      existingRow.latestReference = order.reference;
+      existingRow.latestReference = getRegistrationInscriptionPaymentReference(order);
       existingRow.latestStatus = order.status;
       existingRow.updatedAt = order.updatedAt || order.createdAt;
     }
@@ -5578,19 +5711,24 @@ function AdminLookupPanel({
         <div className="levitate-admin-lookup-table-scroll">
           <div className="levitate-admin-lookup-table levitate-admin-lookup-table--dances" role="table" aria-label="Coreografías registradas">
             <span role="columnheader">Coreografía</span>
-            <span role="columnheader">Modalidad</span>
+            <span role="columnheader">Género</span>
             <span role="columnheader">Categoría</span>
+            <span role="columnheader">División</span>
             <span role="columnheader">Nivel</span>
             <span role="columnheader">Participantes</span>
             {dances.map((dance) => {
               const categoryOptions = danceCategoriesByGenre[dance.genre] ?? danceCategories;
+              const subgenreOptions = danceSubgenresByGenre[dance.genre] ?? [];
+              const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
+              const compactDivisionLabel = divisionLabel.split(":")[0] || "Sin división";
               const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");
 
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
                   <span role="cell">{dance.title}</span>
-                  <span role="cell">{getOptionLabel(danceGenres, dance.genre)}</span>
+                  <span role="cell">{getOptionLabel(subgenreOptions, dance.subgenre)}</span>
                   <span role="cell">{getOptionLabel(categoryOptions, dance.category)}</span>
+                  <span role="cell" title={divisionLabel}>{compactDivisionLabel}</span>
                   <span role="cell">{getDanceLevelLabel(dance.level)}</span>
                   <span role="cell">{participantNames || "Sin participantes"}</span>
                 </div>

@@ -76,6 +76,7 @@ type InscriptionOrder = {
   academyName: string;
   venue: string;
   reference: string;
+  paymentReference?: string;
   amount: number;
   paidAmount: number;
   status: InscriptionOrderStatus;
@@ -100,6 +101,7 @@ type InscriptionLookup = {
   academyName: string;
   venue: string;
   reference: string;
+  paymentReference?: string;
   registrations: InscriptionLookupRecord[];
   lines: InscriptionLookupLine[];
   subtotal: number;
@@ -305,7 +307,7 @@ function isPhoneNumberValid(phoneNumber: string) {
 }
 
 function getPaymentConcept(lookup: InscriptionLookup) {
-  return lookup.order?.reference || lookup.reference;
+  return lookup.order?.paymentReference || lookup.paymentReference || lookup.order?.reference || lookup.reference;
 }
 
 function getVenueLabel(venue?: string | null) {
