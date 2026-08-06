@@ -6047,11 +6047,13 @@ function AdminLookupPanel({
   choreographers,
   dances,
   inscriptionOrders,
+  isInternationalAcademy,
 }: {
   participants: RegistrationParticipant[];
   choreographers: RegistrationChoreographer[];
   dances: RegistrationDance[];
   inscriptionOrders: RegistrationInscriptionOrder[];
+  isInternationalAcademy: boolean;
 }) {
   const [activeLookupTab, setActiveLookupTab] = useState<AdminLookupTab>("participants");
 
@@ -6080,7 +6082,9 @@ function AdminLookupPanel({
       {activeLookupTab === "participants" ? (
         <div className="levitate-admin-lookup-table-scroll">
           <div
-            className="levitate-admin-lookup-table levitate-admin-lookup-table--participants"
+            className={`levitate-admin-lookup-table levitate-admin-lookup-table--participants${
+              isInternationalAcademy ? " levitate-admin-lookup-table--participants-international" : ""
+            }`}
             role="table"
             aria-label="Participantes registrados"
           >
@@ -6089,9 +6093,9 @@ function AdminLookupPanel({
             <span role="columnheader">División</span>
             <span role="columnheader">Edad</span>
             <span role="columnheader">Maestro Relevé</span>
-            <span role="columnheader">Pago</span>
+            {!isInternationalAcademy ? <span role="columnheader">Pago</span> : null}
             {participants.map((participant) => {
-              const isPaid = isParticipantInscriptionPaid(participant, inscriptionOrders);
+              const isPaid = !isInternationalAcademy && isParticipantInscriptionPaid(participant, inscriptionOrders);
               const divisionLabel = getProgramDivisionLabel(participant.division);
               const compactDivisionLabel = divisionLabel.split(":")[0];
 
@@ -6107,9 +6111,11 @@ function AdminLookupPanel({
                   </span>
                   <span role="cell">{participant.age || "Sin edad"}</span>
                   <span role="cell">{participant.isReleveTeacher ? "Sí" : "No"}</span>
-                  <span className={`levitate-admin-payment-badge${isPaid ? " is-paid" : ""}`} role="cell">
-                    {isPaid ? "Pagado" : "Falta pagar"}
-                  </span>
+                  {!isInternationalAcademy ? (
+                    <span className={`levitate-admin-payment-badge${isPaid ? " is-paid" : ""}`} role="cell">
+                      {isPaid ? "Pagado" : "Falta pagar"}
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
@@ -6183,12 +6189,14 @@ function AdminWelcomePanel({
   choreographers,
   dances,
   inscriptionOrders,
+  isInternationalAcademy,
 }: {
   academyName: string;
   participants: RegistrationParticipant[];
   choreographers: RegistrationChoreographer[];
   dances: RegistrationDance[];
   inscriptionOrders: RegistrationInscriptionOrder[];
+  isInternationalAcademy: boolean;
 }) {
   return (
     <section className="levitate-admin-home">
@@ -6196,7 +6204,13 @@ function AdminWelcomePanel({
         <h1>¡Hola, {academyName}!</h1>
       </div>
 
-      <AdminLookupPanel choreographers={choreographers} dances={dances} inscriptionOrders={inscriptionOrders} participants={participants} />
+      <AdminLookupPanel
+        choreographers={choreographers}
+        dances={dances}
+        inscriptionOrders={inscriptionOrders}
+        isInternationalAcademy={isInternationalAcademy}
+        participants={participants}
+      />
     </section>
   );
 }
@@ -6274,6 +6288,7 @@ function getAdminScreen({
         choreographers={choreographers}
         dances={dances}
         inscriptionOrders={inscriptionOrders}
+        isInternationalAcademy={false}
         participants={participants}
       />
     );
@@ -6285,6 +6300,7 @@ function getAdminScreen({
       choreographers={choreographers}
       dances={dances}
       inscriptionOrders={inscriptionOrders}
+      isInternationalAcademy={session.academy.originType === "international"}
       participants={participants}
     />
   );

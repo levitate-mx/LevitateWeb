@@ -22285,6 +22285,10 @@ button {
   --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(128px, 0.56fr);
 }
 
+.levitate-admin-lookup-table--participants-international {
+  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr);
+}
+
 .levitate-admin-lookup-table--choreographers {
   --admin-lookup-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(90px, 0.42fr);
 }
