@@ -4642,6 +4642,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [isLoading, setIsLoading] = useState(false);
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleAdminAuthenticated = useCallback((nextSession: RegistrationSession | RegistrationBootstrap) => {
     if (nextSession.user.role !== "admin") {
@@ -4929,6 +4930,25 @@ export function LevitateRegistrationAdminPaymentsRoute({
     }
   };
 
+  const handleAdminLogout = async () => {
+    setIsLoggingOut(true);
+    setAdminError("");
+
+    try {
+      await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" });
+      setAdminSession(null);
+      setOrders([]);
+      setAdminParticipants([]);
+      setProgramDances([]);
+      setTotals(null);
+      setSelectedOrderId("");
+      window.location.replace("/login");
+    } catch (error) {
+      setAdminError(getErrorMessage(error, "No se pudo cerrar la sesión."));
+      setIsLoggingOut(false);
+    }
+  };
+
   let headerTitle = "Pagos";
   let headerDescription = "Revisión y confirmación de comprobantes";
 
@@ -4987,9 +5007,15 @@ export function LevitateRegistrationAdminPaymentsRoute({
             );
           })}
         </nav>
-        <button className="registration-admin-collapse" type="button" aria-label="Contraer menú">
-          <ArrowLeft aria-hidden="true" size={18} />
-        </button>
+        <div className="registration-admin-sidebar__footer">
+          <button className="registration-admin-logout" disabled={isLoggingOut} onClick={handleAdminLogout} type="button">
+            <LogOut aria-hidden="true" size={17} />
+            {isLoggingOut ? "Cerrando..." : "Cerrar sesión"}
+          </button>
+          <button className="registration-admin-collapse" type="button" aria-label="Contraer menú">
+            <ArrowLeft aria-hidden="true" size={18} />
+          </button>
+        </div>
       </aside>
 
       <section className="registration-admin-workspace">

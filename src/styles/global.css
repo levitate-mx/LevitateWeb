@@ -19832,6 +19832,41 @@ button {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.registration-admin-sidebar__footer {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+}
+
+.registration-admin-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 760;
+  text-align: left;
+}
+
+.registration-admin-logout:hover,
+.registration-admin-logout:focus-visible {
+  border-color: rgba(226, 67, 140, 0.7);
+  background: rgba(226, 67, 140, 0.16);
+  color: #fff;
+}
+
+.registration-admin-logout:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .registration-admin-workspace {
   display: grid;
   align-content: start;
@@ -20761,6 +20796,14 @@ button {
     display: none;
   }
 
+  .registration-admin-sidebar__footer {
+    padding-top: 16px;
+  }
+
+  .registration-admin-logout {
+    justify-content: center;
+  }
+
   .registration-admin-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -20798,6 +20841,10 @@ button {
   }
 
   .registration-admin-sidebar nav button {
+    justify-content: flex-start;
+  }
+
+  .registration-admin-logout {
     justify-content: flex-start;
   }
 
