@@ -3157,7 +3157,7 @@ function LevitateAuthScreen({
               <AdminField icon={Phone} label="Teléfono">
                 <input autoComplete="tel" name="phone" type="tel" />
               </AdminField>
-              <AdminField helper="Indica si la academia es mexicana o internacional." icon={Globe2} label="Origen de la academia">
+              <AdminField icon={Globe2} label="Origen de la academia">
                 <AdminSelect
                   id="academy-origin-type"
                   name="academyOriginType"
