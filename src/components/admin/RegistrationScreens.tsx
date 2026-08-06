@@ -390,9 +390,9 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
-  { label: "Pagos", icon: CreditCard, screen: "payments" },
   { label: "Subir música", icon: Upload, screen: "music" },
   { label: "Feedback", icon: MessageCircle, screen: "feedback" },
+  { label: "Pagos", icon: CreditCard, screen: "payments" },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
 
@@ -3518,17 +3518,12 @@ function ParticipantRegistrationPanel({
 }) {
   const eventDate = venueEventDates[academyVenue] ?? venueEventDates.edomex;
   const isInternational = isAcademyInternational;
-  const defaultCurpHelper = isInternational ? "Ingrese el número de documento." : "Ingrese su CURP (18 caracteres)";
   const releveTeacherMinimumDances = 3;
   const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
-  const releveTeacherHelper = canRegisterReleveTeacher
-    ? "Disponible porque tu academia ya tiene 3 coreografías inscritas."
-    : `Disponible al tener mínimo ${releveTeacherMinimumDances} coreografías inscritas de tu academia. Actualmente tienes ${registeredDanceCount}.`;
   const [curp, setCurp] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [ageValue, setAgeValue] = useState("");
   const [division, setDivision] = useState("baby");
-  const [curpHelper, setCurpHelper] = useState(defaultCurpHelper);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -3556,13 +3551,12 @@ function ParticipantRegistrationPanel({
   useEffect(() => {
     setCurp("");
     clearAutoFields();
-    setCurpHelper(defaultCurpHelper);
-  }, [defaultCurpHelper]);
+  }, [isInternational]);
 
   const handleCurpChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextCurp = isInternational ? normalizeDocumentInput(event.target.value) : normalizeCurpInput(event.target.value);
     setCurp(nextCurp);
-    setCurpHelper(defaultCurpHelper);
+    setErrorMessage("");
 
     if (isInternational) {
       return;
@@ -3577,7 +3571,7 @@ function ParticipantRegistrationPanel({
 
     if (!nextBirthDate) {
       clearAutoFields();
-      setCurpHelper("No pudimos leer la fecha de nacimiento. Revisa la CURP.");
+      setErrorMessage("No pudimos leer la fecha de nacimiento. Revisa la CURP.");
       return;
     }
 
@@ -3635,7 +3629,6 @@ function ParticipantRegistrationPanel({
       form.reset();
       setCurp("");
       clearAutoFields();
-      setCurpHelper(defaultCurpHelper);
       setStatusMessage("Participante guardado en la base.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo guardar el participante."));
@@ -3650,7 +3643,7 @@ function ParticipantRegistrationPanel({
         <AdminField icon={Users} label="Nombre del participante">
           <input name="fullName" required type="text" />
         </AdminField>
-        <AdminField helper={curpHelper} icon={ClipboardList} label={documentFieldLabel}>
+        <AdminField icon={ClipboardList} label={documentFieldLabel}>
           <input
             maxLength={isInternational ? 32 : 18}
             minLength={isInternational ? 3 : 18}
@@ -3661,11 +3654,7 @@ function ParticipantRegistrationPanel({
             value={curp}
           />
         </AdminField>
-        <AdminField
-          helper={isInternational ? "Se usa para calcular edad y división." : "Se calcula automáticamente con la CURP."}
-          icon={CalendarDays}
-          label="Fecha de nacimiento"
-        >
+        <AdminField icon={CalendarDays} label="Fecha de nacimiento">
           <input
             aria-readonly={!isInternational}
             name="birthDate"
@@ -3676,14 +3665,10 @@ function ParticipantRegistrationPanel({
             value={birthDate}
           />
         </AdminField>
-        <AdminField
-          helper={isInternational ? "Se calcula automáticamente con la fecha de nacimiento." : "Se calcula automáticamente con la CURP."}
-          icon={BadgeCheck}
-          label="Edad"
-        >
+        <AdminField icon={BadgeCheck} label="Edad">
           <input aria-readonly="true" min={0} name="age" readOnly required type="number" value={ageValue} />
         </AdminField>
-        <AdminField helper="Se asigna automáticamente según la edad al día del evento." icon={GraduationCap} label="División">
+        <AdminField icon={GraduationCap} label="División">
           <input name="division" type="hidden" value={division} />
           <AdminSelect
             disabled
@@ -3700,7 +3685,6 @@ function ParticipantRegistrationPanel({
           <input disabled={!canRegisterReleveTeacher} name="isReleveTeacher" type="checkbox" />
           <span>
             <strong>Soy Maestro Relevé</strong>
-            <small>{releveTeacherHelper}</small>
           </span>
         </label>
         <div className="levitate-admin-form__wide-block">
