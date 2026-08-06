@@ -2960,7 +2960,10 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
   const subtotal = lines.reduce((total, line) => total + line.amount, 0);
   const primaryRegistration = registrationRows[0];
   const primaryVenue = lines[0]?.venue || danceRows[0]?.venue || primaryRegistration.venue || defaultRegistrationAcademyVenue;
-  const reference = buildRegistrationInscriptionReference(curp, primaryVenue);
+  const reference = buildRegistrationInscriptionReference(curp, primaryVenue, {
+    academyId: primaryRegistration.academy_id,
+    isInternational,
+  });
   const order = await getRegistrationInscriptionOrderByReference(db, reference);
   const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
 
@@ -2971,7 +2974,11 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
     academyName: primaryRegistration.academy_name,
     venue: primaryVenue,
     reference,
-    paymentReference: buildRegistrationInscriptionPaymentReference(curp),
+    paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
+      academyId: primaryRegistration.academy_id,
+      isInternational,
+      venue: primaryVenue,
+    }),
     currency: getRegistrationInscriptionCurrency(isInternational),
     pricingMode: isInternational ? "international" : "mexico",
     registrations: registrationRows.map(serializeRegistrationStudentRecord),
@@ -3509,7 +3516,11 @@ async function createRegistrationShopReference(db, curp, lineItems = []) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
-function buildRegistrationInscriptionPaymentReference(curp) {
+function buildRegistrationInscriptionPaymentReference(curp, { academyId = "", isInternational = false, venue = "" } = {}) {
+  if (isInternational) {
+    return `INS-${getRegistrationInternationalPaymentCode(curp, academyId, venue)}`;
+  }
+
   return `INS-${getRegistrationPaymentCurpCode(curp)}`;
 }
 
@@ -3539,6 +3550,33 @@ function getRegistrationPaymentCurpCode(curp) {
   const code = `${curpPrefix}${curpTail}`.replace(/[^A-Z0-9]/g, "");
 
   return code || "PAGO";
+}
+
+function getRegistrationInternationalPaymentCode(curp, academyId = "", venue = "") {
+  const documentCode = normalizeRegistrationDocument(curp).replace(/[^A-Z0-9]/g, "");
+  const readablePrefix = documentCode.slice(0, 4) || "DOC";
+  const stableCode = getRegistrationStableReferenceCode([academyId, curp, venue].join("|"));
+
+  return `${readablePrefix}${stableCode}`;
+}
+
+function getRegistrationStableReferenceCode(value) {
+  const normalizedValue = String(value || "").trim().toUpperCase();
+  const firstHash = getRegistrationStableHashSegment(normalizedValue, 0x811c9dc5);
+  const secondHash = getRegistrationStableHashSegment(normalizedValue, 0x27d4eb2d);
+
+  return `${firstHash}${secondHash}`.slice(0, 10);
+}
+
+function getRegistrationStableHashSegment(value, seed) {
+  let hash = seed >>> 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+
+  return hash.toString(36).toUpperCase().padStart(7, "0");
 }
 
 function getRegistrationPaymentCurpPrefix(curp) {
@@ -4871,8 +4909,13 @@ function isRegistrationReleveTeacherDance(dance) {
     : false;
 }
 
-function buildRegistrationInscriptionReference(curp, venue) {
+function buildRegistrationInscriptionReference(curp, venue, { academyId = "", isInternational = false } = {}) {
   const venueCode = String(venue || "sede").toUpperCase();
+
+  if (isInternational) {
+    return `LEV-${venueCode}-INT-${getRegistrationInternationalPaymentCode(curp, academyId, venue)}`;
+  }
+
   return `LEV-${venueCode}-${curp.slice(0, 4)}-${curp.slice(-4)}`;
 }
 
@@ -5077,6 +5120,8 @@ function normalizePhoneNumber(value) {
 
 function serializeRegistrationInscriptionOrder(order) {
   const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
+  const currency = getRegistrationOrderCurrency(lineItems);
+  const isInternational = currency === registrationInscriptionCurrencies.international;
 
   return {
     orderType: "registration",
@@ -5087,10 +5132,14 @@ function serializeRegistrationInscriptionOrder(order) {
     academyName: order.academy_name,
     venue: order.venue,
     reference: order.reference,
-    paymentReference: buildRegistrationInscriptionPaymentReference(order.curp),
+    paymentReference: buildRegistrationInscriptionPaymentReference(order.curp, {
+      academyId: order.academy_id,
+      isInternational,
+      venue: order.venue,
+    }),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
-    currency: getRegistrationOrderCurrency(lineItems),
+    currency,
     status: order.status,
     paymentMethod: order.payment_method,
     lineItems,
@@ -5859,7 +5908,8 @@ function assertRegistrationMusicDurationAllowed(dance, durationSeconds) {
     );
   }
 
-  const overageSeconds = Math.max(0, Math.ceil(durationSeconds - limit.maximumSeconds));
+  const checkedDurationSeconds = Math.max(0, Math.round(Number(durationSeconds) || 0));
+  const overageSeconds = Math.max(0, checkedDurationSeconds - limit.maximumSeconds);
 
   if (overageSeconds >= registrationMusicDurationGraceSeconds + 1) {
     const allowedRange = `${formatRegistrationMusicDuration(limit.minimumSeconds)} a ${formatRegistrationMusicDuration(limit.maximumSeconds)}`;

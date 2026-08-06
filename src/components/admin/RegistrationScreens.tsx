@@ -944,22 +944,23 @@ function formatMusicDuration(seconds: number) {
 
 function getMusicDurationCheck(dance: RegistrationDance, durationSeconds: number) {
   const limit = getMusicDurationLimitForDance(dance);
-  const formattedDuration = formatMusicDuration(durationSeconds);
+  const checkedDurationSeconds = Math.max(0, Math.round(durationSeconds));
+  const formattedDuration = formatMusicDuration(checkedDurationSeconds);
 
   if (!limit) {
     return {
-      durationSeconds,
+      durationSeconds: checkedDurationSeconds,
       message: "No pudimos determinar la división de la coreografía para validar el tiempo del reglamento.",
       status: "blocked" as const,
     };
   }
 
   const allowedRange = `${formatMusicDuration(limit.minimumSeconds)} a ${formatMusicDuration(limit.maximumSeconds)}`;
-  const overageSeconds = Math.max(0, Math.ceil(durationSeconds - limit.maximumSeconds));
+  const overageSeconds = Math.max(0, checkedDurationSeconds - limit.maximumSeconds);
 
   if (overageSeconds >= musicDurationGraceSeconds + 1) {
     return {
-      durationSeconds,
+      durationSeconds: checkedDurationSeconds,
       message: `La duración detectada es ${formattedDuration}. No es posible recibir el archivo porque excede por ${overageSeconds} segundos el tiempo permitido (${allowedRange}).`,
       status: "blocked" as const,
     };
@@ -967,14 +968,14 @@ function getMusicDurationCheck(dance: RegistrationDance, durationSeconds: number
 
   if (overageSeconds > 0) {
     return {
-      durationSeconds,
+      durationSeconds: checkedDurationSeconds,
       message: `La duración detectada es ${formattedDuration}. La duración excede los tiempos estipulados en el reglamento (${allowedRange}).`,
       status: "warning" as const,
     };
   }
 
   return {
-    durationSeconds,
+    durationSeconds: checkedDurationSeconds,
     message: `Duración detectada: ${formattedDuration}. Tiempo reglamentario: ${allowedRange}.`,
     status: "valid" as const,
   };
