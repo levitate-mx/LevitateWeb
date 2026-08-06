@@ -4278,10 +4278,6 @@ function AcademyInternationalPaymentsPanel({
   const [errorMessage, setErrorMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = useState(participants[0]?.id ?? "");
-  const participantDocumentKeys = useMemo(
-    () => new Set(participants.map((participant) => participant.curp.trim().toUpperCase()).filter(Boolean)),
-    [participants],
-  );
   const participantOptions = useMemo(
     () =>
       [...participants]
@@ -4293,11 +4289,13 @@ function AcademyInternationalPaymentsPanel({
     [participants],
   );
   const selectedParticipant = participants.find((participant) => participant.id === selectedParticipantId) ?? null;
+  const selectedParticipantDocumentKey = selectedParticipant?.curp.trim().toUpperCase() ?? "";
   const registrationOrders = orders
     .filter(
       (order) =>
         getAdminOrderType(order) === "registration" &&
-        participantDocumentKeys.has(order.curp.trim().toUpperCase()),
+        Boolean(selectedParticipantDocumentKey) &&
+        order.curp.trim().toUpperCase() === selectedParticipantDocumentKey,
     )
     .sort((left, right) => left.participantName.localeCompare(right.participantName, "es"));
 
@@ -4380,7 +4378,7 @@ function AcademyInternationalPaymentsPanel({
           <p className="levitate-admin-empty-state">
             {participants.length === 0
               ? "Registra participantes para generar pagos."
-              : "Genera los pagos cuando ya tengas participantes y coreografías registradas."}
+              : "Genera el pago para ver la orden de este participante."}
           </p>
         )}
       </div>
