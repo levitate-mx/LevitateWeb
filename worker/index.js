@@ -129,6 +129,16 @@ const registrationUserRoles = new Set(["academy", "admin"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
+const registrationMusicDurationGraceSeconds = 10;
+const registrationMusicDurationLimitsByDivision = {
+  baby: { minimumSeconds: 120, maximumSeconds: 180 },
+  junior: { minimumSeconds: 150, maximumSeconds: 210 },
+  legacy: { minimumSeconds: 150, maximumSeconds: 210 },
+  petite: { minimumSeconds: 120, maximumSeconds: 180 },
+  releve: { minimumSeconds: 150, maximumSeconds: 210 },
+  senior: { minimumSeconds: 150, maximumSeconds: 210 },
+  teen: { minimumSeconds: 150, maximumSeconds: 210 },
+};
 const registrationGoogleDriveScope = "https://www.googleapis.com/auth/drive.file";
 const registrationGmailSendScope = "https://www.googleapis.com/auth/gmail.send";
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
@@ -1916,6 +1926,7 @@ async function handleRegistrationMusic(request, env) {
     await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
 
     const dance = await getRegistrationDanceById(db, academyId, danceId);
+    assertRegistrationMusicDurationAllowed(dance, musicUpload.durationSeconds);
     const storedMusicUpload = await storeRegistrationMusicUpload({ dance, env, musicUpload, session });
 
     await db
@@ -5846,6 +5857,39 @@ function getRegistrationMusicDriveDivision(dance) {
   return normalizeRegistrationDriveDivision(participantsByAge[0]?.division || "");
 }
 
+function assertRegistrationMusicDurationAllowed(dance, durationSeconds) {
+  const division = getRegistrationMusicDriveDivision(dance);
+  const limit = registrationMusicDurationLimitsByDivision[division];
+
+  if (!limit) {
+    throwHttpError(
+      "registration_music_duration_division_missing",
+      "No pudimos determinar la división de la coreografía para validar el tiempo del reglamento.",
+      400,
+    );
+  }
+
+  const overageSeconds = Math.max(0, Math.ceil(durationSeconds - limit.maximumSeconds));
+
+  if (overageSeconds >= registrationMusicDurationGraceSeconds + 1) {
+    const allowedRange = `${formatRegistrationMusicDuration(limit.minimumSeconds)} a ${formatRegistrationMusicDuration(limit.maximumSeconds)}`;
+
+    throwHttpError(
+      "registration_music_duration_exceeded",
+      `No es posible recibir el archivo porque excede por ${overageSeconds} segundos el tiempo permitido (${allowedRange}).`,
+      400,
+    );
+  }
+}
+
+function formatRegistrationMusicDuration(seconds) {
+  const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 function compareRegistrationDriveParticipantsByAge(left, right) {
   const leftAge = typeof left.age === "number" ? left.age : getRegistrationDriveDivisionFallbackAge(left.division);
   const rightAge = typeof right.age === "number" ? right.age : getRegistrationDriveDivisionFallbackAge(right.division);
@@ -6084,9 +6128,14 @@ function getRegistrationMusicUploadInput(body) {
   const estimatedFileSize = estimateBase64DataUrlSize(dataUrl);
   const providedFileSize = optionalInteger(body.fileSize, "fileSize");
   const fileSize = providedFileSize || estimatedFileSize;
+  const durationSeconds = Number(body.durationSeconds);
 
   if (!fileName.toLowerCase().endsWith(".mp3")) {
     throwHttpError("invalid_music_file", "La canción debe estar en formato MP3", 400);
+  }
+
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throwHttpError("invalid_music_duration", "No pudimos verificar la duración del archivo de música", 400);
   }
 
   if (!dataUrl.startsWith(`data:${contentType};base64,`)) {
@@ -6104,6 +6153,7 @@ function getRegistrationMusicUploadInput(body) {
   return {
     contentType,
     dataUrl,
+    durationSeconds,
     fileName,
     fileSize,
   };

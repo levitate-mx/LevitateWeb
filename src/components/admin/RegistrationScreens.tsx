@@ -49,7 +49,7 @@ type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "mus
 type AdminLookupTab = "participants" | "choreographers" | "dances";
 type RegistrationAdminDashboardSection = "payments" | "program" | "tickets" | "media" | "registrations";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
-type StatusTone = "success" | "error";
+type StatusTone = "success" | "error" | "warning";
 
 const TICKET_BLOCK_MINIMUM = 3;
 
@@ -159,6 +159,7 @@ type RegistrationMusicUpload = {
   fileName: string;
   contentType: string;
   fileSize: number;
+  durationSeconds?: number | null;
   dataUrl?: string | null;
   driveFileId?: string | null;
   driveUrl?: string | null;
@@ -412,6 +413,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
 ];
 
 const maxMusicUploadBytes = 12000000;
+const musicDurationGraceSeconds = 10;
 const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const allowedPaymentProofTypes = paymentProofAccept.split(",");
 const maxPaymentProofBytes = 1800000;
@@ -705,6 +707,15 @@ const programCategoryOrder: Record<string, number> = {
   trio_3_aparatos: 2,
   grupo: 3,
 };
+const musicDurationLimitsByDivision: Record<string, { maximumSeconds: number; minimumSeconds: number }> = {
+  baby: { minimumSeconds: 120, maximumSeconds: 180 },
+  junior: { minimumSeconds: 150, maximumSeconds: 210 },
+  legacy: { minimumSeconds: 150, maximumSeconds: 210 },
+  petite: { minimumSeconds: 120, maximumSeconds: 180 },
+  releve: { minimumSeconds: 150, maximumSeconds: 210 },
+  senior: { minimumSeconds: 150, maximumSeconds: 210 },
+  teen: { minimumSeconds: 150, maximumSeconds: 210 },
+};
 
 type ProgramRow = {
   academyName: string;
@@ -922,6 +933,59 @@ function getDanceProgramDivision(dance: RegistrationDance) {
   const selectedParticipant = participantsByAge[0];
 
   return selectedParticipant?.division ?? "";
+}
+
+function getMusicDurationLimitForDance(dance: RegistrationDance) {
+  const division = normalizeProgramDivision(getDanceProgramDivision(dance));
+  const limit = musicDurationLimitsByDivision[division];
+
+  return limit ? { ...limit, division } : null;
+}
+
+function formatMusicDuration(seconds: number) {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function getMusicDurationCheck(dance: RegistrationDance, durationSeconds: number) {
+  const limit = getMusicDurationLimitForDance(dance);
+  const formattedDuration = formatMusicDuration(durationSeconds);
+
+  if (!limit) {
+    return {
+      durationSeconds,
+      message: "No pudimos determinar la división de la coreografía para validar el tiempo del reglamento.",
+      status: "blocked" as const,
+    };
+  }
+
+  const allowedRange = `${formatMusicDuration(limit.minimumSeconds)} a ${formatMusicDuration(limit.maximumSeconds)}`;
+  const overageSeconds = Math.max(0, Math.ceil(durationSeconds - limit.maximumSeconds));
+
+  if (overageSeconds >= musicDurationGraceSeconds + 1) {
+    return {
+      durationSeconds,
+      message: `La duración detectada es ${formattedDuration}. No es posible recibir el archivo porque excede por ${overageSeconds} segundos el tiempo permitido (${allowedRange}).`,
+      status: "blocked" as const,
+    };
+  }
+
+  if (overageSeconds > 0) {
+    return {
+      durationSeconds,
+      message: `La duración detectada es ${formattedDuration}. La duración excede los tiempos estipulados en el reglamento (${allowedRange}).`,
+      status: "warning" as const,
+    };
+  }
+
+  return {
+    durationSeconds,
+    message: `Duración detectada: ${formattedDuration}. Tiempo reglamentario: ${allowedRange}.`,
+    status: "valid" as const,
+  };
 }
 
 function getProgramBlock(dance: RegistrationDance, division: string) {
@@ -1328,6 +1392,37 @@ function readMusicFileAsDataUrl(file: File) {
         fileSize: file.size,
       });
     reader.readAsDataURL(file);
+  });
+}
+
+function readMusicDuration(file: File) {
+  return new Promise<number>((resolve, reject) => {
+    const audio = document.createElement("audio");
+    const objectUrl = URL.createObjectURL(file);
+
+    const cleanup = () => {
+      audio.removeAttribute("src");
+      audio.load();
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration;
+      cleanup();
+
+      if (!Number.isFinite(duration) || duration <= 0) {
+        reject(new Error("No pudimos verificar la duración del archivo."));
+        return;
+      }
+
+      resolve(duration);
+    };
+    audio.onerror = () => {
+      cleanup();
+      reject(new Error("No pudimos verificar la duración del archivo."));
+    };
+    audio.src = objectUrl;
   });
 }
 
@@ -2525,10 +2620,16 @@ function AdminStatusMessage({ message, tone = "success" }: { message: string; to
     return null;
   }
 
-  const Icon = tone === "error" ? CircleAlert : ShieldCheck;
+  const Icon = tone === "success" ? ShieldCheck : CircleAlert;
+  const toneClass =
+    tone === "error"
+      ? " levitate-auth-message--error"
+      : tone === "warning"
+        ? " levitate-auth-message--warning"
+        : "";
 
   return (
-    <p className={`levitate-auth-message${tone === "error" ? " levitate-auth-message--error" : ""}`}>
+    <p className={`levitate-auth-message${toneClass}`}>
       <Icon aria-hidden="true" size={17} />
       {message}
     </p>
@@ -3938,7 +4039,9 @@ function MusicUploadPanel({
 }) {
   const [selectedDanceId, setSelectedDanceId] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedMusicDurationCheck, setSelectedMusicDurationCheck] = useState<ReturnType<typeof getMusicDurationCheck> | null>(null);
   const [fileInputVersion, setFileInputVersion] = useState(0);
+  const [isCheckingMusicDuration, setIsCheckingMusicDuration] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploadError, setUploadError] = useState("");
@@ -3959,30 +4062,58 @@ function MusicUploadPanel({
       label: dance.title,
     }));
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
     const file = event.target.files?.[0] ?? null;
 
     setUploadError("");
     setUploadMessage("");
     setSelectedFile(null);
+    setSelectedMusicDurationCheck(null);
 
     if (!file) {
       return;
     }
 
+    if (!selectedDance) {
+      input.value = "";
+      setUploadError("Selecciona una coreografía antes de subir la música.");
+      return;
+    }
+
     if (file.size > maxMusicUploadBytes) {
-      event.currentTarget.value = "";
+      input.value = "";
       setUploadError("La canción debe pesar menos de 12 MB.");
       return;
     }
 
     if (!isMp3File(file)) {
-      event.currentTarget.value = "";
+      input.value = "";
       setUploadError("Solo se aceptan archivos en formato MP3.");
       return;
     }
 
-    setSelectedFile(file);
+    setIsCheckingMusicDuration(true);
+
+    try {
+      const durationSeconds = await readMusicDuration(file);
+      const durationCheck = getMusicDurationCheck(selectedDance, durationSeconds);
+
+      setSelectedMusicDurationCheck(durationCheck);
+
+      if (durationCheck.status === "blocked") {
+        input.value = "";
+        setUploadError(durationCheck.message);
+        return;
+      }
+
+      setSelectedFile(file);
+    } catch (error) {
+      input.value = "";
+      setUploadError(error instanceof Error ? error.message : "No pudimos verificar la duración del archivo.");
+    } finally {
+      setIsCheckingMusicDuration(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -3998,6 +4129,11 @@ function MusicUploadPanel({
       return;
     }
 
+    if (!selectedMusicDurationCheck || selectedMusicDurationCheck.status === "blocked") {
+      setUploadError("Selecciona un archivo MP3 con duración válida.");
+      return;
+    }
+
     setIsUploading(true);
     setUploadError("");
     setUploadMessage("");
@@ -4010,6 +4146,7 @@ function MusicUploadPanel({
         {
           body: JSON.stringify({
             danceId: selectedDance.id,
+            durationSeconds: selectedMusicDurationCheck.durationSeconds,
             ...musicFile,
           }),
           method: "POST",
@@ -4019,6 +4156,7 @@ function MusicUploadPanel({
       onDanceUpdated(response.dance);
       setUploadMessage("Música subida para la coreografía seleccionada.");
       setSelectedFile(null);
+      setSelectedMusicDurationCheck(null);
       setFileInputVersion((current) => current + 1);
     } catch (error) {
       setUploadError(getErrorMessage(error, "No pudimos subir la música."));
@@ -4038,6 +4176,7 @@ function MusicUploadPanel({
             onChange={(event) => {
               setSelectedDanceId(event.target.value);
               setSelectedFile(null);
+              setSelectedMusicDurationCheck(null);
               setFileInputVersion((current) => current + 1);
               setUploadMessage("");
               setUploadError("");
@@ -4066,20 +4205,38 @@ function MusicUploadPanel({
           <Upload aria-hidden="true" size={26} />
           <strong>{selectedFile?.name || "Sube la canción en MP3"}</strong>
           <span>
-            {selectedFile
-              ? `Archivo listo para subir · ${formatAdminFileSize(selectedFile.size)}`
+            {isCheckingMusicDuration
+              ? "Verificando duración del archivo..."
+              : selectedFile
+                ? `Archivo listo para subir · ${formatAdminFileSize(selectedFile.size)} · ${formatMusicDuration(selectedMusicDurationCheck?.durationSeconds ?? 0)}`
               : currentMusicUpload
                 ? `Último archivo: ${currentMusicUpload.fileName} · ${formatAdminFileSize(currentMusicUpload.fileSize)}`
                 : "Selecciona únicamente un archivo .mp3."}
           </span>
-          <input key={fileInputVersion} accept=".mp3,audio/mpeg" disabled={!selectedDance || isUploading} onChange={handleFileChange} type="file" />
+          <input
+            key={fileInputVersion}
+            accept=".mp3,audio/mpeg"
+            disabled={!selectedDance || isUploading || isCheckingMusicDuration}
+            onChange={handleFileChange}
+            type="file"
+          />
         </label>
 
-        <button className="levitate-admin-save" disabled={!selectedDance || !selectedFile || isUploading} type="submit">
+        <button
+          className="levitate-admin-save"
+          disabled={!selectedDance || !selectedFile || isUploading || isCheckingMusicDuration || selectedMusicDurationCheck?.status === "blocked"}
+          type="submit"
+        >
           <Upload aria-hidden="true" size={18} />
           {isUploading ? "Subiendo música..." : "Subir música"}
         </button>
 
+        {selectedMusicDurationCheck && selectedMusicDurationCheck.status !== "blocked" ? (
+          <AdminStatusMessage
+            message={selectedMusicDurationCheck.message}
+            tone={selectedMusicDurationCheck.status === "warning" ? "warning" : "success"}
+          />
+        ) : null}
         <AdminStatusMessage message={uploadMessage} />
         <AdminStatusMessage message={uploadError} tone="error" />
         {dances.length === 0 ? <p className="levitate-admin-empty-state">Registra una coreografía para poder subir su música.</p> : null}

@@ -18988,6 +18988,16 @@ button {
   color: rgba(217, 76, 140, 0.78);
 }
 
+.levitate-auth-message--warning {
+  border-color: rgba(221, 157, 49, 0.28);
+  background: rgba(221, 157, 49, 0.1);
+  color: rgba(247, 243, 239, 0.84);
+}
+
+.levitate-auth-message--warning svg {
+  color: rgba(221, 157, 49, 0.86);
+}
+
 .levitate-auth-submit {
   display: inline-flex;
   align-items: center;
@@ -19250,6 +19260,16 @@ button {
 
 .levitate-admin-panel .levitate-auth-message--error svg {
   color: var(--admin-pink);
+}
+
+.levitate-admin-panel .levitate-auth-message--warning {
+  border-color: rgba(221, 157, 49, 0.42);
+  background: rgba(221, 157, 49, 0.12);
+  color: rgba(39, 37, 37, 0.86);
+}
+
+.levitate-admin-panel .levitate-auth-message--warning svg {
+  color: #b07013;
 }
 
 .levitate-admin-save,
