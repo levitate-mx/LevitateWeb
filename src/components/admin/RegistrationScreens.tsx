@@ -2502,6 +2502,15 @@ function isUnauthorizedRegistrationError(error: unknown) {
   return error instanceof RegistrationApiError && error.status === 401;
 }
 
+function redirectRegistrationAdmin(session: RegistrationSession | RegistrationBootstrap) {
+  if (session.user.role !== "admin" || typeof window === "undefined") {
+    return false;
+  }
+
+  window.location.replace("/admin/inscripciones");
+  return true;
+}
+
 function LevitateAdminLogo() {
   return (
     <div className="levitate-admin-logo" aria-label="Levitate MX">
@@ -3021,7 +3030,6 @@ function LevitateAuthScreen({
           password: getFormValue(formData, "password"),
           academy: getFormValue(formData, "academy"),
           phone: getFormValue(formData, "phone"),
-          venue: getFormValue(formData, "venue"),
           academyOriginType,
           academyState: getFormValue(formData, "academyState"),
           academyCountry: getFormValue(formData, "academyCountry"),
@@ -3153,9 +3161,6 @@ function LevitateAuthScreen({
               <span className="levitate-auth-form__section-label">Academia</span>
               <AdminField icon={Building2} label="Nombre de la Academia o Escuela">
                 <input name="academy" required type="text" />
-              </AdminField>
-              <AdminField helper="Elige a qué evento se está registrando tu academia." icon={MapPin} label="Evento de inscripción">
-                <AdminSelect defaultValue="edomex" id="academy-venue" name="venue" options={venueOptions} />
               </AdminField>
               <AdminField icon={Phone} label="Teléfono">
                 <input autoComplete="tel" name="phone" type="tel" />
@@ -3789,12 +3794,10 @@ function ChoreographerRegistrationPanel({
 }
 
 function DanceRegistrationPanel({
-  academyVenue,
   choreographers,
   participants,
   onDanceCreated,
 }: {
-  academyVenue: string;
   choreographers: RegistrationChoreographer[];
   participants: RegistrationParticipant[];
   onDanceCreated: (dance: RegistrationDance) => void;
@@ -3867,7 +3870,7 @@ function DanceRegistrationPanel({
           subgenre: getFormValue(formData, "subgenre"),
           category: getFormValue(formData, "category"),
           level: shouldShowLevel ? getFormValue(formData, "level") : null,
-          venue: academyVenue,
+          venue: getFormValue(formData, "venue"),
           choreographerIds: selectedChoreographerIds,
           participantIds: selectedParticipantIds,
         }),
@@ -3895,6 +3898,9 @@ function DanceRegistrationPanel({
       <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
         <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
           <input name="title" required type="text" />
+        </AdminField>
+        <AdminField icon={MapPin} label="Sede de competencia">
+          <AdminSelect defaultValue="edomex" id="dance-venue" name="venue" options={venueOptions} />
         </AdminField>
         <AdminField icon={Music2} label="Género de coreografía">
           <AdminSelect id="dance-genre" name="genre" onChange={handleGenreChange} options={danceGenres} value={selectedGenre} />
@@ -6187,6 +6193,7 @@ function AdminLookupPanel({
         <div className="levitate-admin-lookup-table-scroll">
           <div className="levitate-admin-lookup-table levitate-admin-lookup-table--dances" role="table" aria-label="Coreografías registradas">
             <span role="columnheader">Coreografía</span>
+            <span role="columnheader">Sede</span>
             <span role="columnheader">Género</span>
             <span role="columnheader">Categoría</span>
             <span role="columnheader">División</span>
@@ -6202,6 +6209,7 @@ function AdminLookupPanel({
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
                   <span role="cell">{dance.title}</span>
+                  <span role="cell">{getVenueLabel(dance.venue)}</span>
                   <span role="cell">{getOptionLabel(subgenreOptions, dance.subgenre)}</span>
                   <span role="cell">{getOptionLabel(categoryOptions, dance.category)}</span>
                   <span role="cell" title={divisionLabel}>{compactDivisionLabel}</span>
@@ -6285,7 +6293,6 @@ function getAdminScreen({
   if (screen === "dance") {
     return (
       <DanceRegistrationPanel
-        academyVenue={session.academy.venue}
         choreographers={choreographers}
         onDanceCreated={onDanceCreated}
         participants={participants}
@@ -6351,6 +6358,12 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     setIsLoadingData(true);
 
     try {
+      const currentSession = await requestRegistrationApi<RegistrationSession>("/api/registration/me");
+
+      if (redirectRegistrationAdmin(currentSession)) {
+        return;
+      }
+
       const bootstrap = await requestRegistrationApi<RegistrationBootstrap>("/api/registration/bootstrap");
       setSession({
         user: bootstrap.user,
@@ -6387,6 +6400,10 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   };
 
   const handleAuthenticated = (nextSession: RegistrationSession | RegistrationBootstrap) => {
+    if (redirectRegistrationAdmin(nextSession)) {
+      return;
+    }
+
     setSession({
       user: nextSession.user,
       academy: nextSession.academy,
@@ -6555,9 +6572,9 @@ export function LevitateStudentRegistrationRoute() {
 }
 
 export function LevitateAuthRoute() {
-  const handleAuthenticated = () => {
+  const handleAuthenticated = (session: RegistrationSession | RegistrationBootstrap) => {
     if (typeof window !== "undefined") {
-      window.location.assign("/registro/academias");
+      window.location.replace(session.user.role === "admin" ? "/admin/inscripciones" : "/registro/academias");
     }
   };
 
@@ -6584,7 +6601,6 @@ export function LevitateDanceRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
       <DanceRegistrationPanel
-        academyVenue="edomex"
         choreographers={[]}
         onDanceCreated={() => undefined}
         participants={[]}

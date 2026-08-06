@@ -5,6 +5,7 @@ const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const registrationEmailVerificationMaxAgeMinutes = 60 * 24 * 2;
 const registrationPasswordResetMaxAgeMinutes = 60;
 const registrationVenues = new Set(["cdmx", "puebla", "edomex", "veracruz"]);
+const defaultRegistrationAcademyVenue = "edomex";
 const registrationAcademyOriginTypes = new Set(["mexico", "international"]);
 const registrationMexicoStates = new Set([
   "aguascalientes",
@@ -642,7 +643,8 @@ async function handleRegistrationRegister(request, env) {
     const email = normalizeEmail(requireString(body.email, "email"));
     const password = requireString(body.password, "password");
     const academyName = requireString(body.academy, "academy");
-    const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
+    const requestedVenue = optionalString(body.venue);
+    const venue = requestedVenue ? requireRegistrationChoice(requestedVenue, "venue", registrationVenues) : defaultRegistrationAcademyVenue;
     const phone = optionalString(body.phone);
     const academyOriginType = requireRegistrationChoice(body.academyOriginType || "mexico", "academyOriginType", registrationAcademyOriginTypes);
     const academyOriginState =
@@ -1107,7 +1109,7 @@ async function handleRegistrationBootstrap(request, env) {
     assertMethod(request, ["GET"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
     return sendJson({
@@ -1127,7 +1129,7 @@ async function handleRegistrationParticipants(request, env) {
     assertMethod(request, ["GET", "POST"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
     await ensureRegistrationParticipantInternationalColumn(db);
@@ -1553,7 +1555,7 @@ async function handleRegistrationInscriptionOrders(request, env) {
     assertMethod(request, ["GET"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const orders = await getRegistrationInscriptionOrders(db, session.academy.id);
 
     return sendJson({ orders });
@@ -1604,7 +1606,7 @@ async function handleRegistrationInscriptionOrderStatus(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const body = await readJsonBody(request);
     const orderId = requireString(body.id, "id");
     const status = requireRegistrationChoice(body.status, "status", registrationInscriptionOrderStatuses);
@@ -1750,7 +1752,7 @@ async function handleRegistrationChoreographers(request, env) {
     assertMethod(request, ["GET", "POST"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
     if (request.method === "GET") {
@@ -1805,7 +1807,7 @@ async function handleRegistrationDances(request, env) {
     assertMethod(request, ["GET", "POST"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
     if (request.method === "GET") {
@@ -1818,7 +1820,7 @@ async function handleRegistrationDances(request, env) {
     const subgenre = requireRegistrationSubgenre(genre, body.subgenre);
     const category = requireRegistrationCategory(genre, body.category);
     const level = requireRegistrationLevel(genre, body.level);
-    const venue = requireRegistrationChoice(body.venue || session.academy.venue, "venue", registrationVenues);
+    const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
 
@@ -1916,7 +1918,7 @@ async function handleRegistrationMusic(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
+    const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
     const body = await readJsonBody(request);
     const danceId = requireString(body.danceId, "danceId");
@@ -2639,6 +2641,20 @@ async function getRegistrationStateFromRequest({ db, request }) {
   return serializeRegistrationSession(row);
 }
 
+async function requireRegistrationAcademy(request, db) {
+  const session = await getRegistrationStateFromRequest({ db, request });
+
+  if (session.user.role !== "academy") {
+    throwHttpError(
+      "registration_academy_forbidden",
+      "Las cuentas administradoras deben usar el panel de administración",
+      403,
+    );
+  }
+
+  return session;
+}
+
 async function getRegistrationStudentStateFromRequest({ db, request }) {
   const sessionToken = readCookie(request, registrationStudentSessionCookieName);
 
@@ -2981,7 +2997,8 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
   const lines = buildRegistrationInscriptionLines(dancesWithParticipants, { isInternational });
   const subtotal = lines.reduce((total, line) => total + line.amount, 0);
   const primaryRegistration = registrationRows[0];
-  const reference = buildRegistrationInscriptionReference(curp, primaryRegistration.venue);
+  const primaryVenue = lines[0]?.venue || danceRows[0]?.venue || primaryRegistration.venue || defaultRegistrationAcademyVenue;
+  const reference = buildRegistrationInscriptionReference(curp, primaryVenue);
   const order = await getRegistrationInscriptionOrderByReference(db, reference);
   const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
 
@@ -2990,7 +3007,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
     academyId: primaryRegistration.academy_id,
     participantName: primaryRegistration.full_name,
     academyName: primaryRegistration.academy_name,
-    venue: primaryRegistration.venue,
+    venue: primaryVenue,
     reference,
     paymentReference: buildRegistrationInscriptionPaymentReference(curp),
     currency: getRegistrationInscriptionCurrency(isInternational),
@@ -3249,7 +3266,18 @@ async function getRegistrationShopParticipantByCurp(db, curp) {
         SELECT
           registration_participants.*,
           registration_academies.name AS academy_name,
-          registration_academies.venue AS venue
+          COALESCE(
+            (
+              SELECT registration_dances.venue
+              FROM registration_dance_participants
+              INNER JOIN registration_dances
+                ON registration_dances.id = registration_dance_participants.dance_id
+              WHERE registration_dance_participants.participant_id = registration_participants.id
+              ORDER BY registration_dances.created_at DESC
+              LIMIT 1
+            ),
+            registration_academies.venue
+          ) AS venue
         FROM registration_participants
         INNER JOIN registration_academies
           ON registration_academies.id = registration_participants.academy_id
