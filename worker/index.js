@@ -449,10 +449,6 @@ export default {
       return handleRegistrationInscriptionOrders(request, env);
     }
 
-    if (url.pathname === "/api/registration/inscription/academy-payment-orders") {
-      return handleRegistrationAcademyInscriptionPaymentOrders(request, env);
-    }
-
     if (url.pathname === "/api/registration/inscription/order/status") {
       return handleRegistrationInscriptionOrderStatus(request, env);
     }
@@ -1559,43 +1555,6 @@ async function handleRegistrationInscriptionOrders(request, env) {
     const orders = await getRegistrationInscriptionOrders(db, session.academy.id);
 
     return sendJson({ orders });
-  } catch (error) {
-    return sendRegistrationError(error);
-  }
-}
-
-async function handleRegistrationAcademyInscriptionPaymentOrders(request, env) {
-  try {
-    assertMethod(request, ["POST"]);
-
-    const db = getDb(env);
-    const session = await getRegistrationStateFromRequest({ db, request });
-
-    if (session.academy.originType !== "international") {
-      throwHttpError("registration_international_only", "Los pagos directos del registro están disponibles para academias internacionales.", 403);
-    }
-
-    const participants = await getRegistrationParticipants(db, session.academy.id);
-    const orders = [];
-
-    for (const participant of participants) {
-      const curp = normalizeRegistrationLookupIdentifier(participant.curp);
-
-      if (!curp) {
-        continue;
-      }
-
-      const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, null, {
-        academyId: session.academy.id,
-        skipEmpty: true,
-      });
-
-      if (lookup.order) {
-        orders.push(lookup.order);
-      }
-    }
-
-    return sendJson({ orders }, 201);
   } catch (error) {
     return sendRegistrationError(error);
   }

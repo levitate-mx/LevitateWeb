@@ -19485,13 +19485,13 @@ button {
 
 .levitate-admin-payment-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 0.72fr) auto;
   gap: 18px;
-  align-items: center;
+  align-items: end;
   padding: clamp(22px, 4vw, 38px) clamp(24px, 4vw, 44px) 0;
 }
 
-.levitate-admin-payment-toolbar span {
+.levitate-admin-payment-toolbar__copy span {
   display: block;
   margin-bottom: 7px;
   color: var(--admin-pink);
@@ -19501,7 +19501,7 @@ button {
   text-transform: uppercase;
 }
 
-.levitate-admin-payment-toolbar strong {
+.levitate-admin-payment-toolbar__copy strong {
   display: block;
   color: var(--admin-ink);
   font-size: clamp(1.12rem, 2vw, 1.45rem);
@@ -19509,7 +19509,7 @@ button {
   line-height: 1.06;
 }
 
-.levitate-admin-payment-toolbar p {
+.levitate-admin-payment-toolbar__copy p {
   max-width: 720px;
   margin: 8px 0 0;
   color: rgba(17, 16, 21, 0.6);
@@ -19518,47 +19518,9 @@ button {
   line-height: 1.44;
 }
 
-.levitate-admin-international-price-table {
-  display: grid;
-  grid-template-columns: minmax(150px, 1fr) repeat(2, minmax(96px, 0.4fr));
-  gap: 1px;
-  overflow: hidden;
-  margin: 20px clamp(24px, 4vw, 44px) 0;
-  border: 1px solid rgba(17, 16, 21, 0.1);
-  border-radius: 8px;
-  background: rgba(17, 16, 21, 0.1);
-}
-
-.levitate-admin-international-price-table > span,
-.levitate-admin-international-price-table div > * {
+.levitate-admin-payment-toolbar .levitate-admin-field {
   min-width: 0;
-  padding: 13px 16px;
-  background: rgba(255, 250, 244, 0.94);
-}
-
-.levitate-admin-international-price-table > span {
-  color: rgba(17, 16, 21, 0.46);
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.levitate-admin-international-price-table div {
-  display: contents;
-}
-
-.levitate-admin-international-price-table strong,
-.levitate-admin-international-price-table em,
-.levitate-admin-international-price-table b {
-  color: rgba(17, 16, 21, 0.84);
-  font-size: 0.92rem;
-  font-style: normal;
-  font-weight: 860;
-}
-
-.levitate-admin-international-price-table em {
-  color: var(--admin-pink);
+  margin: 0;
 }
 
 .levitate-admin-payment-card {
@@ -21361,16 +21323,6 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .levitate-admin-international-price-table {
-    grid-template-columns: minmax(112px, 1fr) repeat(2, minmax(78px, 0.55fr));
-  }
-
-  .levitate-admin-international-price-table > span,
-  .levitate-admin-international-price-table div > * {
-    padding: 11px 10px;
-    font-size: 0.78rem;
-  }
-
   .levitate-admin-payment-line {
     grid-template-columns: 30px minmax(0, 1fr);
   }
@@ -22946,18 +22898,6 @@ button {
   .levitate-admin-payment-list {
     padding-right: 18px;
     padding-left: 18px;
-  }
-
-  .levitate-admin-international-price-table {
-    grid-template-columns: minmax(108px, 1fr) repeat(2, minmax(74px, 0.55fr));
-    margin-right: 18px;
-    margin-left: 18px;
-  }
-
-  .levitate-admin-international-price-table > span,
-  .levitate-admin-international-price-table div > * {
-    padding: 11px 9px;
-    font-size: 0.76rem;
   }
 
   .levitate-admin-form {

@@ -583,14 +583,6 @@ const paymentRejectionReasonOptions: Array<FieldOption & { value: RegistrationPa
   { value: "invalid_or_unreadable_proof", label: "Comprobante incorrecto o ilegible" },
 ];
 
-const internationalInscriptionCosts = [
-  { category: "Solo", presale: "85 USD", normal: "100 USD" },
-  { category: "Dúo", presale: "70 USD", normal: "80 USD" },
-  { category: "Trío", presale: "55 USD", normal: "70 USD" },
-  { category: "Grupo", presale: "45 USD", normal: "60 USD" },
-  { category: "Maestros Relevé", presale: "60 USD", normal: "90 USD" },
-];
-
 const studentPortalModules = [
   {
     title: "Pago de inscripción",
@@ -4277,39 +4269,77 @@ function AcademyInternationalPaymentsPanel({
   orders,
   participants,
   onOrderUpdated,
-  onOrdersSynced,
 }: {
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationParticipant[];
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
-  onOrdersSynced: (orders: RegistrationInscriptionOrder[]) => void;
 }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedParticipantId, setSelectedParticipantId] = useState(participants[0]?.id ?? "");
+  const participantDocumentKeys = useMemo(
+    () => new Set(participants.map((participant) => participant.curp.trim().toUpperCase()).filter(Boolean)),
+    [participants],
+  );
+  const participantOptions = useMemo(
+    () =>
+      [...participants]
+        .sort((left, right) => left.fullName.localeCompare(right.fullName, "es"))
+        .map((participant) => ({
+          value: participant.id,
+          label: `${participant.fullName} · ${participant.curp}`,
+        })),
+    [participants],
+  );
+  const selectedParticipant = participants.find((participant) => participant.id === selectedParticipantId) ?? null;
   const registrationOrders = orders
-    .filter((order) => getAdminOrderType(order) === "registration")
+    .filter(
+      (order) =>
+        getAdminOrderType(order) === "registration" &&
+        participantDocumentKeys.has(order.curp.trim().toUpperCase()),
+    )
     .sort((left, right) => left.participantName.localeCompare(right.participantName, "es"));
 
-  const handleSyncOrders = async () => {
+  useEffect(() => {
+    if (participants.length === 0) {
+      setSelectedParticipantId("");
+      return;
+    }
+
+    if (!participants.some((participant) => participant.id === selectedParticipantId)) {
+      setSelectedParticipantId(participants[0]?.id ?? "");
+    }
+  }, [participants, selectedParticipantId]);
+
+  const handleSyncOrder = async () => {
+    if (!selectedParticipant) {
+      setErrorMessage("Selecciona un participante para generar su orden.");
+      return;
+    }
+
     setIsSyncing(true);
     setStatusMessage("");
     setErrorMessage("");
 
     try {
-      const response = await requestRegistrationApi<{ orders: RegistrationInscriptionOrder[] }>(
-        "/api/registration/inscription/academy-payment-orders",
-        { method: "POST" },
+      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder | null }>(
+        "/api/registration/inscription/order",
+        {
+          body: JSON.stringify({ curp: selectedParticipant.curp }),
+          method: "POST",
+        },
       );
 
-      onOrdersSynced(response.orders);
-      setStatusMessage(
-        response.orders.length === 1
-          ? "Se generó 1 orden de pago."
-          : `Se generaron ${response.orders.length} órdenes de pago.`,
-      );
+      if (!response.order) {
+        setStatusMessage(`No hay coreografías cobrables para ${selectedParticipant.fullName}.`);
+        return;
+      }
+
+      onOrderUpdated(response.order);
+      setStatusMessage(`Se generó la orden de pago para ${selectedParticipant.fullName}.`);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudieron generar los pagos."));
+      setErrorMessage(getErrorMessage(error, "No se pudo generar el pago."));
     } finally {
       setIsSyncing(false);
     }
@@ -4318,28 +4348,29 @@ function AcademyInternationalPaymentsPanel({
   return (
     <AdminPanel className="levitate-admin-panel--international-payments" title="Pagos internacionales" eyebrow="Registro">
       <div className="levitate-admin-payment-toolbar">
-        <div>
+        <div className="levitate-admin-payment-toolbar__copy">
           <span>USD</span>
           <strong>Preventa hasta el 12 de octubre de 2026</strong>
           <p>Las primeras 2 participaciones por participante son cortesía Levitate. Se cobra a partir de la 3ª.</p>
         </div>
-        <button className="levitate-admin-save" disabled={isSyncing || participants.length === 0} onClick={handleSyncOrders} type="button">
+        <AdminField icon={Users} label="Participante">
+          <AdminSelect
+            disabled={participantOptions.length === 0}
+            id="international-payment-participant"
+            name="participantId"
+            onChange={(event) => {
+              setSelectedParticipantId(event.target.value);
+              setStatusMessage("");
+              setErrorMessage("");
+            }}
+            options={participantOptions}
+            value={selectedParticipantId}
+          />
+        </AdminField>
+        <button className="levitate-admin-save" disabled={isSyncing || !selectedParticipant} onClick={handleSyncOrder} type="button">
           <CreditCard aria-hidden="true" size={18} />
-          {isSyncing ? "Actualizando..." : "Generar / actualizar pagos"}
+          {isSyncing ? "Actualizando..." : "Generar / actualizar pago"}
         </button>
-      </div>
-
-      <div className="levitate-admin-international-price-table" aria-label="Precios internacionales">
-        <span>Modalidad</span>
-        <span>Preventa</span>
-        <span>Normal</span>
-        {internationalInscriptionCosts.map((cost) => (
-          <div key={cost.category}>
-            <strong>{cost.category}</strong>
-            <em>{cost.presale}</em>
-            <b>{cost.normal}</b>
-          </div>
-        ))}
       </div>
 
       <AdminStatusMessage message={statusMessage} />
@@ -6261,7 +6292,6 @@ function getAdminScreen({
   onChoreographerCreated,
   onDanceCreated,
   onOrderUpdated,
-  onOrdersSynced,
 }: {
   screen: AdminScreenId;
   session: RegistrationSession;
@@ -6273,7 +6303,6 @@ function getAdminScreen({
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
   onDanceCreated: (dance: RegistrationDance) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
-  onOrdersSynced: (orders: RegistrationInscriptionOrder[]) => void;
 }) {
   if (screen === "choreographers") {
     return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
@@ -6313,7 +6342,6 @@ function getAdminScreen({
       return (
         <AcademyInternationalPaymentsPanel
           onOrderUpdated={onOrderUpdated}
-          onOrdersSynced={onOrdersSynced}
           orders={inscriptionOrders}
           participants={participants}
         />
@@ -6450,26 +6478,6 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     setInscriptionOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
   };
 
-  const handleOrdersSynced = (orders: RegistrationInscriptionOrder[]) => {
-    setInscriptionOrders((current) => {
-      const nextOrders = new Map(current.map((order) => [order.id, order]));
-
-      for (const order of orders) {
-        nextOrders.set(order.id, order);
-      }
-
-      return Array.from(nextOrders.values()).sort((left, right) => {
-        const dateDifference = new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-
-        if (dateDifference !== 0) {
-          return dateDifference;
-        }
-
-        return right.id.localeCompare(left.id);
-      });
-    });
-  };
-
   if (isCheckingSession) {
     return <LoadingRegistrationScreen />;
   }
@@ -6517,7 +6525,6 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
             onChoreographerCreated: handleChoreographerCreated,
             onDanceCreated: handleDanceCreated,
             onOrderUpdated: handleOrderUpdated,
-            onOrdersSynced: handleOrdersSynced,
           })}
         </div>
       </section>
