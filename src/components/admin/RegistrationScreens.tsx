@@ -4348,11 +4348,6 @@ function AcademyInternationalPaymentsPanel({
   return (
     <AdminPanel className="levitate-admin-panel--international-payments" title="Pagos internacionales" eyebrow="Registro">
       <div className="levitate-admin-payment-toolbar">
-        <div className="levitate-admin-payment-toolbar__copy">
-          <span>USD</span>
-          <strong>Preventa hasta el 12 de octubre de 2026</strong>
-          <p>Las primeras 2 participaciones por participante son cortesía Levitate. Se cobra a partir de la 3ª.</p>
-        </div>
         <AdminField icon={Users} label="Participante">
           <AdminSelect
             disabled={participantOptions.length === 0}
@@ -4379,7 +4374,7 @@ function AcademyInternationalPaymentsPanel({
       <div className="levitate-admin-payment-list">
         {registrationOrders.length > 0 ? (
           registrationOrders.map((order) => (
-            <AcademyInternationalPaymentCard key={order.id} onOrderUpdated={onOrderUpdated} order={order} />
+            <AcademyInternationalPaymentCard key={order.id} order={order} />
           ))
         ) : (
           <p className="levitate-admin-empty-state">
@@ -4395,58 +4390,11 @@ function AcademyInternationalPaymentsPanel({
 
 function AcademyInternationalPaymentCard({
   order,
-  onOrderUpdated,
 }: {
   order: RegistrationInscriptionOrder;
-  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
-  const [statusMessage, setStatusMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
   const currency = getRegistrationOrderCurrency(order);
-  const isCourtesyOrder = order.amount <= 0;
-  const canUploadProof = canSubmitRegistrationOrderProof(order);
   const lineItems = order.lineItems ?? [];
-
-  const handleProofFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.target;
-    const proofFile = input.files?.[0] ?? null;
-
-    if (!proofFile || !canUploadProof) {
-      input.value = "";
-      return;
-    }
-
-    setIsUploading(true);
-    setStatusMessage("");
-    setErrorMessage("");
-
-    try {
-      const proof = await readPaymentProofFileAsDataUrl(proofFile);
-      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(
-        "/api/registration/inscription/order/proof",
-        {
-          body: JSON.stringify({
-            contentType: proof.contentType,
-            curp: order.curp,
-            dataUrl: proof.dataUrl,
-            fileName: proof.fileName,
-            fileSize: proof.fileSize,
-            orderId: order.id,
-          }),
-          method: "POST",
-        },
-      );
-
-      onOrderUpdated(response.order);
-      setStatusMessage("Comprobante recibido. Queda pendiente de confirmación.");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo subir el comprobante."));
-    } finally {
-      setIsUploading(false);
-      input.value = "";
-    }
-  };
 
   return (
     <article className="levitate-admin-payment-card levitate-admin-payment-card--academy">
@@ -4474,10 +4422,6 @@ function AcademyInternationalPaymentCard({
           <dt>Pagado</dt>
           <dd>{formatAdminCurrency(order.paidAmount, currency)}</dd>
         </div>
-        <div>
-          <dt>Comprobante</dt>
-          <dd>{order.proof ? "Recibido" : isCourtesyOrder ? "No aplica" : "Pendiente"}</dd>
-        </div>
       </dl>
 
       {lineItems.length > 0 ? (
@@ -4504,30 +4448,6 @@ function AcademyInternationalPaymentCard({
           })}
         </div>
       ) : null}
-
-      <div className="levitate-admin-payment-proof">
-        <div>
-          <span>Comprobante</span>
-          <strong>{order.proof?.fileName || "Sin archivo cargado"}</strong>
-          <p>
-            {order.proof
-              ? `${new Date(order.proof.uploadedAt).toLocaleDateString("es-MX")} · ${formatAdminFileSize(order.proof.fileSize)}`
-              : isCourtesyOrder
-                ? "Sin pago requerido por cortesía Levitate."
-                : "Carga el comprobante para que el equipo Levitate pueda validar el pago."}
-          </p>
-        </div>
-        {canUploadProof ? (
-          <label className="levitate-admin-proof-upload">
-            <Upload aria-hidden="true" size={17} />
-            {isUploading ? "Subiendo..." : order.proof ? "Reemplazar" : "Subir"}
-            <input accept={paymentProofAccept} disabled={isUploading} onChange={handleProofFileChange} type="file" />
-          </label>
-        ) : null}
-      </div>
-
-      <AdminStatusMessage message={statusMessage} />
-      <AdminStatusMessage message={errorMessage} tone="error" />
     </article>
   );
 }

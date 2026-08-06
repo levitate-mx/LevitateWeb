@@ -1267,7 +1267,10 @@ async function handleRegistrationInscriptionOrder(request, env) {
 
     const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
-    const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
+    const buyerPhoneContact =
+      access.scope === "academy" && access.session.academy.originType === "international"
+        ? null
+        : getRegistrationBuyerPhoneContact(body);
     const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
     });

@@ -19485,37 +19485,10 @@ button {
 
 .levitate-admin-payment-toolbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(260px, 0.72fr) auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   gap: 18px;
   align-items: end;
   padding: clamp(22px, 4vw, 38px) clamp(24px, 4vw, 44px) 0;
-}
-
-.levitate-admin-payment-toolbar__copy span {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--admin-pink);
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.levitate-admin-payment-toolbar__copy strong {
-  display: block;
-  color: var(--admin-ink);
-  font-size: clamp(1.12rem, 2vw, 1.45rem);
-  font-weight: 900;
-  line-height: 1.06;
-}
-
-.levitate-admin-payment-toolbar__copy p {
-  max-width: 720px;
-  margin: 8px 0 0;
-  color: rgba(17, 16, 21, 0.6);
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1.44;
 }
 
 .levitate-admin-payment-toolbar .levitate-admin-field {
