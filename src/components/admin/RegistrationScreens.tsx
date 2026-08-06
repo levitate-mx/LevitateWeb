@@ -214,8 +214,13 @@ type RegistrationEventTicket = {
 };
 
 type RegistrationInscriptionLineItem = {
+  baseAmount?: number;
   count?: number;
+  currency?: string;
+  discountAmount?: number;
+  discountRate?: number;
   id: string;
+  isCourtesy?: boolean;
   itemType?: string;
   name?: string;
   title: string;
@@ -228,6 +233,8 @@ type RegistrationInscriptionLineItem = {
   quantity?: number;
   qty?: number;
   level?: string | null;
+  pricingPosition?: number;
+  pricingType?: string;
   type?: string;
   venue: string;
   visual?: string;
@@ -247,6 +254,7 @@ type RegistrationInscriptionOrder = {
   paymentReference?: string;
   amount: number;
   paidAmount: number;
+  currency?: string;
   status: RegistrationInscriptionOrderStatus;
   paymentMethod: string;
   lineItems?: RegistrationInscriptionLineItem[];
@@ -381,6 +389,7 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
+  { label: "Pagos", icon: CreditCard, screen: "payments" },
   { label: "Subir música", icon: Upload, screen: "music" },
   { label: "Feedback", icon: MessageCircle, screen: "feedback" },
   { label: "Salir", icon: LogOut, action: "logout" },
@@ -403,6 +412,9 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
 ];
 
 const maxMusicUploadBytes = 12000000;
+const paymentProofAccept = "image/jpeg,image/png,image/webp,application/pdf";
+const allowedPaymentProofTypes = paymentProofAccept.split(",");
+const maxPaymentProofBytes = 1800000;
 
 const divisions: FieldOption[] = [
   { value: "baby", label: "Baby: hasta los 6 años" },
@@ -567,6 +579,14 @@ const paymentRejectionReasonOptions: Array<FieldOption & { value: RegistrationPa
   { value: "incomplete_amount", label: "Pagaron un monto incompleto" },
   { value: "payment_not_found", label: "No se encontró el pago" },
   { value: "invalid_or_unreadable_proof", label: "Comprobante incorrecto o ilegible" },
+];
+
+const internationalInscriptionCosts = [
+  { category: "Solo", presale: "85 USD", normal: "100 USD" },
+  { category: "Dúo", presale: "70 USD", normal: "80 USD" },
+  { category: "Trío", presale: "55 USD", normal: "70 USD" },
+  { category: "Grupo", presale: "45 USD", normal: "60 USD" },
+  { category: "Maestros Relevé", presale: "60 USD", normal: "90 USD" },
 ];
 
 const studentPortalModules = [
@@ -1059,14 +1079,55 @@ function buildProgramBlocks(rows: ProgramRow[]) {
   return Array.from(blocks.values()).sort((left, right) => left.id - right.id);
 }
 
-const adminCurrencyFormatter = new Intl.NumberFormat("es-MX", {
-  currency: "MXN",
-  maximumFractionDigits: 0,
-  style: "currency",
-});
+const adminCurrencyFormatters = new Map<string, Intl.NumberFormat>();
 
-function formatAdminCurrency(amount: number) {
-  return adminCurrencyFormatter.format(amount);
+function getAdminCurrencyFormatter(currency = "MXN") {
+  const normalizedCurrency = currency.toUpperCase();
+  const existingFormatter = adminCurrencyFormatters.get(normalizedCurrency);
+
+  if (existingFormatter) {
+    return existingFormatter;
+  }
+
+  const formatter = new Intl.NumberFormat(normalizedCurrency === "USD" ? "en-US" : "es-MX", {
+    currency: normalizedCurrency,
+    maximumFractionDigits: 0,
+    style: "currency",
+  });
+
+  adminCurrencyFormatters.set(normalizedCurrency, formatter);
+  return formatter;
+}
+
+function formatAdminCurrency(amount: number, currency = "MXN") {
+  return getAdminCurrencyFormatter(currency).format(amount);
+}
+
+function getRegistrationOrderCurrency(order: Pick<RegistrationInscriptionOrder, "currency" | "lineItems">) {
+  return order.currency || order.lineItems?.find((lineItem) => lineItem.currency)?.currency || "MXN";
+}
+
+function getRegistrationLineTitle(lineItem: RegistrationInscriptionLineItem) {
+  return lineItem.title || lineItem.productName || lineItem.name || getOptionLabel(danceSubgenresByGenre[lineItem.genre] ?? [], lineItem.subgenre) || "Inscripción";
+}
+
+function getRegistrationLineMeta(lineItem: RegistrationInscriptionLineItem) {
+  const categoryOptions = danceCategoriesByGenre[lineItem.genre] ?? danceCategories;
+  const parts = [
+    getOptionLabel(danceGenres, lineItem.genre),
+    getOptionLabel(danceSubgenresByGenre[lineItem.genre] ?? [], lineItem.subgenre),
+    getOptionLabel(categoryOptions, lineItem.category),
+  ].filter(Boolean);
+
+  if (lineItem.level) {
+    parts.push(getDanceLevelLabel(lineItem.level));
+  }
+
+  return parts.join(" · ");
+}
+
+function canSubmitRegistrationOrderProof(order: RegistrationInscriptionOrder) {
+  return getAdminOrderType(order) === "registration" && order.amount > 0 && (!order.proof || order.status === "rejected");
 }
 
 function formatAdminFileSize(bytes: number) {
@@ -1270,6 +1331,32 @@ function readMusicFileAsDataUrl(file: File) {
   });
 }
 
+function readPaymentProofFileAsDataUrl(file: File) {
+  return new Promise<{ contentType: string; dataUrl: string; fileName: string; fileSize: number }>((resolve, reject) => {
+    if (file.size > maxPaymentProofBytes) {
+      reject(new Error("El comprobante debe pesar menos de 1.8 MB."));
+      return;
+    }
+
+    if (!allowedPaymentProofTypes.includes(file.type)) {
+      reject(new Error("Solo se aceptan JPG, PNG, WEBP o PDF."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("No pudimos leer el comprobante."));
+    reader.onload = () =>
+      resolve({
+        contentType: file.type,
+        dataUrl: String(reader.result),
+        fileName: file.name,
+        fileSize: file.size,
+      });
+    reader.readAsDataURL(file);
+  });
+}
+
 function getPaymentRejectionReasonLabel(reason?: string | null) {
   return getOptionLabel(paymentRejectionReasonOptions, reason || "");
 }
@@ -1351,7 +1438,7 @@ function getAdminShopPaymentReferencePrefix(lineItems: RegistrationInscriptionLi
 }
 
 function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reason: RegistrationPaymentRejectionReason) {
-  const amount = formatAdminCurrency(order.amount);
+  const amount = formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order));
 
   const messages: Record<RegistrationPaymentRejectionReason, string> = {
     incomplete_amount: `El monto recibido no cubre el total de la orden. El importe correcto es ${amount}. Por favor completa la diferencia o compártenos la aclaración correspondiente para continuar con la validación.`,
@@ -1404,7 +1491,7 @@ function buildInscriptionProofCorrectionUrl(order: RegistrationInscriptionOrder)
 }
 
 function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
-  const amount = formatAdminCurrency(order.paidAmount || order.amount);
+  const amount = formatAdminCurrency(order.paidAmount || order.amount, getRegistrationOrderCurrency(order));
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const ticketCount = order.tickets?.length ?? 0;
   const isShopOrder = getAdminOrderType(order) === "shop";
@@ -1448,7 +1535,7 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     message,
     "",
     `Orden: ${paymentReference}`,
-    `Monto esperado: ${formatAdminCurrency(order.amount)}`,
+    `Monto esperado: ${formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}`,
     `Concepto para transferencia: ${paymentReference}`,
     ...correctionLinkLines,
     "",
@@ -3274,18 +3361,22 @@ function LevitateStudentPortal({
 
 function AdminSidebar({
   activeScreen,
+  isInternationalAcademy,
   onScreenChange,
   onLogout,
 }: {
   activeScreen: AdminScreenId;
+  isInternationalAcademy: boolean;
   onScreenChange: (screen: AdminScreenId) => void;
   onLogout: () => void;
 }) {
+  const visibleMenuItems = adminMenuItems.filter((item) => item.screen !== "payments" || isInternationalAcademy);
+
   return (
     <aside className="levitate-admin-sidebar" aria-label="Menú administrativo">
       <h2>Registro</h2>
       <nav>
-        {adminMenuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.screen === activeScreen;
 
@@ -4019,6 +4110,234 @@ function FeedbackPanel({ dances }: { dances: RegistrationDance[] }) {
   );
 }
 
+function AcademyInternationalPaymentsPanel({
+  orders,
+  participants,
+  onOrderUpdated,
+  onOrdersSynced,
+}: {
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationParticipant[];
+  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+  onOrdersSynced: (orders: RegistrationInscriptionOrder[]) => void;
+}) {
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const registrationOrders = orders
+    .filter((order) => getAdminOrderType(order) === "registration")
+    .sort((left, right) => left.participantName.localeCompare(right.participantName, "es"));
+
+  const handleSyncOrders = async () => {
+    setIsSyncing(true);
+    setStatusMessage("");
+    setErrorMessage("");
+
+    try {
+      const response = await requestRegistrationApi<{ orders: RegistrationInscriptionOrder[] }>(
+        "/api/registration/inscription/academy-payment-orders",
+        { method: "POST" },
+      );
+
+      onOrdersSynced(response.orders);
+      setStatusMessage(
+        response.orders.length === 1
+          ? "Se generó 1 orden de pago."
+          : `Se generaron ${response.orders.length} órdenes de pago.`,
+      );
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudieron generar los pagos."));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return (
+    <AdminPanel className="levitate-admin-panel--international-payments" title="Pagos internacionales" eyebrow="Registro">
+      <div className="levitate-admin-payment-toolbar">
+        <div>
+          <span>USD</span>
+          <strong>Preventa hasta el 12 de octubre de 2026</strong>
+          <p>Las primeras 2 participaciones por participante son cortesía Levitate. Se cobra a partir de la 3ª.</p>
+        </div>
+        <button className="levitate-admin-save" disabled={isSyncing || participants.length === 0} onClick={handleSyncOrders} type="button">
+          <CreditCard aria-hidden="true" size={18} />
+          {isSyncing ? "Actualizando..." : "Generar / actualizar pagos"}
+        </button>
+      </div>
+
+      <div className="levitate-admin-international-price-table" aria-label="Precios internacionales">
+        <span>Modalidad</span>
+        <span>Preventa</span>
+        <span>Normal</span>
+        {internationalInscriptionCosts.map((cost) => (
+          <div key={cost.category}>
+            <strong>{cost.category}</strong>
+            <em>{cost.presale}</em>
+            <b>{cost.normal}</b>
+          </div>
+        ))}
+      </div>
+
+      <AdminStatusMessage message={statusMessage} />
+      <AdminStatusMessage message={errorMessage} tone="error" />
+
+      <div className="levitate-admin-payment-list">
+        {registrationOrders.length > 0 ? (
+          registrationOrders.map((order) => (
+            <AcademyInternationalPaymentCard key={order.id} onOrderUpdated={onOrderUpdated} order={order} />
+          ))
+        ) : (
+          <p className="levitate-admin-empty-state">
+            {participants.length === 0
+              ? "Registra participantes para generar pagos."
+              : "Genera los pagos cuando ya tengas participantes y coreografías registradas."}
+          </p>
+        )}
+      </div>
+    </AdminPanel>
+  );
+}
+
+function AcademyInternationalPaymentCard({
+  order,
+  onOrderUpdated,
+}: {
+  order: RegistrationInscriptionOrder;
+  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+}) {
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const currency = getRegistrationOrderCurrency(order);
+  const isCourtesyOrder = order.amount <= 0;
+  const canUploadProof = canSubmitRegistrationOrderProof(order);
+  const lineItems = order.lineItems ?? [];
+
+  const handleProofFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const proofFile = input.files?.[0] ?? null;
+
+    if (!proofFile || !canUploadProof) {
+      input.value = "";
+      return;
+    }
+
+    setIsUploading(true);
+    setStatusMessage("");
+    setErrorMessage("");
+
+    try {
+      const proof = await readPaymentProofFileAsDataUrl(proofFile);
+      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(
+        "/api/registration/inscription/order/proof",
+        {
+          body: JSON.stringify({
+            contentType: proof.contentType,
+            curp: order.curp,
+            dataUrl: proof.dataUrl,
+            fileName: proof.fileName,
+            fileSize: proof.fileSize,
+            orderId: order.id,
+          }),
+          method: "POST",
+        },
+      );
+
+      onOrderUpdated(response.order);
+      setStatusMessage("Comprobante recibido. Queda pendiente de confirmación.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo subir el comprobante."));
+    } finally {
+      setIsUploading(false);
+      input.value = "";
+    }
+  };
+
+  return (
+    <article className="levitate-admin-payment-card levitate-admin-payment-card--academy">
+      <header>
+        <div>
+          <span>{getRegistrationInscriptionPaymentReference(order)}</span>
+          <h3>{order.participantName}</h3>
+          <p>
+            {order.curp} · {getVenueLabel(order.venue)}
+          </p>
+        </div>
+        <strong>{formatAdminCurrency(order.amount, currency)}</strong>
+      </header>
+
+      <dl>
+        <div>
+          <dt>Estado</dt>
+          <dd>{getInscriptionOrderStatusLabel(order.status)}</dd>
+        </div>
+        <div>
+          <dt>Moneda</dt>
+          <dd>{currency}</dd>
+        </div>
+        <div>
+          <dt>Pagado</dt>
+          <dd>{formatAdminCurrency(order.paidAmount, currency)}</dd>
+        </div>
+        <div>
+          <dt>Comprobante</dt>
+          <dd>{order.proof ? "Recibido" : isCourtesyOrder ? "No aplica" : "Pendiente"}</dd>
+        </div>
+      </dl>
+
+      {lineItems.length > 0 ? (
+        <div className="levitate-admin-payment-lines" aria-label="Coreografías incluidas">
+          {lineItems.map((lineItem, index) => {
+            const lineCurrency = lineItem.currency || currency;
+            const baseAmount = lineItem.baseAmount ?? lineItem.amount;
+            const hasDiscount = Boolean(lineItem.discountAmount);
+
+            return (
+              <div className="levitate-admin-payment-line" key={`${order.id}-${lineItem.id || index}`}>
+                <span>{lineItem.pricingPosition ?? index + 1}</span>
+                <div>
+                  <strong>{getRegistrationLineTitle(lineItem)}</strong>
+                  <small>{getRegistrationLineMeta(lineItem)}</small>
+                  {lineItem.isCourtesy ? <em>Cortesía Levitate</em> : hasDiscount ? <em>Descuento aplicado</em> : null}
+                </div>
+                <b>
+                  {hasDiscount ? <del>{formatAdminCurrency(baseAmount, lineCurrency)}</del> : null}
+                  {lineItem.isCourtesy ? "Cortesía" : formatAdminCurrency(lineItem.amount, lineCurrency)}
+                </b>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="levitate-admin-payment-proof">
+        <div>
+          <span>Comprobante</span>
+          <strong>{order.proof?.fileName || "Sin archivo cargado"}</strong>
+          <p>
+            {order.proof
+              ? `${new Date(order.proof.uploadedAt).toLocaleDateString("es-MX")} · ${formatAdminFileSize(order.proof.fileSize)}`
+              : isCourtesyOrder
+                ? "Sin pago requerido por cortesía Levitate."
+                : "Carga el comprobante para que el equipo Levitate pueda validar el pago."}
+          </p>
+        </div>
+        {canUploadProof ? (
+          <label className="levitate-admin-proof-upload">
+            <Upload aria-hidden="true" size={17} />
+            {isUploading ? "Subiendo..." : order.proof ? "Reemplazar" : "Subir"}
+            <input accept={paymentProofAccept} disabled={isUploading} onChange={handleProofFileChange} type="file" />
+          </label>
+        ) : null}
+      </div>
+
+      <AdminStatusMessage message={statusMessage} />
+      <AdminStatusMessage message={errorMessage} tone="error" />
+    </article>
+  );
+}
+
 function InscriptionOrdersPanel({
   emptyMessage = "Todavía no hay órdenes. Se crean cuando una familia consulta una CURP y presiona pagar inscripción.",
   orders,
@@ -4110,7 +4429,7 @@ function InscriptionOrderCard({
             {order.curp} · {getVenueLabel(order.venue)}
           </p>
         </div>
-        <strong>{formatAdminCurrency(order.amount)}</strong>
+        <strong>{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</strong>
       </header>
 
       <dl>
@@ -4124,7 +4443,7 @@ function InscriptionOrderCard({
         </div>
         <div>
           <dt>Pagado</dt>
-          <dd>{formatAdminCurrency(order.paidAmount)}</dd>
+          <dd>{formatAdminCurrency(order.paidAmount, getRegistrationOrderCurrency(order))}</dd>
         </div>
         <div>
           <dt>Comprobante</dt>
@@ -5011,7 +5330,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           {getOrderMediaConcept(order)}
                           <small>{getOrderMediaItemCount(order)} paquete(s)</small>
                         </span>
-                        <span role="cell">{formatAdminCurrency(order.amount)}</span>
+                        <span role="cell">{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</span>
                         <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
                         <span role="cell">
                           <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
@@ -5170,7 +5489,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                         <span role="cell">{order.participantName}</span>
                         <span role="cell">{order.academyName}</span>
                         <span role="cell">{getInscriptionOrderConcept(order)}</span>
-                        <span role="cell">{formatAdminCurrency(order.amount)}</span>
+                        <span role="cell">{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</span>
                         <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
                         <span role="cell">
                           <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
@@ -5487,11 +5806,11 @@ function RegistrationAdminOrderDetail({
         </div>
         <div>
           <dt>Monto esperado</dt>
-          <dd>{formatAdminCurrency(order.amount)}</dd>
+          <dd>{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</dd>
         </div>
         <div>
           <dt>Monto reportado</dt>
-          <dd>{order.paidAmount > 0 ? formatAdminCurrency(order.paidAmount) : "Sin reportar"}</dd>
+          <dd>{order.paidAmount > 0 ? formatAdminCurrency(order.paidAmount, getRegistrationOrderCurrency(order)) : "Sin reportar"}</dd>
         </div>
         <div>
           <dt>Fecha transferencia</dt>
@@ -5777,6 +6096,7 @@ function getAdminScreen({
   onChoreographerCreated,
   onDanceCreated,
   onOrderUpdated,
+  onOrdersSynced,
 }: {
   screen: AdminScreenId;
   session: RegistrationSession;
@@ -5788,6 +6108,7 @@ function getAdminScreen({
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
   onDanceCreated: (dance: RegistrationDance) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+  onOrdersSynced: (orders: RegistrationInscriptionOrder[]) => void;
 }) {
   if (screen === "choreographers") {
     return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
@@ -5824,7 +6145,26 @@ function getAdminScreen({
   }
 
   if (screen === "payments") {
-    return <InscriptionOrdersPanel onOrderUpdated={onOrderUpdated} orders={inscriptionOrders} />;
+    if (session.academy.originType === "international") {
+      return (
+        <AcademyInternationalPaymentsPanel
+          onOrderUpdated={onOrderUpdated}
+          onOrdersSynced={onOrdersSynced}
+          orders={inscriptionOrders}
+          participants={participants}
+        />
+      );
+    }
+
+    return (
+      <AdminWelcomePanel
+        academyName={session.academy.name}
+        choreographers={choreographers}
+        dances={dances}
+        inscriptionOrders={inscriptionOrders}
+        participants={participants}
+      />
+    );
   }
 
   return (
@@ -5936,6 +6276,26 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     setInscriptionOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
   };
 
+  const handleOrdersSynced = (orders: RegistrationInscriptionOrder[]) => {
+    setInscriptionOrders((current) => {
+      const nextOrders = new Map(current.map((order) => [order.id, order]));
+
+      for (const order of orders) {
+        nextOrders.set(order.id, order);
+      }
+
+      return Array.from(nextOrders.values()).sort((left, right) => {
+        const dateDifference = new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+
+        if (dateDifference !== 0) {
+          return dateDifference;
+        }
+
+        return right.id.localeCompare(left.id);
+      });
+    });
+  };
+
   if (isCheckingSession) {
     return <LoadingRegistrationScreen />;
   }
@@ -5946,7 +6306,12 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
 
   return (
     <main className={`levitate-admin-shell${isMobileMenuOpen ? " is-mobile-menu-open" : ""}`}>
-      <AdminSidebar activeScreen={activeScreen} onLogout={handleLogout} onScreenChange={handleScreenChange} />
+      <AdminSidebar
+        activeScreen={activeScreen}
+        isInternationalAcademy={session.academy.originType === "international"}
+        onLogout={handleLogout}
+        onScreenChange={handleScreenChange}
+      />
       <button
         aria-label="Cerrar menú"
         className="levitate-admin-mobile-scrim"
@@ -5978,6 +6343,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
             onChoreographerCreated: handleChoreographerCreated,
             onDanceCreated: handleDanceCreated,
             onOrderUpdated: handleOrderUpdated,
+            onOrdersSynced: handleOrdersSynced,
           })}
         </div>
       </section>

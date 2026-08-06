@@ -137,15 +137,37 @@ const registrationInscriptionPrices = {
   normal: {
     duo: 1400,
     grupo: 1000,
+    releve: 1500,
     solo: 1750,
     trio: 1200,
   },
   presale: {
     duo: 1300,
     grupo: 800,
+    releve: 1000,
     solo: 1500,
     trio: 950,
   },
+};
+const registrationInternationalInscriptionPrices = {
+  normal: {
+    duo: 80,
+    grupo: 60,
+    releve: 90,
+    solo: 100,
+    trio: 70,
+  },
+  presale: {
+    duo: 70,
+    grupo: 45,
+    releve: 60,
+    solo: 85,
+    trio: 55,
+  },
+};
+const registrationInscriptionCurrencies = {
+  international: "USD",
+  mexico: "MXN",
 };
 const registrationShopDiscountCode = "COLIBRI26";
 const registrationShopDiscountRate = 0.1;
@@ -414,6 +436,10 @@ export default {
 
     if (url.pathname === "/api/registration/inscription/orders") {
       return handleRegistrationInscriptionOrders(request, env);
+    }
+
+    if (url.pathname === "/api/registration/inscription/academy-payment-orders") {
+      return handleRegistrationAcademyInscriptionPaymentOrders(request, env);
     }
 
     if (url.pathname === "/api/registration/inscription/order/status") {
@@ -1227,16 +1253,16 @@ async function handleRegistrationInscriptionOrder(request, env) {
 
     const db = getDb(env);
     const body = await readJsonBody(request);
-    const curp = normalizeCurp(requireString(body.curp, "curp"));
+    const curp = normalizeRegistrationLookupIdentifier(requireString(body.curp, "curp"));
 
-    if (curp.length !== 18) {
-      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
-    }
+    assertRegistrationLookupIdentifier(curp);
 
-    await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
     const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
-    const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact);
+    const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
+      academyId: access.scope === "academy" ? access.session.academy.id : null,
+    });
     return sendJson(
       {
         order: lookup.order ? serializePublicRegistrationInscriptionOrder(lookup.order) : null,
@@ -1282,12 +1308,10 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
 
     const db = getDb(env);
     const body = await readJsonBody(request);
-    const curp = normalizeCurp(requireString(body.curp, "curp"));
+    const curp = normalizeRegistrationLookupIdentifier(requireString(body.curp, "curp"));
     const orderId = requireString(body.orderId, "orderId");
 
-    if (curp.length !== 18) {
-      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
-    }
+    assertRegistrationLookupIdentifier(curp);
 
     await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
@@ -1523,6 +1547,43 @@ async function handleRegistrationInscriptionOrders(request, env) {
     const orders = await getRegistrationInscriptionOrders(db, session.academy.id);
 
     return sendJson({ orders });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAcademyInscriptionPaymentOrders(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const session = await getRegistrationStateFromRequest({ db, request });
+
+    if (session.academy.originType !== "international") {
+      throwHttpError("registration_international_only", "Los pagos directos del registro están disponibles para academias internacionales.", 403);
+    }
+
+    const participants = await getRegistrationParticipants(db, session.academy.id);
+    const orders = [];
+
+    for (const participant of participants) {
+      const curp = normalizeRegistrationLookupIdentifier(participant.curp);
+
+      if (!curp) {
+        continue;
+      }
+
+      const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, null, {
+        academyId: session.academy.id,
+        skipEmpty: true,
+      });
+
+      if (lookup.order) {
+        orders.push(lookup.order);
+      }
+    }
+
+    return sendJson({ orders }, 201);
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -2830,7 +2891,13 @@ async function getRegistrationStudentState(db, user) {
   };
 }
 
-async function getRegistrationInscriptionLookup(db, curp) {
+async function getRegistrationInscriptionLookup(db, curp, { academyId = null } = {}) {
+  await ensureRegistrationAcademyOriginColumns(db);
+  await ensureRegistrationParticipantInternationalColumn(db);
+  await ensureRegistrationParticipantReleveTeacherColumn(db);
+
+  const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
+  const lookupBindings = academyId ? [curp, academyId] : [curp];
   const { results: registrationRows = [] } = await db
     .prepare(
       `
@@ -2841,23 +2908,29 @@ async function getRegistrationInscriptionLookup(db, curp) {
           registration_participants.curp,
           registration_participants.division,
           registration_participants.shirt_size,
+          registration_participants.is_international,
           registration_academies.name AS academy_name,
           registration_academies.venue,
+          registration_academies.origin_type AS academy_origin_type,
           registration_participants.created_at
         FROM registration_participants
         INNER JOIN registration_academies
           ON registration_academies.id = registration_participants.academy_id
         WHERE registration_participants.curp = ?
+          ${academyFilter}
         ORDER BY registration_participants.created_at DESC
       `,
     )
-    .bind(curp)
+    .bind(...lookupBindings)
     .all();
 
   if (registrationRows.length === 0) {
     throwHttpError("registration_inscription_not_found", "No encontramos una inscripción asociada a esa CURP", 404);
   }
 
+  const isInternational = registrationRows.some(
+    (registration) => registration.academy_origin_type === "international" || Boolean(Number(registration.is_international || 0)),
+  );
   const { results: danceRows = [] } = await db
     .prepare(
       `
@@ -2873,8 +2946,11 @@ async function getRegistrationInscriptionLookup(db, curp) {
             FROM registration_dance_participants AS all_dance_participants
             WHERE all_dance_participants.dance_id = registration_dances.id
           ) AS participant_count,
+          registration_participants.is_international AS selected_participant_is_international,
+          registration_participants.is_releve_teacher AS selected_participant_is_releve_teacher,
           registration_dances.venue,
           registration_academies.name AS academy_name,
+          registration_academies.origin_type AS academy_origin_type,
           registration_dances.created_at
         FROM registration_dance_participants
         INNER JOIN registration_participants
@@ -2884,13 +2960,14 @@ async function getRegistrationInscriptionLookup(db, curp) {
         INNER JOIN registration_academies
           ON registration_academies.id = registration_dances.academy_id
         WHERE registration_participants.curp = ?
+          ${academyFilter}
         ORDER BY registration_dances.created_at DESC
       `,
     )
-    .bind(curp)
+    .bind(...lookupBindings)
     .all();
   const dancesWithParticipants = await attachRegistrationDanceParticipants(db, danceRows);
-  const lines = buildRegistrationInscriptionLines(dancesWithParticipants);
+  const lines = buildRegistrationInscriptionLines(dancesWithParticipants, { isInternational });
   const subtotal = lines.reduce((total, line) => total + line.amount, 0);
   const primaryRegistration = registrationRows[0];
   const reference = buildRegistrationInscriptionReference(curp, primaryRegistration.venue);
@@ -2905,6 +2982,8 @@ async function getRegistrationInscriptionLookup(db, curp) {
     venue: primaryRegistration.venue,
     reference,
     paymentReference: buildRegistrationInscriptionPaymentReference(curp),
+    currency: getRegistrationInscriptionCurrency(isInternational),
+    pricingMode: isInternational ? "international" : "mexico",
     registrations: registrationRows.map(serializeRegistrationStudentRecord),
     lines,
     subtotal,
@@ -2912,15 +2991,26 @@ async function getRegistrationInscriptionLookup(db, curp) {
   };
 }
 
-async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null) {
+async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false } = {}) {
   await ensureRegistrationInscriptionOrderBuyerPhoneColumns(db);
 
-  const lookup = await getRegistrationInscriptionLookup(db, curp);
+  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId });
+
+  if (skipEmpty && lookup.lines.length === 0) {
+    return {
+      ...lookup,
+      order: null,
+    };
+  }
+
   const existingOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
   const lineItemsJson = JSON.stringify(lookup.lines);
   const buyerPhoneCountryCode = buyerPhoneContact?.countryCode || null;
   const buyerPhoneNumber = buyerPhoneContact?.number || null;
   const buyerPhone = buyerPhoneContact?.phone || null;
+  const isCourtesyOrder = lookup.subtotal === 0;
+  const shouldResetCourtesyOrder =
+    !isCourtesyOrder && existingOrder?.status === "paid" && Number(existingOrder.amount || 0) === 0;
 
   if (existingOrder) {
     await db
@@ -2935,6 +3025,21 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
             venue = ?,
             amount = ?,
             line_items_json = ?,
+            status = CASE
+              WHEN ? THEN 'paid'
+              WHEN ? THEN 'pending_payment'
+              ELSE status
+            END,
+            paid_amount = CASE
+              WHEN ? THEN 0
+              WHEN ? THEN 0
+              ELSE paid_amount
+            END,
+            paid_at = CASE
+              WHEN ? THEN COALESCE(paid_at, datetime('now'))
+              WHEN ? THEN NULL
+              ELSE paid_at
+            END,
             buyer_phone_country_code = COALESCE(?, buyer_phone_country_code),
             buyer_phone_number = COALESCE(?, buyer_phone_number),
             buyer_phone = COALESCE(?, buyer_phone),
@@ -2950,6 +3055,12 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
         lookup.venue,
         lookup.subtotal,
         lineItemsJson,
+        isCourtesyOrder ? 1 : 0,
+        shouldResetCourtesyOrder ? 1 : 0,
+        isCourtesyOrder ? 1 : 0,
+        shouldResetCourtesyOrder ? 1 : 0,
+        isCourtesyOrder ? 1 : 0,
+        shouldResetCourtesyOrder ? 1 : 0,
         buyerPhoneCountryCode,
         buyerPhoneNumber,
         buyerPhone,
@@ -2969,13 +3080,15 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
             venue,
             reference,
             amount,
+            status,
+            paid_at,
             payment_method,
             buyer_phone_country_code,
             buyer_phone_number,
             buyer_phone,
             line_items_json
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE NULL END, 'bank_transfer', ?, ?, ?, ?)
         `,
       )
       .bind(
@@ -2987,6 +3100,8 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
         lookup.venue,
         lookup.reference,
         lookup.subtotal,
+        isCourtesyOrder ? "paid" : "pending_payment",
+        isCourtesyOrder ? 1 : 0,
         buyerPhoneCountryCode,
         buyerPhoneNumber,
         buyerPhone,
@@ -4406,7 +4521,8 @@ async function serializeRegistrationProgramDances(db, dances) {
           registration_participants.full_name,
           registration_participants.age,
           registration_participants.division,
-          registration_participants.shirt_size
+          registration_participants.shirt_size,
+          registration_participants.is_releve_teacher
         FROM registration_dance_participants
         INNER JOIN registration_participants
           ON registration_participants.id = registration_dance_participants.participant_id
@@ -4538,6 +4654,7 @@ function groupRegistrationRelations(rows, danceIds) {
       division: row.division,
       id: row.id,
       fullName: row.full_name,
+      isReleveTeacher: Boolean(Number(row.is_releve_teacher || 0)),
       shirtSize: row.shirt_size,
     });
     grouped.set(row.dance_id, current);
@@ -4648,8 +4765,9 @@ function serializeRegistrationStudentDance(dance) {
   };
 }
 
-function serializeRegistrationInscriptionLine(dance) {
-  const baseAmount = getRegistrationInscriptionAmount(dance);
+function serializeRegistrationInscriptionLine(dance, { isInternational = false } = {}) {
+  const currency = getRegistrationInscriptionCurrency(isInternational);
+  const baseAmount = getRegistrationInscriptionAmount(dance, { isInternational });
 
   return {
     id: dance.id,
@@ -4663,42 +4781,93 @@ function serializeRegistrationInscriptionLine(dance) {
     venue: dance.venue,
     academyName: dance.academy_name,
     baseAmount,
+    currency,
     discountAmount: 0,
     discountRate: 0,
+    isCourtesy: false,
     pricingPosition: 0,
+    pricingType: isInternational ? "international" : "mexico",
     amount: baseAmount,
   };
 }
 
-function buildRegistrationInscriptionLines(dances) {
+function buildRegistrationInscriptionLines(dances, { isInternational = false } = {}) {
   return dances
-    .map(serializeRegistrationInscriptionLine)
-    .sort((firstLine, secondLine) => secondLine.baseAmount - firstLine.baseAmount)
+    .map((dance) => serializeRegistrationInscriptionLine(dance, { isInternational }))
+    .sort((firstLine, secondLine) => {
+      const amountDifference = isInternational
+        ? firstLine.baseAmount - secondLine.baseAmount
+        : secondLine.baseAmount - firstLine.baseAmount;
+
+      if (amountDifference !== 0) {
+        return amountDifference;
+      }
+
+      return firstLine.title.localeCompare(secondLine.title, "es");
+    })
     .map((line, index) => {
       const pricingPosition = index + 1;
-      const discountRate = [2, 4, 6].includes(pricingPosition) ? 0.5 : 0;
+      const isCourtesy = isInternational && pricingPosition <= 2;
+      const discountRate = isCourtesy ? 1 : [2, 4, 6].includes(pricingPosition) ? 0.5 : 0;
       const discountAmount = Math.round(line.baseAmount * discountRate);
 
       return {
         ...line,
         discountAmount,
         discountRate,
+        isCourtesy,
         pricingPosition,
+        pricingType: isCourtesy ? "international_courtesy" : line.pricingType,
         amount: line.baseAmount - discountAmount,
       };
     });
 }
 
-function getRegistrationInscriptionAmount(dance) {
+function getRegistrationInscriptionAmount(dance, { isInternational = false } = {}) {
+  const priceTable = isInternational ? registrationInternationalInscriptionPrices : registrationInscriptionPrices;
   const prices = Date.now() < registrationInscriptionPresaleEndsAt
-    ? registrationInscriptionPrices.presale
-    : registrationInscriptionPrices.normal;
+    ? priceTable.presale
+    : priceTable.normal;
+  const priceKey = getRegistrationInscriptionPriceKey(dance, { isInternational });
 
-  if (dance.genre === "aereo") {
-    return prices.solo;
+  return prices[priceKey] ?? prices.grupo;
+}
+
+function getRegistrationInscriptionCurrency(isInternational = false) {
+  return isInternational ? registrationInscriptionCurrencies.international : registrationInscriptionCurrencies.mexico;
+}
+
+function getRegistrationInscriptionPriceKey(dance, { isInternational = false } = {}) {
+  if (isRegistrationReleveTeacherDance(dance)) {
+    return "releve";
   }
 
-  return prices[dance.category] ?? prices.grupo;
+  if (!isInternational && dance.genre === "aereo") {
+    return "solo";
+  }
+
+  const categoryPriceKeys = {
+    duo: "duo",
+    duo_2_aparatos: "duo",
+    dupla_1_aparato: "duo",
+    grupo: "grupo",
+    solo: "solo",
+    terna_1_aparato: "trio",
+    trio: "trio",
+    trio_3_aparatos: "trio",
+  };
+
+  return categoryPriceKeys[dance.category] ?? "grupo";
+}
+
+function isRegistrationReleveTeacherDance(dance) {
+  if (Boolean(Number(dance.selected_participant_is_releve_teacher || 0))) {
+    return true;
+  }
+
+  return Array.isArray(dance.participants)
+    ? dance.participants.some((participant) => Boolean(participant.isReleveTeacher || participant.is_releve_teacher))
+    : false;
 }
 
 function buildRegistrationInscriptionReference(curp, venue) {
@@ -4906,6 +5075,8 @@ function normalizePhoneNumber(value) {
 }
 
 function serializeRegistrationInscriptionOrder(order) {
+  const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
+
   return {
     orderType: "registration",
     id: order.id,
@@ -4918,9 +5089,10 @@ function serializeRegistrationInscriptionOrder(order) {
     paymentReference: buildRegistrationInscriptionPaymentReference(order.curp),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
+    currency: getRegistrationOrderCurrency(lineItems),
     status: order.status,
     paymentMethod: order.payment_method,
-    lineItems: parseRegistrationOrderLineItems(order.line_items_json),
+    lineItems,
     buyerName: order.buyer_name,
     buyerEmail: order.buyer_email,
     buyerPhoneCountryCode: order.buyer_phone_country_code,
@@ -4938,6 +5110,8 @@ function serializeRegistrationInscriptionOrder(order) {
 }
 
 function serializeRegistrationShopOrder(order) {
+  const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
+
   return {
     orderType: "shop",
     id: order.id,
@@ -4950,9 +5124,10 @@ function serializeRegistrationShopOrder(order) {
     paymentReference: buildRegistrationShopPaymentReference(order),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
+    currency: getRegistrationOrderCurrency(lineItems),
     status: order.status,
     paymentMethod: order.payment_method,
-    lineItems: parseRegistrationOrderLineItems(order.line_items_json),
+    lineItems,
     buyerName: order.buyer_name,
     buyerEmail: order.buyer_email,
     buyerPhoneCountryCode: order.buyer_phone_country_code,
@@ -5116,6 +5291,8 @@ function serializePublicRegistrationInscriptionPaymentLookup(lookup) {
     venue: lookup.venue,
     reference: lookup.reference,
     paymentReference: lookup.paymentReference || buildRegistrationInscriptionPaymentReference(lookup.curp),
+    currency: lookup.currency || getRegistrationInscriptionCurrency(lookup.pricingMode === "international"),
+    pricingMode: lookup.pricingMode || "mexico",
     registrations: [],
     lines: lookup.lines.map((line, index) => ({
       ...line,
@@ -5142,6 +5319,7 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     paymentReference: order.paymentReference || buildRegistrationInscriptionPaymentReference(order.curp),
     amount: order.amount,
     paidAmount: order.paidAmount,
+    currency: order.currency || getRegistrationOrderCurrency(order.lineItems),
     status: order.status,
     paymentMethod: order.paymentMethod,
     buyerPhoneCountryCode: order.buyerPhoneCountryCode,
@@ -5163,6 +5341,12 @@ function parseRegistrationOrderLineItems(value) {
   } catch {
     return [];
   }
+}
+
+function getRegistrationOrderCurrency(lineItems = []) {
+  const currency = lineItems.find((lineItem) => lineItem?.currency)?.currency;
+
+  return currency || registrationInscriptionCurrencies.mexico;
 }
 
 function isMissingRegistrationInscriptionOrdersTable(error) {
@@ -5980,6 +6164,20 @@ function normalizeCurp(value) {
 
 function normalizeRegistrationDocument(value) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 32);
+}
+
+function normalizeRegistrationLookupIdentifier(value) {
+  const normalized = normalizeCurp(value);
+
+  return normalized.length === 18 ? normalized : normalizeRegistrationDocument(value);
+}
+
+function assertRegistrationLookupIdentifier(value) {
+  if (value.length === 18 || value.length >= 3) {
+    return;
+  }
+
+  throwHttpError("invalid_registration_identifier", "Ingresa una CURP o número de documento válido", 400);
 }
 
 async function hashPassword(password) {

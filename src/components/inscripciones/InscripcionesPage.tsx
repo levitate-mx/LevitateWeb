@@ -50,9 +50,12 @@ type InscriptionLookupLine = {
   venue: string;
   academyName: string;
   baseAmount?: number;
+  currency?: string;
   discountAmount?: number;
   discountRate?: number;
+  isCourtesy?: boolean;
   pricingPosition?: number;
+  pricingType?: string;
   amount: number;
 };
 
@@ -79,6 +82,7 @@ type InscriptionOrder = {
   paymentReference?: string;
   amount: number;
   paidAmount: number;
+  currency?: string;
   status: InscriptionOrderStatus;
   paymentMethod: string;
   buyerPhoneCountryCode?: string | null;
@@ -105,6 +109,8 @@ type InscriptionLookup = {
   registrations: InscriptionLookupRecord[];
   lines: InscriptionLookupLine[];
   subtotal: number;
+  currency?: string;
+  pricingMode?: "mexico" | "international";
   order?: InscriptionOrder | null;
 };
 
@@ -248,11 +254,7 @@ const venueLabels: Record<string, string> = {
   veracruz: "Primavera 2027 - Veracruz",
 };
 
-const currencyFormatter = new Intl.NumberFormat("es-MX", {
-  currency: "MXN",
-  maximumFractionDigits: 0,
-  style: "currency",
-});
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 const orderStatusLabels: Record<InscriptionOrderStatus, string> = {
   paid: "Pagada",
@@ -261,8 +263,30 @@ const orderStatusLabels: Record<InscriptionOrderStatus, string> = {
   rejected: "Rechazada",
 };
 
-function formatCurrency(amount: number) {
-  return currencyFormatter.format(amount);
+function getCurrencyFormatter(currency = "MXN") {
+  const normalizedCurrency = currency.toUpperCase();
+  const existingFormatter = currencyFormatters.get(normalizedCurrency);
+
+  if (existingFormatter) {
+    return existingFormatter;
+  }
+
+  const formatter = new Intl.NumberFormat(normalizedCurrency === "USD" ? "en-US" : "es-MX", {
+    currency: normalizedCurrency,
+    maximumFractionDigits: 0,
+    style: "currency",
+  });
+
+  currencyFormatters.set(normalizedCurrency, formatter);
+  return formatter;
+}
+
+function formatCurrency(amount: number, currency = "MXN") {
+  return getCurrencyFormatter(currency).format(amount);
+}
+
+function getLookupCurrency(lookup?: InscriptionLookup | null) {
+  return lookup?.currency || lookup?.order?.currency || lookup?.lines.find((line) => line.currency)?.currency || "MXN";
 }
 
 function normalizeCurp(value: string) {
@@ -526,6 +550,7 @@ function InscriptionLookupPanel() {
   const selectedPaymentMethod = paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? null;
   const visibleLines = lookup?.lines ?? [];
   const visibleSubtotal = lookup?.subtotal ?? 0;
+  const visibleCurrency = getLookupCurrency(lookup);
   const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
   const visibleDiscount = Math.max(0, visibleOriginalSubtotal - visibleSubtotal);
   const hasUploadedPaymentProof = Boolean(lookup?.order?.proof);
@@ -1077,7 +1102,7 @@ function InscriptionLookupPanel() {
         const badgeY = titleY - 22;
 
         drawRoundRect(badgeX, badgeY, badgeWidth, 34, 17, greenSoft);
-        drawText("50% DE DESCUENTO", badgeX + 18, badgeY + 23, 15, green, 820);
+        drawText(line.isCourtesy ? "CORTESIA LEVITATE" : "50% DE DESCUENTO", badgeX + 18, badgeY + 23, 15, green, 820);
       }
 
       drawText(getLineMeta(line).toUpperCase(), textX, titleY + 36, 16, muted, 820);
@@ -1085,7 +1110,8 @@ function InscriptionLookupPanel() {
       const amountX = padding + leftWidth - 28;
 
       if (line.discountAmount) {
-        const original = formatCurrency(line.baseAmount ?? line.amount);
+        const lineCurrency = line.currency || visibleCurrency;
+        const original = formatCurrency(line.baseAmount ?? line.amount, lineCurrency);
 
         drawRightText(original, amountX, rowCenter - 10, 20, "rgba(42, 41, 40, 0.48)", 660);
         context.strokeStyle = "rgba(42, 41, 40, 0.48)";
@@ -1094,9 +1120,9 @@ function InscriptionLookupPanel() {
         context.moveTo(amountX - context.measureText(original).width, rowCenter - 17);
         context.lineTo(amountX, rowCenter - 17);
         context.stroke();
-        drawRightText(formatCurrency(line.amount), amountX, rowCenter + 28, 29, ink, 820);
+        drawRightText(line.isCourtesy ? "Cortesía" : formatCurrency(line.amount, lineCurrency), amountX, rowCenter + 28, 29, ink, 820);
       } else {
-        drawRightText(formatCurrency(line.amount), amountX, rowCenter + 10, 27, ink, 820);
+        drawRightText(formatCurrency(line.amount, line.currency || visibleCurrency), amountX, rowCenter + 10, 27, ink, 820);
       }
 
       rowY += rowHeight;
@@ -1104,11 +1130,11 @@ function InscriptionLookupPanel() {
 
     const summaryY = listY + listHeight + 38;
     drawText("Subtotal", padding, summaryY, 23, ink, 820);
-    drawRightText(formatCurrency(visibleOriginalSubtotal), padding + leftWidth, summaryY, 23, ink, 760);
+    drawRightText(formatCurrency(visibleOriginalSubtotal, visibleCurrency), padding + leftWidth, summaryY, 23, ink, 760);
 
     if (visibleDiscount > 0) {
-      drawText("Descuentos", padding, summaryY + 48, 23, green, 820);
-      drawRightText(`-${formatCurrency(visibleDiscount)}`, padding + leftWidth, summaryY + 48, 23, green, 760);
+      drawText(lookup?.pricingMode === "international" ? "Cortesías" : "Descuentos", padding, summaryY + 48, 23, green, 820);
+      drawRightText(`-${formatCurrency(visibleDiscount, visibleCurrency)}`, padding + leftWidth, summaryY + 48, 23, green, 760);
     }
 
     context.strokeStyle = "rgba(42, 41, 40, 0.62)";
@@ -1118,8 +1144,8 @@ function InscriptionLookupPanel() {
     context.stroke();
 
     drawText("Total a pagar", padding, summaryY + 142, 24, ink, 840);
-    drawRightText("MXN", padding + leftWidth, summaryY + 142, 21, ink, 820);
-    drawRightText(formatCurrency(visibleSubtotal), padding + leftWidth - 54, summaryY + 142, 42, ink, 820);
+    drawRightText(visibleCurrency, padding + leftWidth, summaryY + 142, 21, ink, 820);
+    drawRightText(formatCurrency(visibleSubtotal, visibleCurrency), padding + leftWidth - 54, summaryY + 142, 42, ink, 820);
 
     drawText("Datos para pago", rightX, 58, 16, ink, 840);
     drawText("Opciones de pago", rightX, 122, 42, ink, 560);
@@ -1130,7 +1156,7 @@ function InscriptionLookupPanel() {
     context.stroke();
     drawText("Total a transferir", rightX, 226, 18, muted, 540);
     drawText(getOrderStatusLabel(lookup.order?.status), rightX, 262, 17, muted, 540);
-    drawRightText(formatCurrency(visibleSubtotal), rightX + rightWidth, 248, 38, pink, 820);
+    drawRightText(formatCurrency(visibleSubtotal, visibleCurrency), rightX + rightWidth, 248, 38, pink, 820);
     context.beginPath();
     context.moveTo(rightX, 292);
     context.lineTo(rightX + rightWidth, 292);
@@ -1494,7 +1520,7 @@ function InscriptionLookupPanel() {
               <div className="inscripciones-checkout-subhead">
                 <span>
                   <CheckCircle2 aria-hidden="true" size={17} />
-                  Precio preventa respetado
+                  {lookup.pricingMode === "international" ? "Primeras 2 participaciones cortesía" : "Precio preventa respetado"}
                 </span>
               </div>
 
@@ -1506,14 +1532,18 @@ function InscriptionLookupPanel() {
                       <div>
                         <div className="inscripciones-choreography-row__title-line">
                           <strong>{getLineTitle(line)}</strong>
-                          {line.discountAmount ? <em className="inscripciones-choreography-row__discount">50% de descuento</em> : null}
+                          {line.discountAmount ? (
+                            <em className="inscripciones-choreography-row__discount">
+                              {line.isCourtesy ? "Cortesía Levitate" : "50% de descuento"}
+                            </em>
+                          ) : null}
                         </div>
                         <span>{getLineMeta(line)}</span>
                       </div>
                       <div className="inscripciones-choreography-row__amount">
                         <span>
-                          {line.discountAmount ? <del>{formatCurrency(line.baseAmount ?? line.amount)}</del> : null}
-                          <b>{formatCurrency(line.amount)}</b>
+                          {line.discountAmount ? <del>{formatCurrency(line.baseAmount ?? line.amount, line.currency || visibleCurrency)}</del> : null}
+                          <b>{line.isCourtesy ? "Cortesía" : formatCurrency(line.amount, line.currency || visibleCurrency)}</b>
                         </span>
                       </div>
                     </div>
@@ -1532,19 +1562,19 @@ function InscriptionLookupPanel() {
                   <dl>
                     <div>
                       <dt>Subtotal</dt>
-                      <dd>{formatCurrency(visibleOriginalSubtotal)}</dd>
+                      <dd>{formatCurrency(visibleOriginalSubtotal, visibleCurrency)}</dd>
                     </div>
                     {visibleDiscount > 0 ? (
                       <div className="is-discount">
-                        <dt>Descuentos</dt>
-                        <dd>-{formatCurrency(visibleDiscount)}</dd>
+                        <dt>{lookup.pricingMode === "international" ? "Cortesías" : "Descuentos"}</dt>
+                        <dd>-{formatCurrency(visibleDiscount, visibleCurrency)}</dd>
                       </div>
                     ) : null}
                     <div className="is-total">
                       <dt>Total a pagar</dt>
                       <dd>
-                        <strong>{formatCurrency(visibleSubtotal)}</strong>
-                        <span>MXN</span>
+                        <strong>{formatCurrency(visibleSubtotal, visibleCurrency)}</strong>
+                        <span>{visibleCurrency}</span>
                       </dd>
                     </div>
                   </dl>
@@ -1651,7 +1681,7 @@ function InscriptionLookupPanel() {
 
               <div className="inscripciones-payment-sidepanel__amount">
                 <span>Total a transferir</span>
-                <strong>{formatCurrency(visibleSubtotal)}</strong>
+                <strong>{formatCurrency(visibleSubtotal, visibleCurrency)}</strong>
                 <small>{getOrderStatusLabel(lookup.order?.status)}</small>
               </div>
 
