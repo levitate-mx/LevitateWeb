@@ -903,10 +903,10 @@ export function PassportAdminPage() {
             </div>
             {(summary?.recentPassports ?? []).map((passport) => (
               <div role="row" key={passport.code}>
-                <span role="cell">{passport.code}</span>
-                <span role="cell">{passport.participantName || passport.status}</span>
-                <span role="cell">{passport.academy || "—"}</span>
-                <span role="cell">
+                <span data-label="Código" role="cell">{passport.code}</span>
+                <span data-label="Participante" role="cell">{passport.participantName || passport.status}</span>
+                <span data-label="Academia" role="cell">{passport.academy || "—"}</span>
+                <span data-label="Progreso" role="cell">
                   {passport.completedStations}/{passport.totalStations}
                 </span>
               </div>

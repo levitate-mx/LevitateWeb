@@ -720,6 +720,66 @@ export function LevitateHeader({
         >
           {navItems.map(renderNavItem)}
         </nav>
+
+        <div className="levitate-classic-mobile-trigger-wrap" ref={capsuleMenuRef}>
+          <button
+            aria-controls="levitate-classic-mobile-menu"
+            aria-expanded={isPillMenuOpen}
+            className="levitate-classic-mobile-trigger"
+            onClick={() => {
+              if (isPillMenuOpen) {
+                closePillMenu();
+              } else {
+                openPillMenu();
+              }
+            }}
+            type="button"
+          >
+            <Grip aria-hidden="true" size={18} strokeWidth={2.25} />
+            <span>Menú</span>
+          </button>
+        </div>
+
+        {isPillMenuOpen ? (
+          <div className="levitate-classic-mobile-menu" id="levitate-classic-mobile-menu" ref={pillMenuRef}>
+            <button
+              aria-label="Cerrar menú"
+              className="levitate-classic-mobile-menu__close"
+              onClick={closePillMenu}
+              type="button"
+            >
+              <X aria-hidden="true" size={20} />
+            </button>
+            <nav aria-label="Navegación móvil">
+              {pillMenuSections.map((section) => (
+                section.links ? (
+                  <section key={section.title}>
+                    <strong>{section.title}</strong>
+                    <div>
+                      {section.links.map((link) => (
+                        <a
+                          href={resolveHref(link.href ?? "#inicio", useRootLinks)}
+                          key={link.label}
+                          onClick={closePillMenu}
+                        >
+                          {link.label}
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ) : (
+                  <a
+                    href={resolveHref(section.href ?? "#inicio", useRootLinks)}
+                    key={section.title}
+                    onClick={closePillMenu}
+                  >
+                    {section.title}
+                  </a>
+                )
+              ))}
+            </nav>
+          </div>
+        ) : null}
       </header>
 
       {dropdown && typeof document !== "undefined" ? createPortal(dropdown, document.body) : null}

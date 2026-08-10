@@ -18222,6 +18222,30 @@ button {
     gap: 14px;
   }
 
+  .levitate-home-redesign .levitate-nav--pill.is-scroll-compact {
+    grid-template-columns: auto;
+    gap: 0;
+    padding: 10px 16px;
+  }
+
+  .levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-logo,
+  .levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-nav__login-wrap {
+    display: none;
+  }
+
+  .levitate-home-redesign .levitate-nav--pill.is-scroll-compact .levitate-nav__group--primary {
+    grid-column: 1;
+    width: fit-content;
+    max-width: calc(100vw - 32px);
+    overflow: visible;
+    transform: none;
+  }
+
+  .levitate-home-redesign .levitate-nav--pill.is-scroll-compact + .levitate-pill-menu {
+    top: 72px;
+    max-height: calc(100svh - 88px);
+  }
+
   .levitate-home-redesign .levitate-nav__group {
     width: 100%;
     overflow-x: auto;
@@ -20836,16 +20860,63 @@ button {
     flex-direction: column;
   }
 
+  .registration-admin-sidebar {
+    position: sticky;
+    z-index: 110;
+    top: 0;
+    grid-template-rows: auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  .registration-admin-brand {
+    margin: 0;
+    font-size: 1.48rem;
+  }
+
   .registration-admin-sidebar nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    min-width: 0;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .registration-admin-sidebar nav::-webkit-scrollbar {
+    display: none;
   }
 
   .registration-admin-sidebar nav button {
-    justify-content: flex-start;
+    flex: 0 0 auto;
+    min-height: 42px;
+    justify-content: center;
+    padding: 0 11px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .registration-admin-sidebar nav button:disabled {
+    display: none;
+  }
+
+  .registration-admin-sidebar__footer {
+    display: block;
+    padding: 0;
   }
 
   .registration-admin-logout {
-    justify-content: flex-start;
+    width: 42px;
+    min-height: 42px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .registration-admin-logout span {
+    display: none;
   }
 
   .registration-admin-summary,
@@ -27962,6 +28033,16 @@ button {
 
   .sedes-section-heading h2 {
     font-size: clamp(3rem, 13vw, 4.8rem);
+  }
+
+  .sedes-section-heading,
+  .sedes-blocks .sedes-section-heading h2 {
+    min-width: 0;
+  }
+
+  .sedes-blocks .sedes-section-heading h2 {
+    font-size: clamp(2.85rem, 13vw, 4.4rem);
+    overflow-wrap: anywhere;
   }
 
   .sedes-modalities .sedes-section-heading::after {
@@ -36338,6 +36419,28 @@ button {
     padding: 76px 20px 96px;
   }
 
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program > *,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__section,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-program__heading,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-grid,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-category-grid {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-category-card {
+    min-width: 0;
+  }
+
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card h4,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-genre-card p,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-category-card h4,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-category-card p {
+    overflow-wrap: anywhere;
+  }
+
   .rules-page--aerial.levitate-home-redesign .rules-aerial-program__intro {
     gap: 18px;
     padding-bottom: 58px;
@@ -36354,6 +36457,7 @@ button {
   }
 
   .rules-page--aerial.levitate-home-redesign .rules-aerial-program__section {
+    grid-template-columns: minmax(0, 1fr);
     gap: 26px;
     padding: 56px 0;
   }
@@ -36391,7 +36495,8 @@ button {
     display: none;
   }
 
-  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row {
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table__row,
+  .rules-page--aerial.levitate-home-redesign .rules-aerial-division-table--with-groups .rules-aerial-division-table__row {
     grid-template-columns: 1fr;
     gap: 13px;
     min-height: 0;
@@ -37102,5 +37207,254 @@ button {
 
   .levitate-scholarships__download {
     width: 100%;
+  }
+}
+
+.levitate-classic-mobile-trigger-wrap,
+.levitate-classic-mobile-menu {
+  display: none;
+}
+
+@media (max-width: 680px) {
+  .registration-admin-dashboard {
+    grid-auto-rows: max-content;
+    align-content: start;
+  }
+
+  .registration-admin-filters input,
+  .registration-admin-filters select {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  .levitate-menu-shell:not(.levitate-menu-shell--pill) .levitate-nav {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 22px 20px 18px;
+  }
+
+  .levitate-menu-shell:not(.levitate-menu-shell--pill) .levitate-nav > nav {
+    display: none;
+  }
+
+  .levitate-classic-mobile-trigger-wrap {
+    display: block;
+    justify-self: end;
+  }
+
+  .levitate-classic-mobile-trigger {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 15px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 760;
+  }
+
+  .levitate-classic-mobile-menu {
+    position: relative;
+    z-index: 90;
+    display: grid;
+    grid-column: 1 / -1;
+    max-height: calc(100svh - 118px);
+    overflow-y: auto;
+    border: 1px solid rgba(42, 41, 40, 0.1);
+    border-radius: 8px;
+    padding: 54px 20px 22px;
+    background: #f8f6f1;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+    color: #2a2928;
+  }
+
+  .levitate-classic-mobile-menu__close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(42, 41, 40, 0.07);
+    color: #2a2928;
+  }
+
+  .levitate-classic-mobile-menu > nav {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .levitate-classic-mobile-menu > nav > a,
+  .levitate-classic-mobile-menu section {
+    border-top: 1px solid rgba(42, 41, 40, 0.1);
+  }
+
+  .levitate-classic-mobile-menu > nav > a,
+  .levitate-classic-mobile-menu section > strong {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    color: #2a2928;
+    font-size: 1rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .levitate-classic-mobile-menu section > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 0 16px;
+  }
+
+  .levitate-classic-mobile-menu section a {
+    display: flex;
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+    padding: 0 12px;
+    border: 1px solid rgba(42, 41, 40, 0.1);
+    border-radius: 6px;
+    background: #fff;
+    color: #2a2928;
+    font-size: 0.88rem;
+    font-weight: 720;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .workshops-page.levitate-home-redesign .workshops-light-section .workshops-intro__copy h2 {
+    max-width: 100%;
+    font-size: clamp(3rem, 14vw, 3.7rem);
+    overflow-wrap: anywhere;
+  }
+
+  .workshops-page.levitate-home-redesign .workshops-light-section .workshops-intro__copy h2 span {
+    white-space: normal;
+  }
+
+  .premiation-page--modern .premiation-hero h1 {
+    font-size: clamp(2.8rem, 13vw, 5.2rem);
+    overflow-wrap: anywhere;
+  }
+
+  .premiation-page--modern .premiation-modern-closing__grid {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .premiation-page--modern .premiation-modern-closing__grid > *,
+  .premiation-page--modern .premiation-modern-closing a {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .premiation-page--modern .premiation-modern-closing a {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .premiation-page--modern .premiation-modern-closing h2 {
+    font-size: clamp(2.6rem, 11vw, 4.5rem);
+    overflow-wrap: anywhere;
+  }
+
+  .sedes-jury-step.is-active .sedes-jury-step__copy > span,
+  .sedes-jury-step:hover .sedes-jury-step__copy > span,
+  .sedes-jury-step:focus-visible .sedes-jury-step__copy > span {
+    transform: none;
+  }
+
+  .ticket-shop-product select,
+  .ticket-shop-checkout input,
+  .ticket-shop-checkout select,
+  .ticket-shop-checkout textarea {
+    font-size: 1rem;
+  }
+
+  .levitate-scholarships__select select {
+    min-height: 50px;
+    font-size: 1rem;
+  }
+
+  .rules-progress {
+    min-height: 44px;
+    align-items: center;
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .rules-progress button,
+  .rules-progress button.is-active {
+    position: relative;
+    height: 44px;
+    border-radius: 0;
+    background: transparent;
+    transform: none;
+  }
+
+  .rules-progress button::after {
+    position: absolute;
+    top: 20px;
+    right: 0;
+    left: 0;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(247, 243, 239, 0.44);
+    content: "";
+  }
+
+  .rules-progress button.is-active::after,
+  .rules-progress button:hover::after {
+    background: var(--rules-pink);
+  }
+
+  .passport-admin-table {
+    overflow: visible;
+    padding: 20px;
+  }
+
+  .passport-admin-table [role="row"]:first-child {
+    display: none;
+  }
+
+  .passport-admin-table [role="row"]:not(:first-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    gap: 18px 14px;
+    padding: 18px 0;
+  }
+
+  .passport-admin-table [role="cell"] {
+    display: grid;
+    gap: 5px;
+    overflow-wrap: anywhere;
+  }
+
+  .passport-admin-table [role="cell"]::before {
+    color: rgba(17, 16, 21, 0.5);
+    content: attr(data-label);
+    font-size: 0.66rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .levitate-footer__contact,
+  .levitate-footer__socials a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
   }
 }

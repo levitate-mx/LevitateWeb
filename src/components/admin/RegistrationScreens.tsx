@@ -43,7 +43,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
@@ -4626,6 +4626,32 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const activeAdminNavItemRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth > 680 || !adminSession) {
+      return;
+    }
+
+    const activeButton = activeAdminNavItemRef.current;
+    const nav = activeButton?.parentElement;
+
+    if (!activeButton || !nav) {
+      return;
+    }
+
+    const navRect = nav.getBoundingClientRect();
+    const activeButtonRect = activeButton.getBoundingClientRect();
+
+    nav.scrollTo({
+      left:
+        nav.scrollLeft +
+        activeButtonRect.left -
+        navRect.left -
+        (navRect.width - activeButtonRect.width) / 2,
+      behavior: "auto",
+    });
+  }, [activeSection, adminSession]);
 
   const handleAdminAuthenticated = useCallback((nextSession: RegistrationSession | RegistrationBootstrap) => {
     if (nextSession.user.role !== "admin") {
@@ -4982,6 +5008,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                     handleSectionChange(item.section);
                   }
                 }}
+                ref={isActive ? activeAdminNavItemRef : undefined}
                 type="button"
               >
                 <Icon aria-hidden="true" size={17} />
@@ -4991,9 +5018,15 @@ export function LevitateRegistrationAdminPaymentsRoute({
           })}
         </nav>
         <div className="registration-admin-sidebar__footer">
-          <button className="registration-admin-logout" disabled={isLoggingOut} onClick={handleAdminLogout} type="button">
+          <button
+            aria-label={isLoggingOut ? "Cerrando sesión" : "Cerrar sesión"}
+            className="registration-admin-logout"
+            disabled={isLoggingOut}
+            onClick={handleAdminLogout}
+            type="button"
+          >
             <LogOut aria-hidden="true" size={17} />
-            {isLoggingOut ? "Cerrando..." : "Cerrar sesión"}
+            <span>{isLoggingOut ? "Cerrando..." : "Cerrar sesión"}</span>
           </button>
           <button className="registration-admin-collapse" type="button" aria-label="Contraer menú">
             <ArrowLeft aria-hidden="true" size={18} />
