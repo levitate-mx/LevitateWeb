@@ -1,49 +1,5 @@
 PRAGMA foreign_keys = OFF;
 
-DROP TABLE IF EXISTS registration_academies_next;
-CREATE TABLE registration_academies_next (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
-  contact_name TEXT NOT NULL,
-  email TEXT NOT NULL COLLATE NOCASE,
-  phone TEXT,
-  origin_type TEXT NOT NULL DEFAULT 'mexico' CHECK (origin_type IN ('mexico', 'international')),
-  origin_state TEXT,
-  origin_country TEXT NOT NULL DEFAULT 'México',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (name, venue)
-);
-INSERT INTO registration_academies_next (
-  id,
-  name,
-  venue,
-  contact_name,
-  email,
-  phone,
-  origin_type,
-  origin_state,
-  origin_country,
-  created_at,
-  updated_at
-)
-SELECT
-  id,
-  name,
-  venue,
-  contact_name,
-  email,
-  phone,
-  'mexico',
-  NULL,
-  'México',
-  created_at,
-  updated_at
-FROM registration_academies;
-DROP TABLE registration_academies;
-ALTER TABLE registration_academies_next RENAME TO registration_academies;
-
 DROP TABLE IF EXISTS registration_dances_next;
 CREATE TABLE registration_dances_next (
   id TEXT PRIMARY KEY,

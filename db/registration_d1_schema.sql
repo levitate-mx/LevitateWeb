@@ -3,7 +3,6 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS registration_academies (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   contact_name TEXT NOT NULL,
   email TEXT NOT NULL COLLATE NOCASE,
   phone TEXT,
@@ -11,8 +10,7 @@ CREATE TABLE IF NOT EXISTS registration_academies (
   origin_state TEXT,
   origin_country TEXT NOT NULL DEFAULT 'México',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (name, venue)
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS registration_users (
@@ -322,6 +320,7 @@ CREATE TABLE IF NOT EXISTS registration_recognition_documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_registration_users_academy_id ON registration_users(academy_id);
+CREATE INDEX IF NOT EXISTS idx_registration_academies_name ON registration_academies(name);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_user_id ON registration_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_expires_at ON registration_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_email_verification_tokens_user_id ON registration_email_verification_tokens(user_id);

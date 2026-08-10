@@ -5,7 +5,7 @@ const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const registrationEmailVerificationMaxAgeMinutes = 60 * 24 * 2;
 const registrationPasswordResetMaxAgeMinutes = 60;
 const registrationVenues = new Set(["cdmx", "puebla", "edomex", "veracruz"]);
-const defaultRegistrationAcademyVenue = "edomex";
+const defaultRegistrationEventVenue = "edomex";
 const registrationAcademyOriginTypes = new Set(["mexico", "international"]);
 const registrationMexicoStates = new Set([
   "aguascalientes",
@@ -639,8 +639,6 @@ async function handleRegistrationRegister(request, env) {
     const email = normalizeEmail(requireString(body.email, "email"));
     const password = requireString(body.password, "password");
     const academyName = requireString(body.academy, "academy");
-    const requestedVenue = optionalString(body.venue);
-    const venue = requestedVenue ? requireRegistrationChoice(requestedVenue, "venue", registrationVenues) : defaultRegistrationAcademyVenue;
     const phone = optionalString(body.phone);
     const academyOriginType = requireRegistrationChoice(body.academyOriginType || "mexico", "academyOriginType", registrationAcademyOriginTypes);
     const academyOriginState =
@@ -673,45 +671,16 @@ async function handleRegistrationRegister(request, env) {
     const userId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
 
-    await db
-      .prepare(
-        `
-          INSERT INTO registration_academies (
-            id,
-            name,
-            venue,
-            contact_name,
-            email,
-            phone,
-            origin_type,
-            origin_state,
-            origin_country
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (name, venue) DO UPDATE SET
-            contact_name = excluded.contact_name,
-            email = excluded.email,
-            phone = excluded.phone,
-            origin_type = excluded.origin_type,
-            origin_state = excluded.origin_state,
-            origin_country = excluded.origin_country,
-            updated_at = datetime('now')
-        `,
-      )
-      .bind(academyId, academyName, venue, name, email, phone || null, academyOriginType, academyOriginState, academyOriginCountry)
-      .run();
-
-    const academy = await db
-      .prepare(
-        `
-          SELECT *
-          FROM registration_academies
-          WHERE name = ? AND venue = ?
-          LIMIT 1
-        `,
-      )
-      .bind(academyName, venue)
-      .first();
+    await createRegistrationAcademy(db, {
+      academyId,
+      academyName,
+      academyOriginCountry,
+      academyOriginState,
+      academyOriginType,
+      contactName: name,
+      email,
+      phone,
+    });
 
     await db
       .prepare(
@@ -727,7 +696,7 @@ async function handleRegistrationRegister(request, env) {
           VALUES (?, ?, ?, ?, ?, ?)
         `,
       )
-      .bind(userId, academy.id, name, username, email, passwordHash)
+      .bind(userId, academyId, name, username, email, passwordHash)
       .run();
 
     const state = await getRegistrationStateByUserId(db, userId);
@@ -1568,23 +1537,12 @@ async function handleRegistrationInscriptionOrderStatus(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
-    const session = await requireRegistrationAcademy(request, db);
-    const body = await readJsonBody(request);
-    const orderId = requireString(body.id, "id");
-    const status = requireRegistrationChoice(body.status, "status", registrationInscriptionOrderStatuses);
-    const paidAmount = optionalInteger(body.paidAmount, "paidAmount");
-    const notes = optionalString(body.notes);
-
-    await updateRegistrationInscriptionOrderStatus(db, {
-      academyId: session.academy.id,
-      notes,
-      orderId,
-      paidAmount,
-      status,
-    });
-
-    const order = await getRegistrationInscriptionOrderById(db, orderId, session.academy.id);
-    return sendJson({ order });
+    await requireRegistrationAcademy(request, db);
+    throwHttpError(
+      "registration_admin_required",
+      "Las academias pueden consultar sus órdenes, pero sólo administración puede aprobar o rechazar pagos",
+      403,
+    );
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -2565,7 +2523,6 @@ async function getRegistrationStateFromRequest({ db, request }) {
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
-          registration_academies.venue,
           registration_academies.contact_name,
           registration_academies.email AS academy_email,
           registration_academies.phone,
@@ -2765,7 +2722,6 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
-          registration_academies.venue,
           registration_academies.contact_name,
           registration_academies.email AS academy_email,
           registration_academies.phone,
@@ -2821,8 +2777,7 @@ async function getRegistrationStudentState(db, user) {
           registration_participants.curp,
           registration_participants.division,
           registration_participants.shirt_size,
-          registration_academies.name AS academy_name,
-          registration_academies.venue
+          registration_academies.name AS academy_name
         FROM registration_participants
         INNER JOIN registration_academies
           ON registration_academies.id = registration_participants.academy_id
@@ -2899,7 +2854,6 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
           registration_participants.shirt_size,
           registration_participants.is_international,
           registration_academies.name AS academy_name,
-          registration_academies.venue,
           registration_academies.origin_type AS academy_origin_type,
           registration_participants.created_at
         FROM registration_participants
@@ -2956,15 +2910,35 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
     .bind(...lookupBindings)
     .all();
   const dancesWithParticipants = await attachRegistrationDanceParticipants(db, danceRows);
-  const lines = buildRegistrationInscriptionLines(dancesWithParticipants, { isInternational });
-  const subtotal = lines.reduce((total, line) => total + line.amount, 0);
+  const allLines = buildRegistrationInscriptionLines(dancesWithParticipants, { isInternational });
   const primaryRegistration = registrationRows[0];
-  const primaryVenue = lines[0]?.venue || danceRows[0]?.venue || primaryRegistration.venue || defaultRegistrationAcademyVenue;
-  const reference = buildRegistrationInscriptionReference(curp, primaryVenue, {
+  const orders = await getRegistrationInscriptionOrdersByParticipant(db, curp, primaryRegistration.academy_id);
+  const latestOrder = orders[0] || null;
+  const openOrder = latestOrder?.status !== "paid" ? latestOrder : null;
+  const paidOrder = orders.find((order) => order.status === "paid") || null;
+  const paidLineIds = getRegistrationInscriptionOrderLineIds(orders.filter((order) => order.status === "paid"));
+  const unpaidLines = allLines.filter((line) => !paidLineIds.has(line.id));
+  const primaryVenue =
+    openOrder?.venue || unpaidLines[0]?.venue || paidOrder?.venue || allLines[0]?.venue || danceRows[0]?.venue || defaultRegistrationEventVenue;
+  const baseReference = buildRegistrationInscriptionReference(curp, primaryVenue, {
     academyId: primaryRegistration.academy_id,
     isInternational,
   });
-  const order = await getRegistrationInscriptionOrderByReference(db, reference);
+  let lines = unpaidLines;
+  let order = openOrder;
+  let reference = openOrder?.reference || getNextRegistrationInscriptionReference(baseReference, orders);
+
+  if (openOrder?.status === "payment_reported") {
+    lines = parseRegistrationOrderLineItems(openOrder.line_items_json);
+  } else if (!openOrder && unpaidLines.length === 0 && paidOrder) {
+    order = paidOrder;
+    reference = paidOrder.reference;
+    lines = parseRegistrationOrderLineItems(paidOrder.line_items_json);
+  }
+
+  const subtotal = order?.status === "payment_reported" || order?.status === "paid"
+    ? Number(order.amount || 0)
+    : lines.reduce((total, line) => total + Number(line.amount || 0), 0);
   const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
 
   return {
@@ -2977,6 +2951,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
     paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
       academyId: primaryRegistration.academy_id,
       isInternational,
+      orderReference: reference,
       venue: primaryVenue,
     }),
     currency: getRegistrationInscriptionCurrency(isInternational),
@@ -3006,8 +2981,34 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
   const buyerPhoneNumber = buyerPhoneContact?.number || null;
   const buyerPhone = buyerPhoneContact?.phone || null;
   const isCourtesyOrder = lookup.subtotal === 0;
-  const shouldResetCourtesyOrder =
-    !isCourtesyOrder && existingOrder?.status === "paid" && Number(existingOrder.amount || 0) === 0;
+
+  if (existingOrder?.status === "paid") {
+    return lookup;
+  }
+
+  if (existingOrder?.status === "payment_reported") {
+    await db
+      .prepare(
+        `
+          UPDATE registration_inscription_orders
+          SET
+            buyer_phone_country_code = COALESCE(?, buyer_phone_country_code),
+            buyer_phone_number = COALESCE(?, buyer_phone_number),
+            buyer_phone = COALESCE(?, buyer_phone),
+            updated_at = datetime('now')
+          WHERE reference = ?
+        `,
+      )
+      .bind(buyerPhoneCountryCode, buyerPhoneNumber, buyerPhone, lookup.reference)
+      .run();
+
+    const reportedOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
+
+    return {
+      ...lookup,
+      order: reportedOrder ? await serializeRegistrationInscriptionOrderWithProof(db, reportedOrder) : lookup.order,
+    };
+  }
 
   if (existingOrder) {
     await db
@@ -3024,17 +3025,14 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
             line_items_json = ?,
             status = CASE
               WHEN ? THEN 'paid'
-              WHEN ? THEN 'pending_payment'
               ELSE status
             END,
             paid_amount = CASE
-              WHEN ? THEN 0
               WHEN ? THEN 0
               ELSE paid_amount
             END,
             paid_at = CASE
               WHEN ? THEN COALESCE(paid_at, datetime('now'))
-              WHEN ? THEN NULL
               ELSE paid_at
             END,
             buyer_phone_country_code = COALESCE(?, buyer_phone_country_code),
@@ -3053,11 +3051,8 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
         lookup.subtotal,
         lineItemsJson,
         isCourtesyOrder ? 1 : 0,
-        shouldResetCourtesyOrder ? 1 : 0,
         isCourtesyOrder ? 1 : 0,
-        shouldResetCourtesyOrder ? 1 : 0,
         isCourtesyOrder ? 1 : 0,
-        shouldResetCourtesyOrder ? 1 : 0,
         buyerPhoneCountryCode,
         buyerPhoneNumber,
         buyerPhone,
@@ -3245,7 +3240,7 @@ async function getRegistrationShopParticipantByCurp(db, curp) {
               ORDER BY registration_dances.created_at DESC
               LIMIT 1
             ),
-            registration_academies.venue
+            '${defaultRegistrationEventVenue}'
           ) AS venue
         FROM registration_participants
         INNER JOIN registration_academies
@@ -3516,12 +3511,16 @@ async function createRegistrationShopReference(db, curp, lineItems = []) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
-function buildRegistrationInscriptionPaymentReference(curp, { academyId = "", isInternational = false, venue = "" } = {}) {
-  if (isInternational) {
-    return `INS-${getRegistrationInternationalPaymentCode(curp, academyId, venue)}`;
-  }
+function buildRegistrationInscriptionPaymentReference(
+  curp,
+  { academyId = "", isInternational = false, orderReference = "", venue = "" } = {},
+) {
+  const basePaymentReference = isInternational
+    ? `INS-${getRegistrationInternationalPaymentCode(curp, academyId, venue)}`
+    : `INS-${getRegistrationPaymentCurpCode(curp)}`;
+  const sequence = optionalString(orderReference).match(/-(\d{2})$/)?.[1];
 
-  return `INS-${getRegistrationPaymentCurpCode(curp)}`;
+  return sequence ? `${basePaymentReference}-${sequence}` : basePaymentReference;
 }
 
 function buildRegistrationShopPaymentReference(order) {
@@ -3637,6 +3636,55 @@ async function getRegistrationInscriptionOrderByReference(db, reference) {
 
     throw error;
   }
+}
+
+async function getRegistrationInscriptionOrdersByParticipant(db, curp, academyId) {
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_inscription_orders
+          WHERE curp = ?
+            AND academy_id = ?
+          ORDER BY created_at DESC, rowid DESC
+        `,
+      )
+      .bind(curp, academyId)
+      .all();
+
+    return results;
+  } catch (error) {
+    if (isMissingRegistrationInscriptionOrdersTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+function getRegistrationInscriptionOrderLineIds(orders) {
+  return new Set(
+    orders.flatMap((order) => parseRegistrationOrderLineItems(order.line_items_json).map((line) => optionalString(line.id)).filter(Boolean)),
+  );
+}
+
+function getNextRegistrationInscriptionReference(baseReference, orders) {
+  const existingReferences = new Set(orders.map((order) => optionalString(order.reference).toUpperCase()).filter(Boolean));
+
+  if (existingReferences.size === 0) {
+    return baseReference;
+  }
+
+  for (let sequence = Math.max(2, orders.length + 1); sequence < 100; sequence += 1) {
+    const candidate = `${baseReference}-${String(sequence).padStart(2, "0")}`;
+
+    if (!existingReferences.has(candidate.toUpperCase())) {
+      return candidate;
+    }
+  }
+
+  return `${baseReference}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
 async function getRegistrationShopOrderByReference(db, reference) {
@@ -4326,7 +4374,16 @@ async function getAllRegistrationAdminParticipants(db) {
         SELECT
           registration_participants.*,
           registration_academies.name AS academy_name,
-          registration_academies.venue AS academy_venue,
+          COALESCE(
+            (
+              SELECT GROUP_CONCAT(DISTINCT registration_dances.venue)
+              FROM registration_dance_participants
+              INNER JOIN registration_dances
+                ON registration_dances.id = registration_dance_participants.dance_id
+              WHERE registration_dance_participants.participant_id = registration_participants.id
+            ),
+            ''
+          ) AS event_venues,
           registration_academies.contact_name AS academy_contact_name,
           registration_academies.email AS academy_email,
           registration_academies.phone AS academy_phone,
@@ -4740,7 +4797,6 @@ function serializeRegistrationSession(row) {
     academy: {
       id: row.academy_id,
       name: row.academy_name,
-      venue: row.venue,
       contactName: row.contact_name,
       email: row.academy_email,
       phone: row.phone,
@@ -4771,7 +4827,10 @@ function serializeRegistrationAdminParticipant(participant) {
     ...serializeRegistrationParticipant(participant),
     academyId: participant.academy_id,
     academyName: participant.academy_name,
-    academyVenue: participant.academy_venue,
+    eventVenues: String(participant.event_venues || "")
+      .split(",")
+      .map((venue) => venue.trim())
+      .filter(Boolean),
     academyContactName: participant.academy_contact_name,
     academyEmail: participant.academy_email,
     academyPhone: participant.academy_phone,
@@ -4787,7 +4846,6 @@ function serializeRegistrationStudentRecord(participant) {
     fullName: participant.full_name,
     curp: participant.curp,
     academyName: participant.academy_name,
-    venue: participant.venue,
     division: participant.division,
     shirtSize: participant.shirt_size,
   };
@@ -5009,6 +5067,72 @@ async function ensureRegistrationInscriptionOrderBuyerPhoneColumns(db) {
   }
 }
 
+async function createRegistrationAcademy(db, {
+  academyId,
+  academyName,
+  academyOriginCountry,
+  academyOriginState,
+  academyOriginType,
+  contactName,
+  email,
+  phone,
+}) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_academies)").all();
+  const hasLegacyVenueColumn = results.some((column) => column.name === "venue");
+
+  if (hasLegacyVenueColumn) {
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_academies (
+            id,
+            name,
+            venue,
+            contact_name,
+            email,
+            phone,
+            origin_type,
+            origin_state,
+            origin_country
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .bind(
+        academyId,
+        academyName,
+        defaultRegistrationEventVenue,
+        contactName,
+        email,
+        phone || null,
+        academyOriginType,
+        academyOriginState,
+        academyOriginCountry,
+      )
+      .run();
+    return;
+  }
+
+  await db
+    .prepare(
+      `
+        INSERT INTO registration_academies (
+          id,
+          name,
+          contact_name,
+          email,
+          phone,
+          origin_type,
+          origin_state,
+          origin_country
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    )
+    .bind(academyId, academyName, contactName, email, phone || null, academyOriginType, academyOriginState, academyOriginCountry)
+    .run();
+}
+
 async function ensureRegistrationAcademyOriginColumns(db) {
   const { results = [] } = await db.prepare("PRAGMA table_info(registration_academies)").all();
   const existingColumns = new Set(results.map((column) => column.name));
@@ -5135,6 +5259,7 @@ function serializeRegistrationInscriptionOrder(order) {
     paymentReference: buildRegistrationInscriptionPaymentReference(order.curp, {
       academyId: order.academy_id,
       isInternational,
+      orderReference: order.reference,
       venue: order.venue,
     }),
     amount: Number(order.amount || 0),

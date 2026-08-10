@@ -91,7 +91,6 @@ type RegistrationSession = {
   academy: {
     id: string;
     name: string;
-    venue: string;
     contactName: string;
     email: string;
     phone: string | null;
@@ -127,7 +126,7 @@ type RegistrationParticipant = {
 type RegistrationAdminParticipant = RegistrationParticipant & {
   academyId: string;
   academyName: string;
-  academyVenue: string;
+  eventVenues: string[];
   academyContactName: string | null;
   academyEmail: string | null;
   academyPhone: string | null;
@@ -334,7 +333,6 @@ type StudentRegistrationRecord = {
   fullName: string;
   curp: string;
   academyName: string;
-  venue: string;
   division: string;
   shirtSize: string;
 };
@@ -1298,7 +1296,7 @@ function getAdminParticipantGroups(participants: RegistrationAdminParticipant[])
   const groupMap = new Map<string, RegistrationAdminParticipant[]>();
 
   for (const participant of participants) {
-    const key = participant.academyId || `${participant.academyName}-${participant.academyVenue}`;
+    const key = participant.academyId || participant.academyName;
     const current = groupMap.get(key) ?? [];
 
     current.push(participant);
@@ -1315,17 +1313,9 @@ function getAdminParticipantGroups(participants: RegistrationAdminParticipant[])
         originType: groupParticipants[0]?.academyOriginType,
       }),
       participants: groupParticipants.sort((left, right) => left.fullName.localeCompare(right.fullName, "es")),
-      venue: groupParticipants[0]?.academyVenue || "",
+      venues: Array.from(new Set(groupParticipants.flatMap((participant) => participant.eventVenues))),
     }))
-    .sort((left, right) => {
-      const academyDiff = left.academyName.localeCompare(right.academyName, "es");
-
-      if (academyDiff !== 0) {
-        return academyDiff;
-      }
-
-      return left.venue.localeCompare(right.venue, "es");
-    });
+    .sort((left, right) => left.academyName.localeCompare(right.academyName, "es"));
 }
 
 function getAdminParticipantTotals(participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[]) {
@@ -2312,7 +2302,7 @@ function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
     "Alumno",
     "CURP",
     "Academia",
-    "Sede",
+    "Eventos",
     "Boletos pedidos",
     "Boletos confirmados",
     "Listo para bloque",
@@ -2421,7 +2411,7 @@ function downloadAdminParticipantsCsv(participants: RegistrationAdminParticipant
       originState: participant.academyOriginState,
       originType: participant.academyOriginType,
     }),
-    getVenueLabel(participant.academyVenue),
+    participant.eventVenues.map(getVenueLabel).join(" / ") || "Sin coreografía",
     participant.fullName,
     participant.curp,
     getProgramDivisionLabel(participant.division),
@@ -3425,8 +3415,7 @@ function LevitateStudentPortal({
                 <strong>{registration.fullName}</strong>
                 <span>{registration.academyName}</span>
                 <p>
-                  {getVenueLabel(registration.venue)} · {getProgramDivisionLabel(registration.division)} · Playera{" "}
-                  {getOptionLabel(shirtSizes, registration.shirtSize)}
+                  {getProgramDivisionLabel(registration.division)} · Playera {getOptionLabel(shirtSizes, registration.shirtSize)}
                 </p>
               </article>
             ))}
@@ -3507,17 +3496,15 @@ function AdminSidebar({
 }
 
 function ParticipantRegistrationPanel({
-  academyVenue,
   isAcademyInternational,
   registeredDanceCount,
   onParticipantCreated,
 }: {
-  academyVenue: string;
   isAcademyInternational: boolean;
   registeredDanceCount: number;
   onParticipantCreated: (participant: RegistrationParticipant) => void;
 }) {
-  const eventDate = venueEventDates[academyVenue] ?? venueEventDates.edomex;
+  const eventDate = venueEventDates.edomex;
   const isInternational = isAcademyInternational;
   const releveTeacherMinimumDances = 3;
   const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
@@ -4438,17 +4425,15 @@ function AcademyInternationalPaymentCard({
 function InscriptionOrdersPanel({
   emptyMessage = "Todavía no hay órdenes. Se crean cuando una familia consulta una CURP y presiona pagar inscripción.",
   orders,
-  onOrderUpdated,
 }: {
   emptyMessage?: string;
   orders: RegistrationInscriptionOrder[];
-  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
   return (
-    <AdminPanel title="Pagos de inscripción" eyebrow="Control">
+    <AdminPanel title="Pagos de inscripción" eyebrow="Consulta">
       <div className="levitate-admin-payment-list">
         {orders.length > 0 ? (
-          orders.map((order) => <InscriptionOrderCard key={order.id} onOrderUpdated={onOrderUpdated} order={order} />)
+          orders.map((order) => <InscriptionOrderCard key={order.id} order={order} />)
         ) : (
           <p className="levitate-admin-empty-state">{emptyMessage}</p>
         )}
@@ -4459,23 +4444,10 @@ function InscriptionOrdersPanel({
 
 function InscriptionOrderCard({
   order,
-  onOrderUpdated,
 }: {
   order: RegistrationInscriptionOrder;
-  onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
-  const [status, setStatus] = useState<RegistrationInscriptionOrderStatus>(order.status);
-  const [paidAmount, setPaidAmount] = useState(String(order.paidAmount || ""));
-  const [notes, setNotes] = useState(order.notes ?? "");
-  const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setStatus(order.status);
-    setPaidAmount(String(order.paidAmount || ""));
-    setNotes(order.notes ?? "");
-  }, [order]);
 
   const handleOpenProof = () => {
     if (!order.proof) {
@@ -4488,36 +4460,8 @@ function InscriptionOrderCard({
     });
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsSaving(true);
-    setStatusMessage("");
-    setErrorMessage("");
-
-    const nextPaidAmount = paidAmount === "" ? null : Number(paidAmount);
-
-    try {
-      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>("/api/registration/inscription/order/status", {
-        body: JSON.stringify({
-          id: order.id,
-          notes,
-          paidAmount: nextPaidAmount,
-          status,
-        }),
-        method: "POST",
-      });
-
-      onOrderUpdated(response.order);
-      setStatusMessage("Orden actualizada.");
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo actualizar la orden."));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
-    <form className="levitate-admin-payment-card" onSubmit={handleSubmit}>
+    <article className="levitate-admin-payment-card">
       <header>
         <div>
           <span>{getRegistrationInscriptionPaymentReference(order)}</span>
@@ -4563,33 +4507,10 @@ function InscriptionOrderCard({
         </div>
       ) : null}
 
-      <div className="levitate-admin-payment-card__fields">
-        <AdminField icon={CreditCard} label="Estado">
-          <AdminSelect
-            id={`order-status-${order.id}`}
-            name="status"
-            onChange={(event) => setStatus(event.target.value as RegistrationInscriptionOrderStatus)}
-            options={inscriptionOrderStatusOptions}
-            value={status}
-          />
-        </AdminField>
-        <AdminField icon={CreditCard} label="Monto pagado">
-          <input min={0} onChange={(event) => setPaidAmount(event.target.value)} type="number" value={paidAmount} />
-        </AdminField>
-        <AdminField className="levitate-admin-field--wide" icon={ClipboardList} label="Notas internas">
-          <input onChange={(event) => setNotes(event.target.value)} placeholder="Ej. comprobante recibido por WhatsApp" type="text" value={notes} />
-        </AdminField>
-      </div>
-
       <div className="levitate-admin-form__wide-block">
-        <AdminStatusMessage message={statusMessage} />
         <AdminStatusMessage message={errorMessage} tone="error" />
       </div>
-
-      <div className="levitate-admin-form__actions">
-        <SaveButton disabled={isSaving} isSaving={isSaving} label="Actualizar orden" />
-      </div>
-    </form>
+    </article>
   );
 }
 
@@ -4825,7 +4746,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
     return adminParticipants.filter((participant) => {
       const matchesAcademy = registrationAcademyFilter === "all" || participant.academyId === registrationAcademyFilter;
-      const matchesVenue = registrationVenueFilter === "all" || participant.academyVenue === registrationVenueFilter;
+      const matchesVenue = registrationVenueFilter === "all" || participant.eventVenues.includes(registrationVenueFilter);
       const matchesDivision = registrationDivisionFilter === "all" || participant.division === registrationDivisionFilter;
       const matchesQuery =
         !normalizedQuery ||
@@ -5171,7 +5092,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
                       <div>
                         <strong>{group.academyName}</strong>
                         <span>
-                          {group.originLabel} · {getVenueLabel(group.venue)} · {group.participants.length} participante(s)
+                          {group.originLabel} · {group.venues.length > 0 ? group.venues.map(getVenueLabel).join(" / ") : "Sin coreografías"} ·{" "}
+                          {group.participants.length} participante(s)
                         </span>
                       </div>
                     </header>
@@ -6287,7 +6209,6 @@ function getAdminScreen({
   if (screen === "participants") {
     return (
       <ParticipantRegistrationPanel
-        academyVenue={session.academy.venue}
         isAcademyInternational={session.academy.originType === "international"}
         onParticipantCreated={onParticipantCreated}
         registeredDanceCount={dances.length}
@@ -6569,7 +6490,7 @@ export function LevitateAuthRoute() {
 export function LevitateParticipantRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ParticipantRegistrationPanel academyVenue="edomex" isAcademyInternational={false} onParticipantCreated={() => undefined} registeredDanceCount={0} />
+      <ParticipantRegistrationPanel isAcademyInternational={false} onParticipantCreated={() => undefined} registeredDanceCount={0} />
     </RegistrationPageScaffold>
   );
 }

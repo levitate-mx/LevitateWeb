@@ -35,7 +35,6 @@ type InscriptionLookupRecord = {
   fullName: string;
   curp: string;
   academyName: string;
-  venue: string;
   division?: string | null;
   shirtSize?: string | null;
 };
