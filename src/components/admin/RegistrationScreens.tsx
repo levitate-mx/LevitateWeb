@@ -73,6 +73,7 @@ type RegistrationDashboardVenueMetric = "participants" | "choreographies" | "con
 type RegistrationDashboardAlertSeverity = "critical" | "important" | "info";
 type RegistrationAcademyDirectoryStatus = "active" | "incomplete" | "inactive" | "archived";
 type RegistrationAcademyDirectorySort = "recent" | "name" | "registrations" | "participants" | "pending" | "alerts";
+type RegistrationChoreographerDirectorySort = "recent" | "name" | "academy" | "dances";
 type RegistrationParticipantOperationalStatus = "registered" | "pending_payment" | "pending_tickets" | "incomplete";
 type RegistrationAcademyProfileTab =
   | "overview"
@@ -209,6 +210,10 @@ type RegistrationChoreographer = {
 type RegistrationAdminChoreographer = RegistrationChoreographer & {
   academyId: string;
   academyName: string;
+  danceCount: number;
+  eventVenues: string[];
+  latestDanceTitle?: string | null;
+  latestDanceAt?: string | null;
 };
 
 type RegistrationDanceRelation = {
@@ -4230,12 +4235,19 @@ function downloadAdminParticipantsCsv(rows: RegistrationParticipantOperationalRo
   URL.revokeObjectURL(url);
 }
 
-function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreographer[]) {
-  const headers = ["Nombre", "Academia", "Talla"];
+function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreographer[], fileName = "levitate-coreografos.csv") {
+  const headers = ["Nombre", "Academia", "Correo", "Teléfono", "Talla", "Sedes", "Coreografías", "Última actividad"];
   const rows = choreographers.map((choreographer) => [
     choreographer.fullName,
     choreographer.academyName,
+    choreographer.email ?? "",
+    choreographer.phone ?? "",
     getOptionLabel(shirtSizes, choreographer.shirtSize),
+    choreographer.eventVenues.map(getVenueLabel).join(" / ") || "Sin sede",
+    choreographer.danceCount,
+    choreographer.latestDanceTitle
+      ? `${choreographer.latestDanceTitle} · ${getAdminDateLabel(choreographer.latestDanceAt ?? choreographer.createdAt)}`
+      : `Registro creado · ${getAdminDateLabel(choreographer.createdAt)}`,
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -4243,7 +4255,7 @@ function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreog
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = "levitate-coreografos.csv";
+  link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -6319,29 +6331,155 @@ function RegistrationAcademyQuickPanel({
 }
 
 function RegistrationAdminChoreographersPanel({
+  academyFilter,
+  academyOptions,
+  activityFilter,
   choreographers,
   filteredChoreographers,
   isLoading,
+  onAcademyFilterChange,
+  onActivityFilterChange,
+  onExportChoreographer,
+  onOpenAcademy,
+  onOpenChoreographer,
   onQueryChange,
+  onShirtFilterChange,
+  onSortChange,
+  onVenueFilterChange,
   query,
+  selectedChoreographerId,
+  shirtFilter,
+  sort,
+  venueFilter,
 }: {
+  academyFilter: string;
+  academyOptions: FieldOption[];
+  activityFilter: string;
   choreographers: RegistrationAdminChoreographer[];
   filteredChoreographers: RegistrationAdminChoreographer[];
   isLoading: boolean;
+  onAcademyFilterChange: (value: string) => void;
+  onActivityFilterChange: (value: string) => void;
+  onExportChoreographer: (choreographer: RegistrationAdminChoreographer) => void;
+  onOpenAcademy: (academyId: string) => void;
+  onOpenChoreographer: (choreographerId: string) => void;
   onQueryChange: (value: string) => void;
+  onShirtFilterChange: (value: string) => void;
+  onSortChange: (value: RegistrationChoreographerDirectorySort) => void;
+  onVenueFilterChange: (value: string) => void;
   query: string;
+  selectedChoreographerId: string;
+  shirtFilter: string;
+  sort: RegistrationChoreographerDirectorySort;
+  venueFilter: string;
 }) {
+  const academyCount = new Set(choreographers.map((choreographer) => choreographer.academyId || choreographer.academyName)).size;
+  const withDancesCount = choreographers.filter((choreographer) => choreographer.danceCount > 0).length;
+  const withoutDancesCount = choreographers.filter((choreographer) => choreographer.danceCount === 0).length;
+  const withoutContactCount = choreographers.filter((choreographer) => !choreographer.email && !choreographer.phone).length;
+
   return (
-    <>
+    <section className="registration-choreographers-panel" aria-label="Directorio de coreógrafos">
+      <section className="registration-academies-summary registration-choreographers-summary" aria-label="Resumen de coreógrafos">
+        <RegistrationAcademySummaryCard
+          icon={UserRoundPlus}
+          label="Total coreógrafos"
+          meta={`${academyCount.toLocaleString("es-MX")} academia(s)`}
+          onClick={() => onActivityFilterChange("all")}
+          tone="purple"
+          value={choreographers.length.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={BadgeCheck}
+          label="Con coreografías"
+          meta="Ligados al programa"
+          onClick={() => onActivityFilterChange("with_dances")}
+          tone="green"
+          value={withDancesCount.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={CircleAlert}
+          label="Sin coreografías"
+          meta="Requieren seguimiento"
+          onClick={() => onActivityFilterChange("without_dances")}
+          tone="amber"
+          value={withoutDancesCount.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={Mail}
+          label="Sin contacto"
+          meta="Sin correo ni teléfono"
+          onClick={() => onActivityFilterChange("without_contact")}
+          tone="red"
+          value={withoutContactCount.toLocaleString("es-MX")}
+        />
+      </section>
+
       <section className="registration-admin-filters registration-admin-filters--choreographers" aria-label="Filtros de coreógrafos">
         <label className="registration-admin-search">
           <Search aria-hidden="true" size={17} />
           <input
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Buscar por nombre, academia o talla..."
+            placeholder="Buscar por nombre, academia, contacto o sede..."
             type="search"
             value={query}
           />
+        </label>
+        <label>
+          <span>Academia</span>
+          <select onChange={(event) => onAcademyFilterChange(event.target.value)} value={academyFilter}>
+            <option value="all">Todas</option>
+            {academyOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <label>
+          <span>Sede</span>
+          <select onChange={(event) => onVenueFilterChange(event.target.value)} value={venueFilter}>
+            <option value="all">Todas</option>
+            {venueOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <label>
+          <span>Talla</span>
+          <select onChange={(event) => onShirtFilterChange(event.target.value)} value={shirtFilter}>
+            <option value="all">Todas</option>
+            {shirtSizes.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <label>
+          <span>Actividad</span>
+          <select onChange={(event) => onActivityFilterChange(event.target.value)} value={activityFilter}>
+            <option value="all">Todos</option>
+            <option value="with_dances">Con coreografías</option>
+            <option value="without_dances">Sin coreografías</option>
+            <option value="without_contact">Sin contacto</option>
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <label>
+          <span>Ordenar por</span>
+          <select onChange={(event) => onSortChange(event.target.value as RegistrationChoreographerDirectorySort)} value={sort}>
+            <option value="recent">Actividad reciente</option>
+            <option value="name">Nombre</option>
+            <option value="academy">Academia</option>
+            <option value="dances">Más coreografías</option>
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
         </label>
       </section>
 
@@ -6349,18 +6487,87 @@ function RegistrationAdminChoreographersPanel({
         <div className="registration-admin-table-card">
           <div className="registration-admin-table registration-admin-choreographers-table" role="table" aria-label="Coreógrafos registrados">
             <div className="registration-admin-table__head" role="row">
-              <span role="columnheader">Nombre</span>
+              <span role="columnheader">Coreógrafo</span>
               <span role="columnheader">Academia</span>
+              <span role="columnheader">Contacto</span>
+              <span role="columnheader">Sedes</span>
               <span role="columnheader">Talla</span>
+              <span role="columnheader">Coreografías</span>
+              <span role="columnheader">Última actividad</span>
+              <span role="columnheader">Acciones</span>
             </div>
 
-            {filteredChoreographers.map((choreographer) => (
-              <div className="registration-admin-table__row registration-admin-table__row--static" key={choreographer.id} role="row">
-                <span role="cell">{choreographer.fullName}</span>
-                <span role="cell">{choreographer.academyName}</span>
-                <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
-              </div>
-            ))}
+            {filteredChoreographers.map((choreographer) => {
+              const latestActivityDate = choreographer.latestDanceAt ?? choreographer.createdAt;
+              const openRow = () => onOpenChoreographer(choreographer.id);
+              const handleRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openRow();
+                }
+              };
+
+              return (
+                <div
+                  className={`registration-admin-table__row registration-choreographers-table__row${selectedChoreographerId === choreographer.id ? " is-selected" : ""}`}
+                  key={choreographer.id}
+                  onClick={openRow}
+                  onKeyDown={handleRowKeyDown}
+                  role="row"
+                  tabIndex={0}
+                >
+                  <span role="cell">
+                    {choreographer.fullName}
+                    <small>Registrado el {getAdminDateLabel(choreographer.createdAt)}</small>
+                  </span>
+                  <span role="cell">
+                    {choreographer.academyName}
+                    <button
+                      className="registration-choreographers-link"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenAcademy(choreographer.academyId);
+                      }}
+                      type="button"
+                    >
+                      Ver academia
+                    </button>
+                  </span>
+                  <span role="cell">
+                    {choreographer.email || choreographer.phone || "Sin contacto"}
+                    <small>{choreographer.email && choreographer.phone ? choreographer.phone : choreographer.email ? "Sin teléfono" : "Sin correo"}</small>
+                  </span>
+                  <span role="cell">{choreographer.eventVenues.length > 0 ? choreographer.eventVenues.map(getVenueLabel).join(" / ") : "Sin sede"}</span>
+                  <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+                  <span role="cell">
+                    <strong className="registration-choreographers-number">{choreographer.danceCount}</strong>
+                    <small>{choreographer.danceCount === 1 ? "coreografía" : "coreografías"}</small>
+                  </span>
+                  <span role="cell">
+                    {getDashboardActivityTimeLabel(latestActivityDate)}
+                    <small>{choreographer.latestDanceTitle ?? "Registro creado"}</small>
+                  </span>
+                  <span role="cell">
+                    <details className="registration-participants-actions" onClick={(event) => event.stopPropagation()}>
+                      <summary aria-label={`Acciones de ${choreographer.fullName}`}>
+                        <MoreVertical aria-hidden="true" size={17} />
+                      </summary>
+                      <div>
+                        <button onClick={() => onOpenChoreographer(choreographer.id)} type="button">
+                          Ver perfil
+                        </button>
+                        <button onClick={() => onOpenAcademy(choreographer.academyId)} type="button">
+                          Ver academia
+                        </button>
+                        <button onClick={() => onExportChoreographer(choreographer)} type="button">
+                          Exportar resumen
+                        </button>
+                      </div>
+                    </details>
+                  </span>
+                </div>
+              );
+            })}
 
             {filteredChoreographers.length === 0 ? (
               <p className="registration-admin-empty">
@@ -6375,7 +6582,89 @@ function RegistrationAdminChoreographersPanel({
           </footer>
         </div>
       </section>
-    </>
+    </section>
+  );
+}
+
+function RegistrationChoreographerQuickPanel({
+  choreographer,
+  onClose,
+  onExport,
+  onOpenAcademy,
+}: {
+  choreographer: RegistrationAdminChoreographer;
+  onClose: () => void;
+  onExport: (choreographer: RegistrationAdminChoreographer) => void;
+  onOpenAcademy: (academyId: string) => void;
+}) {
+  const latestActivityDate = choreographer.latestDanceAt ?? choreographer.createdAt;
+
+  return (
+    <aside className="registration-participant-profile registration-choreographer-profile" aria-label={`Perfil de ${choreographer.fullName}`}>
+      <header className="registration-participant-profile__header">
+        <div>
+          <span>Coreógrafo</span>
+          <h2>{choreographer.fullName}</h2>
+          <p>{choreographer.academyName}</p>
+        </div>
+        <button onClick={onClose} type="button" aria-label="Cerrar perfil">
+          <X aria-hidden="true" size={19} />
+        </button>
+      </header>
+
+      <div className="registration-participant-profile__meta">
+        <span>{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+        <span>{choreographer.eventVenues.length > 0 ? choreographer.eventVenues.map(getVenueLabel).join(" / ") : "Sin sede"}</span>
+        <span>{choreographer.danceCount} coreografía(s)</span>
+      </div>
+
+      <section className="registration-participant-profile__stats" aria-label="Resumen de coreógrafo">
+        <button onClick={() => onOpenAcademy(choreographer.academyId)} type="button">
+          <span>Academia</span>
+          <strong>{choreographer.academyName}</strong>
+          <small>Abrir perfil de academia</small>
+        </button>
+        <button disabled type="button">
+          <span>Coreografías</span>
+          <strong>{choreographer.danceCount}</strong>
+          <small>{choreographer.latestDanceTitle ?? "Sin coreografías registradas"}</small>
+        </button>
+      </section>
+
+      <section className="registration-participant-profile__block">
+        <h3>Contacto</h3>
+        <dl>
+          <div>
+            <dt>Correo</dt>
+            <dd>{choreographer.email || "Sin correo"}</dd>
+          </div>
+          <div>
+            <dt>Teléfono</dt>
+            <dd>{choreographer.phone || "Sin teléfono"}</dd>
+          </div>
+          <div>
+            <dt>Talla</dt>
+            <dd>{getOptionLabel(shirtSizes, choreographer.shirtSize)}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="registration-participant-profile__block">
+        <h3>Actividad</h3>
+        <div className="registration-participant-profile__list">
+          <article>
+            <strong>{choreographer.latestDanceTitle ?? "Registro creado"}</strong>
+            <span>{choreographer.latestDanceTitle ? "Última coreografía relacionada" : "Ficha de coreógrafo"}</span>
+            <small>{getDashboardActivityTimeLabel(latestActivityDate)}</small>
+          </article>
+        </div>
+      </section>
+
+      <button className="registration-participant-profile__primary" onClick={() => onExport(choreographer)} type="button">
+        <Download aria-hidden="true" size={16} />
+        Exportar resumen
+      </button>
+    </aside>
   );
 }
 
@@ -7927,6 +8216,11 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [registrationTicketRequirementFilter, setRegistrationTicketRequirementFilter] = useState("all");
   const [registrationDisciplineFilter, setRegistrationDisciplineFilter] = useState("all");
   const [choreographerQuery, setChoreographerQuery] = useState("");
+  const [choreographerAcademyFilter, setChoreographerAcademyFilter] = useState("all");
+  const [choreographerVenueFilter, setChoreographerVenueFilter] = useState("all");
+  const [choreographerShirtFilter, setChoreographerShirtFilter] = useState("all");
+  const [choreographerActivityFilter, setChoreographerActivityFilter] = useState("all");
+  const [choreographerSort, setChoreographerSort] = useState<RegistrationChoreographerDirectorySort>("recent");
   const [academyQuery, setAcademyQuery] = useState("");
   const [academyEventFilter, setAcademyEventFilter] = useState("all");
   const [academyStatusFilter, setAcademyStatusFilter] = useState("all");
@@ -7946,6 +8240,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedAcademyId, setSelectedAcademyId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [selectedChoreographerId, setSelectedChoreographerId] = useState("");
   const [academyProfileTab, setAcademyProfileTab] = useState<RegistrationAcademyProfileTab>("overview");
   const [adminAuthMessage, setAdminAuthMessage] = useState("");
   const [adminError, setAdminError] = useState("");
@@ -8128,7 +8423,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
 
   useEffect(() => {
-    if (!selectedOrderId && !selectedAcademyId && !selectedParticipantId) {
+    if (!selectedOrderId && !selectedAcademyId && !selectedParticipantId && !selectedChoreographerId) {
       return;
     }
 
@@ -8137,12 +8432,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
         setSelectedOrderId("");
         setSelectedAcademyId("");
         setSelectedParticipantId("");
+        setSelectedChoreographerId("");
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedAcademyId, selectedOrderId, selectedParticipantId]);
+  }, [selectedAcademyId, selectedChoreographerId, selectedOrderId, selectedParticipantId]);
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -8188,6 +8484,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
       .map(([value, label]) => ({ label, value }))
       .sort((left, right) => left.label.localeCompare(right.label, "es"));
   }, [adminAcademies, adminParticipants]);
+  const choreographerAcademyOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+
+    for (const academy of adminAcademies) {
+      optionMap.set(academy.id, academy.name);
+    }
+
+    for (const choreographer of adminChoreographers) {
+      optionMap.set(choreographer.academyId, choreographer.academyName);
+    }
+
+    return Array.from(optionMap.entries())
+      .map(([value, label]) => ({ label, value }))
+      .sort((left, right) => left.label.localeCompare(right.label, "es"));
+  }, [adminAcademies, adminChoreographers]);
   const participantOperationalRows = useMemo(
     () => getParticipantOperationalRows(adminParticipants, orders, programDances),
     [adminParticipants, orders, programDances],
@@ -8268,21 +8579,55 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
     return adminChoreographers
       .filter((choreographer) => {
-        if (!normalizedQuery) {
-          return true;
+        const matchesAcademy = choreographerAcademyFilter === "all" || choreographer.academyId === choreographerAcademyFilter;
+        const matchesVenue = choreographerVenueFilter === "all" || choreographer.eventVenues.includes(choreographerVenueFilter);
+        const matchesShirt = choreographerShirtFilter === "all" || choreographer.shirtSize === choreographerShirtFilter;
+        const matchesActivity =
+          choreographerActivityFilter === "all" ||
+          (choreographerActivityFilter === "with_dances" && choreographer.danceCount > 0) ||
+          (choreographerActivityFilter === "without_dances" && choreographer.danceCount === 0) ||
+          (choreographerActivityFilter === "without_contact" && !choreographer.email && !choreographer.phone);
+        const matchesQuery =
+          !normalizedQuery ||
+          [
+            choreographer.fullName,
+            choreographer.academyName,
+            choreographer.email ?? "",
+            choreographer.phone ?? "",
+            getOptionLabel(shirtSizes, choreographer.shirtSize),
+            choreographer.eventVenues.map(getVenueLabel).join(" "),
+            choreographer.latestDanceTitle ?? "",
+          ]
+            .map(normalizeDirectoryText)
+            .join(" ")
+            .includes(normalizedQuery);
+
+        return matchesAcademy && matchesVenue && matchesShirt && matchesActivity && matchesQuery;
+      })
+      .sort((left, right) => {
+        if (choreographerSort === "name") {
+          return left.fullName.localeCompare(right.fullName, "es");
         }
 
-        return [
-          choreographer.fullName,
-          choreographer.academyName,
-          getOptionLabel(shirtSizes, choreographer.shirtSize),
-        ]
-          .map(normalizeDirectoryText)
-          .join(" ")
-          .includes(normalizedQuery);
-      })
-      .sort((left, right) => left.academyName.localeCompare(right.academyName, "es") || left.fullName.localeCompare(right.fullName, "es"));
-  }, [adminChoreographers, choreographerQuery]);
+        if (choreographerSort === "academy") {
+          return left.academyName.localeCompare(right.academyName, "es") || left.fullName.localeCompare(right.fullName, "es");
+        }
+
+        if (choreographerSort === "dances") {
+          return right.danceCount - left.danceCount || left.fullName.localeCompare(right.fullName, "es");
+        }
+
+        return Date.parse(right.latestDanceAt ?? right.createdAt) - Date.parse(left.latestDanceAt ?? left.createdAt);
+      });
+  }, [
+    adminChoreographers,
+    choreographerAcademyFilter,
+    choreographerActivityFilter,
+    choreographerQuery,
+    choreographerShirtFilter,
+    choreographerSort,
+    choreographerVenueFilter,
+  ]);
   const ticketRows = useMemo(() => getTicketDashboardRows(orders), [orders]);
   const filteredTicketRows = useMemo(() => {
     const normalizedQuery = ticketQuery.trim().toLowerCase();
@@ -8406,6 +8751,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
   const selectedAcademySummary = selectedAcademyId ? academySummaries.find((summary) => summary.academy.id === selectedAcademyId) || null : null;
   const selectedParticipantRow = selectedParticipantId ? participantOperationalRows.find((row) => row.participant.id === selectedParticipantId) || null : null;
+  const selectedChoreographer = selectedChoreographerId ? adminChoreographers.find((choreographer) => choreographer.id === selectedChoreographerId) || null : null;
   const dashboardDateWindow = useMemo(
     () => getDashboardDateWindow(dashboardDateRange, dashboardCustomStartDate, dashboardCustomEndDate),
     [dashboardCustomEndDate, dashboardCustomStartDate, dashboardDateRange],
@@ -8465,6 +8811,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     setSelectedOrderId("");
     setSelectedAcademyId("");
     setSelectedParticipantId("");
+    setSelectedChoreographerId("");
     updateAdminSectionPath(section);
   };
 
@@ -8473,6 +8820,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     setSelectedOrderId(target.orderId ?? "");
     setSelectedAcademyId("");
     setSelectedParticipantId("");
+    setSelectedChoreographerId("");
     updateAdminSectionPath(target.section);
 
     if (target.section === "payments") {
@@ -8507,6 +8855,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const handleOpenAcademyProfile = (academyId: string, tab: RegistrationAcademyProfileTab = "overview") => {
     setSelectedOrderId("");
     setSelectedParticipantId("");
+    setSelectedChoreographerId("");
     setSelectedAcademyId(academyId);
     setAcademyProfileTab(tab);
   };
@@ -8526,13 +8875,22 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const handleOpenParticipantProfile = (participantId: string) => {
     setSelectedOrderId("");
     setSelectedAcademyId("");
+    setSelectedChoreographerId("");
     setSelectedParticipantId(participantId);
   };
 
   const handleOpenParticipantOrder = (orderId: string) => {
     setSelectedParticipantId("");
+    setSelectedChoreographerId("");
     setSelectedAcademyId("");
     setSelectedOrderId(orderId);
+  };
+
+  const handleOpenChoreographerProfile = (choreographerId: string) => {
+    setSelectedOrderId("");
+    setSelectedAcademyId("");
+    setSelectedParticipantId("");
+    setSelectedChoreographerId(choreographerId);
   };
 
   const handleOpenParticipantFullProfile = (row: RegistrationParticipantOperationalRow) => {
@@ -8566,6 +8924,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       setTotals(null);
       setSelectedOrderId("");
       setSelectedParticipantId("");
+      setSelectedChoreographerId("");
       window.location.replace("/login");
     } catch (error) {
       setAdminError(getErrorMessage(error, "No se pudo cerrar la sesión."));
@@ -8786,11 +9145,28 @@ export function LevitateRegistrationAdminPaymentsRoute({
           />
         ) : isChoreographersSection ? (
           <RegistrationAdminChoreographersPanel
+            academyFilter={choreographerAcademyFilter}
+            academyOptions={choreographerAcademyOptions}
+            activityFilter={choreographerActivityFilter}
             choreographers={adminChoreographers}
             filteredChoreographers={filteredAdminChoreographers}
             isLoading={isParticipantsLoading}
+            onAcademyFilterChange={setChoreographerAcademyFilter}
+            onActivityFilterChange={setChoreographerActivityFilter}
+            onExportChoreographer={(choreographer) =>
+              downloadAdminChoreographersCsv([choreographer], `levitate-coreografo-${normalizeDirectoryText(choreographer.fullName) || choreographer.id}.csv`)
+            }
+            onOpenAcademy={(academyId) => handleOpenAcademyProfile(academyId, "choreographers")}
+            onOpenChoreographer={handleOpenChoreographerProfile}
             onQueryChange={setChoreographerQuery}
+            onShirtFilterChange={setChoreographerShirtFilter}
+            onSortChange={setChoreographerSort}
+            onVenueFilterChange={setChoreographerVenueFilter}
             query={choreographerQuery}
+            selectedChoreographerId={selectedChoreographerId}
+            shirtFilter={choreographerShirtFilter}
+            sort={choreographerSort}
+            venueFilter={choreographerVenueFilter}
           />
         ) : isProgramSection ? (
           <ProgramPanel
@@ -9305,6 +9681,27 @@ export function LevitateRegistrationAdminPaymentsRoute({
               onOpenFullProfile={handleOpenParticipantFullProfile}
               onOpenOrder={handleOpenParticipantOrder}
               row={selectedParticipantRow}
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      {selectedChoreographer ? (
+        <div
+          className="registration-admin-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Perfil de coreógrafo ${selectedChoreographer.fullName}`}
+        >
+          <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedChoreographerId("")} type="button" aria-label="Cerrar perfil" />
+          <aside className="registration-admin-sidepanel registration-admin-sidepanel--participant">
+            <RegistrationChoreographerQuickPanel
+              choreographer={selectedChoreographer}
+              onClose={() => setSelectedChoreographerId("")}
+              onExport={(choreographer) =>
+                downloadAdminChoreographersCsv([choreographer], `levitate-coreografo-${normalizeDirectoryText(choreographer.fullName) || choreographer.id}.csv`)
+              }
+              onOpenAcademy={(academyId) => handleOpenAcademyProfile(academyId, "choreographers")}
             />
           </aside>
         </div>

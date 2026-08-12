@@ -21562,7 +21562,13 @@ button {
 }
 
 .registration-admin-filters--choreographers {
-  grid-template-columns: minmax(280px, 0.55fr);
+  grid-template-columns:
+    minmax(260px, 1.25fr)
+    minmax(160px, 0.72fr)
+    minmax(140px, 0.58fr)
+    minmax(120px, 0.52fr)
+    minmax(150px, 0.7fr)
+    minmax(150px, 0.7fr);
 }
 
 .registration-admin-grid {
@@ -21683,19 +21689,72 @@ button {
   font-weight: 900;
 }
 
+.registration-choreographers-panel {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.registration-choreographers-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .registration-admin-choreographers-table {
-  min-width: 680px;
+  min-width: 1320px;
 }
 
 .registration-admin-choreographers-table .registration-admin-table__head,
 .registration-admin-choreographers-table .registration-admin-table__row {
-  grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 1fr) minmax(110px, 0.36fr);
+  grid-template-columns:
+    minmax(210px, 1.1fr)
+    minmax(180px, 0.9fr)
+    minmax(190px, 0.96fr)
+    minmax(150px, 0.72fr)
+    minmax(100px, 0.44fr)
+    minmax(120px, 0.48fr)
+    minmax(160px, 0.72fr)
+    minmax(62px, 0.28fr);
 }
 
-.registration-admin-choreographers-table .registration-admin-table__row span:last-child {
+.registration-admin-choreographers-table .registration-admin-table__row > span:nth-child(5),
+.registration-choreographers-number {
   color: #171717;
   font-size: 0.96rem;
   font-weight: 900;
+}
+
+.registration-choreographers-table__row {
+  min-height: 76px;
+}
+
+.registration-choreographers-table__row > span:last-child {
+  overflow: visible;
+}
+
+.registration-choreographers-table__row:focus-visible {
+  outline: 2px solid rgba(217, 76, 140, 0.42);
+  outline-offset: -2px;
+}
+
+.registration-choreographers-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--admin-pink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 860;
+  text-align: left;
+}
+
+.registration-choreographers-link:hover,
+.registration-choreographers-link:focus-visible {
+  text-decoration: underline;
 }
 
 .registration-participants-panel {
@@ -23121,7 +23180,8 @@ button {
 .registration-admin-dashboard .registration-admin-summary strong,
 .registration-admin-dashboard .registration-admin-table__row,
 .registration-admin-dashboard .registration-admin-academies-table .registration-admin-table__row span:nth-child(n + 6),
-.registration-admin-dashboard .registration-admin-choreographers-table .registration-admin-table__row span:last-child,
+.registration-admin-dashboard .registration-admin-choreographers-table .registration-admin-table__row > span:nth-child(5),
+.registration-admin-dashboard .registration-choreographers-number,
 .registration-admin-dashboard .registration-participants-metric-button strong,
 .registration-admin-dashboard .registration-participants-progress-button strong,
 .registration-admin-dashboard .registration-participants-ticket-button strong,

@@ -4711,7 +4711,37 @@ async function getAllRegistrationAdminChoreographers(db) {
       `
         SELECT
           registration_choreographers.*,
-          registration_academies.name AS academy_name
+          registration_academies.name AS academy_name,
+          (
+            SELECT COUNT(DISTINCT registration_dance_choreographers.dance_id)
+            FROM registration_dance_choreographers
+            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
+          ) AS dance_count,
+          (
+            SELECT GROUP_CONCAT(DISTINCT registration_dances.venue)
+            FROM registration_dance_choreographers
+            INNER JOIN registration_dances
+              ON registration_dances.id = registration_dance_choreographers.dance_id
+            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
+          ) AS event_venues,
+          (
+            SELECT registration_dances.title
+            FROM registration_dance_choreographers
+            INNER JOIN registration_dances
+              ON registration_dances.id = registration_dance_choreographers.dance_id
+            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
+            ORDER BY registration_dances.created_at DESC
+            LIMIT 1
+          ) AS latest_dance_title,
+          (
+            SELECT registration_dances.created_at
+            FROM registration_dance_choreographers
+            INNER JOIN registration_dances
+              ON registration_dances.id = registration_dance_choreographers.dance_id
+            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
+            ORDER BY registration_dances.created_at DESC
+            LIMIT 1
+          ) AS latest_dance_at
         FROM registration_choreographers
         INNER JOIN registration_academies
           ON registration_academies.id = registration_choreographers.academy_id
@@ -5233,6 +5263,13 @@ function serializeRegistrationAdminChoreographer(choreographer) {
     ...serializeRegistrationChoreographer(choreographer),
     academyId: choreographer.academy_id,
     academyName: choreographer.academy_name,
+    danceCount: Number(choreographer.dance_count || 0),
+    eventVenues: String(choreographer.event_venues || "")
+      .split(",")
+      .map((venue) => venue.trim())
+      .filter(Boolean),
+    latestDanceTitle: choreographer.latest_dance_title || null,
+    latestDanceAt: choreographer.latest_dance_at || null,
   };
 }
 
