@@ -5035,7 +5035,7 @@ function LevitateAuthScreen({
                 <input name="academy" required type="text" />
               </AdminField>
               <AdminField icon={Phone} label="Teléfono">
-                <input autoComplete="tel" name="phone" type="tel" />
+                <input autoComplete="tel" name="phone" required type="tel" />
               </AdminField>
               <AdminField icon={Globe2} label="Origen de la academia">
                 <AdminSelect

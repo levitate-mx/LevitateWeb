@@ -669,6 +669,10 @@ async function handleRegistrationRegister(request, env) {
       academyOriginType === "mexico" ? requireRegistrationChoice(body.academyState, "academyState", registrationMexicoStates) : null;
     const academyOriginCountry = academyOriginType === "international" ? requireString(body.academyCountry, "academyCountry").slice(0, 90) : "México";
 
+    if (!phone) {
+      throwHttpError("validation_error", "El teléfono del responsable es obligatorio.", 400);
+    }
+
     if (password.length < 8) {
       throwHttpError("weak_password", "La contraseña debe tener al menos 8 caracteres", 400);
     }
