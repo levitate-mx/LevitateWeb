@@ -66,7 +66,8 @@ type RulesContent = {
   processCards: RulesProcessCard[];
 };
 
-const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+const aerialRegulationsPdfHref = "/assets/reglamento-levitate-primavera-2026-aerial.pdf";
+const aerialObligatoriosPdfHref = "/assets/niveles-obligatorios-aerial-otono-2026.pdf";
 
 const motionRuleCards: RuleCard[] = [
   {
@@ -422,11 +423,16 @@ function AerialProgram() {
               correspondientes. Esto permite evaluar con mayor claridad la dificultad, limpieza y control de cada
               rutina.
             </p>
-            <button className="rules-aerial-download" disabled type="button">
+            <a
+              aria-label="Descargar PDF de obligatorios Aerial Otono 2026"
+              className="rules-aerial-download"
+              download="NIVELES - OBLIGATORIOS AERIAL OTONO 2026.pdf"
+              href={aerialObligatoriosPdfHref}
+            >
               <FileText aria-hidden="true" size={18} />
               <span>PDF de obligatorios</span>
-              <small>Próximamente</small>
-            </button>
+              <small>Descargar PDF</small>
+            </a>
           </div>
           <div className="rules-aerial-level-list" aria-label="Niveles de Levitate Aerial">
             {aerialLevels.map((level) => (
@@ -541,7 +547,11 @@ export function RulesPage({ modality = "motion" }: RulesPageProps) {
             <RulesTitleText title={content.heroTitle} />
           </h1>
           {modality === "aerial" ? (
-            <a className="rules-hero__download" download href={regulationsPdfHref}>
+            <a
+              className="rules-hero__download"
+              download="REGLAMENTO LEVITATE PRIMAVERA 2026 - AERIAL.pdf"
+              href={aerialRegulationsPdfHref}
+            >
               <FileText aria-hidden="true" size={18} />
               <span>PDF de reglamento</span>
             </a>

@@ -35656,11 +35656,21 @@ button {
   font-weight: 760;
   letter-spacing: 0;
   text-align: left;
+  text-decoration: none;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
 }
 
-.rules-page--aerial.levitate-home-redesign .rules-aerial-download:disabled {
-  cursor: not-allowed;
+.rules-page--aerial.levitate-home-redesign .rules-aerial-download:hover,
+.rules-page--aerial.levitate-home-redesign .rules-aerial-download:focus-visible {
+  border-color: rgba(220, 66, 132, 0.36);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 12px 28px rgba(42, 41, 40, 0.08);
+  transform: translateY(-1px);
 }
 
 .rules-page--aerial.levitate-home-redesign .rules-aerial-download svg {

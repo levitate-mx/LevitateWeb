@@ -3,7 +3,7 @@ import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+const regulationsPdfHref = "/assets/reglamento-levitate-primavera-2026-motion.pdf";
 
 const motionGenres = [
   {
@@ -104,7 +104,7 @@ export function MotionGenresPage() {
             <span className="rules-title__line">Levitate </span>
             <span className="rules-title__accent">Motion</span>
           </h1>
-          <a className="rules-hero__download" download href={regulationsPdfHref}>
+          <a className="rules-hero__download" download="REGLAMENTO LEVITATE PRIMAVERA 2026 - MOTION.pdf" href={regulationsPdfHref}>
             <FileText aria-hidden="true" size={18} />
             <span>PDF de reglamento</span>
           </a>
