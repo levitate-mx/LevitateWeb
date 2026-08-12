@@ -1119,7 +1119,7 @@ async function handleRegistrationBootstrap(request, env) {
 
 async function handleRegistrationParticipants(request, env) {
   try {
-    assertMethod(request, ["GET", "POST"]);
+    assertMethod(request, ["GET", "POST", "DELETE"]);
 
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
@@ -1130,6 +1130,15 @@ async function handleRegistrationParticipants(request, env) {
 
     if (request.method === "GET") {
       return sendJson({ participants: await getRegistrationParticipants(db, academyId) });
+    }
+
+    if (request.method === "DELETE") {
+      const participantId = await getRegistrationDeleteRecordId(request);
+      await deleteRegistrationParticipant(db, academyId, participantId);
+      return sendJson({
+        dances: await getRegistrationDances(db, academyId),
+        participants: await getRegistrationParticipants(db, academyId),
+      });
     }
 
     const body = await readJsonBody(request);
@@ -1943,7 +1952,7 @@ async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
 
 async function handleRegistrationChoreographers(request, env) {
   try {
-    assertMethod(request, ["GET", "POST"]);
+    assertMethod(request, ["GET", "POST", "DELETE"]);
 
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
@@ -1951,6 +1960,15 @@ async function handleRegistrationChoreographers(request, env) {
 
     if (request.method === "GET") {
       return sendJson({ choreographers: await getRegistrationChoreographers(db, academyId) });
+    }
+
+    if (request.method === "DELETE") {
+      const choreographerId = await getRegistrationDeleteRecordId(request);
+      await deleteRegistrationChoreographer(db, academyId, choreographerId);
+      return sendJson({
+        choreographers: await getRegistrationChoreographers(db, academyId),
+        dances: await getRegistrationDances(db, academyId),
+      });
     }
 
     const body = await readJsonBody(request);
@@ -1998,13 +2016,19 @@ async function handleRegistrationChoreographers(request, env) {
 
 async function handleRegistrationDances(request, env) {
   try {
-    assertMethod(request, ["GET", "POST"]);
+    assertMethod(request, ["GET", "POST", "DELETE"]);
 
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
     if (request.method === "GET") {
+      return sendJson({ dances: await getRegistrationDances(db, academyId) });
+    }
+
+    if (request.method === "DELETE") {
+      const danceId = await getRegistrationDeleteRecordId(request);
+      await deleteRegistrationDance(db, academyId, danceId);
       return sendJson({ dances: await getRegistrationDances(db, academyId) });
     }
 
@@ -4931,6 +4955,48 @@ async function getRegistrationDanceById(db, academyId, danceId) {
   return serializedDance;
 }
 
+async function deleteRegistrationParticipant(db, academyId, participantId) {
+  await assertRegistrationIdsBelongToAcademy(
+    db,
+    "registration_participants",
+    academyId,
+    [participantId],
+    "Participante no encontrado",
+  );
+
+  await db.batch([
+    db.prepare("DELETE FROM registration_dance_participants WHERE participant_id = ?").bind(participantId),
+    db.prepare("DELETE FROM registration_participants WHERE academy_id = ? AND id = ?").bind(academyId, participantId),
+  ]);
+}
+
+async function deleteRegistrationChoreographer(db, academyId, choreographerId) {
+  await assertRegistrationIdsBelongToAcademy(
+    db,
+    "registration_choreographers",
+    academyId,
+    [choreographerId],
+    "Coreógrafo no encontrado",
+  );
+
+  await db.batch([
+    db.prepare("DELETE FROM registration_dance_choreographers WHERE choreographer_id = ?").bind(choreographerId),
+    db.prepare("DELETE FROM registration_choreographers WHERE academy_id = ? AND id = ?").bind(academyId, choreographerId),
+  ]);
+}
+
+async function deleteRegistrationDance(db, academyId, danceId) {
+  await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
+  await ensureRegistrationMusicUploadsTable(db);
+
+  await db.batch([
+    db.prepare("DELETE FROM registration_music_uploads WHERE academy_id = ? AND dance_id = ?").bind(academyId, danceId),
+    db.prepare("DELETE FROM registration_dance_choreographers WHERE dance_id = ?").bind(danceId),
+    db.prepare("DELETE FROM registration_dance_participants WHERE dance_id = ?").bind(danceId),
+    db.prepare("DELETE FROM registration_dances WHERE academy_id = ? AND id = ?").bind(academyId, danceId),
+  ]);
+}
+
 async function assertRegistrationDanceBelongsToAcademy(db, academyId, danceId) {
   const dance = await db
     .prepare(
@@ -7749,6 +7815,21 @@ async function readJsonBody(request) {
   } catch {
     throwHttpError("invalid_json", "Request body must be valid JSON", 400);
   }
+}
+
+async function getRegistrationDeleteRecordId(request) {
+  const urlId = optionalString(new URL(request.url).searchParams.get("id"));
+
+  if (urlId) {
+    return urlId;
+  }
+
+  const body = await readJsonBody(request);
+  if (!body || typeof body !== "object") {
+    throwHttpError("validation_error", "id is required", 400);
+  }
+
+  return requireString(body.id ?? body.recordId, "id");
 }
 
 function requireString(value, fieldName) {

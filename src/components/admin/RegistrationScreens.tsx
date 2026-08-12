@@ -41,6 +41,7 @@ import {
   ShoppingBag,
   Shirt,
   Ticket,
+  Trash2,
   TriangleAlert,
   Upload,
   UserPlus,
@@ -10117,14 +10118,60 @@ function AdminLookupPanel({
   dances,
   inscriptionOrders,
   isInternationalAcademy,
+  onDeleteRecord,
 }: {
   participants: RegistrationParticipant[];
   choreographers: RegistrationChoreographer[];
   dances: RegistrationDance[];
   inscriptionOrders: RegistrationInscriptionOrder[];
   isInternationalAcademy: boolean;
+  onDeleteRecord: (recordType: AdminLookupTab, recordId: string) => Promise<void>;
 }) {
   const [activeLookupTab, setActiveLookupTab] = useState<AdminLookupTab>("participants");
+  const [deletingRecordKey, setDeletingRecordKey] = useState("");
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    label: string;
+    recordType: AdminLookupTab;
+    recordTypeLabel: string;
+  } | null>(null);
+
+  const openDeleteConfirmation = (recordType: AdminLookupTab, recordId: string, recordLabel: string) => {
+    const recordTypeLabel =
+      recordType === "participants" ? "participante" : recordType === "choreographers" ? "coreógrafo" : "coreografía";
+
+    setDeleteMessage("");
+    setDeleteError("");
+    setPendingDelete({
+      id: recordId,
+      label: recordLabel,
+      recordType,
+      recordTypeLabel,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) {
+      return;
+    }
+
+    const recordKey = `${pendingDelete.recordType}:${pendingDelete.id}`;
+    setDeletingRecordKey(recordKey);
+    setDeleteMessage("");
+    setDeleteError("");
+
+    try {
+      await onDeleteRecord(pendingDelete.recordType, pendingDelete.id);
+      setDeleteMessage(`${pendingDelete.label} se borró correctamente.`);
+      setPendingDelete(null);
+    } catch (error) {
+      setDeleteError(getErrorMessage(error, `No se pudo borrar ${pendingDelete.recordTypeLabel}.`));
+    } finally {
+      setDeletingRecordKey("");
+    }
+  };
 
   return (
     <section className="levitate-admin-panel levitate-admin-home__lookup levitate-admin-lookup-panel" aria-label="Consulta de registros">
@@ -10148,6 +10195,57 @@ function AdminLookupPanel({
         ))}
       </div>
 
+      <AdminStatusMessage message={deleteMessage} />
+      <AdminStatusMessage message={deleteError} tone="error" />
+
+      {pendingDelete ? (
+        <div className="levitate-admin-confirm-overlay" role="presentation">
+          <div
+            aria-labelledby="levitate-delete-confirm-title"
+            aria-modal="true"
+            className="levitate-admin-confirm-dialog"
+            role="dialog"
+          >
+            <button
+              aria-label="Cerrar confirmación"
+              className="levitate-admin-confirm-dialog__close"
+              disabled={deletingRecordKey === `${pendingDelete.recordType}:${pendingDelete.id}`}
+              onClick={() => setPendingDelete(null)}
+              type="button"
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+            <span className="levitate-admin-confirm-dialog__icon" aria-hidden="true">
+              <Trash2 size={20} />
+            </span>
+            <h3 id="levitate-delete-confirm-title">Confirmar borrado</h3>
+            <p>
+              Vas a borrar el {pendingDelete.recordTypeLabel} <strong>{pendingDelete.label}</strong>. Esta acción no se
+              puede deshacer.
+            </p>
+            <div className="levitate-admin-confirm-dialog__actions">
+              <button
+                className="levitate-admin-confirm-dialog__cancel"
+                disabled={deletingRecordKey === `${pendingDelete.recordType}:${pendingDelete.id}`}
+                onClick={() => setPendingDelete(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="levitate-admin-confirm-dialog__delete"
+                disabled={deletingRecordKey === `${pendingDelete.recordType}:${pendingDelete.id}`}
+                onClick={() => void handleConfirmDelete()}
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={17} />
+                {deletingRecordKey === `${pendingDelete.recordType}:${pendingDelete.id}` ? "Borrando..." : "Borrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {activeLookupTab === "participants" ? (
         <div className="levitate-admin-lookup-table-scroll">
           <div
@@ -10163,10 +10261,12 @@ function AdminLookupPanel({
             <span role="columnheader">Edad</span>
             <span role="columnheader">Maestro Relevé</span>
             {!isInternationalAcademy ? <span role="columnheader">Pago</span> : null}
+            <span role="columnheader">Acciones</span>
             {participants.map((participant) => {
               const isPaid = !isInternationalAcademy && isParticipantInscriptionPaid(participant, inscriptionOrders);
               const divisionLabel = getProgramDivisionLabel(participant.division);
               const compactDivisionLabel = divisionLabel.split(":")[0];
+              const recordKey = `participants:${participant.id}`;
 
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={participant.id}>
@@ -10185,6 +10285,18 @@ function AdminLookupPanel({
                       {isPaid ? "Pagado" : "Falta pagar"}
                     </span>
                   ) : null}
+                  <span className="levitate-admin-lookup-table__actions" role="cell">
+                    <button
+                      aria-label={`Borrar participante ${participant.fullName}`}
+                      className="levitate-admin-lookup-delete-button"
+                      disabled={deletingRecordKey === recordKey}
+                      onClick={() => openDeleteConfirmation("participants", participant.id, participant.fullName)}
+                      title="Borrar participante"
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" size={17} />
+                    </button>
+                  </span>
                 </div>
               );
             })}
@@ -10203,13 +10315,30 @@ function AdminLookupPanel({
             <span role="columnheader">Coreógrafo</span>
             <span role="columnheader">Teléfono</span>
             <span role="columnheader">Talla</span>
-            {choreographers.map((choreographer) => (
-              <div className="levitate-admin-lookup-table__row" role="row" key={choreographer.id}>
-                <span role="cell">{choreographer.fullName}</span>
-                <span role="cell">{choreographer.phone || "Sin teléfono"}</span>
-                <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
-              </div>
-            ))}
+            <span role="columnheader">Acciones</span>
+            {choreographers.map((choreographer) => {
+              const recordKey = `choreographers:${choreographer.id}`;
+
+              return (
+                <div className="levitate-admin-lookup-table__row" role="row" key={choreographer.id}>
+                  <span role="cell">{choreographer.fullName}</span>
+                  <span role="cell">{choreographer.phone || "Sin teléfono"}</span>
+                  <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+                  <span className="levitate-admin-lookup-table__actions" role="cell">
+                    <button
+                      aria-label={`Borrar coreógrafo ${choreographer.fullName}`}
+                      className="levitate-admin-lookup-delete-button"
+                      disabled={deletingRecordKey === recordKey}
+                      onClick={() => openDeleteConfirmation("choreographers", choreographer.id, choreographer.fullName)}
+                      title="Borrar coreógrafo"
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" size={17} />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
             {choreographers.length === 0 ? <p className="levitate-admin-empty-state">Todavía no hay coreógrafos registrados.</p> : null}
           </div>
         </div>
@@ -10225,12 +10354,14 @@ function AdminLookupPanel({
             <span role="columnheader">División</span>
             <span role="columnheader">Nivel</span>
             <span role="columnheader">Participantes</span>
+            <span role="columnheader">Acciones</span>
             {dances.map((dance) => {
               const categoryOptions = danceCategoriesByGenre[dance.genre] ?? danceCategories;
               const subgenreOptions = danceSubgenresByGenre[dance.genre] ?? [];
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
               const compactDivisionLabel = divisionLabel.split(":")[0] || "Sin división";
               const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");
+              const recordKey = `dances:${dance.id}`;
 
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
@@ -10241,6 +10372,18 @@ function AdminLookupPanel({
                   <span role="cell" title={divisionLabel}>{compactDivisionLabel}</span>
                   <span role="cell">{getDanceLevelLabel(dance.level)}</span>
                   <span role="cell">{participantNames || "Sin participantes"}</span>
+                  <span className="levitate-admin-lookup-table__actions" role="cell">
+                    <button
+                      aria-label={`Borrar coreografía ${dance.title}`}
+                      className="levitate-admin-lookup-delete-button"
+                      disabled={deletingRecordKey === recordKey}
+                      onClick={() => openDeleteConfirmation("dances", dance.id, dance.title)}
+                      title="Borrar coreografía"
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" size={17} />
+                    </button>
+                  </span>
                 </div>
               );
             })}
@@ -10259,6 +10402,7 @@ function AdminWelcomePanel({
   dances,
   inscriptionOrders,
   isInternationalAcademy,
+  onDeleteRecord,
 }: {
   academyName: string;
   participants: RegistrationParticipant[];
@@ -10266,6 +10410,7 @@ function AdminWelcomePanel({
   dances: RegistrationDance[];
   inscriptionOrders: RegistrationInscriptionOrder[];
   isInternationalAcademy: boolean;
+  onDeleteRecord: (recordType: AdminLookupTab, recordId: string) => Promise<void>;
 }) {
   return (
     <section className="levitate-admin-home">
@@ -10278,6 +10423,7 @@ function AdminWelcomePanel({
         dances={dances}
         inscriptionOrders={inscriptionOrders}
         isInternationalAcademy={isInternationalAcademy}
+        onDeleteRecord={onDeleteRecord}
         participants={participants}
       />
     </section>
@@ -10295,6 +10441,7 @@ function getAdminScreen({
   onChoreographerCreated,
   onDanceCreated,
   onOrderUpdated,
+  onDeleteRecord,
 }: {
   screen: AdminScreenId;
   session: RegistrationSession;
@@ -10306,6 +10453,7 @@ function getAdminScreen({
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
   onDanceCreated: (dance: RegistrationDance) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
+  onDeleteRecord: (recordType: AdminLookupTab, recordId: string) => Promise<void>;
 }) {
   if (screen === "choreographers") {
     return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
@@ -10357,6 +10505,7 @@ function getAdminScreen({
         dances={dances}
         inscriptionOrders={inscriptionOrders}
         isInternationalAcademy={false}
+        onDeleteRecord={onDeleteRecord}
         participants={participants}
       />
     );
@@ -10369,6 +10518,7 @@ function getAdminScreen({
       dances={dances}
       inscriptionOrders={inscriptionOrders}
       isInternationalAcademy={session.academy.originType === "international"}
+      onDeleteRecord={onDeleteRecord}
       participants={participants}
     />
   );
@@ -10482,6 +10632,40 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     setInscriptionOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
   };
 
+  const handleLookupRecordDeleted = async (recordType: AdminLookupTab, recordId: string) => {
+    if (recordType === "participants") {
+      const response = await requestRegistrationApi<{ dances: RegistrationDance[]; participants: RegistrationParticipant[] }>(
+        "/api/registration/participants",
+        {
+          body: JSON.stringify({ id: recordId }),
+          method: "DELETE",
+        },
+      );
+      setParticipants(response.participants);
+      setDances(response.dances);
+      return;
+    }
+
+    if (recordType === "choreographers") {
+      const response = await requestRegistrationApi<{ choreographers: RegistrationChoreographer[]; dances: RegistrationDance[] }>(
+        "/api/registration/choreographers",
+        {
+          body: JSON.stringify({ id: recordId }),
+          method: "DELETE",
+        },
+      );
+      setChoreographers(response.choreographers);
+      setDances(response.dances);
+      return;
+    }
+
+    const response = await requestRegistrationApi<{ dances: RegistrationDance[] }>("/api/registration/dances", {
+      body: JSON.stringify({ id: recordId }),
+      method: "DELETE",
+    });
+    setDances(response.dances);
+  };
+
   if (isCheckingSession) {
     return <LoadingRegistrationScreen />;
   }
@@ -10528,6 +10712,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
             onParticipantCreated: handleParticipantCreated,
             onChoreographerCreated: handleChoreographerCreated,
             onDanceCreated: handleDanceCreated,
+            onDeleteRecord: handleLookupRecordDeleted,
             onOrderUpdated: handleOrderUpdated,
           })}
         </div>

@@ -25285,19 +25285,19 @@ button {
 }
 
 .levitate-admin-lookup-table--participants {
-  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(128px, 0.56fr);
+  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(128px, 0.56fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table--participants-international {
-  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr);
+  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table--choreographers {
-  --admin-lookup-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(90px, 0.42fr);
+  --admin-lookup-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(90px, 0.42fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table--dances {
-  --admin-lookup-columns: minmax(190px, 1fr) minmax(150px, 0.72fr) minmax(132px, 0.62fr) minmax(132px, 0.62fr) minmax(112px, 0.52fr) minmax(116px, 0.54fr) minmax(320px, 1.55fr);
+  --admin-lookup-columns: minmax(190px, 1fr) minmax(150px, 0.72fr) minmax(132px, 0.62fr) minmax(132px, 0.62fr) minmax(112px, 0.52fr) minmax(116px, 0.54fr) minmax(320px, 1.55fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table > span[role="columnheader"] {
@@ -25359,6 +25359,171 @@ button {
 
 .levitate-admin-lookup-table > .levitate-admin-lookup-table__row:first-of-type {
   border-top: 0;
+}
+
+.levitate-admin-lookup-table__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.levitate-admin-lookup-delete-button {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(224, 79, 146, 0.24);
+  border-radius: 999px;
+  background: rgba(224, 79, 146, 0.08);
+  color: var(--admin-pink);
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 200ms var(--ease-out);
+}
+
+.levitate-admin-lookup-delete-button:hover,
+.levitate-admin-lookup-delete-button:focus-visible {
+  border-color: rgba(224, 79, 146, 0.56);
+  background: rgba(224, 79, 146, 0.16);
+  color: #c72b74;
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.levitate-admin-lookup-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+  transform: none;
+}
+
+.levitate-admin-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(16, 15, 18, 0.48);
+  backdrop-filter: blur(10px);
+}
+
+.levitate-admin-confirm-dialog {
+  position: relative;
+  display: grid;
+  width: min(100%, 440px);
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid rgba(39, 37, 37, 0.14);
+  border-radius: 22px;
+  background: #fffaf5;
+  box-shadow: 0 28px 80px rgba(39, 37, 37, 0.28);
+  color: var(--admin-ink);
+}
+
+.levitate-admin-confirm-dialog__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(39, 37, 37, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(39, 37, 37, 0.72);
+  cursor: pointer;
+}
+
+.levitate-admin-confirm-dialog__close:hover,
+.levitate-admin-confirm-dialog__close:focus-visible {
+  border-color: rgba(39, 37, 37, 0.26);
+  color: var(--admin-ink);
+  outline: 0;
+}
+
+.levitate-admin-confirm-dialog__icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(224, 79, 146, 0.12);
+  color: var(--admin-pink);
+}
+
+.levitate-admin-confirm-dialog h3 {
+  margin: 2px 44px 0 0;
+  font-size: clamp(1.7rem, 4vw, 2.35rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.levitate-admin-confirm-dialog p {
+  max-width: 34rem;
+  margin: 0;
+  color: rgba(39, 37, 37, 0.68);
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.levitate-admin-confirm-dialog p strong {
+  color: var(--admin-ink);
+}
+
+.levitate-admin-confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.levitate-admin-confirm-dialog__cancel,
+.levitate-admin-confirm-dialog__delete {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 820;
+}
+
+.levitate-admin-confirm-dialog__cancel {
+  border: 1px solid rgba(39, 37, 37, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(39, 37, 37, 0.72);
+}
+
+.levitate-admin-confirm-dialog__delete {
+  border: 1px solid rgba(224, 79, 146, 0.28);
+  background: var(--admin-pink);
+  color: #fffaf5;
+}
+
+.levitate-admin-confirm-dialog__cancel:hover,
+.levitate-admin-confirm-dialog__cancel:focus-visible,
+.levitate-admin-confirm-dialog__delete:hover,
+.levitate-admin-confirm-dialog__delete:focus-visible {
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.levitate-admin-confirm-dialog__cancel:disabled,
+.levitate-admin-confirm-dialog__delete:disabled {
+  cursor: wait;
+  opacity: 0.64;
+  transform: none;
 }
 
 .levitate-admin-payment-badge {
