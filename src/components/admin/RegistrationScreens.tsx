@@ -55,7 +55,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
-type RegistrationAdminDashboardSection = "dashboard" | "academies" | "payments" | "program" | "tickets" | "media" | "registrations";
+type RegistrationAdminDashboardSection = "dashboard" | "academies" | "choreographers" | "payments" | "program" | "tickets" | "media" | "registrations";
 type RegistrationDashboardDateRangeId = "today" | "last_7_days" | "last_30_days" | "current_event" | "custom" | "season";
 type RegistrationDashboardVenueMetric = "participants" | "choreographies" | "confirmed_registrations" | "revenue" | "tickets";
 type RegistrationDashboardAlertSeverity = "critical" | "important" | "info";
@@ -190,6 +190,11 @@ type RegistrationChoreographer = {
   phone: string | null;
   shirtSize: string;
   createdAt: string;
+};
+
+type RegistrationAdminChoreographer = RegistrationChoreographer & {
+  academyId: string;
+  academyName: string;
 };
 
 type RegistrationDanceRelation = {
@@ -363,6 +368,7 @@ type RegistrationAdminProgramPayload = {
 
 type RegistrationAdminParticipantsPayload = {
   academies?: RegistrationAdminAcademy[];
+  choreographers?: RegistrationAdminChoreographer[];
   participants: RegistrationAdminParticipant[];
 };
 
@@ -541,7 +547,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Gestión", label: "Panel general", icon: LayoutDashboard, section: "dashboard" },
   { group: "Gestión", label: "Academias", icon: Building2, section: "academies" },
   { group: "Gestión", label: "Participantes", icon: Users, section: "registrations" },
-  { group: "Gestión", label: "Coreógrafos", icon: UserRoundPlus },
+  { group: "Gestión", label: "Coreógrafos", icon: UserRoundPlus, section: "choreographers" },
   { group: "Ventas y pagos", label: "Pagos", icon: CreditCard, section: "payments", badgeKey: "payments" },
   { group: "Ventas y pagos", label: "Boletos", icon: Ticket, section: "tickets", badgeKey: "tickets" },
   { group: "Ventas y pagos", label: "Foto/Video", icon: Camera, section: "media", badgeKey: "media" },
@@ -3958,6 +3964,24 @@ function downloadAdminParticipantsCsv(academies: RegistrationAdminAcademy[], par
   URL.revokeObjectURL(url);
 }
 
+function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreographer[]) {
+  const headers = ["Nombre", "Academia", "Talla"];
+  const rows = choreographers.map((choreographer) => [
+    choreographer.fullName,
+    choreographer.academyName,
+    getOptionLabel(shirtSizes, choreographer.shirtSize),
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "levitate-coreografos.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function downloadRegistrationDashboardCsv({
   dateWindow,
   mediaTotals,
@@ -6028,6 +6052,67 @@ function RegistrationAcademyQuickPanel({
   );
 }
 
+function RegistrationAdminChoreographersPanel({
+  choreographers,
+  filteredChoreographers,
+  isLoading,
+  onQueryChange,
+  query,
+}: {
+  choreographers: RegistrationAdminChoreographer[];
+  filteredChoreographers: RegistrationAdminChoreographer[];
+  isLoading: boolean;
+  onQueryChange: (value: string) => void;
+  query: string;
+}) {
+  return (
+    <>
+      <section className="registration-admin-filters registration-admin-filters--choreographers" aria-label="Filtros de coreógrafos">
+        <label className="registration-admin-search">
+          <Search aria-hidden="true" size={17} />
+          <input
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Buscar por nombre, academia o talla..."
+            type="search"
+            value={query}
+          />
+        </label>
+      </section>
+
+      <section className="registration-admin-grid">
+        <div className="registration-admin-table-card">
+          <div className="registration-admin-table registration-admin-choreographers-table" role="table" aria-label="Coreógrafos registrados">
+            <div className="registration-admin-table__head" role="row">
+              <span role="columnheader">Nombre</span>
+              <span role="columnheader">Academia</span>
+              <span role="columnheader">Talla</span>
+            </div>
+
+            {filteredChoreographers.map((choreographer) => (
+              <div className="registration-admin-table__row registration-admin-table__row--static" key={choreographer.id} role="row">
+                <span role="cell">{choreographer.fullName}</span>
+                <span role="cell">{choreographer.academyName}</span>
+                <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+              </div>
+            ))}
+
+            {filteredChoreographers.length === 0 ? (
+              <p className="registration-admin-empty">
+                {isLoading ? "Cargando coreógrafos..." : "No hay coreógrafos registrados con esos filtros."}
+              </p>
+            ) : null}
+          </div>
+          <footer className="registration-admin-table-footer">
+            <span>
+              Mostrando {filteredChoreographers.length} de {choreographers.length} coreógrafos
+            </span>
+          </footer>
+        </div>
+      </section>
+    </>
+  );
+}
+
 function ParticipantRegistrationPanel({
   isAcademyInternational,
   registeredDanceCount,
@@ -7056,6 +7141,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
   const [adminAcademies, setAdminAcademies] = useState<RegistrationAdminAcademy[]>([]);
+  const [adminChoreographers, setAdminChoreographers] = useState<RegistrationAdminChoreographer[]>([]);
   const [adminParticipants, setAdminParticipants] = useState<RegistrationAdminParticipant[]>([]);
   const [programDances, setProgramDances] = useState<RegistrationDance[]>([]);
   const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
@@ -7068,6 +7154,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [registrationVenueFilter, setRegistrationVenueFilter] = useState("all");
   const [registrationDivisionFilter, setRegistrationDivisionFilter] = useState("all");
   const [registrationPaymentStatusFilter, setRegistrationPaymentStatusFilter] = useState("all");
+  const [choreographerQuery, setChoreographerQuery] = useState("");
   const [academyQuery, setAcademyQuery] = useState("");
   const [academyEventFilter, setAcademyEventFilter] = useState("all");
   const [academyStatusFilter, setAcademyStatusFilter] = useState("all");
@@ -7187,6 +7274,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     try {
       const payload = await requestRegistrationApi<RegistrationAdminParticipantsPayload>("/api/registration/admin/participants");
       setAdminAcademies(payload.academies ?? []);
+      setAdminChoreographers(payload.choreographers ?? []);
       setAdminParticipants(payload.participants);
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
@@ -7232,13 +7320,25 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [activeSection, adminSession?.user.role, loadAdminProgram]);
 
   useEffect(() => {
-    if (adminSession?.user.role === "admin" && (activeSection === "registrations" || activeSection === "dashboard" || activeSection === "academies")) {
+    if (adminSession?.user.role === "admin" && (activeSection === "registrations" || activeSection === "dashboard" || activeSection === "academies" || activeSection === "choreographers")) {
       void loadAdminParticipants();
     }
   }, [activeSection, adminSession?.user.role, loadAdminParticipants]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || adminSession?.user.role !== "admin" || (activeSection !== "dashboard" && activeSection !== "academies")) {
+    if (typeof window === "undefined" || adminSession?.user.role !== "admin") {
+      return;
+    }
+
+    if (activeSection === "choreographers") {
+      const intervalId = window.setInterval(() => {
+        void loadAdminParticipants();
+      }, 60000);
+
+      return () => window.clearInterval(intervalId);
+    }
+
+    if (activeSection !== "dashboard" && activeSection !== "academies") {
       return;
     }
 
@@ -7377,6 +7477,26 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return matchesAcademy && matchesVenue && matchesDivision && matchesPaymentStatus && matchesQuery;
     });
   }, [adminParticipants, orders, registrationAcademyFilter, registrationDivisionFilter, registrationPaymentStatusFilter, registrationQuery, registrationVenueFilter]);
+  const filteredAdminChoreographers = useMemo(() => {
+    const normalizedQuery = normalizeDirectoryText(choreographerQuery);
+
+    return adminChoreographers
+      .filter((choreographer) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        return [
+          choreographer.fullName,
+          choreographer.academyName,
+          getOptionLabel(shirtSizes, choreographer.shirtSize),
+        ]
+          .map(normalizeDirectoryText)
+          .join(" ")
+          .includes(normalizedQuery);
+      })
+      .sort((left, right) => left.academyName.localeCompare(right.academyName, "es") || left.fullName.localeCompare(right.fullName, "es"));
+  }, [adminChoreographers, choreographerQuery]);
   const participantGroups = useMemo(() => getAdminParticipantGroups(filteredAdminParticipants), [filteredAdminParticipants]);
   const visibleRegistrationAcademyCount = Math.max(filteredAdminAcademies.length, participantGroups.length);
   const participantTotals = useMemo(
@@ -7511,6 +7631,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   );
   const isDashboardSection = activeSection === "dashboard";
   const isAcademiesSection = activeSection === "academies";
+  const isChoreographersSection = activeSection === "choreographers";
   const isTicketSection = activeSection === "tickets";
   const isProgramSection = activeSection === "program";
   const isMediaSection = activeSection === "media";
@@ -7542,6 +7663,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
         nextPath = "/admin/dashboard";
       } else if (section === "academies") {
         nextPath = "/admin/academias";
+      } else if (section === "choreographers") {
+        nextPath = "/admin/coreografos";
       } else if (section === "tickets") {
         nextPath = "/admin/boletos";
       } else if (section === "program") {
@@ -7620,6 +7743,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" });
       setAdminSession(null);
       setAdminAcademies([]);
+      setAdminChoreographers([]);
       setOrders([]);
       setAdminParticipants([]);
       setProgramDances([]);
@@ -7641,6 +7765,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
   } else if (isAcademiesSection) {
     headerTitle = "Academias";
     headerDescription = "Gestiona todas las academias registradas en la competencia";
+  } else if (isChoreographersSection) {
+    headerTitle = "Coreógrafos";
+    headerDescription = "Coreógrafos registrados por academia";
   } else if (isTicketSection) {
     headerTitle = "Boletos";
     headerDescription = "Boletos confirmados por alumno y quiénes ya llegan a 3+ para bloque de competencia";
@@ -7744,17 +7871,24 @@ export function LevitateRegistrationAdminPaymentsRoute({
                   disabled={
                     isAcademiesSection
                       ? filteredAcademySummaries.length === 0
-                      : isTicketSection
-                        ? filteredTicketRows.length === 0
-                        : isMediaSection
-                          ? filteredMediaOrders.length === 0
-                          : isRegistrationsSection
-                            ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
-                            : filteredOrders.length === 0
+                      : isChoreographersSection
+                        ? filteredAdminChoreographers.length === 0
+                        : isTicketSection
+                          ? filteredTicketRows.length === 0
+                          : isMediaSection
+                            ? filteredMediaOrders.length === 0
+                            : isRegistrationsSection
+                              ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
+                              : filteredOrders.length === 0
                   }
                   onClick={() => {
                     if (isAcademiesSection) {
                       downloadRegistrationAcademiesDirectoryCsv(filteredAcademySummaries);
+                      return;
+                    }
+
+                    if (isChoreographersSection) {
+                      downloadAdminChoreographersCsv(filteredAdminChoreographers);
                       return;
                     }
 
@@ -7826,6 +7960,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
             sort={academySort}
             statusFilter={academyStatusFilter}
             summaries={academySummaries}
+          />
+        ) : isChoreographersSection ? (
+          <RegistrationAdminChoreographersPanel
+            choreographers={adminChoreographers}
+            filteredChoreographers={filteredAdminChoreographers}
+            isLoading={isParticipantsLoading}
+            onQueryChange={setChoreographerQuery}
+            query={choreographerQuery}
           />
         ) : isProgramSection ? (
           <ProgramPanel

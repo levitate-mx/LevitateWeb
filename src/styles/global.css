@@ -21543,6 +21543,10 @@ button {
   grid-template-columns: minmax(280px, 1fr) minmax(210px, 0.8fr) minmax(160px, 0.52fr) minmax(170px, 0.58fr) minmax(170px, 0.58fr);
 }
 
+.registration-admin-filters--choreographers {
+  grid-template-columns: minmax(280px, 0.55fr);
+}
+
 .registration-admin-grid {
   min-width: 0;
 }
@@ -21656,6 +21660,21 @@ button {
 }
 
 .registration-admin-academies-table .registration-admin-table__row span:nth-child(n + 6) {
+  color: #171717;
+  font-size: 0.96rem;
+  font-weight: 900;
+}
+
+.registration-admin-choreographers-table {
+  min-width: 680px;
+}
+
+.registration-admin-choreographers-table .registration-admin-table__head,
+.registration-admin-choreographers-table .registration-admin-table__row {
+  grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 1fr) minmax(110px, 0.36fr);
+}
+
+.registration-admin-choreographers-table .registration-admin-table__row span:last-child {
   color: #171717;
   font-size: 0.96rem;
   font-weight: 900;

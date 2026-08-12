@@ -1636,6 +1636,7 @@ async function handleRegistrationAdminParticipants(request, env) {
 
     return sendJson({
       academies: await getAllRegistrationAdminAcademies(db),
+      choreographers: await getAllRegistrationAdminChoreographers(db),
       participants: await getAllRegistrationAdminParticipants(db),
     });
   } catch (error) {
@@ -4704,6 +4705,24 @@ async function getAllRegistrationAdminParticipants(db) {
   return results.map(serializeRegistrationAdminParticipant);
 }
 
+async function getAllRegistrationAdminChoreographers(db) {
+  const { results = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_choreographers.*,
+          registration_academies.name AS academy_name
+        FROM registration_choreographers
+        INNER JOIN registration_academies
+          ON registration_academies.id = registration_choreographers.academy_id
+        ORDER BY registration_academies.name ASC, registration_choreographers.full_name ASC
+      `,
+    )
+    .all();
+
+  return results.map(serializeRegistrationAdminChoreographer);
+}
+
 async function getAllRegistrationAdminAcademies(db) {
   const { results = [] } = await db
     .prepare(
@@ -5206,6 +5225,14 @@ function serializeRegistrationAdminParticipant(participant) {
     academyOriginType: participant.academy_origin_type || "mexico",
     academyOriginState: participant.academy_origin_state || null,
     academyOriginCountry: participant.academy_origin_country || "México",
+  };
+}
+
+function serializeRegistrationAdminChoreographer(choreographer) {
+  return {
+    ...serializeRegistrationChoreographer(choreographer),
+    academyId: choreographer.academy_id,
+    academyName: choreographer.academy_name,
   };
 }
 
