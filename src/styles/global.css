@@ -25297,7 +25297,7 @@ button {
 }
 
 .levitate-admin-lookup-table--dances {
-  --admin-lookup-columns: minmax(190px, 1fr) minmax(150px, 0.72fr) minmax(132px, 0.62fr) minmax(132px, 0.62fr) minmax(112px, 0.52fr) minmax(116px, 0.54fr) minmax(320px, 1.55fr) minmax(72px, 0.28fr);
+  --admin-lookup-columns: minmax(190px, 1fr) minmax(132px, 0.62fr) minmax(132px, 0.62fr) minmax(112px, 0.52fr) minmax(116px, 0.54fr) minmax(320px, 1.55fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table > span[role="columnheader"] {

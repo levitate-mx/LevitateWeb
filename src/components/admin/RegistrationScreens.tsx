@@ -10348,7 +10348,6 @@ function AdminLookupPanel({
         <div className="levitate-admin-lookup-table-scroll">
           <div className="levitate-admin-lookup-table levitate-admin-lookup-table--dances" role="table" aria-label="Coreografías registradas">
             <span role="columnheader">Coreografía</span>
-            <span role="columnheader">Sede</span>
             <span role="columnheader">Género</span>
             <span role="columnheader">Categoría</span>
             <span role="columnheader">División</span>
@@ -10366,7 +10365,6 @@ function AdminLookupPanel({
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
                   <span role="cell">{dance.title}</span>
-                  <span role="cell">{getVenueLabel(dance.venue)}</span>
                   <span role="cell">{getOptionLabel(subgenreOptions, dance.subgenre)}</span>
                   <span role="cell">{getOptionLabel(categoryOptions, dance.category)}</span>
                   <span role="cell" title={divisionLabel}>{compactDivisionLabel}</span>
