@@ -34,6 +34,7 @@ export default function App() {
   const hospedajeMatch = window.location.pathname.match(/^\/hospedaje\/?$/);
   const inscripcionesConsultaMatch = window.location.pathname.match(/^\/inscripciones\/consulta-curp\/?$/);
   const inscripcionesMatch = window.location.pathname.match(/^\/inscripciones\/?$/);
+  const registrationAdminDashboardMatch = window.location.pathname.match(/^\/admin(?:\/dashboard)?\/?$/);
   const registrationAdminPaymentsMatch = window.location.pathname.match(/^\/admin\/inscripciones\/?$/);
   const registrationAdminParticipantsMatch = window.location.pathname.match(/^\/admin\/inscripciones\/participantes\/?$/);
   const registrationAdminTicketsMatch = window.location.pathname.match(/^\/admin\/boletos\/?$/);
@@ -60,6 +61,10 @@ export default function App() {
 
   if (adminMediaMatch) {
     return <LevitateRegistrationRoute />;
+  }
+
+  if (registrationAdminDashboardMatch) {
+    return <LevitateRegistrationAdminPaymentsRoute initialSection="dashboard" />;
   }
 
   if (registrationAdminPaymentsMatch) {

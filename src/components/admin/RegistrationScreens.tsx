@@ -1,12 +1,15 @@
 import {
   ArrowLeft,
+  ArrowUpRight,
   AtSign,
   BadgeCheck,
   Building2,
   CalendarDays,
+  CalendarRange,
   Camera,
   ChevronDown,
   CheckCircle2,
+  ChartPie,
   CircleAlert,
   ClipboardList,
   Clock,
@@ -14,11 +17,14 @@ import {
   Download,
   Eye,
   FileText,
+  FileSpreadsheet,
   Globe2,
   GraduationCap,
   Home,
+  Info,
   KeyRound,
   LayoutDashboard,
+  ListFilter,
   LogIn,
   LogOut,
   Mail,
@@ -28,26 +34,32 @@ import {
   Music2,
   Phone,
   Plus,
+  RefreshCw,
   Save,
   Search,
   ShieldCheck,
   ShoppingBag,
   Shirt,
   Ticket,
+  TriangleAlert,
   Upload,
   UserPlus,
   UserRoundPlus,
   Users,
+  Wallet,
   X,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent, type ReactNode } from "react";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
-type RegistrationAdminDashboardSection = "payments" | "program" | "tickets" | "media" | "registrations";
+type RegistrationAdminDashboardSection = "dashboard" | "payments" | "program" | "tickets" | "media" | "registrations";
+type RegistrationDashboardDateRangeId = "today" | "last_7_days" | "last_30_days" | "current_event" | "custom" | "season";
+type RegistrationDashboardVenueMetric = "participants" | "choreographies" | "confirmed_registrations" | "revenue" | "tickets";
+type RegistrationDashboardAlertSeverity = "critical" | "important" | "info";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error" | "warning";
 
@@ -61,6 +73,8 @@ type AdminNavItem = {
 };
 
 type RegistrationAdminDashboardNavItem = {
+  badgeKey?: "media" | "payments" | "program" | "tickets";
+  group: string;
   label: string;
   icon: LucideIcon;
   section?: RegistrationAdminDashboardSection;
@@ -398,6 +412,60 @@ type StudentRegistrationSession = {
   resources: StudentRegistrationResource[];
 };
 
+type RegistrationDashboardTarget = {
+  mediaStatusFilter?: string;
+  orderId?: string;
+  purchaseTypeFilter?: string;
+  query?: string;
+  registrationPaymentStatusFilter?: string;
+  section: RegistrationAdminDashboardSection;
+  statusFilter?: string;
+  ticketStatusFilter?: string;
+  venueFilter?: string;
+};
+
+type RegistrationDashboardDateWindow = {
+  currentEventVenue?: string;
+  end: Date | null;
+  id: RegistrationDashboardDateRangeId;
+  label: string;
+  start: Date | null;
+};
+
+type RegistrationDashboardVenueSlice = {
+  choreographies: number;
+  confirmedRegistrations: number;
+  label: string;
+  participants: number;
+  percent: number;
+  revenue: number;
+  tickets: number;
+  value: number;
+  venue: string;
+};
+
+type RegistrationDashboardActivityItem = {
+  academyName: string;
+  description: string;
+  icon: LucideIcon;
+  id: string;
+  occurredAt: string;
+  target: RegistrationDashboardTarget;
+  title: string;
+  tone: "pink" | "purple" | "green" | "cyan" | "amber";
+};
+
+type RegistrationDashboardAlert = {
+  actionLabel: string;
+  count: number;
+  detail: string;
+  id: string;
+  reason: string;
+  severity: RegistrationDashboardAlertSeverity;
+  target: RegistrationDashboardTarget;
+  title: string;
+};
+
 type RegistrationApiErrorBody = {
   error?: {
     code?: string;
@@ -435,13 +503,16 @@ const adminLookupTabs: Array<{ id: AdminLookupTab; label: string }> = [
 ];
 
 const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Pagos", icon: CreditCard, section: "payments" },
-  { label: "Inscripciones", icon: FileText, section: "registrations" },
-  { label: "Programa", icon: ClipboardList, section: "program" },
-  { label: "Boletos", icon: Ticket, section: "tickets" },
-  { label: "Foto/Video", icon: Camera, section: "media" },
-  { label: "Hojas de jueceo", icon: BadgeCheck },
+  { group: "Management", label: "Dashboard", icon: LayoutDashboard, section: "dashboard" },
+  { group: "Management", label: "Academias", icon: Building2 },
+  { group: "Management", label: "Participantes", icon: Users, section: "registrations" },
+  { group: "Management", label: "Coreógrafos", icon: UserRoundPlus },
+  { group: "Sales and payments", label: "Pagos", icon: CreditCard, section: "payments", badgeKey: "payments" },
+  { group: "Sales and payments", label: "Boletos", icon: Ticket, section: "tickets", badgeKey: "tickets" },
+  { group: "Sales and payments", label: "Foto/Video", icon: Camera, section: "media", badgeKey: "media" },
+  { group: "Competition operations", label: "Programa", icon: ClipboardList, section: "program", badgeKey: "program" },
+  { group: "Competition operations", label: "Hojas de jueceo", icon: BadgeCheck },
+  { group: "Analysis", label: "Reportes", icon: FileSpreadsheet },
 ];
 
 const maxMusicUploadBytes = 12000000;
@@ -559,6 +630,28 @@ const venueLabelOptions: FieldOption[] = [
 const venueEventDates: Record<string, string> = {
   edomex: "2026-11-13",
   veracruz: "2027-03-21",
+};
+
+const registrationDashboardDateRangeOptions: Array<{ label: string; value: RegistrationDashboardDateRangeId }> = [
+  { value: "season", label: "Toda la temporada" },
+  { value: "today", label: "Hoy" },
+  { value: "last_7_days", label: "Últimos 7 días" },
+  { value: "last_30_days", label: "Últimos 30 días" },
+  { value: "current_event", label: "Evento actual" },
+  { value: "custom", label: "Rango personalizado" },
+];
+
+const registrationDashboardVenueMetricOptions: Array<{ label: string; value: RegistrationDashboardVenueMetric }> = [
+  { value: "participants", label: "Participantes" },
+  { value: "choreographies", label: "Coreografías" },
+  { value: "confirmed_registrations", label: "Inscripciones confirmadas" },
+  { value: "revenue", label: "Ingresos" },
+  { value: "tickets", label: "Boletos vendidos" },
+];
+
+const registrationDashboardEventStatusByVenue: Record<string, string> = {
+  edomex: "Registro abierto",
+  veracruz: "En preparación",
 };
 
 const academyOriginTypeOptions: FieldOption[] = [
@@ -1926,6 +2019,870 @@ function getTicketBlockMissingCount(row: TicketDashboardRow) {
   return Math.max(0, TICKET_BLOCK_MINIMUM - row.paidTickets);
 }
 
+function getDashboardStartOfDay(date: Date) {
+  const nextDate = new Date(date);
+
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function getDashboardEndOfDay(date: Date) {
+  const nextDate = new Date(date);
+
+  nextDate.setHours(23, 59, 59, 999);
+  return nextDate;
+}
+
+function addDashboardDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function parseDashboardInputDate(value: string, endOfDay = false) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return null;
+  }
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return endOfDay ? getDashboardEndOfDay(date) : getDashboardStartOfDay(date);
+}
+
+function getDashboardDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDashboardCurrentEventVenue(now = new Date()) {
+  const eventEntries = Object.entries(venueEventDates)
+    .map(([venue, rawDate]) => ({ date: parseDashboardInputDate(rawDate), venue }))
+    .filter((entry): entry is { date: Date; venue: string } => Boolean(entry.date))
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
+  const today = getDashboardStartOfDay(now);
+  const upcomingEvent = eventEntries.find((entry) => entry.date.getTime() >= today.getTime());
+
+  return upcomingEvent?.venue ?? eventEntries[eventEntries.length - 1]?.venue ?? venueOptions[0]?.value;
+}
+
+function formatDashboardDateLabel(date: Date) {
+  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function getDashboardDateWindow(
+  rangeId: RegistrationDashboardDateRangeId,
+  customStart: string,
+  customEnd: string,
+): RegistrationDashboardDateWindow {
+  const today = new Date();
+
+  if (rangeId === "today") {
+    return {
+      end: getDashboardEndOfDay(today),
+      id: rangeId,
+      label: "Hoy",
+      start: getDashboardStartOfDay(today),
+    };
+  }
+
+  if (rangeId === "last_7_days" || rangeId === "last_30_days") {
+    const days = rangeId === "last_7_days" ? 7 : 30;
+    const start = getDashboardStartOfDay(addDashboardDays(today, -(days - 1)));
+    const end = getDashboardEndOfDay(today);
+
+    return {
+      end,
+      id: rangeId,
+      label: `${formatDashboardDateLabel(start)} - ${formatDashboardDateLabel(end)}`,
+      start,
+    };
+  }
+
+  if (rangeId === "current_event") {
+    const currentEventVenue = getDashboardCurrentEventVenue(today);
+
+    return {
+      currentEventVenue,
+      end: null,
+      id: rangeId,
+      label: `Evento actual: ${getVenueLabel(currentEventVenue)}`,
+      start: null,
+    };
+  }
+
+  if (rangeId === "custom") {
+    const start = parseDashboardInputDate(customStart);
+    const end = parseDashboardInputDate(customEnd, true);
+
+    return {
+      end,
+      id: rangeId,
+      label: start && end ? `${formatDashboardDateLabel(start)} - ${formatDashboardDateLabel(end)}` : "Rango personalizado",
+      start,
+    };
+  }
+
+  return {
+    end: null,
+    id: "season",
+    label: "Toda la temporada",
+    start: null,
+  };
+}
+
+function getPreviousDashboardDateWindow(window: RegistrationDashboardDateWindow): RegistrationDashboardDateWindow | null {
+  if (!window.start || !window.end) {
+    return null;
+  }
+
+  const duration = window.end.getTime() - window.start.getTime() + 1;
+  const previousEnd = new Date(window.start.getTime() - 1);
+  const previousStart = new Date(previousEnd.getTime() - duration + 1);
+
+  return {
+    end: previousEnd,
+    id: window.id,
+    label: "Periodo anterior",
+    start: previousStart,
+  };
+}
+
+function isDateInDashboardWindow(rawDate: string | null | undefined, window: RegistrationDashboardDateWindow | null) {
+  if (!window?.start && !window?.end) {
+    return true;
+  }
+
+  if (!rawDate) {
+    return false;
+  }
+
+  const time = Date.parse(rawDate);
+
+  if (!Number.isFinite(time)) {
+    return false;
+  }
+
+  return (!window.start || time >= window.start.getTime()) && (!window.end || time <= window.end.getTime());
+}
+
+function getDashboardEffectiveVenueFilter(window: RegistrationDashboardDateWindow, venueFilter: string) {
+  return venueFilter !== "all" ? venueFilter : window.currentEventVenue ?? "all";
+}
+
+function doesDashboardOrderMatchVenue(order: RegistrationInscriptionOrder, venueFilter: string) {
+  return venueFilter === "all" || order.venue === venueFilter;
+}
+
+function doesDashboardParticipantMatchVenue(participant: RegistrationAdminParticipant, venueFilter: string) {
+  return venueFilter === "all" || participant.eventVenues.includes(venueFilter);
+}
+
+function doesDashboardDanceMatchVenue(dance: RegistrationDance, venueFilter: string) {
+  return venueFilter === "all" || dance.venue === venueFilter;
+}
+
+function getDashboardOrderRangeDate(order: RegistrationInscriptionOrder) {
+  if (order.status === "paid") {
+    return order.paidAt || order.reviewedAt || order.updatedAt || order.createdAt;
+  }
+
+  if (order.status === "rejected") {
+    return order.reviewedAt || order.updatedAt || order.createdAt;
+  }
+
+  if (order.status === "payment_reported") {
+    return order.proof?.uploadedAt || order.updatedAt || order.createdAt;
+  }
+
+  return order.createdAt || order.updatedAt;
+}
+
+function getDashboardScopedOrders(
+  orders: RegistrationInscriptionOrder[],
+  window: RegistrationDashboardDateWindow,
+  venueFilter: string,
+) {
+  const effectiveVenueFilter = getDashboardEffectiveVenueFilter(window, venueFilter);
+
+  return orders.filter((order) => isDateInDashboardWindow(getDashboardOrderRangeDate(order), window) && doesDashboardOrderMatchVenue(order, effectiveVenueFilter));
+}
+
+function getDashboardScopedParticipants(
+  participants: RegistrationAdminParticipant[],
+  window: RegistrationDashboardDateWindow,
+  venueFilter: string,
+) {
+  const effectiveVenueFilter = getDashboardEffectiveVenueFilter(window, venueFilter);
+
+  return participants.filter((participant) => isDateInDashboardWindow(participant.createdAt, window) && doesDashboardParticipantMatchVenue(participant, effectiveVenueFilter));
+}
+
+function getDashboardScopedDances(dances: RegistrationDance[], window: RegistrationDashboardDateWindow, venueFilter: string) {
+  const effectiveVenueFilter = getDashboardEffectiveVenueFilter(window, venueFilter);
+
+  return dances.filter((dance) => isDateInDashboardWindow(dance.createdAt, window) && doesDashboardDanceMatchVenue(dance, effectiveVenueFilter));
+}
+
+function getDashboardUniqueParticipantCount(participants: RegistrationAdminParticipant[]) {
+  const participantKeys = new Set<string>();
+
+  for (const participant of participants) {
+    participantKeys.add(normalizeCurpInput(participant.curp) || participant.id);
+  }
+
+  return participantKeys.size;
+}
+
+function getDashboardAcademyKeys(participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[]) {
+  const academyKeys = new Set<string>();
+
+  for (const participant of participants) {
+    academyKeys.add(participant.academyId || participant.academyName);
+  }
+
+  for (const order of orders) {
+    academyKeys.add(order.academyId || order.academyName);
+  }
+
+  academyKeys.delete("");
+  return academyKeys;
+}
+
+function getDashboardParticipantPaymentCounts(participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[]) {
+  return participants.reduce(
+    (counts, participant) => {
+      const status = getParticipantPaymentStatus(participant, orders);
+
+      return {
+        incomplete: counts.incomplete + (!participant.birthDate || participant.age == null || !participant.shirtSize ? 1 : 0),
+        paid: counts.paid + (status === "paid" ? 1 : 0),
+        pending: counts.pending + (status === "pending_payment" || status === "payment_reported" ? 1 : 0),
+        withoutConfirmedOrder: counts.withoutConfirmedOrder + (status !== "paid" ? 1 : 0),
+        withoutOrder: counts.withoutOrder + (status === "no_order" ? 1 : 0),
+      };
+    },
+    {
+      incomplete: 0,
+      paid: 0,
+      pending: 0,
+      withoutConfirmedOrder: 0,
+      withoutOrder: 0,
+    },
+  );
+}
+
+function getDashboardPaidRevenue(orders: RegistrationInscriptionOrder[]) {
+  return orders.reduce((total, order) => total + (order.status === "paid" ? order.paidAmount || order.amount : 0), 0);
+}
+
+function getDashboardPendingVerificationRevenue(orders: RegistrationInscriptionOrder[]) {
+  return orders.reduce((total, order) => total + (order.status === "payment_reported" ? order.paidAmount || order.amount : 0), 0);
+}
+
+function getDashboardTrendLabel(currentValue: number, previousValue: number, formatter: (value: number) => string = String) {
+  const diff = currentValue - previousValue;
+
+  if (diff === 0) {
+    return "Sin cambio vs. periodo anterior";
+  }
+
+  return `${diff > 0 ? "+" : ""}${formatter(diff)} vs. periodo anterior`;
+}
+
+function getDashboardPercentTrendLabel(currentValue: number, previousValue: number) {
+  if (previousValue <= 0) {
+    return currentValue > 0 ? "Nuevo en el periodo" : "Sin cambio vs. periodo anterior";
+  }
+
+  const percent = Math.round(((currentValue - previousValue) / previousValue) * 100);
+
+  if (percent === 0) {
+    return "Sin cambio vs. periodo anterior";
+  }
+
+  return `${percent > 0 ? "+" : ""}${percent}% vs. periodo anterior`;
+}
+
+function getDashboardRevenueBreakdown(orders: RegistrationInscriptionOrder[]) {
+  return orders.reduce(
+    (breakdown, order) => {
+      if (order.status !== "paid") {
+        return breakdown;
+      }
+
+      const amount = order.paidAmount || order.amount;
+      const hasTickets = getOrderRequestedTicketCount(order) > 0;
+      const hasMedia = getOrderMediaItemCount(order) > 0;
+
+      if (getAdminOrderType(order) === "registration") {
+        breakdown.registrations += amount;
+      } else if (hasTickets && !hasMedia) {
+        breakdown.tickets += amount;
+      } else if (hasMedia && !hasTickets) {
+        breakdown.media += amount;
+      } else {
+        breakdown.other += amount;
+      }
+
+      return breakdown;
+    },
+    {
+      media: 0,
+      other: 0,
+      registrations: 0,
+      tickets: 0,
+    },
+  );
+}
+
+function getDashboardVenueMetricValue(
+  slice: Omit<RegistrationDashboardVenueSlice, "percent" | "value">,
+  metric: RegistrationDashboardVenueMetric,
+) {
+  if (metric === "choreographies") {
+    return slice.choreographies;
+  }
+
+  if (metric === "confirmed_registrations") {
+    return slice.confirmedRegistrations;
+  }
+
+  if (metric === "revenue") {
+    return slice.revenue;
+  }
+
+  if (metric === "tickets") {
+    return slice.tickets;
+  }
+
+  return slice.participants;
+}
+
+function getDashboardVenueMetricLabel(metric: RegistrationDashboardVenueMetric, value: number) {
+  return metric === "revenue" ? formatAdminCurrency(value) : value.toLocaleString("es-MX");
+}
+
+function buildDashboardVenueSlices({
+  metric,
+  orders,
+  participants,
+  programDances,
+  ticketRows,
+}: {
+  metric: RegistrationDashboardVenueMetric;
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+  ticketRows: TicketDashboardRow[];
+}) {
+  const sliceMap = new Map<string, Omit<RegistrationDashboardVenueSlice, "percent" | "value">>();
+  const ensureSlice = (venue: string) => {
+    const key = venue || "sin-sede";
+    const existingSlice = sliceMap.get(key);
+
+    if (existingSlice) {
+      return existingSlice;
+    }
+
+    const nextSlice = {
+      choreographies: 0,
+      confirmedRegistrations: 0,
+      label: key === "sin-sede" ? "Sin sede" : getVenueLabel(key),
+      participants: 0,
+      revenue: 0,
+      tickets: 0,
+      venue: key,
+    };
+
+    sliceMap.set(key, nextSlice);
+    return nextSlice;
+  };
+  const participantsByVenue = new Map<string, Set<string>>();
+  const confirmedRegistrationsByVenue = new Map<string, Set<string>>();
+
+  for (const participant of participants) {
+    const participantKey = normalizeCurpInput(participant.curp) || participant.id;
+    const venues = participant.eventVenues.length > 0 ? participant.eventVenues : ["sin-sede"];
+
+    for (const venue of venues) {
+      ensureSlice(venue);
+      const venueParticipants = participantsByVenue.get(venue) ?? new Set<string>();
+
+      venueParticipants.add(participantKey);
+      participantsByVenue.set(venue, venueParticipants);
+    }
+  }
+
+  for (const dance of programDances) {
+    ensureSlice(dance.venue).choreographies += 1;
+  }
+
+  for (const order of orders) {
+    const slice = ensureSlice(order.venue);
+
+    if (order.status === "paid") {
+      slice.revenue += order.paidAmount || order.amount;
+
+      if (getAdminOrderType(order) === "registration") {
+        const venueRegistrations = confirmedRegistrationsByVenue.get(order.venue) ?? new Set<string>();
+
+        venueRegistrations.add(normalizeCurpInput(order.curp) || order.id);
+        confirmedRegistrationsByVenue.set(order.venue, venueRegistrations);
+      }
+    }
+  }
+
+  for (const ticketRow of ticketRows) {
+    ensureSlice(ticketRow.venue).tickets += ticketRow.paidTickets;
+  }
+
+  for (const [venue, participantKeys] of participantsByVenue) {
+    const slice = ensureSlice(venue);
+
+    slice.participants = participantKeys.size;
+  }
+
+  const rawSlices = Array.from(sliceMap.values()).map((slice) => {
+    const confirmedRegistrations = confirmedRegistrationsByVenue.get(slice.venue)?.size ?? slice.confirmedRegistrations;
+    const metricSource = {
+      ...slice,
+      confirmedRegistrations,
+    };
+    const value = getDashboardVenueMetricValue(metricSource, metric);
+
+    return {
+      ...slice,
+      choreographies: metricSource.choreographies,
+      confirmedRegistrations,
+      value,
+    };
+  });
+  const total = rawSlices.reduce((sum, slice) => sum + slice.value, 0);
+
+  return rawSlices
+    .filter((slice) => slice.value > 0)
+    .map((slice) => ({
+      ...slice,
+      percent: total > 0 ? (slice.value / total) * 100 : 0,
+    }))
+    .sort((left, right) => right.value - left.value);
+}
+
+function getDashboardPieGradient(slices: RegistrationDashboardVenueSlice[]) {
+  if (slices.length === 0) {
+    return "conic-gradient(rgba(255,255,255,0.1) 0 100%)";
+  }
+
+  const colors = ["#f05293", "#8b5fd8", "#55a8e8", "#72cf72", "#f0b44c", "#56c4d5"];
+  let start = 0;
+  const stops = slices.map((slice, index) => {
+    const end = start + slice.percent;
+    const stop = `${colors[index % colors.length]} ${start}% ${end}%`;
+
+    start = end;
+    return stop;
+  });
+
+  return `conic-gradient(${stops.join(", ")})`;
+}
+
+function getDashboardOrderTarget(order: RegistrationInscriptionOrder): RegistrationDashboardTarget {
+  const section = getOrderRequestedTicketCount(order) > 0 ? "tickets" : getOrderMediaItemCount(order) > 0 ? "media" : "payments";
+
+  return {
+    mediaStatusFilter: order.status,
+    orderId: order.id,
+    query: getRegistrationInscriptionPaymentReference(order),
+    section,
+    statusFilter: order.status,
+    ticketStatusFilter: order.status === "paid" ? "paid" : order.status === "rejected" ? "rejected" : "pending",
+    venueFilter: order.venue,
+  };
+}
+
+function buildDashboardActivityItems({
+  orders,
+  participants,
+  programDances,
+}: {
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+}) {
+  const items: RegistrationDashboardActivityItem[] = [];
+
+  for (const participant of participants) {
+    items.push({
+      academyName: participant.academyName,
+      description: `${participant.fullName} · ${participant.academyName}`,
+      icon: Users,
+      id: `participant-${participant.id}`,
+      occurredAt: participant.createdAt,
+      target: {
+        query: participant.fullName,
+        registrationPaymentStatusFilter: "all",
+        section: "registrations",
+        venueFilter: participant.eventVenues[0] ?? "all",
+      },
+      title: "Nuevo participante registrado",
+      tone: "purple",
+    });
+  }
+
+  for (const dance of programDances) {
+    items.push({
+      academyName: dance.academyName ?? "Sin academia",
+      description: `${dance.title} · ${getVenueLabel(dance.venue)}`,
+      icon: Music2,
+      id: `dance-${dance.id}`,
+      occurredAt: dance.createdAt,
+      target: { section: "program", venueFilter: dance.venue },
+      title: "Coreografía creada",
+      tone: "cyan",
+    });
+
+    if (dance.musicUpload) {
+      items.push({
+        academyName: dance.academyName ?? "Sin academia",
+        description: `${dance.musicUpload.fileName} · ${dance.title}`,
+        icon: Upload,
+        id: `music-${dance.musicUpload.id}`,
+        occurredAt: dance.musicUpload.uploadedAt,
+        target: { section: "program", venueFilter: dance.venue },
+        title: "Música subida",
+        tone: "green",
+      });
+    }
+  }
+
+  for (const order of orders) {
+    const orderTarget = getDashboardOrderTarget(order);
+    const reference = getRegistrationInscriptionPaymentReference(order);
+    const hasTickets = getOrderRequestedTicketCount(order) > 0;
+    const hasMedia = getOrderMediaItemCount(order) > 0;
+    const reviewer = order.reviewedBy ? ` · ${order.reviewedBy}` : "";
+    const activityBase = {
+      academyName: order.academyName,
+      description: `${reference} · ${order.participantName}${reviewer}`,
+      target: orderTarget,
+    };
+
+    if (order.status === "paid") {
+      items.push({
+        ...activityBase,
+        icon: hasTickets ? Ticket : hasMedia ? Camera : CreditCard,
+        id: `order-paid-${order.id}`,
+        occurredAt: order.reviewedAt || order.paidAt || order.updatedAt,
+        title: hasTickets ? "Boletos confirmados" : hasMedia ? "Foto/Video aprobado" : "Pago aprobado",
+        tone: hasMedia ? "purple" : "green",
+      });
+      continue;
+    }
+
+    if (order.status === "rejected") {
+      items.push({
+        ...activityBase,
+        icon: XCircle,
+        id: `order-rejected-${order.id}`,
+        occurredAt: order.reviewedAt || order.updatedAt,
+        title: "Pago rechazado",
+        tone: "amber",
+      });
+      continue;
+    }
+
+    if (order.status === "payment_reported") {
+      items.push({
+        ...activityBase,
+        icon: FileText,
+        id: `order-proof-${order.id}`,
+        occurredAt: order.proof?.uploadedAt || order.updatedAt,
+        title: "Comprobante subido",
+        tone: "pink",
+      });
+      continue;
+    }
+
+    items.push({
+      ...activityBase,
+      icon: hasTickets ? Ticket : hasMedia ? ShoppingBag : ClipboardList,
+      id: `order-created-${order.id}`,
+      occurredAt: order.createdAt,
+      title: hasTickets ? "Orden de boletos enviada" : hasMedia ? "Paquete Foto/Video adquirido" : "Orden de inscripción enviada",
+      tone: hasTickets ? "pink" : "purple",
+    });
+  }
+
+  return items
+    .filter((item) => Number.isFinite(Date.parse(item.occurredAt)))
+    .sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt));
+}
+
+function getDashboardActivityTimeLabel(rawDate: string) {
+  const date = new Date(rawDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return rawDate || "Sin fecha";
+  }
+
+  const today = getDashboardStartOfDay(new Date());
+  const activityDay = getDashboardStartOfDay(date);
+  const time = date.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+
+  if (activityDay.getTime() === today.getTime()) {
+    return `Hoy, ${time}`;
+  }
+
+  if (activityDay.getTime() === addDashboardDays(today, -1).getTime()) {
+    return `Ayer, ${time}`;
+  }
+
+  return `${date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}, ${time}`;
+}
+
+function buildDashboardUpcomingEvents(programDances: RegistrationDance[]) {
+  const danceCountByVenue = programDances.reduce<Map<string, number>>((counts, dance) => {
+    counts.set(dance.venue, (counts.get(dance.venue) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const venues = Array.from(new Set([...venueOptions.map((option) => option.value), ...programDances.map((dance) => dance.venue)]));
+
+  return venues
+    .map((venue) => {
+      const eventDate = venueEventDates[venue] ? parseDashboardInputDate(venueEventDates[venue]) : null;
+      const danceCount = danceCountByVenue.get(venue) ?? 0;
+      const status = registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Draft");
+
+      return {
+        date: eventDate,
+        detail: danceCount > 0 ? `${danceCount} coreografías en programa` : "Programa pendiente",
+        status,
+        target: { section: "program" as const, venueFilter: venue },
+        title: getVenueLabel(venue),
+        type: "Competencia",
+        venue,
+      };
+    })
+    .sort((left, right) => {
+      if (!left.date && !right.date) {
+        return left.title.localeCompare(right.title, "es");
+      }
+
+      if (!left.date) {
+        return 1;
+      }
+
+      if (!right.date) {
+        return -1;
+      }
+
+      return left.date.getTime() - right.date.getTime();
+    });
+}
+
+function getDashboardAlertSeverityLabel(severity: RegistrationDashboardAlertSeverity) {
+  const labels: Record<RegistrationDashboardAlertSeverity, string> = {
+    critical: "Crítico",
+    important: "Importante",
+    info: "Informativo",
+  };
+
+  return labels[severity];
+}
+
+function buildDashboardAlerts({
+  orders,
+  participants,
+  programDances,
+}: {
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+}) {
+  const alerts: RegistrationDashboardAlert[] = [];
+  const now = Date.now();
+  const fortyEightHours = 48 * 60 * 60 * 1000;
+  const paymentReviewOrders = orders.filter((order) => order.status === "payment_reported");
+  const delayedPaymentReviewOrders = paymentReviewOrders.filter((order) => {
+    const uploadedAt = Date.parse(order.proof?.uploadedAt || order.updatedAt || order.createdAt);
+
+    return Number.isFinite(uploadedAt) && now - uploadedAt > fortyEightHours;
+  });
+  const pendingRegistrationOrders = orders.filter((order) => getAdminOrderType(order) === "registration" && order.status === "pending_payment");
+  const missingInfoParticipants = participants.filter((participant) => !participant.birthDate || participant.age == null || !participant.shirtSize);
+  const curpCounts = participants.reduce<Map<string, number>>((counts, participant) => {
+    const curp = normalizeCurpInput(participant.curp);
+
+    if (!curp) {
+      return counts;
+    }
+
+    counts.set(curp, (counts.get(curp) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const duplicateCurpCount = Array.from(curpCounts.values()).filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
+  const dancesWithoutParticipants = programDances.filter((dance) => dance.participants.length === 0);
+  const dancesWithoutMusic = programDances.filter((dance) => !dance.musicUpload);
+  const ticketIssueOrders = orders.filter(
+    (order) => getOrderRequestedTicketCount(order) > 0 && (order.status === "pending_payment" || order.status === "payment_reported" || order.status === "rejected"),
+  );
+  const mediaPendingOrders = orders.filter(
+    (order) => getOrderMediaItemCount(order) > 0 && (order.status === "pending_payment" || order.status === "payment_reported"),
+  );
+  const programmedVenues = new Set(programDances.map((dance) => dance.venue));
+  const eventsWithoutProgram = venueOptions.filter((venue) => !programmedVenues.has(venue.value));
+
+  if (delayedPaymentReviewOrders.length > 0) {
+    alerts.push({
+      actionLabel: "Revisar pagos",
+      count: delayedPaymentReviewOrders.length,
+      detail: "Comprobantes con más de 48 horas sin aprobar o rechazar.",
+      id: "delayed-payments",
+      reason: "Bloquea confirmaciones y comunicación con familias.",
+      severity: "critical",
+      target: { section: "payments", statusFilter: "payment_reported" },
+      title: "Pagos atrasados en revisión",
+    });
+  }
+
+  if (paymentReviewOrders.length > 0) {
+    alerts.push({
+      actionLabel: "Validar comprobantes",
+      count: paymentReviewOrders.length,
+      detail: "Pagos reportados esperando decisión administrativa.",
+      id: "payment-review",
+      reason: "Requiere aprobación o rechazo para cerrar la orden.",
+      severity: "important",
+      target: { section: "payments", statusFilter: "payment_reported" },
+      title: "Pagos esperando revisión",
+    });
+  }
+
+  if (pendingRegistrationOrders.length > 0) {
+    alerts.push({
+      actionLabel: "Dar seguimiento",
+      count: pendingRegistrationOrders.length,
+      detail: "Órdenes de inscripción creadas sin comprobante.",
+      id: "pending-registration-payments",
+      reason: "Aún no hay pago reportado.",
+      severity: "important",
+      target: { purchaseTypeFilter: "registration", section: "payments", statusFilter: "pending_payment" },
+      title: "Inscripciones pendientes de pago",
+    });
+  }
+
+  if (missingInfoParticipants.length > 0) {
+    alerts.push({
+      actionLabel: "Ver participantes",
+      count: missingInfoParticipants.length,
+      detail: "Participantes con edad, fecha de nacimiento o talla incompleta.",
+      id: "missing-participant-info",
+      reason: "Puede afectar programa, división o producción.",
+      severity: "important",
+      target: { query: "", section: "registrations" },
+      title: "Participantes con información incompleta",
+    });
+  }
+
+  if (duplicateCurpCount > 0) {
+    alerts.push({
+      actionLabel: "Revisar duplicados",
+      count: duplicateCurpCount,
+      detail: "CURPs repetidos entre participantes del periodo.",
+      id: "duplicate-curps",
+      reason: "Puede duplicar conteos o pagos asociados.",
+      severity: "critical",
+      target: { section: "registrations" },
+      title: "CURPs duplicados",
+    });
+  }
+
+  if (dancesWithoutParticipants.length > 0) {
+    alerts.push({
+      actionLabel: "Abrir programa",
+      count: dancesWithoutParticipants.length,
+      detail: "Coreografías registradas sin participantes asignados.",
+      id: "dances-without-participants",
+      reason: "No se pueden programar correctamente.",
+      severity: "critical",
+      target: { section: "program" },
+      title: "Coreografías sin participantes",
+    });
+  }
+
+  if (dancesWithoutMusic.length > 0) {
+    alerts.push({
+      actionLabel: "Abrir programa",
+      count: dancesWithoutMusic.length,
+      detail: "Coreografías sin archivo musical cargado.",
+      id: "dances-without-music",
+      reason: "Requiere seguimiento antes del evento.",
+      severity: "important",
+      target: { section: "program" },
+      title: "Música pendiente",
+    });
+  }
+
+  if (ticketIssueOrders.length > 0) {
+    alerts.push({
+      actionLabel: "Revisar boletos",
+      count: ticketIssueOrders.length,
+      detail: "Órdenes de boletos pendientes o rechazadas.",
+      id: "ticket-issues",
+      reason: "Afecta confirmación de entrada y QR.",
+      severity: "important",
+      target: { section: "tickets", ticketStatusFilter: "pending" },
+      title: "Boletos con seguimiento",
+    });
+  }
+
+  if (mediaPendingOrders.length > 0) {
+    alerts.push({
+      actionLabel: "Revisar Foto/Video",
+      count: mediaPendingOrders.length,
+      detail: "Paquetes de foto/video con pago pendiente o comprobante por revisar.",
+      id: "media-pending",
+      reason: "Aún requieren acción administrativa.",
+      severity: "info",
+      target: { mediaStatusFilter: "payment_reported", section: "media" },
+      title: "Foto/Video pendiente",
+    });
+  }
+
+  if (eventsWithoutProgram.length > 0) {
+    alerts.push({
+      actionLabel: "Abrir programa",
+      count: eventsWithoutProgram.length,
+      detail: "Sedes configuradas sin coreografías en el programa.",
+      id: "events-without-program",
+      reason: "Útil revisarlo antes de publicar calendario.",
+      severity: "info",
+      target: { section: "program" },
+      title: "Eventos sin programa cargado",
+    });
+  }
+
+  return alerts.sort((left, right) => {
+    const severityRank: Record<RegistrationDashboardAlertSeverity, number> = {
+      critical: 0,
+      important: 1,
+      info: 2,
+    };
+
+    return severityRank[left.severity] - severityRank[right.severity] || right.count - left.count;
+  });
+}
+
 function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
   const labels: Record<RegistrationEventTicketStatus, string> = {
     active: "Activo",
@@ -2581,6 +3538,68 @@ function downloadAdminParticipantsCsv(academies: RegistrationAdminAcademy[], par
 
   link.href = url;
   link.download = "levitate-participantes-por-academia.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadRegistrationDashboardCsv({
+  dateWindow,
+  mediaTotals,
+  orders,
+  participants,
+  programDances,
+  ticketTotals,
+  venueFilter,
+  venueMetric,
+  venueSlices,
+}: {
+  dateWindow: RegistrationDashboardDateWindow;
+  mediaTotals: ReturnType<typeof getMediaDashboardTotals>;
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+  ticketTotals: ReturnType<typeof getTicketDashboardTotals>;
+  venueFilter: string;
+  venueMetric: RegistrationDashboardVenueMetric;
+  venueSlices: RegistrationDashboardVenueSlice[];
+}) {
+  const academyCount = getDashboardAcademyKeys(participants, orders).size;
+  const participantPaymentCounts = getDashboardParticipantPaymentCounts(participants, orders);
+  const revenueBreakdown = getDashboardRevenueBreakdown(orders);
+  const summaryRows = [
+    ["Reporte", "Dashboard Levitate MX"],
+    ["Periodo", dateWindow.label],
+    ["Filtro sede", venueFilter === "all" ? "Todas" : getVenueLabel(venueFilter)],
+    ["Generado", new Date().toLocaleString("es-MX")],
+    [],
+    ["Métrica", "Valor"],
+    ["Academias con actividad", academyCount],
+    ["Participantes únicos", getDashboardUniqueParticipantCount(participants)],
+    ["Participantes sin inscripción confirmada", participantPaymentCounts.withoutConfirmedOrder],
+    ["Coreografías en programa", programDances.length],
+    ["Boletos confirmados", ticketTotals.paidTickets],
+    ["Boletos pendientes", ticketTotals.pendingTickets],
+    ["Paquetes Foto/Video comprados", mediaTotals.requestedItems],
+    ["Foto/Video pendientes de pago", mediaTotals.pending],
+    ["Ingresos confirmados", getDashboardPaidRevenue(orders)],
+    ["Pendiente de verificación", getDashboardPendingVerificationRevenue(orders)],
+    [],
+    ["Ingresos por tipo", "Monto"],
+    ["Inscripciones", revenueBreakdown.registrations],
+    ["Boletos", revenueBreakdown.tickets],
+    ["Foto/Video", revenueBreakdown.media],
+    ["Otros", revenueBreakdown.other],
+    [],
+    [`Distribución por sede (${getOptionLabel(registrationDashboardVenueMetricOptions, venueMetric)})`, "Valor", "Porcentaje"],
+    ...venueSlices.map((slice) => [slice.label, slice.value, `${Math.round(slice.percent)}%`]),
+  ];
+  const csv = summaryRows.map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "levitate-dashboard-resumen.csv";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -3647,6 +4666,539 @@ function AdminSidebar({
   );
 }
 
+function RegistrationDashboardMetricCard({
+  accent,
+  detail,
+  icon: Icon,
+  label,
+  meta,
+  onClick,
+  progress,
+  value,
+}: {
+  accent: "pink" | "purple" | "green" | "cyan" | "amber";
+  detail?: string;
+  icon: LucideIcon;
+  label: string;
+  meta: string;
+  onClick: () => void;
+  progress?: number | null;
+  value: string;
+}) {
+  return (
+    <button className={`registration-dashboard-metric registration-dashboard-metric--${accent}`} onClick={onClick} type="button">
+      <span className="registration-dashboard-metric__icon" aria-hidden="true">
+        <Icon size={24} />
+      </span>
+      <span className="registration-dashboard-metric__body">
+        <span>{label}</span>
+        <strong>{value}</strong>
+        {detail ? <small>{detail}</small> : null}
+      </span>
+      {progress != null ? (
+        <span
+          className="registration-dashboard-metric__progress"
+          style={{ "--dashboard-progress": `${Math.max(0, Math.min(100, progress))}%` } as CSSProperties}
+          aria-hidden="true"
+        />
+      ) : null}
+      <em>
+        {meta}
+        <ArrowUpRight aria-hidden="true" size={15} />
+      </em>
+    </button>
+  );
+}
+
+function RegistrationDashboardSectionHeader({
+  actionLabel,
+  children,
+  onAction,
+  title,
+}: {
+  actionLabel?: string;
+  children?: ReactNode;
+  onAction?: () => void;
+  title: string;
+}) {
+  return (
+    <header className="registration-dashboard-panel__header">
+      <div>
+        <h2>{title}</h2>
+        {children}
+      </div>
+      {actionLabel && onAction ? (
+        <button onClick={onAction} type="button">
+          {actionLabel}
+        </button>
+      ) : null}
+    </header>
+  );
+}
+
+function RegistrationAdminDashboardOverview({
+  customEndDate,
+  customStartDate,
+  dateRange,
+  dateWindow,
+  isLoading,
+  isParticipantsLoading,
+  isProgramLoading,
+  lastUpdatedAt,
+  onCustomEndDateChange,
+  onCustomStartDateChange,
+  onDateRangeChange,
+  onNavigate,
+  onRefresh,
+  onVenueFilterChange,
+  onVenueMetricChange,
+  orders,
+  participants,
+  programDances,
+  userName,
+  venueFilter,
+  venueMetric,
+}: {
+  customEndDate: string;
+  customStartDate: string;
+  dateRange: RegistrationDashboardDateRangeId;
+  dateWindow: RegistrationDashboardDateWindow;
+  isLoading: boolean;
+  isParticipantsLoading: boolean;
+  isProgramLoading: boolean;
+  lastUpdatedAt: string;
+  onCustomEndDateChange: (value: string) => void;
+  onCustomStartDateChange: (value: string) => void;
+  onDateRangeChange: (value: RegistrationDashboardDateRangeId) => void;
+  onNavigate: (target: RegistrationDashboardTarget) => void;
+  onRefresh: () => void;
+  onVenueFilterChange: (value: string) => void;
+  onVenueMetricChange: (value: RegistrationDashboardVenueMetric) => void;
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+  userName: string;
+  venueFilter: string;
+  venueMetric: RegistrationDashboardVenueMetric;
+}) {
+  const effectiveVenueFilter = getDashboardEffectiveVenueFilter(dateWindow, venueFilter);
+  const scopedOrders = useMemo(() => getDashboardScopedOrders(orders, dateWindow, venueFilter), [dateWindow, orders, venueFilter]);
+  const scopedParticipants = useMemo(
+    () => getDashboardScopedParticipants(participants, dateWindow, venueFilter),
+    [dateWindow, participants, venueFilter],
+  );
+  const scopedProgramDances = useMemo(
+    () => getDashboardScopedDances(programDances, dateWindow, venueFilter),
+    [dateWindow, programDances, venueFilter],
+  );
+  const previousDateWindow = useMemo(() => getPreviousDashboardDateWindow(dateWindow), [dateWindow]);
+  const previousOrders = useMemo(
+    () => (previousDateWindow ? getDashboardScopedOrders(orders, previousDateWindow, venueFilter) : []),
+    [orders, previousDateWindow, venueFilter],
+  );
+  const previousParticipants = useMemo(
+    () => (previousDateWindow ? getDashboardScopedParticipants(participants, previousDateWindow, venueFilter) : []),
+    [participants, previousDateWindow, venueFilter],
+  );
+  const ticketRows = useMemo(() => getTicketDashboardRows(scopedOrders), [scopedOrders]);
+  const ticketTotals = useMemo(() => getTicketDashboardTotals(ticketRows), [ticketRows]);
+  const previousTicketTotals = useMemo(() => getTicketDashboardTotals(getTicketDashboardRows(previousOrders)), [previousOrders]);
+  const mediaOrders = useMemo(
+    () => scopedOrders.filter((order) => getAdminOrderType(order) === "shop" && getOrderMediaLineItems(order).length > 0),
+    [scopedOrders],
+  );
+  const mediaTotals = useMemo(() => getMediaDashboardTotals(mediaOrders), [mediaOrders]);
+  const previousMediaOrders = useMemo(
+    () => previousOrders.filter((order) => getAdminOrderType(order) === "shop" && getOrderMediaLineItems(order).length > 0),
+    [previousOrders],
+  );
+  const previousMediaTotals = useMemo(() => getMediaDashboardTotals(previousMediaOrders), [previousMediaOrders]);
+  const academyCount = getDashboardAcademyKeys(scopedParticipants, scopedOrders).size;
+  const previousAcademyCount = getDashboardAcademyKeys(previousParticipants, previousOrders).size;
+  const participantCount = getDashboardUniqueParticipantCount(scopedParticipants);
+  const previousParticipantCount = getDashboardUniqueParticipantCount(previousParticipants);
+  const participantPaymentCounts = getDashboardParticipantPaymentCounts(scopedParticipants, scopedOrders);
+  const paidMediaPackages = mediaOrders.reduce(
+    (total, order) => total + (order.status === "paid" ? getOrderMediaItemCount(order) : 0),
+    0,
+  );
+  const previousPaidMediaPackages = previousMediaOrders.reduce(
+    (total, order) => total + (order.status === "paid" ? getOrderMediaItemCount(order) : 0),
+    0,
+  );
+  const confirmedRevenue = getDashboardPaidRevenue(scopedOrders);
+  const previousConfirmedRevenue = getDashboardPaidRevenue(previousOrders);
+  const pendingRevenue = getDashboardPendingVerificationRevenue(scopedOrders);
+  const revenueBreakdown = getDashboardRevenueBreakdown(scopedOrders);
+  const venueSlices = useMemo(
+    () =>
+      buildDashboardVenueSlices({
+        metric: venueMetric,
+        orders: scopedOrders,
+        participants: scopedParticipants,
+        programDances: scopedProgramDances,
+        ticketRows,
+      }),
+    [scopedOrders, scopedParticipants, scopedProgramDances, ticketRows, venueMetric],
+  );
+  const pieGradient = useMemo(() => getDashboardPieGradient(venueSlices), [venueSlices]);
+  const venueMetricTotal = venueSlices.reduce((total, slice) => total + slice.value, 0);
+  const recentActivity = useMemo(
+    () =>
+      buildDashboardActivityItems({
+        orders: scopedOrders,
+        participants: scopedParticipants,
+        programDances: scopedProgramDances,
+      }).slice(0, 6),
+    [scopedOrders, scopedParticipants, scopedProgramDances],
+  );
+  const upcomingEvents = useMemo(() => buildDashboardUpcomingEvents(programDances).slice(0, 5), [programDances]);
+  const alerts = useMemo(
+    () => buildDashboardAlerts({ orders: scopedOrders, participants: scopedParticipants, programDances: scopedProgramDances }).slice(0, 5),
+    [scopedOrders, scopedParticipants, scopedProgramDances],
+  );
+  const hasAnyDashboardData = scopedOrders.length > 0 || scopedParticipants.length > 0 || scopedProgramDances.length > 0;
+  const isDashboardLoading = isLoading || isParticipantsLoading || isProgramLoading;
+  const ticketProgress = ticketTotals.requestedTickets > 0 ? (ticketTotals.paidTickets / ticketTotals.requestedTickets) * 100 : 0;
+  const lastUpdatedLabel = lastUpdatedAt ? getDashboardActivityTimeLabel(lastUpdatedAt) : "Sin actualizar";
+  const firstName = userName.trim().split(/\s+/)[0] || "Admin";
+
+  const handleExportDashboard = () => {
+    downloadRegistrationDashboardCsv({
+      dateWindow,
+      mediaTotals,
+      orders: scopedOrders,
+      participants: scopedParticipants,
+      programDances: scopedProgramDances,
+      ticketTotals,
+      venueFilter: effectiveVenueFilter,
+      venueMetric,
+      venueSlices,
+    });
+  };
+
+  return (
+    <section className="registration-dashboard-overview" aria-label="Dashboard operativo Levitate">
+      <div className="registration-dashboard-topline">
+        <div>
+          <h1>¡Bienvenida, {firstName}!</h1>
+          <p>Resumen operativo de Levitate MX con los datos disponibles en el periodo seleccionado.</p>
+        </div>
+        <div className="registration-dashboard-controls" aria-label="Controles globales del dashboard">
+          <label>
+            <CalendarRange aria-hidden="true" size={17} />
+            <span>Periodo</span>
+            <select
+              onChange={(event) => onDateRangeChange(event.target.value as RegistrationDashboardDateRangeId)}
+              value={dateRange}
+            >
+              {registrationDashboardDateRangeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" size={15} />
+          </label>
+          {dateRange === "custom" ? (
+            <>
+              <label className="registration-dashboard-controls__date">
+                <span>Inicio</span>
+                <input onChange={(event) => onCustomStartDateChange(event.target.value)} type="date" value={customStartDate} />
+              </label>
+              <label className="registration-dashboard-controls__date">
+                <span>Fin</span>
+                <input onChange={(event) => onCustomEndDateChange(event.target.value)} type="date" value={customEndDate} />
+              </label>
+            </>
+          ) : null}
+          <label>
+            <MapPin aria-hidden="true" size={17} />
+            <span>Sede</span>
+            <select onChange={(event) => onVenueFilterChange(event.target.value)} value={venueFilter}>
+              <option value="all">Todas</option>
+              {venueLabelOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" size={15} />
+          </label>
+          <button className="registration-dashboard-icon-button" onClick={onRefresh} type="button">
+            <RefreshCw aria-hidden="true" size={17} />
+            Actualizar
+          </button>
+          <button className="registration-dashboard-export" disabled={!hasAnyDashboardData} onClick={handleExportDashboard} type="button">
+            <Download aria-hidden="true" size={17} />
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="registration-dashboard-filterbar">
+        <span>
+          <ListFilter aria-hidden="true" size={16} />
+          {dateWindow.label}
+          {effectiveVenueFilter !== "all" ? ` · Viendo: ${getVenueLabel(effectiveVenueFilter)}` : ""}
+        </span>
+        <small>Actualizado: {lastUpdatedLabel}</small>
+        {effectiveVenueFilter !== "all" ? (
+          <button
+            onClick={() => {
+              onVenueFilterChange("all");
+
+              if (dateWindow.currentEventVenue) {
+                onDateRangeChange("season");
+              }
+            }}
+            type="button"
+          >
+            Quitar filtro
+          </button>
+        ) : null}
+      </div>
+
+      {isDashboardLoading && !hasAnyDashboardData ? (
+        <div className="registration-dashboard-skeleton-grid" aria-label="Cargando dashboard">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      ) : null}
+
+      <section className="registration-dashboard-metrics" aria-label="Métricas principales">
+        <RegistrationDashboardMetricCard
+          accent="pink"
+          detail={`${academyCount} activas con registros u órdenes`}
+          icon={Building2}
+          label="Academias con actividad"
+          meta={previousDateWindow ? getDashboardTrendLabel(academyCount, previousAcademyCount) : "Agrupadas desde registros actuales"}
+          onClick={() => onNavigate({ section: "registrations" })}
+          value={academyCount.toLocaleString("es-MX")}
+        />
+        <RegistrationDashboardMetricCard
+          accent="purple"
+          detail={`${participantPaymentCounts.incomplete} con información incompleta`}
+          icon={Users}
+          label="Participantes"
+          meta={previousDateWindow ? getDashboardTrendLabel(participantCount, previousParticipantCount) : `${participantPaymentCounts.withoutConfirmedOrder} sin inscripción confirmada`}
+          onClick={() => onNavigate({ section: "registrations" })}
+          value={participantCount.toLocaleString("es-MX")}
+        />
+        <RegistrationDashboardMetricCard
+          accent="pink"
+          detail={`${ticketTotals.paidTickets.toLocaleString("es-MX")} de ${ticketTotals.requestedTickets.toLocaleString("es-MX")} pedidos`}
+          icon={Ticket}
+          label="Boletos vendidos"
+          meta={previousDateWindow ? getDashboardTrendLabel(ticketTotals.paidTickets, previousTicketTotals.paidTickets) : `${ticketTotals.pendingTickets} pendientes`}
+          onClick={() => onNavigate({ section: "tickets", ticketStatusFilter: "paid" })}
+          progress={ticketProgress}
+          value={ticketTotals.paidTickets.toLocaleString("es-MX")}
+        />
+        <RegistrationDashboardMetricCard
+          accent="purple"
+          detail={`${mediaTotals.pending} compras pendientes de pago`}
+          icon={Camera}
+          label="Paquetes Foto/Video"
+          meta={previousDateWindow ? getDashboardTrendLabel(paidMediaPackages, previousPaidMediaPackages) : `${mediaTotals.requestedItems} paquetes pedidos`}
+          onClick={() => onNavigate({ section: "media", mediaStatusFilter: "paid" })}
+          value={paidMediaPackages.toLocaleString("es-MX")}
+        />
+        <RegistrationDashboardMetricCard
+          accent="green"
+          detail={`Pendiente verificación: ${formatAdminCurrency(pendingRevenue)}`}
+          icon={Wallet}
+          label="Ingresos confirmados"
+          meta={previousDateWindow ? getDashboardPercentTrendLabel(confirmedRevenue, previousConfirmedRevenue) : "Solo pagos aprobados"}
+          onClick={() => onNavigate({ section: "payments", statusFilter: "paid" })}
+          value={formatAdminCurrency(confirmedRevenue)}
+        />
+      </section>
+
+      <section className="registration-dashboard-main-grid">
+        <article className="registration-dashboard-panel registration-dashboard-activity">
+          <RegistrationDashboardSectionHeader
+            actionLabel="Ver todas"
+            onAction={() => onNavigate({ section: "payments" })}
+            title="Actividad reciente"
+          />
+          <div className="registration-dashboard-activity__list">
+            {recentActivity.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <button key={item.id} onClick={() => onNavigate(item.target)} type="button">
+                  <span className={`registration-dashboard-activity__icon registration-dashboard-activity__icon--${item.tone}`}>
+                    <Icon aria-hidden="true" size={19} />
+                  </span>
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{item.description}</small>
+                  </span>
+                  <time dateTime={item.occurredAt}>{getDashboardActivityTimeLabel(item.occurredAt)}</time>
+                </button>
+              );
+            })}
+            {recentActivity.length === 0 ? (
+              <p className="registration-dashboard-empty">No hay actividad para este periodo todavía.</p>
+            ) : null}
+          </div>
+        </article>
+
+        <article className="registration-dashboard-panel registration-dashboard-venue">
+          <RegistrationDashboardSectionHeader
+            actionLabel="Ver reporte"
+            onAction={() => onNavigate({ section: "registrations", venueFilter: effectiveVenueFilter })}
+            title="Inscripciones por sede"
+          >
+            <label className="registration-dashboard-venue__metric">
+              <ChartPie aria-hidden="true" size={15} />
+              <select
+                onChange={(event) => onVenueMetricChange(event.target.value as RegistrationDashboardVenueMetric)}
+                value={venueMetric}
+              >
+                {registrationDashboardVenueMetricOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" size={14} />
+            </label>
+          </RegistrationDashboardSectionHeader>
+          <div className="registration-dashboard-venue__body">
+            <button
+              aria-label="Distribución por sede"
+              className="registration-dashboard-donut"
+              disabled={venueSlices.length === 0}
+              onClick={() => {
+                if (venueSlices[0]) {
+                  onVenueFilterChange(venueSlices[0].venue);
+                }
+              }}
+              style={{ "--dashboard-pie": pieGradient } as CSSProperties}
+              type="button"
+            >
+              <span>
+                <strong>{getDashboardVenueMetricLabel(venueMetric, venueMetricTotal)}</strong>
+                <small>Total</small>
+              </span>
+            </button>
+            <div className="registration-dashboard-venue__legend">
+              {venueSlices.map((slice, index) => (
+                <button key={slice.venue} onClick={() => onVenueFilterChange(slice.venue)} type="button">
+                  <span
+                    aria-hidden="true"
+                    style={{ "--slice-color": ["#f05293", "#8b5fd8", "#55a8e8", "#72cf72", "#f0b44c", "#56c4d5"][index % 6] } as CSSProperties}
+                  />
+                  <strong>{slice.label}</strong>
+                  <small>
+                    {Math.round(slice.percent)}% ({getDashboardVenueMetricLabel(venueMetric, slice.value)})
+                  </small>
+                </button>
+              ))}
+              {venueSlices.length === 0 ? (
+                <p className="registration-dashboard-empty">La distribución aparecerá cuando existan registros para una sede.</p>
+              ) : null}
+            </div>
+          </div>
+        </article>
+
+        <article className="registration-dashboard-panel registration-dashboard-events">
+          <RegistrationDashboardSectionHeader
+            actionLabel="Ver calendario"
+            onAction={() => onNavigate({ section: "program" })}
+            title="Próximos eventos"
+          />
+          <div className="registration-dashboard-events__list">
+            {upcomingEvents.map((event) => (
+              <button key={event.venue} onClick={() => onNavigate(event.target)} type="button">
+                <time dateTime={event.date ? getDashboardDateInputValue(event.date) : undefined}>
+                  <strong>{event.date ? event.date.toLocaleDateString("es-MX", { day: "2-digit" }) : "--"}</strong>
+                  <span>{event.date ? event.date.toLocaleDateString("es-MX", { month: "short" }) : "S/F"}</span>
+                </time>
+                <span>
+                  <strong>{event.title}</strong>
+                  <small>{event.detail}</small>
+                </span>
+                <em>{event.status}</em>
+              </button>
+            ))}
+          </div>
+        </article>
+      </section>
+
+      <section className="registration-dashboard-bottom-grid">
+        <article className="registration-dashboard-panel registration-dashboard-status">
+          <RegistrationDashboardSectionHeader title="Estado general" />
+          <div className="registration-dashboard-status__grid">
+            <button onClick={() => onNavigate({ registrationPaymentStatusFilter: "requires_payment", section: "registrations" })} type="button">
+              <Building2 aria-hidden="true" size={22} />
+              <span>Inscripciones</span>
+              <strong>{participantCount.toLocaleString("es-MX")}</strong>
+              <small>{participantPaymentCounts.withoutConfirmedOrder} requieren pago o confirmación</small>
+            </button>
+            <button onClick={() => onNavigate({ section: "payments", statusFilter: "payment_reported" })} type="button">
+              <CreditCard aria-hidden="true" size={22} />
+              <span>Pagos</span>
+              <strong>{formatAdminCurrency(revenueBreakdown.registrations + revenueBreakdown.tickets + revenueBreakdown.media + revenueBreakdown.other)}</strong>
+              <small>{scopedOrders.filter((order) => order.status === "payment_reported").length} pagos por revisar</small>
+            </button>
+            <button onClick={() => onNavigate({ section: "tickets", ticketStatusFilter: "pending" })} type="button">
+              <Ticket aria-hidden="true" size={22} />
+              <span>Boletos</span>
+              <strong>
+                {ticketTotals.paidTickets.toLocaleString("es-MX")} / {ticketTotals.requestedTickets.toLocaleString("es-MX")}
+              </strong>
+              <small>{ticketTotals.pendingTickets} pendientes de confirmación</small>
+            </button>
+            <button onClick={() => onNavigate({ mediaStatusFilter: "payment_reported", section: "media" })} type="button">
+              <Camera aria-hidden="true" size={22} />
+              <span>Foto/Video</span>
+              <strong>{mediaTotals.requestedItems.toLocaleString("es-MX")}</strong>
+              <small>{mediaTotals.pending} pendientes de pago o revisión</small>
+            </button>
+          </div>
+        </article>
+
+        <article className="registration-dashboard-panel registration-dashboard-alerts">
+          <RegistrationDashboardSectionHeader
+            actionLabel="Ver todas"
+            onAction={() => onNavigate({ section: "payments", statusFilter: "payment_reported" })}
+            title="Alertas"
+          />
+          <div className="registration-dashboard-alerts__list">
+            {alerts.map((alert) => {
+              const Icon = alert.severity === "critical" ? TriangleAlert : alert.severity === "important" ? CircleAlert : Info;
+
+              return (
+                <button key={alert.id} onClick={() => onNavigate(alert.target)} type="button">
+                  <span className={`registration-dashboard-alerts__icon registration-dashboard-alerts__icon--${alert.severity}`}>
+                    <Icon aria-hidden="true" size={18} />
+                  </span>
+                  <span>
+                    <strong>
+                      {alert.count} · {alert.title}
+                    </strong>
+                    <small>
+                      {getDashboardAlertSeverityLabel(alert.severity)} · {alert.reason}
+                    </small>
+                  </span>
+                  <em>{alert.actionLabel}</em>
+                </button>
+              );
+            })}
+            {alerts.length === 0 ? (
+              <p className="registration-dashboard-empty">No hay alertas accionables para este periodo.</p>
+            ) : null}
+          </div>
+        </article>
+      </section>
+    </section>
+  );
+}
+
 function ParticipantRegistrationPanel({
   isAcademyInternational,
   registeredDanceCount,
@@ -4686,12 +6238,19 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [registrationAcademyFilter, setRegistrationAcademyFilter] = useState("all");
   const [registrationVenueFilter, setRegistrationVenueFilter] = useState("all");
   const [registrationDivisionFilter, setRegistrationDivisionFilter] = useState("all");
+  const [registrationPaymentStatusFilter, setRegistrationPaymentStatusFilter] = useState("all");
   const [ticketQuery, setTicketQuery] = useState("");
   const [ticketVenueFilter, setTicketVenueFilter] = useState("all");
   const [ticketStatusFilter, setTicketStatusFilter] = useState("all");
   const [mediaQuery, setMediaQuery] = useState("");
   const [mediaVenueFilter, setMediaVenueFilter] = useState("all");
   const [mediaStatusFilter, setMediaStatusFilter] = useState("all");
+  const [dashboardDateRange, setDashboardDateRange] = useState<RegistrationDashboardDateRangeId>("season");
+  const [dashboardCustomStartDate, setDashboardCustomStartDate] = useState(() => getDashboardDateInputValue(addDashboardDays(new Date(), -29)));
+  const [dashboardCustomEndDate, setDashboardCustomEndDate] = useState(() => getDashboardDateInputValue(new Date()));
+  const [dashboardVenueFilter, setDashboardVenueFilter] = useState("all");
+  const [dashboardVenueMetric, setDashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
+  const [adminLastUpdatedAt, setAdminLastUpdatedAt] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [adminAuthMessage, setAdminAuthMessage] = useState("");
   const [adminError, setAdminError] = useState("");
@@ -4774,6 +6333,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       setOrders(payload.orders);
       setTotals(payload.totals);
       setSelectedOrderId((current) => (payload.orders.some((order) => order.id === current) ? current : ""));
+      setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       setAdminError(getErrorMessage(error, "No se pudo cargar el panel de inscripciones."));
     } finally {
@@ -4793,6 +6353,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       const payload = await requestRegistrationApi<RegistrationAdminParticipantsPayload>("/api/registration/admin/participants");
       setAdminAcademies(payload.academies ?? []);
       setAdminParticipants(payload.participants);
+      setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       setAdminError(getErrorMessage(error, "No se pudieron cargar los participantes."));
     } finally {
@@ -4811,6 +6372,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     try {
       const payload = await requestRegistrationApi<RegistrationAdminProgramPayload>("/api/registration/admin/program");
       setProgramDances(payload.dances);
+      setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       setAdminError(getErrorMessage(error, "No se pudo cargar el programa."));
     } finally {
@@ -4829,16 +6391,30 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [adminSession?.user.role, loadAdminOrders]);
 
   useEffect(() => {
-    if (adminSession?.user.role === "admin" && activeSection === "program") {
+    if (adminSession?.user.role === "admin" && (activeSection === "program" || activeSection === "dashboard")) {
       void loadAdminProgram();
     }
   }, [activeSection, adminSession?.user.role, loadAdminProgram]);
 
   useEffect(() => {
-    if (adminSession?.user.role === "admin" && activeSection === "registrations") {
+    if (adminSession?.user.role === "admin" && (activeSection === "registrations" || activeSection === "dashboard")) {
       void loadAdminParticipants();
     }
   }, [activeSection, adminSession?.user.role, loadAdminParticipants]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || adminSession?.user.role !== "admin" || activeSection !== "dashboard") {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadAdminOrders();
+      void loadAdminParticipants();
+      void loadAdminProgram();
+    }, 60000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
 
   useEffect(() => {
     if (!selectedOrderId) {
@@ -4935,9 +6511,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
     const normalizedQuery = registrationQuery.trim().toLowerCase();
 
     return adminParticipants.filter((participant) => {
+      const paymentStatus = getParticipantPaymentStatus(participant, orders);
       const matchesAcademy = registrationAcademyFilter === "all" || participant.academyId === registrationAcademyFilter;
       const matchesVenue = registrationVenueFilter === "all" || participant.eventVenues.includes(registrationVenueFilter);
       const matchesDivision = registrationDivisionFilter === "all" || participant.division === registrationDivisionFilter;
+      const matchesPaymentStatus =
+        registrationPaymentStatusFilter === "all" ||
+        paymentStatus === registrationPaymentStatusFilter ||
+        (registrationPaymentStatusFilter === "requires_payment" && paymentStatus !== "paid");
       const matchesQuery =
         !normalizedQuery ||
         [
@@ -4957,9 +6538,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
           .toLowerCase()
           .includes(normalizedQuery);
 
-      return matchesAcademy && matchesVenue && matchesDivision && matchesQuery;
+      return matchesAcademy && matchesVenue && matchesDivision && matchesPaymentStatus && matchesQuery;
     });
-  }, [adminParticipants, registrationAcademyFilter, registrationDivisionFilter, registrationQuery, registrationVenueFilter]);
+  }, [adminParticipants, orders, registrationAcademyFilter, registrationDivisionFilter, registrationPaymentStatusFilter, registrationQuery, registrationVenueFilter]);
   const participantGroups = useMemo(() => getAdminParticipantGroups(filteredAdminParticipants), [filteredAdminParticipants]);
   const visibleRegistrationAcademyCount = Math.max(filteredAdminAcademies.length, participantGroups.length);
   const participantTotals = useMemo(
@@ -5022,10 +6603,27 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const visibleMediaOrders = filteredMediaOrders.slice(0, 10);
   const mediaTotals = useMemo(() => getMediaDashboardTotals(filteredMediaOrders), [filteredMediaOrders]);
   const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
+  const dashboardDateWindow = useMemo(
+    () => getDashboardDateWindow(dashboardDateRange, dashboardCustomStartDate, dashboardCustomEndDate),
+    [dashboardCustomEndDate, dashboardCustomStartDate, dashboardDateRange],
+  );
+  const isDashboardSection = activeSection === "dashboard";
   const isTicketSection = activeSection === "tickets";
   const isProgramSection = activeSection === "program";
   const isMediaSection = activeSection === "media";
   const isRegistrationsSection = activeSection === "registrations";
+  const adminNavBadges = useMemo(() => {
+    const ticketRowsForBadges = getTicketDashboardRows(orders);
+    const ticketTotalsForBadges = getTicketDashboardTotals(ticketRowsForBadges);
+    const mediaOrdersForBadges = orders.filter((order) => getAdminOrderType(order) === "shop" && getOrderMediaLineItems(order).length > 0);
+
+    return {
+      media: mediaOrdersForBadges.filter((order) => order.status === "pending_payment" || order.status === "payment_reported").length,
+      payments: orders.filter((order) => order.status === "payment_reported").length,
+      program: programDances.filter((dance) => !dance.musicUpload || dance.participants.length === 0).length,
+      tickets: ticketTotalsForBadges.pendingTickets + ticketTotalsForBadges.rejectedTickets,
+    };
+  }, [orders, programDances]);
 
   const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
     setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
@@ -5033,14 +6631,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
     void loadAdminOrders();
   };
 
-  const handleSectionChange = (section: RegistrationAdminDashboardSection) => {
-    setActiveSection(section);
-    setSelectedOrderId("");
-
+  const updateAdminSectionPath = (section: RegistrationAdminDashboardSection) => {
     if (typeof window !== "undefined") {
       let nextPath = "/admin/inscripciones";
 
-      if (section === "tickets") {
+      if (section === "dashboard") {
+        nextPath = "/admin/dashboard";
+      } else if (section === "tickets") {
         nextPath = "/admin/boletos";
       } else if (section === "program") {
         nextPath = "/admin/programa";
@@ -5052,6 +6649,45 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
       window.history.replaceState(null, "", nextPath);
     }
+  };
+
+  const handleSectionChange = (section: RegistrationAdminDashboardSection) => {
+    setActiveSection(section);
+    setSelectedOrderId("");
+    updateAdminSectionPath(section);
+  };
+
+  const handleDashboardNavigate = (target: RegistrationDashboardTarget) => {
+    setActiveSection(target.section);
+    setSelectedOrderId(target.orderId ?? "");
+    updateAdminSectionPath(target.section);
+
+    if (target.section === "payments") {
+      setQuery(target.query ?? "");
+      setStatusFilter(target.statusFilter ?? "all");
+      setVenueFilter(target.venueFilter ?? "all");
+      setPurchaseTypeFilter(target.purchaseTypeFilter ?? "all");
+    } else if (target.section === "tickets") {
+      setTicketQuery(target.query ?? "");
+      setTicketStatusFilter(target.ticketStatusFilter ?? "all");
+      setTicketVenueFilter(target.venueFilter ?? "all");
+    } else if (target.section === "media") {
+      setMediaQuery(target.query ?? "");
+      setMediaStatusFilter(target.mediaStatusFilter ?? "all");
+      setMediaVenueFilter(target.venueFilter ?? "all");
+    } else if (target.section === "registrations") {
+      setRegistrationQuery(target.query ?? "");
+      setRegistrationVenueFilter(target.venueFilter ?? "all");
+      setRegistrationPaymentStatusFilter(target.registrationPaymentStatusFilter ?? "all");
+      setRegistrationAcademyFilter("all");
+      setRegistrationDivisionFilter("all");
+    }
+  };
+
+  const handleDashboardRefresh = () => {
+    void loadAdminOrders();
+    void loadAdminParticipants();
+    void loadAdminProgram();
   };
 
   const handleAdminLogout = async () => {
@@ -5077,7 +6713,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   let headerTitle = "Pagos";
   let headerDescription = "Revisión y confirmación de comprobantes";
 
-  if (isTicketSection) {
+  if (isDashboardSection) {
+    headerTitle = "Dashboard";
+    headerDescription = "Control operativo del periodo seleccionado";
+  } else if (isTicketSection) {
     headerTitle = "Boletos";
     headerDescription = "Boletos confirmados por alumno y quiénes ya llegan a 3+ para bloque de competencia";
   } else if (isProgramSection) {
@@ -5110,28 +6749,38 @@ export function LevitateRegistrationAdminPaymentsRoute({
       <aside className="registration-admin-sidebar" aria-label="Navegación admin">
         <div className="registration-admin-brand">Levitate</div>
         <nav>
-          {registrationAdminDashboardNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.section === activeSection;
+          {Array.from(new Set(registrationAdminDashboardNavItems.map((item) => item.group))).map((group) => (
+            <div className="registration-admin-nav-group" key={group}>
+              <span>{group}</span>
+              {registrationAdminDashboardNavItems
+                .filter((item) => item.group === group)
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.section === activeSection;
+                  const badgeCount = item.badgeKey ? adminNavBadges[item.badgeKey] : 0;
 
-            return (
-              <button
-                className={isActive ? "is-active" : ""}
-                disabled={!item.section}
-                key={item.label}
-                onClick={() => {
-                  if (item.section) {
-                    handleSectionChange(item.section);
-                  }
-                }}
-                ref={isActive ? activeAdminNavItemRef : undefined}
-                type="button"
-              >
-                <Icon aria-hidden="true" size={17} />
-                {item.label}
-              </button>
-            );
-          })}
+                  return (
+                    <button
+                      aria-current={isActive ? "page" : undefined}
+                      className={isActive ? "is-active" : ""}
+                      disabled={!item.section}
+                      key={item.label}
+                      onClick={() => {
+                        if (item.section) {
+                          handleSectionChange(item.section);
+                        }
+                      }}
+                      ref={isActive ? activeAdminNavItemRef : undefined}
+                      type="button"
+                    >
+                      <Icon aria-hidden="true" size={17} />
+                      <span>{item.label}</span>
+                      {badgeCount > 0 ? <em>{badgeCount}</em> : null}
+                    </button>
+                  );
+                })}
+            </div>
+          ))}
         </nav>
         <div className="registration-admin-sidebar__footer">
           <button
@@ -5150,53 +6799,79 @@ export function LevitateRegistrationAdminPaymentsRoute({
         </div>
       </aside>
 
-      <section className="registration-admin-workspace">
-        <header className="registration-admin-header">
-          <div>
-            <h1>{headerTitle}</h1>
-            <p>{headerDescription}</p>
-          </div>
-          {!isProgramSection ? (
-            <button
-              className="registration-admin-export"
-              disabled={
-                isTicketSection
-                  ? filteredTicketRows.length === 0
-                  : isMediaSection
-                    ? filteredMediaOrders.length === 0
-                    : isRegistrationsSection
-                      ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
-                      : filteredOrders.length === 0
-              }
-              onClick={() => {
-                if (isTicketSection) {
-                  downloadTicketDashboardCsv(filteredTicketRows);
-                  return;
+      <section className={`registration-admin-workspace${isDashboardSection ? " registration-admin-workspace--dashboard" : ""}`}>
+        {!isDashboardSection ? (
+          <header className="registration-admin-header">
+            <div>
+              <h1>{headerTitle}</h1>
+              <p>{headerDescription}</p>
+            </div>
+            {!isProgramSection ? (
+              <button
+                className="registration-admin-export"
+                disabled={
+                  isTicketSection
+                    ? filteredTicketRows.length === 0
+                    : isMediaSection
+                      ? filteredMediaOrders.length === 0
+                      : isRegistrationsSection
+                        ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
+                        : filteredOrders.length === 0
                 }
+                onClick={() => {
+                  if (isTicketSection) {
+                    downloadTicketDashboardCsv(filteredTicketRows);
+                    return;
+                  }
 
-                if (isMediaSection) {
-                  downloadMediaOrdersCsv(filteredMediaOrders);
-                  return;
-                }
+                  if (isMediaSection) {
+                    downloadMediaOrdersCsv(filteredMediaOrders);
+                    return;
+                  }
 
-                if (isRegistrationsSection) {
-                  downloadAdminParticipantsCsv(filteredAdminAcademies, filteredAdminParticipants, orders);
-                  return;
-                }
+                  if (isRegistrationsSection) {
+                    downloadAdminParticipantsCsv(filteredAdminAcademies, filteredAdminParticipants, orders);
+                    return;
+                  }
 
-                downloadRegistrationOrdersCsv(filteredOrders);
-              }}
-              type="button"
-            >
-              <Download aria-hidden="true" size={16} />
-              Exportar
-            </button>
-          ) : null}
-        </header>
+                  downloadRegistrationOrdersCsv(filteredOrders);
+                }}
+                type="button"
+              >
+                <Download aria-hidden="true" size={16} />
+                Exportar
+              </button>
+            ) : null}
+          </header>
+        ) : null}
 
         {adminError ? <p className="registration-admin-alert">{adminError}</p> : null}
 
-        {isProgramSection ? (
+        {isDashboardSection ? (
+          <RegistrationAdminDashboardOverview
+            customEndDate={dashboardCustomEndDate}
+            customStartDate={dashboardCustomStartDate}
+            dateRange={dashboardDateRange}
+            dateWindow={dashboardDateWindow}
+            isLoading={isLoading}
+            isParticipantsLoading={isParticipantsLoading}
+            isProgramLoading={isProgramLoading}
+            lastUpdatedAt={adminLastUpdatedAt}
+            onCustomEndDateChange={setDashboardCustomEndDate}
+            onCustomStartDateChange={setDashboardCustomStartDate}
+            onDateRangeChange={setDashboardDateRange}
+            onNavigate={handleDashboardNavigate}
+            onRefresh={handleDashboardRefresh}
+            onVenueFilterChange={setDashboardVenueFilter}
+            onVenueMetricChange={setDashboardVenueMetric}
+            orders={orders}
+            participants={adminParticipants}
+            programDances={programDances}
+            userName={adminSession.user.name}
+            venueFilter={dashboardVenueFilter}
+            venueMetric={dashboardVenueMetric}
+          />
+        ) : isProgramSection ? (
           <ProgramPanel
             dances={programDances}
             emptyMessage={isProgramLoading ? "Cargando programa..." : "Todavía no hay coreografías para armar el programa."}
@@ -5274,6 +6949,19 @@ export function LevitateRegistrationAdminPaymentsRoute({
                       {option.label}
                     </option>
                   ))}
+                </select>
+                <ChevronDown aria-hidden="true" size={16} />
+              </label>
+              <label>
+                <span>Pago</span>
+                <select onChange={(event) => setRegistrationPaymentStatusFilter(event.target.value)} value={registrationPaymentStatusFilter}>
+                  <option value="all">Todos</option>
+                  <option value="paid">Pagados</option>
+                  <option value="payment_reported">Por confirmar</option>
+                  <option value="pending_payment">Pendiente de pago</option>
+                  <option value="rejected">Rechazados</option>
+                  <option value="no_order">Sin orden</option>
+                  <option value="requires_payment">Requieren acción</option>
                 </select>
                 <ChevronDown aria-hidden="true" size={16} />
               </label>
