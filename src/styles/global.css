@@ -19944,12 +19944,13 @@ button {
 }
 
 .registration-admin-dashboard {
+  color-scheme: dark;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 206px minmax(0, 1fr);
   align-items: start;
-  background: #f7f7f6;
-  color: #111;
+  background: #07080a;
+  color: #fff;
 }
 
 .registration-admin-sidebar {
@@ -20102,8 +20103,13 @@ button {
   display: grid;
   align-content: start;
   gap: 26px;
+  min-height: 100vh;
   min-width: 0;
   padding: 28px 30px 34px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 210px),
+    #090a0c;
+  color: #fff;
 }
 
 .registration-admin-workspace--dashboard {
@@ -20132,7 +20138,7 @@ button {
 
 .registration-admin-header h1 {
   margin: 0;
-  color: #111;
+  color: #fff;
   font-size: clamp(1.8rem, 3vw, 2.55rem);
   font-weight: 900;
   letter-spacing: 0;
@@ -20141,7 +20147,7 @@ button {
 
 .registration-admin-header p {
   margin: 8px 0 0;
-  color: rgba(17, 17, 17, 0.56);
+  color: rgba(255, 255, 255, 0.62);
   font-size: 0.96rem;
   font-weight: 680;
 }
@@ -20152,10 +20158,10 @@ button {
   justify-content: center;
   gap: 8px;
   min-height: 40px;
-  border: 1px solid #b9b9b9;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 6px;
-  background: #fff;
-  color: #171717;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
@@ -20181,10 +20187,10 @@ button {
   gap: 8px;
   min-height: 40px;
   padding: 0 16px;
-  border: 1px solid #111;
+  border: 1px solid rgba(255, 255, 255, 0.92);
   border-radius: 6px;
-  background: #111;
-  color: #fff;
+  background: #fff;
+  color: #0d0e11;
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
@@ -23068,6 +23074,314 @@ button {
 .registration-admin-whatsapp-action:hover,
 .registration-admin-whatsapp-action:focus-visible {
   background: #176338;
+}
+
+.registration-admin-dashboard .registration-admin-summary,
+.registration-admin-dashboard .registration-admin-table-card,
+.registration-admin-dashboard .registration-admin-filters label,
+.registration-admin-dashboard .registration-participants-quick-filters button,
+.registration-admin-dashboard .registration-participant-profile__block,
+.registration-admin-dashboard .registration-participant-profile__stats,
+.registration-admin-dashboard .registration-admin-sidepanel {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-admin-summary article {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.registration-admin-dashboard .registration-admin-summary span,
+.registration-admin-dashboard .registration-admin-filters span,
+.registration-admin-dashboard .registration-admin-table__head,
+.registration-admin-dashboard .registration-admin-table__row small,
+.registration-admin-dashboard .registration-admin-empty,
+.registration-admin-dashboard .registration-admin-table-footer,
+.registration-admin-dashboard .registration-admin-detail header span,
+.registration-admin-dashboard .registration-admin-ticket-pack header span,
+.registration-admin-dashboard .registration-admin-proof-preview > span,
+.registration-admin-dashboard .registration-admin-note span,
+.registration-admin-dashboard .registration-admin-review-panel span,
+.registration-admin-dashboard .registration-participant-profile__header span,
+.registration-admin-dashboard .registration-participant-profile__header p,
+.registration-admin-dashboard .registration-participant-profile__stats span,
+.registration-admin-dashboard .registration-participant-profile__stats small,
+.registration-admin-dashboard .registration-participant-profile__block p,
+.registration-admin-dashboard .registration-participant-profile__block dt,
+.registration-admin-dashboard .registration-participant-profile__list span,
+.registration-admin-dashboard .registration-participant-profile__list small,
+.registration-admin-dashboard .registration-admin-detail header p,
+.registration-admin-dashboard .registration-admin-detail dt,
+.registration-admin-dashboard .registration-admin-proof-file,
+.registration-admin-dashboard .registration-admin-ticket-pack article small {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.registration-admin-dashboard .registration-admin-summary strong,
+.registration-admin-dashboard .registration-admin-table__row,
+.registration-admin-dashboard .registration-admin-academies-table .registration-admin-table__row span:nth-child(n + 6),
+.registration-admin-dashboard .registration-admin-choreographers-table .registration-admin-table__row span:last-child,
+.registration-admin-dashboard .registration-participants-metric-button strong,
+.registration-admin-dashboard .registration-participants-progress-button strong,
+.registration-admin-dashboard .registration-participants-ticket-button strong,
+.registration-admin-dashboard .registration-admin-ticket-number,
+.registration-admin-dashboard .registration-admin-table-footer button,
+.registration-admin-dashboard .registration-admin-detail h2,
+.registration-admin-dashboard .registration-admin-detail dd,
+.registration-admin-dashboard .registration-admin-ticket-pack header strong,
+.registration-admin-dashboard .registration-admin-ticket-pack article strong,
+.registration-admin-dashboard .registration-participant-profile__header h2,
+.registration-admin-dashboard .registration-participant-profile__stats strong,
+.registration-admin-dashboard .registration-participant-profile__block h3,
+.registration-admin-dashboard .registration-participant-profile__block dd,
+.registration-admin-dashboard .registration-participant-profile__list strong {
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-admin-summary svg {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.registration-admin-dashboard .registration-admin-filters input,
+.registration-admin-dashboard .registration-admin-filters select,
+.registration-admin-dashboard .registration-admin-note textarea,
+.registration-admin-dashboard .registration-admin-review-panel select {
+  color-scheme: dark;
+  color: #fff;
+  caret-color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+
+.registration-admin-dashboard .registration-admin-filters label > svg {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.registration-admin-dashboard .registration-admin-table-card {
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.24);
+}
+
+.registration-admin-dashboard .registration-admin-table__head {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.registration-admin-dashboard .registration-admin-table__row {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.registration-admin-dashboard .registration-admin-table__row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.registration-admin-dashboard .registration-admin-table__row:hover,
+.registration-admin-dashboard .registration-admin-table__row.is-selected {
+  background: rgba(255, 255, 255, 0.095);
+}
+
+.registration-admin-dashboard .registration-admin-participants-card,
+.registration-admin-dashboard .registration-admin-participant-group {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.registration-admin-dashboard .registration-admin-participant-group > header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(90deg, rgba(217, 76, 140, 0.16), rgba(255, 255, 255, 0.035));
+}
+
+.registration-admin-dashboard .registration-admin-participant-group > header strong {
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-admin-participant-group > header span {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.registration-admin-dashboard .registration-participants-quick-filters button:hover,
+.registration-admin-dashboard .registration-participants-quick-filters button:focus-visible,
+.registration-admin-dashboard .registration-participants-quick-filters button.is-active {
+  border-color: rgba(255, 120, 180, 0.48);
+  background: rgba(240, 82, 147, 0.14);
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-participants-quick-filters strong {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-participants-progress {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.registration-admin-dashboard .registration-participants-actions summary,
+.registration-admin-dashboard .registration-participants-actions div,
+.registration-admin-dashboard .registration-participants-actions button,
+.registration-admin-dashboard .registration-admin-table-footer button,
+.registration-admin-dashboard .registration-admin-detail__close,
+.registration-admin-dashboard .registration-admin-proof-preview__actions a,
+.registration-admin-dashboard .registration-admin-proof-preview__actions button,
+.registration-admin-dashboard .registration-admin-ticket-pack header button,
+.registration-admin-dashboard .registration-admin-detail-actions button,
+.registration-admin-dashboard .registration-participant-profile__header button,
+.registration-admin-dashboard .registration-participant-profile__primary {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.055);
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-participants-actions button,
+.registration-admin-dashboard .registration-participants-actions button:last-child {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.registration-admin-dashboard .registration-participants-actions button:hover,
+.registration-admin-dashboard .registration-participants-actions button:focus-visible,
+.registration-admin-dashboard .registration-admin-table-footer button:hover,
+.registration-admin-dashboard .registration-admin-table-footer button:focus-visible,
+.registration-admin-dashboard .registration-admin-detail__close:hover,
+.registration-admin-dashboard .registration-admin-detail__close:focus-visible,
+.registration-admin-dashboard .registration-admin-proof-preview__actions a:hover,
+.registration-admin-dashboard .registration-admin-proof-preview__actions a:focus-visible,
+.registration-admin-dashboard .registration-admin-proof-preview__actions button:hover,
+.registration-admin-dashboard .registration-admin-proof-preview__actions button:focus-visible,
+.registration-admin-dashboard .registration-admin-detail-actions button:hover,
+.registration-admin-dashboard .registration-admin-detail-actions button:focus-visible,
+.registration-admin-dashboard .registration-participant-profile__header button:hover,
+.registration-admin-dashboard .registration-participant-profile__header button:focus-visible,
+.registration-admin-dashboard .registration-participant-profile__primary:hover,
+.registration-admin-dashboard .registration-participant-profile__primary:focus-visible {
+  border-color: rgba(255, 120, 180, 0.48);
+  background: rgba(240, 82, 147, 0.14);
+}
+
+.registration-admin-dashboard .registration-admin-sidepanel {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #0c0d10;
+  color: #fff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.registration-admin-dashboard .registration-admin-drawer__backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.registration-admin-dashboard .registration-participant-profile__meta span,
+.registration-admin-dashboard .registration-participant-profile__chips span,
+.registration-admin-dashboard .registration-participant-profile__list article,
+.registration-admin-dashboard .registration-participant-profile__list button,
+.registration-admin-dashboard .registration-admin-ticket-pack article,
+.registration-admin-dashboard .registration-admin-proof-preview img,
+.registration-admin-dashboard .registration-admin-proof-file,
+.registration-admin-dashboard .registration-admin-note textarea,
+.registration-admin-dashboard .registration-admin-review-panel select {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.registration-admin-dashboard .registration-participant-profile__stats button {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #fff;
+}
+
+.registration-admin-dashboard .registration-participant-profile__block dl div,
+.registration-admin-dashboard .registration-admin-detail dl div {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.registration-admin-dashboard .registration-admin-note textarea:focus,
+.registration-admin-dashboard .registration-admin-review-panel select:focus {
+  border-color: rgba(255, 120, 180, 0.56);
+  box-shadow: 0 0 0 3px rgba(240, 82, 147, 0.14);
+}
+
+.registration-admin-dashboard .registration-admin-review-panel {
+  border-color: rgba(255, 120, 180, 0.2);
+  background: rgba(240, 82, 147, 0.08);
+}
+
+.registration-admin-dashboard .registration-admin-review-panel__submit {
+  border-color: rgba(91, 198, 130, 0.62);
+  background: rgba(91, 198, 130, 0.18);
+  color: #b7f5c9;
+}
+
+.registration-admin-dashboard .registration-admin-review-panel__submit:disabled {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.registration-admin-dashboard .registration-admin-detail-actions button:first-child {
+  border-color: #fff;
+  background: #fff;
+  color: #0d0e11;
+}
+
+.registration-admin-dashboard .registration-admin-detail-actions button:last-child {
+  border-color: rgba(255, 120, 180, 0.48);
+  color: #ff8cbc;
+}
+
+.registration-admin-dashboard .registration-admin-status--no-order {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.registration-admin-dashboard .registration-admin-status--pending-payment {
+  border-color: rgba(255, 120, 180, 0.32);
+  background: rgba(255, 120, 180, 0.1);
+  color: #ff8cbc;
+}
+
+.registration-admin-dashboard .registration-admin-status--payment-reported,
+.registration-admin-dashboard .registration-participant-status--pending-payment,
+.registration-admin-dashboard .registration-participant-status--pending-tickets {
+  border-color: rgba(255, 196, 96, 0.34);
+  background: rgba(255, 196, 96, 0.1);
+  color: #ffc970;
+}
+
+.registration-admin-dashboard .registration-admin-status--paid,
+.registration-admin-dashboard .registration-participant-status--registered {
+  border-color: rgba(112, 232, 154, 0.34);
+  background: rgba(112, 232, 154, 0.1);
+  color: #8beaab;
+}
+
+.registration-admin-dashboard .registration-admin-status--rejected,
+.registration-admin-dashboard .registration-participant-status--incomplete {
+  border-color: rgba(255, 120, 150, 0.34);
+  background: rgba(255, 120, 150, 0.1);
+  color: #ff8aa4;
+}
+
+.registration-admin-dashboard .registration-participants-ticket-button.is-complete strong,
+.registration-admin-dashboard .registration-admin-table__row small.registration-admin-ticket-readiness--ready {
+  border-color: rgba(112, 232, 154, 0.34);
+  background: rgba(112, 232, 154, 0.1);
+  color: #8beaab;
+}
+
+.registration-admin-dashboard .registration-participants-ticket-button.is-partial strong {
+  border-color: rgba(255, 196, 96, 0.34);
+  background: rgba(255, 196, 96, 0.1);
+  color: #ffc970;
+}
+
+.registration-admin-dashboard .registration-participants-ticket-button.is-empty strong {
+  border-color: rgba(255, 120, 150, 0.3);
+  background: rgba(255, 120, 150, 0.1);
+  color: #ff8aa4;
+}
+
+.registration-admin-dashboard .registration-admin-table__row small.registration-admin-ticket-readiness {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.62);
 }
 
 @media (max-width: 1320px) {
