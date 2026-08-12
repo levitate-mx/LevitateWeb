@@ -21543,6 +21543,18 @@ button {
   grid-template-columns: minmax(280px, 1fr) minmax(210px, 0.8fr) minmax(160px, 0.52fr) minmax(170px, 0.58fr) minmax(170px, 0.58fr);
 }
 
+.registration-admin-filters--participants {
+  grid-template-columns:
+    minmax(260px, 1.3fr)
+    minmax(138px, 0.72fr)
+    minmax(132px, 0.68fr)
+    minmax(112px, 0.58fr)
+    minmax(150px, 0.72fr)
+    minmax(136px, 0.62fr)
+    minmax(122px, 0.58fr)
+    minmax(150px, 0.72fr);
+}
+
 .registration-admin-filters--choreographers {
   grid-template-columns: minmax(280px, 0.55fr);
 }
@@ -21680,6 +21692,54 @@ button {
   font-weight: 900;
 }
 
+.registration-participants-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.registration-participants-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registration-participants-quick-filters button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fff;
+  color: rgba(17, 17, 17, 0.68);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 840;
+}
+
+.registration-participants-quick-filters button:hover,
+.registration-participants-quick-filters button:focus-visible,
+.registration-participants-quick-filters button.is-active {
+  border-color: rgba(217, 76, 140, 0.42);
+  background: rgba(217, 76, 140, 0.08);
+  color: #171717;
+}
+
+.registration-participants-quick-filters strong {
+  display: inline-grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.08);
+  color: #171717;
+  font-size: 0.74rem;
+  font-weight: 920;
+}
+
 .registration-admin-participant-group {
   --registration-admin-group-accent: rgba(217, 76, 140, 0.48);
   --registration-admin-group-border: rgba(217, 76, 140, 0.2);
@@ -21731,24 +21791,220 @@ button {
 }
 
 .registration-admin-participants-table {
-  min-width: 980px;
-}
-
-.registration-admin-participants-table .registration-admin-table__head {
-  background: rgba(255, 255, 255, 0.72);
+  min-width: 1480px;
 }
 
 .registration-admin-participants-table .registration-admin-table__head,
 .registration-admin-participants-table .registration-admin-table__row {
-  grid-template-columns: 1.35fr 1.15fr 0.88fr 0.46fr 0.56fr 0.56fr 0.92fr 0.72fr;
+  grid-template-columns:
+    minmax(210px, 1.16fr)
+    minmax(180px, 0.96fr)
+    minmax(190px, 0.98fr)
+    minmax(190px, 0.92fr)
+    minmax(132px, 0.62fr)
+    minmax(136px, 0.62fr)
+    minmax(184px, 0.92fr)
+    minmax(164px, 0.76fr)
+    minmax(62px, 0.28fr);
 }
 
-.registration-admin-participants-table .registration-admin-table__row {
-  background: rgba(255, 255, 255, 0.92);
+.registration-participants-table__row {
+  min-height: 78px;
 }
 
-.registration-admin-participants-table .registration-admin-table__row:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.74);
+.registration-participants-table__row > span:last-child {
+  overflow: visible;
+}
+
+.registration-participants-table__row:focus-visible {
+  outline: 2px solid rgba(217, 76, 140, 0.42);
+  outline-offset: -2px;
+}
+
+.registration-participants-metric-button,
+.registration-participants-progress-button,
+.registration-participants-ticket-button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.registration-participants-metric-button:disabled,
+.registration-participants-progress-button:disabled,
+.registration-participants-ticket-button:disabled {
+  cursor: default;
+}
+
+.registration-participants-metric-button strong,
+.registration-participants-progress-button strong,
+.registration-participants-ticket-button strong {
+  overflow: hidden;
+  color: #171717;
+  font-size: 0.9rem;
+  font-weight: 920;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registration-participants-progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7e7e7;
+}
+
+.registration-participants-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ef4f94, #ff7eb7);
+}
+
+.registration-participants-ticket-button {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.registration-participants-ticket-button strong {
+  display: inline-flex;
+  width: fit-content;
+  min-width: 30px;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(17, 17, 17, 0.16);
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.06);
+}
+
+.registration-participants-ticket-button.is-complete strong {
+  border-color: rgba(73, 136, 97, 0.34);
+  background: rgba(73, 136, 97, 0.12);
+  color: #35734c;
+}
+
+.registration-participants-ticket-button.is-partial strong {
+  border-color: rgba(214, 137, 46, 0.34);
+  background: rgba(214, 137, 46, 0.12);
+  color: #9e661b;
+}
+
+.registration-participants-ticket-button.is-empty strong {
+  border-color: rgba(193, 57, 79, 0.28);
+  background: rgba(193, 57, 79, 0.08);
+  color: #a62c45;
+}
+
+.registration-participant-status {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #d7d7d7;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.registration-participant-status--registered {
+  border-color: rgba(73, 136, 97, 0.34);
+  background: rgba(73, 136, 97, 0.1);
+  color: #35734c;
+}
+
+.registration-participant-status--pending-payment,
+.registration-participant-status--pending-tickets {
+  border-color: rgba(214, 137, 46, 0.34);
+  background: rgba(214, 137, 46, 0.1);
+  color: #9e661b;
+}
+
+.registration-participant-status--incomplete {
+  border-color: rgba(193, 57, 79, 0.34);
+  background: rgba(193, 57, 79, 0.08);
+  color: #a62c45;
+}
+
+.registration-participants-actions {
+  position: relative;
+  width: fit-content;
+}
+
+.registration-participants-actions summary {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fff;
+  color: #171717;
+  cursor: pointer;
+  list-style: none;
+}
+
+.registration-participants-actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.registration-participants-actions[open] summary {
+  border-color: rgba(217, 76, 140, 0.42);
+  background: rgba(217, 76, 140, 0.08);
+}
+
+.registration-participants-actions div {
+  position: absolute;
+  z-index: 20;
+  top: 40px;
+  right: 0;
+  display: grid;
+  width: 190px;
+  overflow: hidden;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+}
+
+.registration-participants-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid #ececec;
+  background: #fff;
+  color: #171717;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 820;
+  text-align: left;
+}
+
+.registration-participants-actions button:last-child {
+  border-bottom: 0;
+}
+
+.registration-participants-actions button:hover,
+.registration-participants-actions button:focus-visible {
+  background: #f6f6f6;
+}
+
+.registration-participants-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .registration-admin-ticket-number {
@@ -21915,6 +22171,293 @@ button {
   border-color: rgba(255, 255, 255, 0.14);
   background: #0c0d10;
   color: #fff;
+}
+
+.registration-admin-sidepanel--participant {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.registration-participant-profile {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.registration-participant-profile__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: start;
+  gap: 14px;
+}
+
+.registration-participant-profile__header div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.registration-participant-profile__header span {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.76rem;
+  font-weight: 860;
+}
+
+.registration-participant-profile__header h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #111;
+  font-size: clamp(1.28rem, 2vw, 1.72rem);
+  font-weight: 920;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+.registration-participant-profile__header p {
+  margin: 0;
+  color: rgba(17, 17, 17, 0.62);
+  font-size: 0.84rem;
+  font-weight: 820;
+}
+
+.registration-participant-profile__header button,
+.registration-participant-profile__primary {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #dedede;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  font: inherit;
+}
+
+.registration-participant-profile__header button {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+}
+
+.registration-participant-profile__header button:hover,
+.registration-participant-profile__header button:focus-visible,
+.registration-participant-profile__primary:hover,
+.registration-participant-profile__primary:focus-visible {
+  border-color: #111;
+}
+
+.registration-participant-profile__meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registration-participant-profile__meta span,
+.registration-participant-profile__chips span {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 27px;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 9px;
+  border: 1px solid #dedede;
+  border-radius: 7px;
+  background: #fafafa;
+  color: rgba(17, 17, 17, 0.72);
+  font-size: 0.74rem;
+  font-weight: 820;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registration-participant-profile__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+}
+
+.registration-participant-profile__stats button {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 104px;
+  padding: 14px;
+  border: 0;
+  border-right: 1px solid #dedede;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.registration-participant-profile__stats button:last-child {
+  border-right: 0;
+}
+
+.registration-participant-profile__stats button:disabled {
+  cursor: default;
+}
+
+.registration-participant-profile__stats span {
+  color: rgba(17, 17, 17, 0.56);
+  font-size: 0.74rem;
+  font-weight: 820;
+}
+
+.registration-participant-profile__stats strong {
+  color: #111;
+  font-size: 1.45rem;
+  font-weight: 920;
+  line-height: 1;
+}
+
+.registration-participant-profile__stats small {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.registration-participant-profile__block {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.registration-participant-profile__block h3 {
+  margin: 0;
+  color: #111;
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.registration-participant-profile__block p {
+  margin: 0;
+  color: rgba(17, 17, 17, 0.6);
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.registration-participant-profile__block dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.registration-participant-profile__block dl div {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.42fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid #ececec;
+}
+
+.registration-participant-profile__block dl div:first-child {
+  border-top: 0;
+}
+
+.registration-participant-profile__block dt,
+.registration-participant-profile__block dd {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.registration-participant-profile__block dt {
+  color: rgba(17, 17, 17, 0.56);
+  font-weight: 760;
+}
+
+.registration-participant-profile__block dd {
+  color: #171717;
+  font-weight: 860;
+  overflow-wrap: anywhere;
+}
+
+.registration-participant-profile__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registration-participant-profile__chips span {
+  border-color: rgba(214, 137, 46, 0.34);
+  background: rgba(214, 137, 46, 0.1);
+  color: #9e661b;
+}
+
+.registration-participant-profile__chips span.is-complete {
+  border-color: rgba(73, 136, 97, 0.34);
+  background: rgba(73, 136, 97, 0.1);
+  color: #35734c;
+}
+
+.registration-participant-profile__list {
+  display: grid;
+  gap: 8px;
+}
+
+.registration-participant-profile__list article,
+.registration-participant-profile__list button {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #ececec;
+  border-radius: 7px;
+  background: #fafafa;
+  color: #171717;
+  font: inherit;
+  text-align: left;
+}
+
+.registration-participant-profile__list button {
+  cursor: pointer;
+}
+
+.registration-participant-profile__list button:hover,
+.registration-participant-profile__list button:focus-visible {
+  border-color: rgba(217, 76, 140, 0.34);
+  background: rgba(217, 76, 140, 0.06);
+}
+
+.registration-participant-profile__list strong,
+.registration-participant-profile__list span,
+.registration-participant-profile__list small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registration-participant-profile__list strong {
+  color: #111;
+  font-size: 0.84rem;
+  font-weight: 880;
+}
+
+.registration-participant-profile__list span,
+.registration-participant-profile__list small {
+  color: rgba(17, 17, 17, 0.58);
+  font-size: 0.76rem;
+  font-weight: 740;
+}
+
+.registration-participant-profile__primary {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 880;
 }
 
 .registration-academy-profile {
@@ -22787,6 +23330,7 @@ button {
   .registration-academies-summary,
   .registration-academies-toolbar,
   .registration-academy-profile__stats,
+  .registration-participant-profile__stats,
   .registration-admin-proof-preview__actions {
     grid-template-columns: 1fr;
   }
@@ -22892,6 +23436,15 @@ button {
     border-bottom: 0;
   }
 
+  .registration-participant-profile__stats button,
+  .registration-participant-profile__stats button:last-child {
+    border-right: 0;
+  }
+
+  .registration-participant-profile__stats button:first-child {
+    border-bottom: 1px solid #dedede;
+  }
+
   .registration-admin-table-footer {
     align-items: flex-start;
     flex-direction: column;
@@ -22908,6 +23461,11 @@ button {
   }
 
   .registration-admin-detail dl div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .registration-participant-profile__block dl div {
     grid-template-columns: 1fr;
     gap: 4px;
   }
