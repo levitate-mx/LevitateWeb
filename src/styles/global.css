@@ -20433,9 +20433,8 @@ button {
 .registration-academies-directory__row {
   display: grid;
   grid-template-columns:
-    minmax(290px, 1.4fr)
-    minmax(160px, 0.72fr)
-    minmax(138px, 0.6fr)
+    minmax(300px, 1.48fr)
+    minmax(190px, 0.82fr)
     minmax(134px, 0.58fr)
     minmax(112px, 0.48fr)
     minmax(110px, 0.48fr)
@@ -20444,7 +20443,7 @@ button {
     52px;
   align-items: center;
   gap: 14px;
-  min-width: 1260px;
+  min-width: 1120px;
   padding: 0 18px;
 }
 
@@ -20659,7 +20658,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  min-width: 1260px;
+  min-width: 1120px;
   min-height: 58px;
   padding: 0 18px;
   border-top: 1px solid var(--academies-line);

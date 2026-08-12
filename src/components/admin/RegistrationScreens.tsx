@@ -5685,7 +5685,6 @@ function RegistrationAcademiesDirectoryPanel({
         <div className="registration-academies-directory__head" role="row">
           <span role="columnheader">Academia</span>
           <span role="columnheader">Ubicación</span>
-          <span role="columnheader">Estado</span>
           <span role="columnheader">Inscripciones</span>
           <span role="columnheader">Participantes</span>
           <span role="columnheader">Coreógrafos</span>
@@ -5719,10 +5718,6 @@ function RegistrationAcademiesDirectoryPanel({
             <div>
               <strong>{summary.locationLabel}</strong>
               <small>{summary.locationDetail}</small>
-            </div>
-            <div>
-              <em className={getRegistrationAcademyStatusClass(summary.status)}>{getRegistrationAcademyStatusLabel(summary.status)}</em>
-              <small>Registrada el {getAdminDateLabel(summary.academy.createdAt)}</small>
             </div>
             <button
               className="registration-academies-directory__metric"
@@ -5897,7 +5892,6 @@ function RegistrationAcademyQuickPanel({
       </header>
 
       <div className="registration-academy-profile__meta">
-        <em className={getRegistrationAcademyStatusClass(summary.status)}>{getRegistrationAcademyStatusLabel(summary.status)}</em>
         <span>{summary.locationLabel}</span>
         <span>{summary.locationDetail}</span>
       </div>
