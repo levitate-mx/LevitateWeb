@@ -503,16 +503,16 @@ const adminLookupTabs: Array<{ id: AdminLookupTab; label: string }> = [
 ];
 
 const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
-  { group: "Management", label: "Dashboard", icon: LayoutDashboard, section: "dashboard" },
-  { group: "Management", label: "Academias", icon: Building2 },
-  { group: "Management", label: "Participantes", icon: Users, section: "registrations" },
-  { group: "Management", label: "Coreógrafos", icon: UserRoundPlus },
-  { group: "Sales and payments", label: "Pagos", icon: CreditCard, section: "payments", badgeKey: "payments" },
-  { group: "Sales and payments", label: "Boletos", icon: Ticket, section: "tickets", badgeKey: "tickets" },
-  { group: "Sales and payments", label: "Foto/Video", icon: Camera, section: "media", badgeKey: "media" },
-  { group: "Competition operations", label: "Programa", icon: ClipboardList, section: "program", badgeKey: "program" },
-  { group: "Competition operations", label: "Hojas de jueceo", icon: BadgeCheck },
-  { group: "Analysis", label: "Reportes", icon: FileSpreadsheet },
+  { group: "Gestión", label: "Panel general", icon: LayoutDashboard, section: "dashboard" },
+  { group: "Gestión", label: "Academias", icon: Building2 },
+  { group: "Gestión", label: "Participantes", icon: Users, section: "registrations" },
+  { group: "Gestión", label: "Coreógrafos", icon: UserRoundPlus },
+  { group: "Ventas y pagos", label: "Pagos", icon: CreditCard, section: "payments", badgeKey: "payments" },
+  { group: "Ventas y pagos", label: "Boletos", icon: Ticket, section: "tickets", badgeKey: "tickets" },
+  { group: "Ventas y pagos", label: "Foto/Video", icon: Camera, section: "media", badgeKey: "media" },
+  { group: "Operación de competencia", label: "Programa", icon: ClipboardList, section: "program", badgeKey: "program" },
+  { group: "Operación de competencia", label: "Hojas de jueceo", icon: BadgeCheck },
+  { group: "Análisis", label: "Reportes", icon: FileSpreadsheet },
 ];
 
 const maxMusicUploadBytes = 12000000;
@@ -2661,7 +2661,7 @@ function buildDashboardUpcomingEvents(programDances: RegistrationDance[]) {
     .map((venue) => {
       const eventDate = venueEventDates[venue] ? parseDashboardInputDate(venueEventDates[venue]) : null;
       const danceCount = danceCountByVenue.get(venue) ?? 0;
-      const status = registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Draft");
+      const status = registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Borrador");
 
       return {
         date: eventDate,
@@ -3567,7 +3567,7 @@ function downloadRegistrationDashboardCsv({
   const participantPaymentCounts = getDashboardParticipantPaymentCounts(participants, orders);
   const revenueBreakdown = getDashboardRevenueBreakdown(orders);
   const summaryRows = [
-    ["Reporte", "Dashboard Levitate MX"],
+    ["Reporte", "Panel general Levitate MX"],
     ["Periodo", dateWindow.label],
     ["Filtro sede", venueFilter === "all" ? "Todas" : getVenueLabel(venueFilter)],
     ["Generado", new Date().toLocaleString("es-MX")],
@@ -3599,7 +3599,7 @@ function downloadRegistrationDashboardCsv({
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = "levitate-dashboard-resumen.csv";
+  link.download = "levitate-panel-general-resumen.csv";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -4861,7 +4861,7 @@ function RegistrationAdminDashboardOverview({
   const isDashboardLoading = isLoading || isParticipantsLoading || isProgramLoading;
   const ticketProgress = ticketTotals.requestedTickets > 0 ? (ticketTotals.paidTickets / ticketTotals.requestedTickets) * 100 : 0;
   const lastUpdatedLabel = lastUpdatedAt ? getDashboardActivityTimeLabel(lastUpdatedAt) : "Sin actualizar";
-  const firstName = userName.trim().split(/\s+/)[0] || "Admin";
+  const firstName = userName.trim().split(/\s+/)[0] || "equipo";
 
   const handleExportDashboard = () => {
     downloadRegistrationDashboardCsv({
@@ -4878,13 +4878,13 @@ function RegistrationAdminDashboardOverview({
   };
 
   return (
-    <section className="registration-dashboard-overview" aria-label="Dashboard operativo Levitate">
+    <section className="registration-dashboard-overview" aria-label="Panel operativo Levitate">
       <div className="registration-dashboard-topline">
         <div>
           <h1>¡Bienvenida, {firstName}!</h1>
           <p>Resumen operativo de Levitate MX con los datos disponibles en el periodo seleccionado.</p>
         </div>
-        <div className="registration-dashboard-controls" aria-label="Controles globales del dashboard">
+        <div className="registration-dashboard-controls" aria-label="Controles globales del panel">
           <label>
             <CalendarRange aria-hidden="true" size={17} />
             <span>Periodo</span>
@@ -4960,7 +4960,7 @@ function RegistrationAdminDashboardOverview({
       </div>
 
       {isDashboardLoading && !hasAnyDashboardData ? (
-        <div className="registration-dashboard-skeleton-grid" aria-label="Cargando dashboard">
+        <div className="registration-dashboard-skeleton-grid" aria-label="Cargando panel">
           {Array.from({ length: 8 }).map((_, index) => (
             <span key={index} />
           ))}
@@ -6714,7 +6714,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   let headerDescription = "Revisión y confirmación de comprobantes";
 
   if (isDashboardSection) {
-    headerTitle = "Dashboard";
+    headerTitle = "Panel general";
     headerDescription = "Control operativo del periodo seleccionado";
   } else if (isTicketSection) {
     headerTitle = "Boletos";
