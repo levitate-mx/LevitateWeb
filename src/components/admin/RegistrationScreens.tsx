@@ -9,7 +9,6 @@ import {
   Camera,
   ChevronDown,
   CheckCircle2,
-  ChartPie,
   CircleAlert,
   ClipboardList,
   Clock,
@@ -5168,7 +5167,6 @@ function RegistrationAdminDashboardOverview({
   onNavigate,
   onRefresh,
   onVenueFilterChange,
-  onVenueMetricChange,
   orders,
   participants,
   programDances,
@@ -5190,7 +5188,6 @@ function RegistrationAdminDashboardOverview({
   onNavigate: (target: RegistrationDashboardTarget) => void;
   onRefresh: () => void;
   onVenueFilterChange: (value: string) => void;
-  onVenueMetricChange: (value: RegistrationDashboardVenueMetric) => void;
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationAdminParticipant[];
   programDances: RegistrationDance[];
@@ -5258,18 +5255,6 @@ function RegistrationAdminDashboardOverview({
       }),
     [scopedOrders, scopedParticipants, scopedProgramDances, ticketRows, venueMetric],
   );
-  const pieGradient = useMemo(() => getDashboardPieGradient(venueSlices), [venueSlices]);
-  const venueMetricTotal = venueSlices.reduce((total, slice) => total + slice.value, 0);
-  const recentActivity = useMemo(
-    () =>
-      buildDashboardActivityItems({
-        orders: scopedOrders,
-        participants: scopedParticipants,
-        programDances: scopedProgramDances,
-      }).slice(0, 6),
-    [scopedOrders, scopedParticipants, scopedProgramDances],
-  );
-  const upcomingEvents = useMemo(() => buildDashboardUpcomingEvents(programDances).slice(0, 5), [programDances]);
   const alerts = useMemo(
     () => buildDashboardAlerts({ orders: scopedOrders, participants: scopedParticipants, programDances: scopedProgramDances }).slice(0, 5),
     [scopedOrders, scopedParticipants, scopedProgramDances],
@@ -5378,7 +5363,7 @@ function RegistrationAdminDashboardOverview({
 
       {isDashboardLoading && !hasAnyDashboardData ? (
         <div className="registration-dashboard-skeleton-grid" aria-label="Cargando panel">
-          {Array.from({ length: 8 }).map((_, index) => (
+          {Array.from({ length: 7 }).map((_, index) => (
             <span key={index} />
           ))}
         </div>
@@ -5431,119 +5416,6 @@ function RegistrationAdminDashboardOverview({
           onClick={() => onNavigate({ section: "payments", statusFilter: "paid" })}
           value={formatAdminCurrency(confirmedRevenue)}
         />
-      </section>
-
-      <section className="registration-dashboard-main-grid">
-        <article className="registration-dashboard-panel registration-dashboard-activity">
-          <RegistrationDashboardSectionHeader
-            actionLabel="Ver todas"
-            onAction={() => onNavigate({ section: "payments" })}
-            title="Actividad reciente"
-          />
-          <div className="registration-dashboard-activity__list">
-            {recentActivity.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <button key={item.id} onClick={() => onNavigate(item.target)} type="button">
-                  <span className={`registration-dashboard-activity__icon registration-dashboard-activity__icon--${item.tone}`}>
-                    <Icon aria-hidden="true" size={19} />
-                  </span>
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.description}</small>
-                  </span>
-                  <time dateTime={item.occurredAt}>{getDashboardActivityTimeLabel(item.occurredAt)}</time>
-                </button>
-              );
-            })}
-            {recentActivity.length === 0 ? (
-              <p className="registration-dashboard-empty">No hay actividad para este periodo todavía.</p>
-            ) : null}
-          </div>
-        </article>
-
-        <article className="registration-dashboard-panel registration-dashboard-venue">
-          <RegistrationDashboardSectionHeader
-            actionLabel="Ver reporte"
-            onAction={() => onNavigate({ section: "registrations", venueFilter: effectiveVenueFilter })}
-            title="Inscripciones por sede"
-          >
-            <label className="registration-dashboard-venue__metric">
-              <ChartPie aria-hidden="true" size={15} />
-              <select
-                onChange={(event) => onVenueMetricChange(event.target.value as RegistrationDashboardVenueMetric)}
-                value={venueMetric}
-              >
-                {registrationDashboardVenueMetricOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown aria-hidden="true" size={14} />
-            </label>
-          </RegistrationDashboardSectionHeader>
-          <div className="registration-dashboard-venue__body">
-            <button
-              aria-label="Distribución por sede"
-              className="registration-dashboard-donut"
-              disabled={venueSlices.length === 0}
-              onClick={() => {
-                if (venueSlices[0]) {
-                  onVenueFilterChange(venueSlices[0].venue);
-                }
-              }}
-              style={{ "--dashboard-pie": pieGradient } as CSSProperties}
-              type="button"
-            >
-              <span>
-                <strong>{getDashboardVenueMetricLabel(venueMetric, venueMetricTotal)}</strong>
-                <small>Total</small>
-              </span>
-            </button>
-            <div className="registration-dashboard-venue__legend">
-              {venueSlices.map((slice, index) => (
-                <button key={slice.venue} onClick={() => onVenueFilterChange(slice.venue)} type="button">
-                  <span
-                    aria-hidden="true"
-                    style={{ "--slice-color": ["#f05293", "#8b5fd8", "#55a8e8", "#72cf72", "#f0b44c", "#56c4d5"][index % 6] } as CSSProperties}
-                  />
-                  <strong>{slice.label}</strong>
-                  <small>
-                    {Math.round(slice.percent)}% ({getDashboardVenueMetricLabel(venueMetric, slice.value)})
-                  </small>
-                </button>
-              ))}
-              {venueSlices.length === 0 ? (
-                <p className="registration-dashboard-empty">La distribución aparecerá cuando existan registros para una sede.</p>
-              ) : null}
-            </div>
-          </div>
-        </article>
-
-        <article className="registration-dashboard-panel registration-dashboard-events">
-          <RegistrationDashboardSectionHeader
-            actionLabel="Ver calendario"
-            onAction={() => onNavigate({ section: "program" })}
-            title="Próximos eventos"
-          />
-          <div className="registration-dashboard-events__list">
-            {upcomingEvents.map((event) => (
-              <button key={event.venue} onClick={() => onNavigate(event.target)} type="button">
-                <time dateTime={event.date ? getDashboardDateInputValue(event.date) : undefined}>
-                  <strong>{event.date ? event.date.toLocaleDateString("es-MX", { day: "2-digit" }) : "--"}</strong>
-                  <span>{event.date ? event.date.toLocaleDateString("es-MX", { month: "short" }) : "S/F"}</span>
-                </time>
-                <span>
-                  <strong>{event.title}</strong>
-                  <small>{event.detail}</small>
-                </span>
-                <em>{event.status}</em>
-              </button>
-            ))}
-          </div>
-        </article>
       </section>
 
       <section className="registration-dashboard-bottom-grid">
@@ -7216,7 +7088,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [dashboardCustomStartDate, setDashboardCustomStartDate] = useState(() => getDashboardDateInputValue(addDashboardDays(new Date(), -29)));
   const [dashboardCustomEndDate, setDashboardCustomEndDate] = useState(() => getDashboardDateInputValue(new Date()));
   const [dashboardVenueFilter, setDashboardVenueFilter] = useState("all");
-  const [dashboardVenueMetric, setDashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
+  const [dashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
   const [adminLastUpdatedAt, setAdminLastUpdatedAt] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedAcademyId, setSelectedAcademyId] = useState("");
@@ -7937,7 +7809,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
             onNavigate={handleDashboardNavigate}
             onRefresh={handleDashboardRefresh}
             onVenueFilterChange={setDashboardVenueFilter}
-            onVenueMetricChange={setDashboardVenueMetric}
             orders={orders}
             participants={adminParticipants}
             programDances={programDances}
