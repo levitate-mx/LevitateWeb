@@ -4,6 +4,7 @@ import {
   Camera,
   CalendarDays,
   CreditCard,
+  Download,
   FileCheck2,
   Info,
   Mail,
@@ -11,6 +12,7 @@ import {
   PackageCheck,
   Phone,
   Plus,
+  QrCode,
   ReceiptText,
   ShieldCheck,
   ShoppingCart,
@@ -22,7 +24,9 @@ import {
   Video,
   X,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createTicketsPdfBlob, downloadBlob } from "../admin/RegistrationScreens";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -95,6 +99,7 @@ type ShopPaymentProof = {
 
 type ShopOrder = {
   id: string;
+  accessToken?: string | null;
   curp: string;
   participantName: string;
   academyName: string;
@@ -106,6 +111,27 @@ type ShopOrder = {
   status: "pending_payment" | "payment_reported" | "paid" | "rejected";
   lineItems?: ShopOrderLineItem[];
   proof?: ShopPaymentProof | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+  buyerPhone?: string | null;
+  buyerPhoneNumber?: string | null;
+  tickets?: ShopEventTicket[];
+};
+
+type ShopEventTicket = {
+  id: string;
+  sourceOrderType: string;
+  sourceOrderId: string;
+  ticketCode: string;
+  ticketNumber: number;
+  ticketLabel: string;
+  holderName?: string | null;
+  qrPayload: string;
+  status: "active" | "used" | "cancelled";
+  usedAt?: string | null;
+  usedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type ShopOrderLineItem = {
@@ -509,6 +535,16 @@ function normalizeStoredShopOrder(value: unknown): ShopOrder | null {
   const amount = Number(candidate?.amount);
   const paidAmount = Number(candidate?.paidAmount ?? 0);
   const validStatuses: ShopOrder["status"][] = ["pending_payment", "payment_reported", "paid", "rejected"];
+  const proof = candidate?.proof
+    ? {
+        id: candidate.proof.id,
+        fileName: candidate.proof.fileName,
+        contentType: candidate.proof.contentType,
+        fileSize: candidate.proof.fileSize,
+        status: candidate.proof.status,
+        uploadedAt: candidate.proof.uploadedAt,
+      }
+    : null;
 
   if (
     typeof candidate?.id !== "string" ||
@@ -526,6 +562,7 @@ function normalizeStoredShopOrder(value: unknown): ShopOrder | null {
 
   return {
     id: candidate.id,
+    accessToken: typeof candidate.accessToken === "string" ? candidate.accessToken : null,
     curp: normalizeCurp(candidate.curp),
     participantName: candidate.participantName,
     academyName: candidate.academyName,
@@ -536,7 +573,11 @@ function normalizeStoredShopOrder(value: unknown): ShopOrder | null {
     paidAmount,
     status: status as ShopOrder["status"],
     lineItems: Array.isArray(candidate.lineItems) ? candidate.lineItems as ShopOrderLineItem[] : [],
-    proof: candidate.proof ?? null,
+    proof,
+    buyerName: typeof candidate.buyerName === "string" ? candidate.buyerName : null,
+    buyerEmail: typeof candidate.buyerEmail === "string" ? candidate.buyerEmail : null,
+    buyerPhone: typeof candidate.buyerPhone === "string" ? candidate.buyerPhone : null,
+    buyerPhoneNumber: typeof candidate.buyerPhoneNumber === "string" ? candidate.buyerPhoneNumber : null,
   };
 }
 
@@ -576,6 +617,27 @@ function normalizePhone(value: string) {
 
 function normalizeCurp(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 18).toUpperCase();
+}
+
+function getLinkedShopOrderLookup() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get("orderId")?.trim() ?? "";
+  const accessToken = params.get("accessKey")?.trim() ?? "";
+
+  return accessToken && orderId ? { accessToken, orderId } : null;
+}
+
+function getBuyerDataFromShopOrder(order: ShopOrder, fallback?: BuyerData): BuyerData {
+  return {
+    curp: normalizeCurp(order.curp),
+    email: order.buyerEmail?.trim() || fallback?.email || "",
+    name: order.buyerName?.trim() || fallback?.name || order.participantName,
+    whatsapp: normalizePhone(order.buyerPhoneNumber || order.buyerPhone || fallback?.whatsapp || ""),
+  };
 }
 
 async function requestShopApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -908,6 +970,51 @@ export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
   return shopMode === "media" ? <PhotoVideoShopPage /> : <TicketShopPage />;
 }
 
+function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
+  const [qrDataUrl, setQrDataUrl] = useState("");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    void QRCode.toDataURL(ticket.qrPayload, {
+      color: { dark: "#181818", light: "#ffffff" },
+      errorCorrectionLevel: "H",
+      margin: 1,
+      width: 360,
+    }).then((dataUrl) => {
+      if (!isCancelled) {
+        setQrDataUrl(dataUrl);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [ticket.qrPayload]);
+
+  return (
+    <article className="ticket-shop-access-card">
+      <div className="ticket-shop-access-card__qr">
+        {qrDataUrl ? <img alt={`Código QR del boleto ${ticket.ticketCode}`} src={qrDataUrl} /> : <QrCode aria-hidden="true" size={48} />}
+      </div>
+      <div className="ticket-shop-access-card__copy">
+        <span>Boleto {ticket.ticketNumber}</span>
+        <strong>{ticket.ticketLabel}</strong>
+        <code>{ticket.ticketCode}</code>
+        <small className={`is-${ticket.status}`}>
+          {ticket.status === "used" ? "Utilizado" : ticket.status === "cancelled" ? "Cancelado" : "Listo para ingresar"}
+        </small>
+      </div>
+      {qrDataUrl ? (
+        <a download={`boleto-${ticket.ticketCode.toLowerCase()}.png`} href={qrDataUrl}>
+          <Download aria-hidden="true" size={17} />
+          Descargar QR
+        </a>
+      ) : null}
+    </article>
+  );
+}
+
 function TicketShopPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
@@ -923,6 +1030,7 @@ function TicketShopPage() {
     readCartCookie(ticketCartCookieName, normalizeStoredTicketCartItem)
   ));
   const [storedCheckout] = useState<PersistedShopCheckout | null>(() => readCheckoutCookie(ticketCheckoutCookieName));
+  const [linkedOrderLookup] = useState(() => getLinkedShopOrderLookup());
   const [buyerData, setBuyerData] = useState<BuyerData>(() => storedCheckout?.buyerData ?? {
     curp: "",
     email: "",
@@ -931,9 +1039,10 @@ function TicketShopPage() {
   });
   const [buyerError, setBuyerError] = useState("");
   const [proofError, setProofError] = useState("");
-  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order));
+  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order.accessToken));
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [isTicketPdfLoading, setIsTicketPdfLoading] = useState(false);
   const [orderReference, setOrderReference] = useState(getShopPaymentReference(storedCheckout?.order));
   const [proofFileName, setProofFileName] = useState(storedCheckout?.order.proof?.fileName ?? "");
   const [proofMessage, setProofMessage] = useState(
@@ -942,6 +1051,7 @@ function TicketShopPage() {
   const [isProofSubmitted, setIsProofSubmitted] = useState(Boolean(storedCheckout?.order.proof));
   const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
   const [shopOrder, setShopOrder] = useState<ShopOrder | null>(storedCheckout?.order ?? null);
+  const paymentSectionRef = useRef<HTMLElement | null>(null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selectedPaymentMethod = ticketPaymentMethods[0];
   const cartLines = useMemo(
@@ -959,6 +1069,104 @@ function TicketShopPage() {
   const ticketCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
   const hasUploadedProof = (Boolean(shopOrder?.proof) || isProofSubmitted) && shopOrder?.status !== "rejected";
+
+  useEffect(() => {
+    const target = linkedOrderLookup ?? (storedCheckout?.order.accessToken ? {
+      accessToken: storedCheckout.order.accessToken,
+      orderId: storedCheckout.order.id,
+    } : null);
+
+    if (!target) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    void requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/lookup", {
+      body: JSON.stringify(target),
+      method: "POST",
+    })
+      .then(({ order }) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const recoveredBuyerData = getBuyerDataFromShopOrder(order, storedCheckout?.buyerData);
+
+        setShopOrder(order);
+        setBuyerData(recoveredBuyerData);
+        setOrderReference(getShopPaymentReference(order));
+        setProofFileName(order.proof?.fileName ?? "");
+        setIsProofSubmitted(Boolean(order.proof));
+        setIsBuyerConfirmed(true);
+        setProofMessage(
+          order.status === "paid" && order.tickets?.length
+            ? "Pago aprobado. Tus accesos con QR ya están disponibles."
+            : "Orden recuperada. Consulta aquí el estado de tu pago.",
+        );
+        writeCheckoutCookie(ticketCheckoutCookieName, recoveredBuyerData, order);
+
+        if (linkedOrderLookup) {
+          setCartItems([]);
+          clearCookieValue(ticketCartCookieName);
+          setIsCartOpen(true);
+        }
+      })
+      .catch((error) => {
+        if (!isCancelled && linkedOrderLookup) {
+          setBuyerError(error instanceof Error ? error.message : "No pudimos recuperar los boletos.");
+          setIsCartOpen(true);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [linkedOrderLookup, storedCheckout]);
+
+  useEffect(() => {
+    if (!linkedOrderLookup || !shopOrder) {
+      return undefined;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      paymentSectionRef.current?.scrollIntoView({ block: "start" });
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [linkedOrderLookup, shopOrder?.id]);
+
+  useEffect(() => {
+    const orderId = shopOrder?.id;
+    const accessToken = shopOrder?.accessToken;
+    const status = shopOrder?.status;
+
+    if (!orderId || !accessToken || !status || !["pending_payment", "payment_reported"].includes(status)) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      void requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/lookup", {
+        body: JSON.stringify({ accessToken, orderId }),
+        method: "POST",
+      }).then(({ order }) => {
+        const recoveredBuyerData = getBuyerDataFromShopOrder(order);
+
+        setShopOrder(order);
+        setBuyerData(recoveredBuyerData);
+        setOrderReference(getShopPaymentReference(order));
+        setProofFileName(order.proof?.fileName ?? "");
+        setIsProofSubmitted(Boolean(order.proof));
+        writeCheckoutCookie(ticketCheckoutCookieName, recoveredBuyerData, order);
+
+        if (order.status === "paid" && order.tickets?.length) {
+          setProofMessage("Pago aprobado. Tus accesos con QR ya están disponibles.");
+        }
+      }).catch(() => undefined);
+    }, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [shopOrder?.accessToken, shopOrder?.id, shopOrder?.status]);
 
   useEffect(() => {
     writeCartCookie(ticketCartCookieName, cartItems);
@@ -1197,6 +1405,11 @@ function TicketShopPage() {
       return;
     }
 
+    if (!shopOrder.accessToken) {
+      setProofError("No pudimos validar el acceso a esta orden. Vuelve a generarla desde el carrito.");
+      return;
+    }
+
     const file = selectedProofFile;
 
     setIsUploadingProof(true);
@@ -1209,7 +1422,7 @@ function TicketShopPage() {
       const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/proof", {
         body: JSON.stringify({
           ...proof,
-          curp: shopOrder.curp,
+          accessToken: shopOrder.accessToken,
           orderId: shopOrder.id,
         }),
         method: "POST",
@@ -1222,12 +1435,35 @@ function TicketShopPage() {
       setSelectedProofFile(null);
       setCartItems([]);
       clearCookieValue(ticketCartCookieName);
-      clearCookieValue(ticketCheckoutCookieName);
+      writeCheckoutCookie(ticketCheckoutCookieName, buyerData, payload.order);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setProofError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
     } finally {
       setIsUploadingProof(false);
+    }
+  };
+
+  const handleDownloadTicketsPdf = async () => {
+    if (!shopOrder?.tickets?.length) {
+      return;
+    }
+
+    setIsTicketPdfLoading(true);
+    setProofError("");
+
+    try {
+      const pdf = await createTicketsPdfBlob(shopOrder);
+
+      if (!pdf) {
+        throw new Error("No pudimos generar el PDF de boletos.");
+      }
+
+      downloadBlob(pdf, `boletos-${getShopPaymentReference(shopOrder).toLowerCase()}.pdf`);
+    } catch (error) {
+      setProofError(error instanceof Error ? error.message : "No pudimos generar el PDF de boletos.");
+    } finally {
+      setIsTicketPdfLoading(false);
     }
   };
 
@@ -1261,7 +1497,7 @@ function TicketShopPage() {
   );
 
   const renderTransferCheckout = () => (
-    <section className="ticket-shop-payment" aria-label="Checkout por transferencia" aria-live="polite">
+    <section className="ticket-shop-payment" aria-label="Checkout por transferencia" aria-live="polite" ref={paymentSectionRef}>
       <header>
         <CreditCard aria-hidden="true" size={22} />
         <span>Checkout</span>
@@ -1273,71 +1509,97 @@ function TicketShopPage() {
         <small>Referencia: {orderReference}</small>
       </div>
 
-      <dl className="ticket-shop-payment__details">
-        {selectedPaymentMethod.rows.map((row) => (
-          <div key={`${selectedPaymentMethod.id}-${row.label}`}>
-            <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
-          </div>
-        ))}
-        <div>
-          <dt>Concepto / referencia</dt>
-          <dd>{orderReference}</dd>
-        </div>
-      </dl>
-
-      {hasUploadedProof ? (
-        <div className="ticket-shop-proof">
-          <strong>Comprobante cargado</strong>
-          {proofFileName ? <p>{proofFileName}</p> : null}
-          {proofMessage ? <p>{proofMessage}</p> : null}
-        </div>
-      ) : (
-        <div className="ticket-shop-proof">
-          <header className="ticket-shop-proof__header">
-            <UploadCloud aria-hidden="true" size={30} />
-            <strong>Subir comprobante de pago</strong>
-            <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
-          </header>
-          <input
-            accept={paymentProofAccept}
-            onChange={handleProofFileChange}
-            ref={proofInputRef}
-            type="file"
-          />
-          {selectedProofFile ? (
-            <p className="ticket-shop-proof__selection">
-              <span>Archivo seleccionado</span>
-              <strong>{selectedProofFile.name}</strong>
-            </p>
-          ) : null}
-          <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
-            {selectedProofFile ? <ArrowRight aria-hidden="true" size={20} /> : <UploadCloud aria-hidden="true" size={20} />}
-            {isUploadingProof
-              ? "Enviando..."
-              : selectedProofFile
-                ? "Confirmar pago y enviar comprobante"
-                : "Seleccionar comprobante"}
-          </button>
-          {proofError ? <p className="ticket-shop-proof__error" role="alert">{proofError}</p> : null}
-          {selectedProofFile ? (
-            <button
-              className="ticket-shop-proof__change"
-              disabled={isUploadingProof}
-              onClick={() => proofInputRef.current?.click()}
-              type="button"
-            >
-              Cambiar archivo
+      {shopOrder?.status === "paid" && shopOrder.tickets?.length ? (
+        <section className="ticket-shop-accesses" aria-label="Boletos con código QR">
+          <header>
+            <div>
+              <QrCode aria-hidden="true" size={24} />
+              <span>
+                <strong>Tus accesos están listos</strong>
+                <small>Presenta un QR por persona en la entrada.</small>
+              </span>
+            </div>
+            <button disabled={isTicketPdfLoading} onClick={handleDownloadTicketsPdf} type="button">
+              <Download aria-hidden="true" size={18} />
+              {isTicketPdfLoading ? "Generando..." : "Descargar PDF"}
             </button>
-          ) : null}
-          {proofMessage ? <p>{proofMessage}</p> : null}
-        </div>
+          </header>
+          <div className="ticket-shop-accesses__grid">
+            {shopOrder.tickets.map((ticket) => <ShopTicketQrCard key={ticket.id} ticket={ticket} />)}
+          </div>
+          {proofError ? <p className="ticket-shop-proof__error" role="alert">{proofError}</p> : null}
+        </section>
+      ) : (
+        <>
+          <dl className="ticket-shop-payment__details">
+            {selectedPaymentMethod.rows.map((row) => (
+              <div key={`${selectedPaymentMethod.id}-${row.label}`}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+            <div>
+              <dt>Concepto / referencia</dt>
+              <dd>{orderReference}</dd>
+            </div>
+          </dl>
+
+          {hasUploadedProof ? (
+            <div className="ticket-shop-proof">
+              <strong>Comprobante cargado</strong>
+              {proofFileName ? <p>{proofFileName}</p> : null}
+              {proofMessage ? <p>{proofMessage}</p> : null}
+            </div>
+          ) : (
+            <div className="ticket-shop-proof">
+              <header className="ticket-shop-proof__header">
+                <UploadCloud aria-hidden="true" size={30} />
+                <strong>Subir comprobante de pago</strong>
+                <span>JPG, PNG, WEBP o PDF menor a 1.8 MB</span>
+              </header>
+              <input
+                accept={paymentProofAccept}
+                onChange={handleProofFileChange}
+                ref={proofInputRef}
+                type="file"
+              />
+              {selectedProofFile ? (
+                <p className="ticket-shop-proof__selection">
+                  <span>Archivo seleccionado</span>
+                  <strong>{selectedProofFile.name}</strong>
+                </p>
+              ) : null}
+              <button disabled={isUploadingProof} onClick={handleProofSubmit} type="button">
+                {selectedProofFile ? <ArrowRight aria-hidden="true" size={20} /> : <UploadCloud aria-hidden="true" size={20} />}
+                {isUploadingProof
+                  ? "Enviando..."
+                  : selectedProofFile
+                    ? "Confirmar pago y enviar comprobante"
+                    : "Seleccionar comprobante"}
+              </button>
+              {proofError ? <p className="ticket-shop-proof__error" role="alert">{proofError}</p> : null}
+              {selectedProofFile ? (
+                <button
+                  className="ticket-shop-proof__change"
+                  disabled={isUploadingProof}
+                  onClick={() => proofInputRef.current?.click()}
+                  type="button"
+                >
+                  Cambiar archivo
+                </button>
+              ) : null}
+              {proofMessage ? <p>{proofMessage}</p> : null}
+            </div>
+          )}
+        </>
       )}
 
       <div className="ticket-shop-confirmation-note">
         <ShieldCheck aria-hidden="true" size={21} />
         <span>
-          Al confirmarse el pago, enviaremos tus accesos con QR por correo y WhatsApp.
+          {shopOrder?.status === "paid"
+            ? "Cada QR es individual y sólo puede utilizarse una vez."
+            : "Al confirmarse el pago, tus accesos con QR aparecerán aquí y recibirás este enlace por WhatsApp."}
         </span>
       </div>
     </section>
@@ -1498,7 +1760,7 @@ function TicketShopPage() {
               </header>
               <div className="ticket-shop-buyer__notice">
                 <Info aria-hidden="true" size={18} />
-                <span>Asegúrate de tener acceso al WhatsApp y correo que registres: tus boletos se entregarán por esos medios.</span>
+                <span>Asegúrate de tener acceso al WhatsApp y correo que registres: te enviaremos el enlace privado de tus boletos.</span>
               </div>
               <label>
                 <span>Nombre del titular o responsable</span>
@@ -1574,7 +1836,7 @@ function PhotoVideoShopPage() {
   });
   const [buyerError, setBuyerError] = useState("");
   const [proofError, setProofError] = useState("");
-  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order));
+  const [isBuyerConfirmed, setIsBuyerConfirmed] = useState(Boolean(storedCheckout?.order.accessToken));
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isParticipantLookupLoading, setIsParticipantLookupLoading] = useState(false);
@@ -2023,6 +2285,11 @@ function PhotoVideoShopPage() {
       return;
     }
 
+    if (!shopOrder.accessToken) {
+      setProofError("No pudimos validar el acceso a esta orden. Vuelve a generarla desde el carrito.");
+      return;
+    }
+
     const file = selectedProofFile;
 
     setIsUploadingProof(true);
@@ -2035,7 +2302,7 @@ function PhotoVideoShopPage() {
       const payload = await requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/proof", {
         body: JSON.stringify({
           ...proof,
-          curp: shopOrder.curp,
+          accessToken: shopOrder.accessToken,
           orderId: shopOrder.id,
         }),
         method: "POST",
@@ -2048,7 +2315,7 @@ function PhotoVideoShopPage() {
       setSelectedProofFile(null);
       setCartItems([]);
       clearCookieValue(mediaCartCookieName);
-      clearCookieValue(mediaCheckoutCookieName);
+      writeCheckoutCookie(mediaCheckoutCookieName, buyerData, payload.order);
       setProofMessage("Comprobante cargado. Administración revisará tu pago y te contactará por WhatsApp.");
     } catch (error) {
       setProofError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");

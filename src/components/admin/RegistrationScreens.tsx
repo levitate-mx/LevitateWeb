@@ -135,6 +135,30 @@ type RegistrationAdminParticipant = RegistrationParticipant & {
   academyOriginCountry?: string | null;
 };
 
+type RegistrationAdminAcademy = {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string | null;
+  originType?: "mexico" | "international";
+  originState?: string | null;
+  originCountry?: string | null;
+  eventVenues: string[];
+  userName?: string | null;
+  username?: string | null;
+  userEmail?: string | null;
+  userStatus?: string | null;
+  participantCount: number;
+  choreographerCount: number;
+  danceCount: number;
+  inscriptionOrderCount: number;
+  shopOrderCount: number;
+  musicUploadCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type RegistrationChoreographer = {
   id: string;
   fullName: string;
@@ -213,6 +237,14 @@ type RegistrationEventTicket = {
   updatedAt: string;
 };
 
+export type RegistrationTicketPdfOrder = {
+  academyName: string;
+  participantName: string;
+  paymentReference?: string;
+  reference: string;
+  tickets?: RegistrationEventTicket[];
+};
+
 type RegistrationInscriptionLineItem = {
   baseAmount?: number;
   count?: number;
@@ -245,6 +277,7 @@ type RegistrationInscriptionLineItem = {
 type RegistrationInscriptionOrder = {
   orderType?: "registration" | "shop";
   id: string;
+  accessToken?: string | null;
   curp: string;
   participantName: string;
   academyId?: string | null;
@@ -305,6 +338,7 @@ type RegistrationAdminProgramPayload = {
 };
 
 type RegistrationAdminParticipantsPayload = {
+  academies?: RegistrationAdminAcademy[];
   participants: RegistrationAdminParticipant[];
 };
 
@@ -1292,6 +1326,31 @@ function getParticipantPaymentStatusClass(status: RegistrationParticipantPayment
   return `registration-admin-status registration-admin-status--${status.replace("_", "-")}`;
 }
 
+function getAdminDateLabel(rawDate?: string | null) {
+  if (!rawDate) {
+    return "Sin fecha";
+  }
+
+  const date = new Date(rawDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return rawDate;
+  }
+
+  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function getAdminAcademyMovementCount(academy: RegistrationAdminAcademy) {
+  return (
+    academy.participantCount +
+    academy.choreographerCount +
+    academy.danceCount +
+    academy.inscriptionOrderCount +
+    academy.shopOrderCount +
+    academy.musicUploadCount
+  );
+}
+
 function getAdminParticipantGroups(participants: RegistrationAdminParticipant[]) {
   const groupMap = new Map<string, RegistrationAdminParticipant[]>();
 
@@ -1318,15 +1377,16 @@ function getAdminParticipantGroups(participants: RegistrationAdminParticipant[])
     .sort((left, right) => left.academyName.localeCompare(right.academyName, "es"));
 }
 
-function getAdminParticipantTotals(participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[]) {
+function getAdminParticipantTotals(participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[], academyCount?: number) {
   const groups = getAdminParticipantGroups(participants);
+  const visibleAcademyCount = academyCount ?? groups.length;
 
   return participants.reduce(
     (totals, participant) => {
       const status = getParticipantPaymentStatus(participant, orders);
 
       return {
-        academies: groups.length,
+        academies: visibleAcademyCount,
         paid: totals.paid + (status === "paid" ? 1 : 0),
         participants: totals.participants + 1,
         pending: totals.pending + (status === "payment_reported" || status === "pending_payment" ? 1 : 0),
@@ -1335,7 +1395,7 @@ function getAdminParticipantTotals(participants: RegistrationAdminParticipant[],
       };
     },
     {
-      academies: groups.length,
+      academies: visibleAcademyCount,
       paid: 0,
       participants: 0,
       pending: 0,
@@ -1568,17 +1628,34 @@ function buildInscriptionProofCorrectionUrl(order: RegistrationInscriptionOrder)
   return url.toString();
 }
 
+function buildShopTicketDeliveryUrl(order: RegistrationInscriptionOrder) {
+  if (typeof window === "undefined" || getAdminOrderType(order) !== "shop" || !order.accessToken || !order.tickets?.length) {
+    return "";
+  }
+
+  const url = new URL("/taquilla", window.location.origin);
+  url.searchParams.set("accessKey", order.accessToken);
+  url.searchParams.set("orderId", order.id);
+  url.searchParams.set("tickets", "1");
+
+  return url.toString();
+}
+
 function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
   const amount = formatAdminCurrency(order.paidAmount || order.amount, getRegistrationOrderCurrency(order));
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const ticketCount = order.tickets?.length ?? 0;
   const isShopOrder = getAdminOrderType(order) === "shop";
-  const ticketLine =
+  const ticketDeliveryUrl = buildShopTicketDeliveryUrl(order);
+  const ticketLines =
     ticketCount > 0
-      ? `Tus boletos ya fueron generados. Te enviaremos ${ticketCount === 1 ? "1 boleto" : `${ticketCount} boletos`} en PDF por este chat.`
+      ? [
+          `Tus ${ticketCount === 1 ? "boleto ya fue generado" : `${ticketCount} boletos ya fueron generados`}.`,
+          ...(ticketDeliveryUrl ? ["", "Puedes ver y descargar tus accesos con QR aquí:", ticketDeliveryUrl] : []),
+        ]
       : isShopOrder
-        ? "Tu compra quedó confirmada correctamente."
-        : "Tu inscripción quedó confirmada correctamente.";
+        ? ["Tu compra quedó confirmada correctamente."]
+        : ["Tu inscripción quedó confirmada correctamente."];
 
   return [
     "Hola, te escribe el equipo de administración de Levitate MX.",
@@ -1589,7 +1666,7 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
     `Monto confirmado: ${amount}`,
     `Academia: ${order.academyName}`,
     "",
-    ticketLine,
+    ...ticketLines,
     "",
     "Gracias por formar parte de Levitate MX.",
   ].join("\n");
@@ -1600,7 +1677,15 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const message =
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
-  const correctionUrl = buildInscriptionProofCorrectionUrl(order);
+  const correctionUrl = isShopOrder && order.accessToken
+    ? (() => {
+        const url = new URL("/taquilla", window.location.origin);
+        url.searchParams.set("accessKey", order.accessToken);
+        url.searchParams.set("orderId", order.id);
+        url.searchParams.set("upload", "proof");
+        return url.toString();
+      })()
+    : buildInscriptionProofCorrectionUrl(order);
   const correctionLinkLines = correctionUrl
     ? ["", "Puedes subir nuevamente el comprobante en esta liga:", correctionUrl]
     : [];
@@ -1851,7 +1936,7 @@ function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
   return labels[status] ?? status;
 }
 
-function downloadBlob(blob: Blob, fileName: string) {
+export function downloadBlob(blob: Blob, fileName: string) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -1879,7 +1964,7 @@ function loadAdminImage(src: string) {
   });
 }
 
-async function createTicketArtwork(order: RegistrationInscriptionOrder, ticket: RegistrationEventTicket) {
+async function createTicketArtwork(order: RegistrationTicketPdfOrder, ticket: RegistrationEventTicket) {
   const scale = 2;
   const width = 842;
   const height = 1191;
@@ -2004,7 +2089,7 @@ async function createTicketArtwork(order: RegistrationInscriptionOrder, ticket: 
   drawText("Estado", padding + 430, 614, 16, muted, 780);
   drawText(getTicketStatusLabel(ticket.status), padding + 430, 654, 30, ticket.status === "active" ? "#35734c" : "#a62c45", 820);
   drawText("Orden", padding + 430, 720, 16, muted, 780);
-  drawWrappedText(getRegistrationInscriptionPaymentReference(order), padding + 430, 760, width - padding * 2 - 430, 24, 28, ink, 780);
+  drawWrappedText(order.paymentReference || order.reference, padding + 430, 760, width - padding * 2 - 430, 24, 28, ink, 780);
 
   const detailsY = 900;
   drawText("Comprador / Participante", padding, detailsY, 16, muted, 780);
@@ -2214,7 +2299,7 @@ async function openPaymentProofPdfInNewWindow(proof: RegistrationPaymentProof, t
   }
 }
 
-async function createTicketsPdfBlob(order: RegistrationInscriptionOrder) {
+export async function createTicketsPdfBlob(order: RegistrationTicketPdfOrder) {
   const tickets = order.tickets ?? [];
 
   if (tickets.length === 0) {
@@ -2389,11 +2474,20 @@ function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   URL.revokeObjectURL(url);
 }
 
-function downloadAdminParticipantsCsv(participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[]) {
+function downloadAdminParticipantsCsv(academies: RegistrationAdminAcademy[], participants: RegistrationAdminParticipant[], orders: RegistrationInscriptionOrder[]) {
   const headers = [
     "Academia",
     "Origen academia",
+    "Contacto",
+    "Email",
+    "Teléfono",
+    "Usuario",
     "Sede",
+    "Participantes academia",
+    "Coreógrafos",
+    "Coreografías",
+    "Órdenes inscripción",
+    "Órdenes tienda",
     "Participante",
     "CURP",
     "División",
@@ -2404,24 +2498,82 @@ function downloadAdminParticipantsCsv(participants: RegistrationAdminParticipant
     "Estado pago",
     "Fecha registro",
   ];
-  const csvRows = participants.map((participant) => [
-    participant.academyName,
-    getAcademyOriginLabel({
-      originCountry: participant.academyOriginCountry,
-      originState: participant.academyOriginState,
-      originType: participant.academyOriginType,
-    }),
-    participant.eventVenues.map(getVenueLabel).join(" / ") || "Sin coreografía",
-    participant.fullName,
-    participant.curp,
-    getProgramDivisionLabel(participant.division),
-    participant.age ?? "",
-    getOptionLabel(shirtSizes, participant.shirtSize),
-    participant.isInternational ? "Sí" : "No",
-    participant.isReleveTeacher ? "Sí" : "No",
-    getParticipantPaymentStatusLabel(getParticipantPaymentStatus(participant, orders)),
-    participant.createdAt,
-  ]);
+  const participantsByAcademy = participants.reduce((map, participant) => {
+    const current = map.get(participant.academyId) ?? [];
+
+    current.push(participant);
+    map.set(participant.academyId, current);
+    return map;
+  }, new Map<string, RegistrationAdminParticipant[]>());
+  const csvRows = academies.flatMap((academy) => {
+    const academyParticipants = participantsByAcademy.get(academy.id) ?? [];
+    const baseRow = [
+      academy.name,
+      getAcademyOriginLabel(academy),
+      academy.contactName,
+      academy.email,
+      academy.phone ?? "",
+      academy.username ?? academy.userEmail ?? "",
+      academy.eventVenues.map(getVenueLabel).join(" / ") || "Sin coreografía",
+      academy.participantCount,
+      academy.choreographerCount,
+      academy.danceCount,
+      academy.inscriptionOrderCount,
+      academy.shopOrderCount,
+    ];
+
+    if (academyParticipants.length === 0) {
+      return [[...baseRow, "", "", "", "", "", "", "", "Academia registrada sin movimientos", academy.createdAt]];
+    }
+
+    return academyParticipants.map((participant) => [
+      ...baseRow,
+      participant.fullName,
+      participant.curp,
+      getProgramDivisionLabel(participant.division),
+      participant.age ?? "",
+      getOptionLabel(shirtSizes, participant.shirtSize),
+      participant.isInternational ? "Sí" : "No",
+      participant.isReleveTeacher ? "Sí" : "No",
+      getParticipantPaymentStatusLabel(getParticipantPaymentStatus(participant, orders)),
+      participant.createdAt,
+    ]);
+  });
+
+  for (const participant of participants) {
+    if (academies.some((academy) => academy.id === participant.academyId)) {
+      continue;
+    }
+
+    csvRows.push([
+      participant.academyName,
+      getAcademyOriginLabel({
+        originCountry: participant.academyOriginCountry,
+        originState: participant.academyOriginState,
+        originType: participant.academyOriginType,
+      }),
+      participant.academyContactName ?? "",
+      participant.academyEmail ?? "",
+      participant.academyPhone ?? "",
+      "",
+      participant.eventVenues.map(getVenueLabel).join(" / ") || "Sin coreografía",
+      "",
+      "",
+      "",
+      "",
+      "",
+      participant.fullName,
+      participant.curp,
+      getProgramDivisionLabel(participant.division),
+      participant.age ?? "",
+      getOptionLabel(shirtSizes, participant.shirtSize),
+      participant.isInternational ? "Sí" : "No",
+      participant.isReleveTeacher ? "Sí" : "No",
+      getParticipantPaymentStatusLabel(getParticipantPaymentStatus(participant, orders)),
+      participant.createdAt,
+    ]);
+  }
+
   const csv = [headers, ...csvRows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -4522,6 +4674,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [adminSession, setAdminSession] = useState<RegistrationSession | null>(null);
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
+  const [adminAcademies, setAdminAcademies] = useState<RegistrationAdminAcademy[]>([]);
   const [adminParticipants, setAdminParticipants] = useState<RegistrationAdminParticipant[]>([]);
   const [programDances, setProgramDances] = useState<RegistrationDance[]>([]);
   const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
@@ -4638,6 +4791,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminParticipantsPayload>("/api/registration/admin/participants");
+      setAdminAcademies(payload.academies ?? []);
       setAdminParticipants(payload.participants);
     } catch (error) {
       setAdminError(getErrorMessage(error, "No se pudieron cargar los participantes."));
@@ -4733,6 +4887,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const registrationAcademyOptions = useMemo(() => {
     const optionMap = new Map<string, string>();
 
+    for (const academy of adminAcademies) {
+      optionMap.set(academy.id, academy.name);
+    }
+
     for (const participant of adminParticipants) {
       optionMap.set(participant.academyId, participant.academyName);
     }
@@ -4740,7 +4898,39 @@ export function LevitateRegistrationAdminPaymentsRoute({
     return Array.from(optionMap.entries())
       .map(([value, label]) => ({ label, value }))
       .sort((left, right) => left.label.localeCompare(right.label, "es"));
-  }, [adminParticipants]);
+  }, [adminAcademies, adminParticipants]);
+  const filteredAdminAcademies = useMemo(() => {
+    const normalizedQuery = registrationQuery.trim().toLowerCase();
+
+    return adminAcademies.filter((academy) => {
+      const matchesAcademy = registrationAcademyFilter === "all" || academy.id === registrationAcademyFilter;
+      const matchesVenue = registrationVenueFilter === "all" || academy.eventVenues.includes(registrationVenueFilter);
+      const matchesDivision =
+        registrationDivisionFilter === "all" ||
+        adminParticipants.some((participant) => participant.academyId === academy.id && participant.division === registrationDivisionFilter);
+      const matchesQuery =
+        !normalizedQuery ||
+        [
+          academy.name,
+          academy.contactName,
+          academy.email,
+          academy.phone ?? "",
+          academy.username ?? "",
+          academy.userEmail ?? "",
+          getAcademyOriginLabel(academy),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery) ||
+        adminParticipants.some(
+          (participant) =>
+            participant.academyId === academy.id &&
+            [participant.fullName, participant.curp].join(" ").toLowerCase().includes(normalizedQuery),
+        );
+
+      return matchesAcademy && matchesVenue && matchesDivision && matchesQuery;
+    });
+  }, [adminAcademies, adminParticipants, registrationAcademyFilter, registrationDivisionFilter, registrationQuery, registrationVenueFilter]);
   const filteredAdminParticipants = useMemo(() => {
     const normalizedQuery = registrationQuery.trim().toLowerCase();
 
@@ -4771,7 +4961,11 @@ export function LevitateRegistrationAdminPaymentsRoute({
     });
   }, [adminParticipants, registrationAcademyFilter, registrationDivisionFilter, registrationQuery, registrationVenueFilter]);
   const participantGroups = useMemo(() => getAdminParticipantGroups(filteredAdminParticipants), [filteredAdminParticipants]);
-  const participantTotals = useMemo(() => getAdminParticipantTotals(filteredAdminParticipants, orders), [filteredAdminParticipants, orders]);
+  const visibleRegistrationAcademyCount = Math.max(filteredAdminAcademies.length, participantGroups.length);
+  const participantTotals = useMemo(
+    () => getAdminParticipantTotals(filteredAdminParticipants, orders, visibleRegistrationAcademyCount),
+    [filteredAdminParticipants, orders, visibleRegistrationAcademyCount],
+  );
   const ticketRows = useMemo(() => getTicketDashboardRows(orders), [orders]);
   const filteredTicketRows = useMemo(() => {
     const normalizedQuery = ticketQuery.trim().toLowerCase();
@@ -4867,6 +5061,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     try {
       await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" });
       setAdminSession(null);
+      setAdminAcademies([]);
       setOrders([]);
       setAdminParticipants([]);
       setProgramDances([]);
@@ -4970,8 +5165,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
                   : isMediaSection
                     ? filteredMediaOrders.length === 0
                     : isRegistrationsSection
-                      ? filteredAdminParticipants.length === 0
-                    : filteredOrders.length === 0
+                      ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
+                      : filteredOrders.length === 0
               }
               onClick={() => {
                 if (isTicketSection) {
@@ -4985,7 +5180,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 }
 
                 if (isRegistrationsSection) {
-                  downloadAdminParticipantsCsv(filteredAdminParticipants, orders);
+                  downloadAdminParticipantsCsv(filteredAdminAcademies, filteredAdminParticipants, orders);
                   return;
                 }
 
@@ -5085,6 +5280,59 @@ export function LevitateRegistrationAdminPaymentsRoute({
             </section>
 
             <section className="registration-admin-grid">
+              <div className="registration-admin-table-card registration-admin-academies-card">
+                <div className="registration-admin-table registration-admin-academies-table" role="table" aria-label="Academias registradas">
+                  <div className="registration-admin-table__head" role="row">
+                    <span role="columnheader">Academia</span>
+                    <span role="columnheader">Contacto</span>
+                    <span role="columnheader">Usuario</span>
+                    <span role="columnheader">Origen</span>
+                    <span role="columnheader">Registro</span>
+                    <span role="columnheader">Participantes</span>
+                    <span role="columnheader">Coreógrafos</span>
+                    <span role="columnheader">Coreografías</span>
+                    <span role="columnheader">Órdenes</span>
+                  </div>
+
+                  {filteredAdminAcademies.map((academy) => {
+                    const orderCount = academy.inscriptionOrderCount + academy.shopOrderCount;
+                    const movementCount = getAdminAcademyMovementCount(academy);
+
+                    return (
+                      <div className="registration-admin-table__row registration-admin-table__row--static" key={academy.id} role="row">
+                        <span role="cell">
+                          {academy.name}
+                          <small>{movementCount === 0 ? "Sin movimientos todavía" : `${movementCount} movimiento(s)`}</small>
+                        </span>
+                        <span role="cell">
+                          {academy.contactName}
+                          <small>{[academy.email, academy.phone].filter(Boolean).join(" · ") || "Sin contacto"}</small>
+                        </span>
+                        <span role="cell">
+                          {academy.username ?? academy.userEmail ?? "Sin usuario"}
+                          <small>{academy.userStatus === "active" ? "Activo" : academy.userStatus || "Sin estado"}</small>
+                        </span>
+                        <span role="cell">{getAcademyOriginLabel(academy)}</span>
+                        <span role="cell">{getAdminDateLabel(academy.createdAt)}</span>
+                        <span role="cell">{academy.participantCount}</span>
+                        <span role="cell">{academy.choreographerCount}</span>
+                        <span role="cell">{academy.danceCount}</span>
+                        <span role="cell">{orderCount}</span>
+                      </div>
+                    );
+                  })}
+
+                  {filteredAdminAcademies.length === 0 ? (
+                    <p className="registration-admin-empty">{isParticipantsLoading ? "Cargando academias..." : "No hay academias registradas con esos filtros."}</p>
+                  ) : null}
+                </div>
+                <footer className="registration-admin-table-footer">
+                  <span>
+                    Mostrando {filteredAdminAcademies.length} de {adminAcademies.length} academias registradas
+                  </span>
+                </footer>
+              </div>
+
               <div className="registration-admin-table-card registration-admin-participants-card">
                 {participantGroups.map((group) => (
                   <section className="registration-admin-participant-group" key={group.key}>
@@ -5149,7 +5397,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                   </span>
                   <div>
                     <button disabled type="button">
-                      {participantGroups.length} academia(s)
+                      {visibleRegistrationAcademyCount} academia(s)
                     </button>
                   </div>
                 </footer>

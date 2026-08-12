@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS registration_shop_orders (
   academy_name TEXT NOT NULL,
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  access_token TEXT UNIQUE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
@@ -43,4 +44,5 @@ CREATE TABLE IF NOT EXISTS registration_shop_payment_proofs (
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_shop_orders_access_token ON registration_shop_orders(access_token) WHERE access_token IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON registration_shop_payment_proofs(order_id);

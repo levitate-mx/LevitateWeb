@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS registration_inscription_orders (
   academy_name TEXT NOT NULL,
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  access_token TEXT UNIQUE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
@@ -198,6 +199,30 @@ CREATE TABLE IF NOT EXISTS registration_event_tickets (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (source_order_type, source_order_id, ticket_number)
+);
+
+CREATE TABLE IF NOT EXISTS registration_scanner_pairing_codes (
+  id TEXT PRIMARY KEY,
+  pairing_token_hash TEXT NOT NULL UNIQUE,
+  created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_scanner_devices (
+  id TEXT PRIMARY KEY,
+  pairing_code_id TEXT NOT NULL UNIQUE REFERENCES registration_scanner_pairing_codes(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  device_token_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  activated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_scan_at TEXT,
+  revoked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS registration_choreographers (
@@ -339,10 +364,13 @@ CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id 
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_shop_orders_access_token ON registration_shop_orders(access_token) WHERE access_token IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON registration_shop_payment_proofs(order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_source_order ON registration_event_tickets(source_order_type, source_order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_ticket_code ON registration_event_tickets(ticket_code);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_status ON registration_event_tickets(status);
+CREATE INDEX IF NOT EXISTS idx_registration_scanner_pairing_codes_expires_at ON registration_scanner_pairing_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_registration_scanner_devices_status ON registration_scanner_devices(status);
 CREATE INDEX IF NOT EXISTS idx_registration_choreographers_academy_id ON registration_choreographers(academy_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   ON registration_choreographers(academy_id, lower(email))

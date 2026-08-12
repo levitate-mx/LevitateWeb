@@ -457,6 +457,10 @@ export default {
       return handleRegistrationShopOrder(request, env);
     }
 
+    if (url.pathname === "/api/registration/shop/order/lookup") {
+      return handleRegistrationShopOrderLookup(request, env);
+    }
+
     if (url.pathname === "/api/registration/shop/order/proof") {
       return handleRegistrationShopOrderProof(request, env);
     }
@@ -475,6 +479,26 @@ export default {
 
     if (url.pathname === "/api/registration/admin/inscription-order/status") {
       return handleRegistrationAdminInscriptionOrderStatus(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/scanner/pairing-code") {
+      return handleRegistrationAdminScannerPairingCode(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/ticket/scan") {
+      return handleRegistrationAdminTicketScan(request, env);
+    }
+
+    if (url.pathname === "/api/registration/scanner/activate") {
+      return handleRegistrationScannerActivate(request, env);
+    }
+
+    if (url.pathname === "/api/registration/scanner/me") {
+      return handleRegistrationScannerMe(request, env);
+    }
+
+    if (url.pathname === "/api/registration/scanner/ticket/scan") {
+      return handleRegistrationScannerTicketScan(request, env);
     }
 
     if (url.pathname === "/api/registration/me") {
@@ -1326,7 +1350,24 @@ async function handleRegistrationShopOrder(request, env) {
       items: body.items,
     });
 
-    return sendJson({ order: await serializeRegistrationShopOrderWithProof(db, order) }, 201);
+    return sendJson({ order: await serializePublicRegistrationShopOrderWithProof(db, order) }, 201);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationShopOrderLookup(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    await ensureRegistrationShopOrderTables(db);
+    const body = await readJsonBody(request);
+    const orderId = requireString(body.orderId, "orderId");
+    const accessToken = requireString(body.accessToken, "accessToken");
+
+    const order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken);
+    return sendJson({ order: await serializePublicRegistrationShopOrderWithProof(db, order) });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -1337,17 +1378,13 @@ async function handleRegistrationShopOrderProof(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
+    await ensureRegistrationShopOrderTables(db);
     await ensureRegistrationPaymentProofTables(db);
 
     const body = await readJsonBody(request);
-    const curp = normalizeCurp(requireString(body.curp, "curp"));
     const orderId = requireString(body.orderId, "orderId");
-
-    if (curp.length !== 18) {
-      throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
-    }
-
-    const order = await getRegistrationShopOrderRecordByIdAndCurp(db, orderId, curp);
+    const accessToken = requireString(body.accessToken, "accessToken");
+    const order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken);
     const existingProof = await getLatestRegistrationShopPaymentProof(db, order.id);
 
     if (existingProof && order.status !== "rejected") {
@@ -1404,9 +1441,9 @@ async function handleRegistrationShopOrderProof(request, env) {
       .bind(order.id)
       .run();
 
-    const updatedOrder = await getRegistrationShopOrderRecordByIdAndCurp(db, order.id, curp);
+    const updatedOrder = await getRegistrationShopOrderRecordByIdAndAccessToken(db, order.id, accessToken);
 
-    return sendJson({ order: await serializeRegistrationShopOrderWithProof(db, updatedOrder) }, 201);
+    return sendJson({ order: await serializePublicRegistrationShopOrderWithProof(db, updatedOrder) }, 201);
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -1598,6 +1635,7 @@ async function handleRegistrationAdminParticipants(request, env) {
     await ensureRegistrationParticipantReleveTeacherColumn(db);
 
     return sendJson({
+      academies: await getAllRegistrationAdminAcademies(db),
       participants: await getAllRegistrationAdminParticipants(db),
     });
   } catch (error) {
@@ -1665,6 +1703,237 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
   } catch (error) {
     return sendRegistrationError(error);
   }
+}
+
+async function handleRegistrationAdminTicketScan(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const admin = await requireRegistrationAdmin(request, env, db);
+    const body = await readJsonBody(request);
+    const ticketCode = parseRegistrationTicketScanValue(body.qrPayload ?? body.ticketCode ?? body.code);
+
+    return sendJson(
+      await scanRegistrationEventTicket(db, {
+        ticketCode,
+        usedBy: admin.session.user.email || admin.session.user.id,
+      }),
+    );
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminScannerPairingCode(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const admin = await requireRegistrationAdmin(request, env, db);
+    const pairingToken = createSessionToken();
+    const pairingCodeId = crypto.randomUUID();
+
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_scanner_pairing_codes (
+            id,
+            pairing_token_hash,
+            created_by_user_id,
+            expires_at
+          )
+          VALUES (?, ?, ?, datetime('now', '+10 minutes'))
+        `,
+      )
+      .bind(pairingCodeId, await hashToken(pairingToken), admin.session.user.id)
+      .run();
+
+    return sendJson(
+      {
+        pairingPayload: `LEVITATE:SCANNER-PAIR:${pairingToken}`,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      },
+      201,
+    );
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationScannerActivate(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const body = await readJsonBody(request);
+    const pairingToken = parseRegistrationScannerPairingValue(body.pairingPayload ?? body.pairingToken ?? body.code);
+    const deviceName = requireString(body.deviceName, "deviceName").slice(0, 120);
+    const db = getDb(env);
+    const pairingTokenHash = await hashToken(pairingToken);
+    const deviceToken = createSessionToken();
+    const deviceId = crypto.randomUUID();
+    const insertResult = await db
+      .prepare(
+        `
+          INSERT INTO registration_scanner_devices (
+            id,
+            pairing_code_id,
+            name,
+            device_token_hash,
+            created_by_user_id
+          )
+          SELECT ?, id, ?, ?, created_by_user_id
+          FROM registration_scanner_pairing_codes
+          WHERE pairing_token_hash = ?
+            AND used_at IS NULL
+            AND expires_at > datetime('now')
+        `,
+      )
+      .bind(deviceId, deviceName, await hashToken(deviceToken), pairingTokenHash)
+      .run();
+
+    if (Number(insertResult.meta?.changes || 0) !== 1) {
+      throwHttpError(
+        "registration_scanner_pairing_invalid",
+        "El QR de vinculación venció o ya fue utilizado.",
+        401,
+      );
+    }
+
+    await db
+      .prepare(
+        `
+          UPDATE registration_scanner_pairing_codes
+          SET used_at = datetime('now')
+          WHERE pairing_token_hash = ?
+            AND used_at IS NULL
+        `,
+      )
+      .bind(pairingTokenHash)
+      .run();
+
+    return sendJson(
+      {
+        device: {
+          id: deviceId,
+          name: deviceName,
+        },
+        deviceToken,
+      },
+      201,
+    );
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationScannerMe(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+
+    const device = await requireRegistrationScannerDevice(request, getDb(env));
+    return sendJson({ device: serializeRegistrationScannerDevice(device) });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationScannerTicketScan(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    const device = await requireRegistrationScannerDevice(request, db);
+    const body = await readJsonBody(request);
+    const ticketCode = parseRegistrationTicketScanValue(body.qrPayload ?? body.ticketCode ?? body.code);
+    const result = await scanRegistrationEventTicket(db, {
+      ticketCode,
+      usedBy: `Scanner: ${device.name}`,
+    });
+
+    await db
+      .prepare(
+        `
+          UPDATE registration_scanner_devices
+          SET last_scan_at = datetime('now'), updated_at = datetime('now')
+          WHERE id = ?
+        `,
+      )
+      .bind(device.id)
+      .run();
+
+    return sendJson(result);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
+  const ticket = await getRegistrationEventTicketByCode(db, ticketCode);
+
+  if (!ticket) {
+    return {
+      admitted: false,
+      reason: "not_found",
+      valid: false,
+      message: "El QR no corresponde a un boleto de Levitate.",
+    };
+  }
+
+  if (ticket.status === "cancelled") {
+    return {
+      admitted: false,
+      reason: "cancelled",
+      valid: false,
+      message: "Este boleto fue cancelado.",
+      ticket: serializeRegistrationEventTicket(ticket),
+    };
+  }
+
+  if (ticket.status === "used") {
+    return {
+      admitted: false,
+      reason: "already_used",
+      valid: true,
+      message: "Este boleto ya fue utilizado.",
+      ticket: serializeRegistrationEventTicket(ticket),
+    };
+  }
+
+  const scanResult = await db
+    .prepare(
+      `
+        UPDATE registration_event_tickets
+        SET
+          status = 'used',
+          used_at = datetime('now'),
+          used_by = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+          AND status = 'active'
+      `,
+    )
+    .bind(usedBy, ticket.id)
+    .run();
+  const updatedTicket = await getRegistrationEventTicketByCode(db, ticketCode);
+
+  if (Number(scanResult.meta?.changes || 0) === 0) {
+    return {
+      admitted: false,
+      reason: "already_used",
+      valid: true,
+      message: "Este boleto ya fue utilizado.",
+      ticket: updatedTicket ? serializeRegistrationEventTicket(updatedTicket) : null,
+    };
+  }
+
+  return {
+    admitted: true,
+    reason: "accepted",
+    valid: true,
+    message: "Boleto válido. Acceso registrado.",
+    ticket: serializeRegistrationEventTicket(updatedTicket),
+  };
 }
 
 async function handleRegistrationChoreographers(request, env) {
@@ -3147,6 +3416,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
             reviewed_at = NULL,
             rejection_reason = NULL,
             rejection_message = NULL,
+            access_token = ?,
             updated_at = datetime('now')
           WHERE id = ?
         `,
@@ -3165,6 +3435,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
         normalizedCart.discountCode || null,
         normalizedCart.discountAmount,
         JSON.stringify(normalizedCart.lineItems),
+        crypto.randomUUID(),
         reusableOrder.id,
       )
       .run();
@@ -3186,6 +3457,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
           academy_name,
           venue,
           reference,
+          access_token,
           amount,
           payment_method,
           buyer_name,
@@ -3197,7 +3469,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
           discount_amount,
           line_items_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .bind(
@@ -3208,6 +3480,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
       participant.academy_name,
       participant.venue,
       reference,
+      crypto.randomUUID(),
       normalizedCart.amount,
       buyerContact.name,
       buyerContact.email,
@@ -3799,22 +4072,22 @@ async function getRegistrationInscriptionOrderRecordById(db, orderId) {
   return order;
 }
 
-async function getRegistrationShopOrderRecordByIdAndCurp(db, orderId, curp) {
+async function getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken) {
   const order = await db
     .prepare(
       `
         SELECT *
         FROM registration_shop_orders
         WHERE id = ?
-          AND curp = ?
+          AND access_token = ?
         LIMIT 1
       `,
     )
-    .bind(orderId, curp)
+    .bind(orderId, accessToken)
     .first();
 
   if (!order) {
-    throwHttpError("registration_shop_order_not_found", "Orden de tienda no encontrada para esa CURP", 404);
+    throwHttpError("registration_shop_order_not_found", "No pudimos abrir esa orden de tienda", 404);
   }
 
   return order;
@@ -4183,6 +4456,36 @@ function buildRegistrationTicketQrPayload(ticketCode) {
   return `LEVITATE:TICKET:${ticketCode}`;
 }
 
+function parseRegistrationTicketScanValue(value) {
+  const normalizedValue = requireString(value, "qrPayload").trim().toUpperCase();
+  const ticketCode = normalizedValue.startsWith("LEVITATE:TICKET:")
+    ? normalizedValue.slice("LEVITATE:TICKET:".length)
+    : normalizedValue;
+
+  if (!/^LV-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(ticketCode) && !/^LV-[A-Z0-9-]{8,36}$/.test(ticketCode)) {
+    throwHttpError("invalid_ticket_qr", "El código escaneado no tiene un formato válido", 400);
+  }
+
+  return ticketCode;
+}
+
+function parseRegistrationScannerPairingValue(value) {
+  const normalizedValue = requireString(value, "pairingPayload").trim();
+  const prefix = "LEVITATE:SCANNER-PAIR:";
+
+  if (normalizedValue.slice(0, prefix.length).toUpperCase() !== prefix) {
+    throwHttpError("registration_scanner_pairing_invalid", "El QR no corresponde a Levitate Entrada.", 400);
+  }
+
+  const pairingToken = normalizedValue.slice(prefix.length).trim();
+
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(pairingToken)) {
+    throwHttpError("registration_scanner_pairing_invalid", "El QR de vinculación no tiene un formato válido.", 400);
+  }
+
+  return pairingToken;
+}
+
 async function getRegistrationEventTicketsForSource(db, sourceOrderType, sourceOrderId) {
   try {
     const { results = [] } = await db
@@ -4399,6 +4702,72 @@ async function getAllRegistrationAdminParticipants(db) {
     .all();
 
   return results.map(serializeRegistrationAdminParticipant);
+}
+
+async function getAllRegistrationAdminAcademies(db) {
+  const { results = [] } = await db
+    .prepare(
+      `
+        SELECT
+          registration_academies.*,
+          registration_users.name AS user_name,
+          registration_users.username,
+          registration_users.email AS user_email,
+          registration_users.status AS user_status,
+          COALESCE(
+            (
+              SELECT GROUP_CONCAT(DISTINCT registration_dances.venue)
+              FROM registration_dances
+              WHERE registration_dances.academy_id = registration_academies.id
+            ),
+            ''
+          ) AS event_venues,
+          (
+            SELECT COUNT(*)
+            FROM registration_participants
+            WHERE registration_participants.academy_id = registration_academies.id
+          ) AS participant_count,
+          (
+            SELECT COUNT(*)
+            FROM registration_choreographers
+            WHERE registration_choreographers.academy_id = registration_academies.id
+          ) AS choreographer_count,
+          (
+            SELECT COUNT(*)
+            FROM registration_dances
+            WHERE registration_dances.academy_id = registration_academies.id
+          ) AS dance_count,
+          (
+            SELECT COUNT(*)
+            FROM registration_inscription_orders
+            WHERE registration_inscription_orders.academy_id = registration_academies.id
+          ) AS inscription_order_count,
+          (
+            SELECT COUNT(*)
+            FROM registration_shop_orders
+            WHERE registration_shop_orders.academy_id = registration_academies.id
+          ) AS shop_order_count,
+          (
+            SELECT COUNT(*)
+            FROM registration_music_uploads
+            WHERE registration_music_uploads.academy_id = registration_academies.id
+          ) AS music_upload_count
+        FROM registration_academies
+        LEFT JOIN registration_users
+          ON registration_users.academy_id = registration_academies.id
+          AND registration_users.role = 'academy'
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM registration_users AS admin_users
+          WHERE admin_users.academy_id = registration_academies.id
+            AND admin_users.role = 'admin'
+        )
+        ORDER BY registration_academies.created_at DESC, registration_academies.name ASC
+      `,
+    )
+    .all();
+
+  return results.map(serializeRegistrationAdminAcademy);
 }
 
 async function getRegistrationChoreographers(db, academyId) {
@@ -4837,6 +5206,35 @@ function serializeRegistrationAdminParticipant(participant) {
     academyOriginType: participant.academy_origin_type || "mexico",
     academyOriginState: participant.academy_origin_state || null,
     academyOriginCountry: participant.academy_origin_country || "México",
+  };
+}
+
+function serializeRegistrationAdminAcademy(academy) {
+  return {
+    id: academy.id,
+    name: academy.name,
+    contactName: academy.contact_name,
+    email: academy.email,
+    phone: academy.phone,
+    originType: academy.origin_type || "mexico",
+    originState: academy.origin_state || null,
+    originCountry: academy.origin_country || "México",
+    eventVenues: String(academy.event_venues || "")
+      .split(",")
+      .map((venue) => venue.trim())
+      .filter(Boolean),
+    userName: academy.user_name || null,
+    username: academy.username || null,
+    userEmail: academy.user_email || null,
+    userStatus: academy.user_status || null,
+    participantCount: Number(academy.participant_count || 0),
+    choreographerCount: Number(academy.choreographer_count || 0),
+    danceCount: Number(academy.dance_count || 0),
+    inscriptionOrderCount: Number(academy.inscription_order_count || 0),
+    shopOrderCount: Number(academy.shop_order_count || 0),
+    musicUploadCount: Number(academy.music_upload_count || 0),
+    createdAt: academy.created_at,
+    updatedAt: academy.updated_at,
   };
 }
 
@@ -5296,6 +5694,7 @@ function serializeRegistrationShopOrder(order) {
     academyName: order.academy_name,
     venue: order.venue,
     reference: order.reference,
+    accessToken: order.access_token,
     paymentReference: buildRegistrationShopPaymentReference(order),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
@@ -5345,6 +5744,25 @@ async function serializeRegistrationShopOrderWithProof(db, order) {
   };
 }
 
+async function serializePublicRegistrationShopOrderWithProof(db, order) {
+  const proof = await getLatestRegistrationShopPaymentProof(db, order.id);
+
+  return {
+    ...serializeRegistrationShopOrder(order),
+    proof: proof
+      ? {
+          id: proof.id,
+          fileName: proof.fileName,
+          contentType: proof.contentType,
+          fileSize: proof.fileSize,
+          status: proof.status,
+          uploadedAt: proof.uploadedAt,
+        }
+      : null,
+    tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
+  };
+}
+
 async function serializeRegistrationShopOrderWithJoinedProof(db, order) {
   return {
     ...serializeRegistrationShopOrder(order),
@@ -5368,6 +5786,17 @@ function serializeRegistrationEventTicket(ticket) {
     usedBy: ticket.used_by,
     createdAt: ticket.created_at,
     updatedAt: ticket.updated_at,
+  };
+}
+
+function serializeRegistrationScannerDevice(device) {
+  return {
+    id: device.id,
+    name: device.name,
+    status: device.status,
+    activatedAt: device.activated_at,
+    lastSeenAt: device.last_seen_at,
+    lastScanAt: device.last_scan_at,
   };
 }
 
@@ -5569,6 +5998,7 @@ async function ensureRegistrationShopOrderTables(db) {
           academy_name TEXT NOT NULL,
           venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
           reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          access_token TEXT UNIQUE,
           amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
           paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
           status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
@@ -5596,6 +6026,25 @@ async function ensureRegistrationShopOrderTables(db) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp)`).run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id)`).run();
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status)`).run();
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_shop_orders)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+
+  if (!existingColumns.has("access_token")) {
+    try {
+      await db.prepare("ALTER TABLE registration_shop_orders ADD COLUMN access_token TEXT").run();
+    } catch (error) {
+      if (!String(error?.message || error).match(/duplicate column name/i)) {
+        throw error;
+      }
+    }
+  }
+
+  await db
+    .prepare("UPDATE registration_shop_orders SET access_token = lower(hex(randomblob(16))) WHERE access_token IS NULL OR access_token = ''")
+    .run();
+  await db
+    .prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_shop_orders_access_token ON registration_shop_orders(access_token) WHERE access_token IS NOT NULL")
+    .run();
 }
 
 async function ensureRegistrationPaymentProofTables(db) {
@@ -7140,6 +7589,46 @@ async function requireRegistrationAdmin(request, env, db) {
   }
 
   return { scope: "global", session };
+}
+
+async function requireRegistrationScannerDevice(request, db) {
+  const authorization = request.headers.get("authorization") || "";
+  const match = authorization.match(/^Scanner\s+(.+)$/i);
+  const deviceToken = match?.[1]?.trim() || "";
+
+  if (!deviceToken) {
+    throwHttpError("registration_scanner_session_missing", "Vincula este dispositivo para continuar.", 401);
+  }
+
+  const device = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_scanner_devices
+        WHERE device_token_hash = ?
+          AND status = 'active'
+        LIMIT 1
+      `,
+    )
+    .bind(await hashToken(deviceToken))
+    .first();
+
+  if (!device) {
+    throwHttpError("registration_scanner_session_invalid", "La vinculación de este dispositivo ya no es válida.", 401);
+  }
+
+  await db
+    .prepare(
+      `
+        UPDATE registration_scanner_devices
+        SET last_seen_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `,
+    )
+    .bind(device.id)
+    .run();
+
+  return device;
 }
 
 function toNumber(value) {
