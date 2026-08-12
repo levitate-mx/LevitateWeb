@@ -56,10 +56,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
-type RegistrationAdminDashboardSection = "dashboard" | "payments" | "program" | "tickets" | "media" | "registrations";
+type RegistrationAdminDashboardSection = "dashboard" | "academies" | "payments" | "program" | "tickets" | "media" | "registrations";
 type RegistrationDashboardDateRangeId = "today" | "last_7_days" | "last_30_days" | "current_event" | "custom" | "season";
 type RegistrationDashboardVenueMetric = "participants" | "choreographies" | "confirmed_registrations" | "revenue" | "tickets";
 type RegistrationDashboardAlertSeverity = "critical" | "important" | "info";
+type RegistrationAcademyDirectoryStatus = "active" | "incomplete" | "inactive" | "archived";
+type RegistrationAcademyDirectorySort = "recent" | "name" | "registrations" | "participants" | "pending" | "alerts";
+type RegistrationAcademyProfileTab =
+  | "overview"
+  | "participants"
+  | "choreographers"
+  | "choreographies"
+  | "payments"
+  | "tickets"
+  | "media"
+  | "activity";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error" | "warning";
 
@@ -466,6 +477,31 @@ type RegistrationDashboardAlert = {
   title: string;
 };
 
+type RegistrationAcademyDirectorySummary = {
+  academy: RegistrationAdminAcademy;
+  alerts: string[];
+  choreographies: RegistrationDance[];
+  confirmedOrders: RegistrationInscriptionOrder[];
+  confirmedRegistrationCount: number;
+  initials: string;
+  latestActivity: {
+    date: string;
+    description: string;
+    title: string;
+  };
+  locationDetail: string;
+  locationLabel: string;
+  mediaOrders: RegistrationInscriptionOrder[];
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  pendingMediaCount: number;
+  pendingOrderCount: number;
+  pendingRegistrationCount: number;
+  pendingTicketCount: number;
+  registrationOrderCount: number;
+  status: RegistrationAcademyDirectoryStatus;
+};
+
 type RegistrationApiErrorBody = {
   error?: {
     code?: string;
@@ -504,7 +540,7 @@ const adminLookupTabs: Array<{ id: AdminLookupTab; label: string }> = [
 
 const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
   { group: "Gestión", label: "Panel general", icon: LayoutDashboard, section: "dashboard" },
-  { group: "Gestión", label: "Academias", icon: Building2 },
+  { group: "Gestión", label: "Academias", icon: Building2, section: "academies" },
   { group: "Gestión", label: "Participantes", icon: Users, section: "registrations" },
   { group: "Gestión", label: "Coreógrafos", icon: UserRoundPlus },
   { group: "Ventas y pagos", label: "Pagos", icon: CreditCard, section: "payments", badgeKey: "payments" },
@@ -653,6 +689,36 @@ const registrationDashboardEventStatusByVenue: Record<string, string> = {
   edomex: "Registro abierto",
   veracruz: "En preparación",
 };
+
+const registrationAcademyStatusOptions: FieldOption[] = [
+  { value: "all", label: "Todos" },
+  { value: "active", label: "Activas" },
+  { value: "incomplete", label: "Incompletas" },
+  { value: "inactive", label: "Inactivas" },
+  { value: "archived", label: "Archivadas" },
+  { value: "with_registrations", label: "Con inscripciones" },
+  { value: "needs_attention", label: "Con alertas" },
+];
+
+const registrationAcademySortOptions: Array<{ label: string; value: RegistrationAcademyDirectorySort }> = [
+  { value: "recent", label: "Más recientes" },
+  { value: "name", label: "Nombre A-Z" },
+  { value: "registrations", label: "Más inscripciones" },
+  { value: "participants", label: "Más participantes" },
+  { value: "pending", label: "Más pendientes" },
+  { value: "alerts", label: "Más alertas" },
+];
+
+const registrationAcademyProfileTabs: Array<{ label: string; value: RegistrationAcademyProfileTab }> = [
+  { value: "overview", label: "Resumen" },
+  { value: "participants", label: "Participantes" },
+  { value: "choreographers", label: "Coreógrafos" },
+  { value: "choreographies", label: "Coreografías" },
+  { value: "payments", label: "Pagos" },
+  { value: "tickets", label: "Boletos" },
+  { value: "media", label: "Foto/Video" },
+  { value: "activity", label: "Actividad" },
+];
 
 const academyOriginTypeOptions: FieldOption[] = [
   { value: "mexico", label: "México" },
@@ -1442,6 +1508,357 @@ function getAdminAcademyMovementCount(academy: RegistrationAdminAcademy) {
     academy.shopOrderCount +
     academy.musicUploadCount
   );
+}
+
+function normalizeDirectoryText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getRegistrationAcademyInitials(name: string) {
+  const words = name
+    .replace(/[^a-zA-ZÀ-ÿ0-9\s]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length === 0) {
+    return "AC";
+  }
+
+  if (words.length === 1) {
+    return words[0].slice(0, 3).toUpperCase();
+  }
+
+  return words
+    .slice(0, 3)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
+function doesOrderBelongToAcademy(order: RegistrationInscriptionOrder, academy: RegistrationAdminAcademy) {
+  return order.academyId === academy.id || normalizeDirectoryText(order.academyName) === normalizeDirectoryText(academy.name);
+}
+
+function doesParticipantBelongToAcademy(participant: RegistrationAdminParticipant, academy: RegistrationAdminAcademy) {
+  return participant.academyId === academy.id || normalizeDirectoryText(participant.academyName) === normalizeDirectoryText(academy.name);
+}
+
+function doesDanceBelongToAcademy(dance: RegistrationDance, academy: RegistrationAdminAcademy) {
+  return normalizeDirectoryText(dance.academyName) === normalizeDirectoryText(academy.name);
+}
+
+function getRegistrationAcademyLocation(academy: RegistrationAdminAcademy) {
+  const origin = getAcademyOriginLabel(academy);
+  const venues = academy.eventVenues.map(getVenueLabel);
+
+  return {
+    detail: venues.length > 0 ? venues.join(" / ") : "Sin sede asignada",
+    label: origin,
+  };
+}
+
+function getRegistrationAcademyStatusLabel(status: RegistrationAcademyDirectoryStatus) {
+  const labels: Record<RegistrationAcademyDirectoryStatus, string> = {
+    active: "Activa",
+    archived: "Archivada",
+    inactive: "Inactiva",
+    incomplete: "Incompleta",
+  };
+
+  return labels[status];
+}
+
+function getRegistrationAcademyStatusClass(status: RegistrationAcademyDirectoryStatus) {
+  return `registration-academies-status registration-academies-status--${status}`;
+}
+
+function getRegistrationAcademyLatestActivity({
+  academy,
+  choreographies,
+  orders,
+  participants,
+}: {
+  academy: RegistrationAdminAcademy;
+  choreographies: RegistrationDance[];
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+}) {
+  const activities: Array<{ date: string; description: string; title: string }> = [
+    {
+      date: academy.updatedAt || academy.createdAt,
+      description: "Ficha de academia",
+      title: "Registro actualizado",
+    },
+    {
+      date: academy.createdAt,
+      description: "Alta de academia",
+      title: "Registro creado",
+    },
+  ];
+
+  for (const participant of participants) {
+    activities.push({
+      date: participant.createdAt,
+      description: participant.fullName,
+      title: "Participante agregado",
+    });
+  }
+
+  for (const dance of choreographies) {
+    activities.push({
+      date: dance.createdAt,
+      description: dance.title,
+      title: "Coreografía registrada",
+    });
+
+    if (dance.musicUpload) {
+      activities.push({
+        date: dance.musicUpload.uploadedAt,
+        description: dance.title,
+        title: "Música cargada",
+      });
+    }
+  }
+
+  for (const order of orders) {
+    const reference = getRegistrationInscriptionPaymentReference(order);
+    const isMediaOrder = getOrderMediaItemCount(order) > 0;
+    const isTicketOrder = getOrderRequestedTicketCount(order) > 0;
+    const orderType = isMediaOrder ? "Foto/Video" : isTicketOrder ? "Boletos" : "Inscripción";
+
+    if (order.status === "paid") {
+      activities.push({
+        date: order.reviewedAt || order.paidAt || order.updatedAt,
+        description: `${orderType} · ${reference}`,
+        title: "Pago confirmado",
+      });
+    } else if (order.status === "payment_reported") {
+      activities.push({
+        date: order.proof?.uploadedAt || order.updatedAt,
+        description: `${orderType} · ${reference}`,
+        title: "Comprobante por revisar",
+      });
+    } else if (order.status === "rejected") {
+      activities.push({
+        date: order.reviewedAt || order.updatedAt,
+        description: `${orderType} · ${reference}`,
+        title: "Pago rechazado",
+      });
+    } else {
+      activities.push({
+        date: order.createdAt,
+        description: `${orderType} · ${reference}`,
+        title: "Orden creada",
+      });
+    }
+  }
+
+  return activities
+    .filter((activity) => Number.isFinite(Date.parse(activity.date)))
+    .sort((left, right) => Date.parse(right.date) - Date.parse(left.date))[0] ?? {
+    date: academy.createdAt,
+    description: "Sin actividad reciente",
+    title: "Registro creado",
+  };
+}
+
+function getRegistrationAcademyAlerts({
+  academy,
+  choreographies,
+  orders,
+  participants,
+}: {
+  academy: RegistrationAdminAcademy;
+  choreographies: RegistrationDance[];
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+}) {
+  const alerts: string[] = [];
+  const pendingReviewCount = orders.filter((order) => order.status === "payment_reported").length;
+  const pendingPaymentCount = orders.filter((order) => order.status === "pending_payment").length;
+  const rejectedPaymentCount = orders.filter((order) => order.status === "rejected").length;
+  const pendingTicketCount = orders.filter((order) => getOrderRequestedTicketCount(order) > 0 && order.status !== "paid").length;
+  const pendingMediaCount = orders.filter((order) => getOrderMediaItemCount(order) > 0 && order.status !== "paid").length;
+  const incompleteParticipantCount = participants.filter((participant) => !participant.birthDate || participant.age == null || !participant.shirtSize).length;
+  const missingMusicCount = choreographies.filter((dance) => !dance.musicUpload).length;
+
+  if (!academy.contactName || !academy.email || !academy.phone) {
+    alerts.push("Contacto incompleto");
+  }
+
+  if (academy.eventVenues.length === 0) {
+    alerts.push("Sin sede asignada");
+  }
+
+  if (academy.participantCount === 0) {
+    alerts.push("Sin participantes");
+  }
+
+  if (academy.danceCount === 0) {
+    alerts.push("Sin coreografías");
+  }
+
+  if (pendingReviewCount > 0) {
+    alerts.push(`${pendingReviewCount} comprobante(s) por revisar`);
+  }
+
+  if (pendingPaymentCount > 0) {
+    alerts.push(`${pendingPaymentCount} pago(s) pendiente(s)`);
+  }
+
+  if (rejectedPaymentCount > 0) {
+    alerts.push(`${rejectedPaymentCount} pago(s) rechazado(s)`);
+  }
+
+  if (pendingTicketCount > 0) {
+    alerts.push(`${pendingTicketCount} orden(es) de boletos pendientes`);
+  }
+
+  if (pendingMediaCount > 0) {
+    alerts.push(`${pendingMediaCount} paquete(s) Foto/Video pendientes`);
+  }
+
+  if (incompleteParticipantCount > 0) {
+    alerts.push(`${incompleteParticipantCount} participante(s) incompletos`);
+  }
+
+  if (missingMusicCount > 0) {
+    alerts.push(`${missingMusicCount} música(s) pendientes`);
+  }
+
+  return alerts;
+}
+
+function getRegistrationAcademyDirectoryStatus({
+  academy,
+  alerts,
+}: {
+  academy: RegistrationAdminAcademy;
+  alerts: string[];
+}): RegistrationAcademyDirectoryStatus {
+  const userStatus = normalizeDirectoryText(academy.userStatus);
+
+  if (userStatus.includes("archiv")) {
+    return "archived";
+  }
+
+  if (userStatus.includes("inactive") || userStatus.includes("inactiv") || userStatus.includes("disabled") || userStatus.includes("suspend")) {
+    return "inactive";
+  }
+
+  if (alerts.some((alert) => ["Contacto incompleto", "Sin sede asignada", "Sin participantes", "Sin coreografías"].includes(alert))) {
+    return "incomplete";
+  }
+
+  if (getAdminAcademyMovementCount(academy) === 0) {
+    return "inactive";
+  }
+
+  return "active";
+}
+
+function buildRegistrationAcademyDirectorySummary({
+  academy,
+  orders,
+  participants,
+  programDances,
+}: {
+  academy: RegistrationAdminAcademy;
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+}): RegistrationAcademyDirectorySummary {
+  const academyOrders = orders.filter((order) => doesOrderBelongToAcademy(order, academy));
+  const academyParticipants = participants.filter((participant) => doesParticipantBelongToAcademy(participant, academy));
+  const academyDances = programDances.filter((dance) => doesDanceBelongToAcademy(dance, academy));
+  const location = getRegistrationAcademyLocation(academy);
+  const registrationOrders = academyOrders.filter((order) => getAdminOrderType(order) === "registration");
+  const mediaOrders = academyOrders.filter((order) => getOrderMediaItemCount(order) > 0);
+  const alerts = getRegistrationAcademyAlerts({
+    academy,
+    choreographies: academyDances,
+    orders: academyOrders,
+    participants: academyParticipants,
+  });
+
+  return {
+    academy,
+    alerts,
+    choreographies: academyDances,
+    confirmedOrders: academyOrders.filter((order) => order.status === "paid"),
+    confirmedRegistrationCount: registrationOrders.filter((order) => order.status === "paid").length,
+    initials: getRegistrationAcademyInitials(academy.name),
+    latestActivity: getRegistrationAcademyLatestActivity({
+      academy,
+      choreographies: academyDances,
+      orders: academyOrders,
+      participants: academyParticipants,
+    }),
+    locationDetail: location.detail,
+    locationLabel: location.label,
+    mediaOrders,
+    orders: academyOrders,
+    participants: academyParticipants,
+    pendingMediaCount: mediaOrders.filter((order) => order.status === "pending_payment" || order.status === "payment_reported").length,
+    pendingOrderCount: academyOrders.filter((order) => order.status === "pending_payment" || order.status === "payment_reported" || order.status === "rejected").length,
+    pendingRegistrationCount: registrationOrders.filter((order) => order.status === "pending_payment" || order.status === "payment_reported").length,
+    pendingTicketCount: academyOrders.filter((order) => getOrderRequestedTicketCount(order) > 0 && order.status !== "paid").length,
+    registrationOrderCount: registrationOrders.length,
+    status: getRegistrationAcademyDirectoryStatus({ academy, alerts }),
+  };
+}
+
+function downloadRegistrationAcademiesDirectoryCsv(summaries: RegistrationAcademyDirectorySummary[]) {
+  const headers = [
+    "Academia",
+    "Contacto",
+    "Correo",
+    "Teléfono",
+    "Ubicación",
+    "Sedes",
+    "Estado",
+    "Inscripciones",
+    "Confirmadas",
+    "Pendientes",
+    "Participantes",
+    "Coreógrafos",
+    "Coreografías",
+    "Órdenes tienda",
+    "Última actividad",
+    "Alertas",
+  ];
+  const rows = summaries.map((summary) => [
+    summary.academy.name,
+    summary.academy.contactName,
+    summary.academy.email,
+    summary.academy.phone ?? "",
+    summary.locationLabel,
+    summary.locationDetail,
+    getRegistrationAcademyStatusLabel(summary.status),
+    summary.registrationOrderCount,
+    summary.confirmedRegistrationCount,
+    summary.pendingRegistrationCount,
+    summary.academy.participantCount,
+    summary.academy.choreographerCount,
+    summary.academy.danceCount,
+    summary.academy.shopOrderCount,
+    `${summary.latestActivity.title} · ${getAdminDateLabel(summary.latestActivity.date)}`,
+    summary.alerts.join(" | "),
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "levitate-academias-directorio.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function getAdminParticipantGroups(participants: RegistrationAdminParticipant[]) {
@@ -5199,6 +5616,552 @@ function RegistrationAdminDashboardOverview({
   );
 }
 
+function RegistrationAcademySummaryCard({
+  icon: Icon,
+  label,
+  meta,
+  onClick,
+  tone,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  meta: string;
+  onClick: () => void;
+  tone: "pink" | "purple" | "green" | "amber" | "red";
+  value: string;
+}) {
+  return (
+    <button className={`registration-academies-summary-card registration-academies-summary-card--${tone}`} onClick={onClick} type="button">
+      <span aria-hidden="true">
+        <Icon size={22} />
+      </span>
+      <strong>{value}</strong>
+      <small>{label}</small>
+      <em>{meta}</em>
+    </button>
+  );
+}
+
+function RegistrationAcademyLogo({ initials, name }: { initials: string; name: string }) {
+  return (
+    <span className="registration-academies-logo" aria-label={`Logo de ${name}`}>
+      {initials}
+    </span>
+  );
+}
+
+function RegistrationAcademyAlerts({ alerts, limit = 2 }: { alerts: string[]; limit?: number }) {
+  if (alerts.length === 0) {
+    return <span className="registration-academies-alerts registration-academies-alerts--clear">Sin alertas</span>;
+  }
+
+  const visibleAlerts = alerts.slice(0, limit);
+  const hiddenCount = alerts.length - visibleAlerts.length;
+
+  return (
+    <span className="registration-academies-alerts">
+      {visibleAlerts.map((alert) => (
+        <em key={alert}>{alert}</em>
+      ))}
+      {hiddenCount > 0 ? <em>+{hiddenCount}</em> : null}
+    </span>
+  );
+}
+
+function RegistrationAcademiesDirectoryPanel({
+  eventFilter,
+  filteredSummaries,
+  isLoading,
+  onEventFilterChange,
+  onMetricNavigate,
+  onNewAcademy,
+  onOpenAcademy,
+  onQueryChange,
+  onSortChange,
+  onStatusFilterChange,
+  query,
+  sort,
+  statusFilter,
+  summaries,
+}: {
+  eventFilter: string;
+  filteredSummaries: RegistrationAcademyDirectorySummary[];
+  isLoading: boolean;
+  onEventFilterChange: (value: string) => void;
+  onMetricNavigate: (target: RegistrationDashboardTarget) => void;
+  onNewAcademy: () => void;
+  onOpenAcademy: (academyId: string, tab?: RegistrationAcademyProfileTab) => void;
+  onQueryChange: (value: string) => void;
+  onSortChange: (value: RegistrationAcademyDirectorySort) => void;
+  onStatusFilterChange: (value: string) => void;
+  query: string;
+  sort: RegistrationAcademyDirectorySort;
+  statusFilter: string;
+  summaries: RegistrationAcademyDirectorySummary[];
+}) {
+  const activeCount = summaries.filter((summary) => summary.status === "active").length;
+  const withRegistrationsCount = summaries.filter((summary) => summary.registrationOrderCount > 0).length;
+  const incompleteCount = summaries.filter((summary) => summary.status === "incomplete").length;
+  const inactiveCount = summaries.filter((summary) => summary.status === "inactive" || summary.status === "archived").length;
+  const newAcademiesThisWeek = summaries.filter((summary) => {
+    const createdAt = Date.parse(summary.academy.createdAt);
+
+    return Number.isFinite(createdAt) && Date.now() - createdAt <= 7 * 24 * 60 * 60 * 1000;
+  }).length;
+
+  return (
+    <section className="registration-academies-panel" aria-label="Directorio de academias">
+      <section className="registration-academies-summary" aria-label="Resumen de academias">
+        <RegistrationAcademySummaryCard
+          icon={Building2}
+          label="Total academias"
+          meta={`+${newAcademiesThisWeek} esta semana`}
+          onClick={() => onStatusFilterChange("all")}
+          tone="pink"
+          value={summaries.length.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={UserPlus}
+          label="Academias activas"
+          meta={`${summaries.length > 0 ? Math.round((activeCount / summaries.length) * 100) : 0}% del total`}
+          onClick={() => onStatusFilterChange("active")}
+          tone="purple"
+          value={activeCount.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={CheckCircle2}
+          label="Con inscripciones"
+          meta={`${summaries.length > 0 ? Math.round((withRegistrationsCount / summaries.length) * 100) : 0}% del total`}
+          onClick={() => onStatusFilterChange("with_registrations")}
+          tone="green"
+          value={withRegistrationsCount.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={Clock}
+          label="Pendientes de completar"
+          meta={`${summaries.length > 0 ? Math.round((incompleteCount / summaries.length) * 100) : 0}% del total`}
+          onClick={() => onStatusFilterChange("incomplete")}
+          tone="amber"
+          value={incompleteCount.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={XCircle}
+          label="Inactivas"
+          meta={`${summaries.length > 0 ? Math.round((inactiveCount / summaries.length) * 100) : 0}% del total`}
+          onClick={() => onStatusFilterChange("inactive")}
+          tone="red"
+          value={inactiveCount.toLocaleString("es-MX")}
+        />
+      </section>
+
+      <section className="registration-academies-toolbar" aria-label="Filtros de academias">
+        <label className="registration-academies-search">
+          <Search aria-hidden="true" size={17} />
+          <input
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Buscar academia, contacto o ciudad..."
+            type="search"
+            value={query}
+          />
+        </label>
+        <label>
+          <span>Estado</span>
+          <select onChange={(event) => onStatusFilterChange(event.target.value)} value={statusFilter}>
+            {registrationAcademyStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <label>
+          <span>Evento / Sede</span>
+          <select onChange={(event) => onEventFilterChange(event.target.value)} value={eventFilter}>
+            <option value="all">Todas</option>
+            {venueLabelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <label>
+          <span>Ordenar por</span>
+          <select onChange={(event) => onSortChange(event.target.value as RegistrationAcademyDirectorySort)} value={sort}>
+            {registrationAcademySortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={16} />
+        </label>
+        <button onClick={() => onStatusFilterChange("needs_attention")} type="button">
+          <ListFilter aria-hidden="true" size={17} />
+          Alertas
+        </button>
+        <button className="registration-academies-new-mobile" onClick={onNewAcademy} type="button">
+          <Plus aria-hidden="true" size={17} />
+          Nueva academia
+        </button>
+      </section>
+
+      <section className="registration-academies-directory" aria-label="Academias registradas">
+        <div className="registration-academies-directory__head" role="row">
+          <span role="columnheader">Academia</span>
+          <span role="columnheader">Ubicación</span>
+          <span role="columnheader">Estado</span>
+          <span role="columnheader">Inscripciones</span>
+          <span role="columnheader">Participantes</span>
+          <span role="columnheader">Coreógrafos</span>
+          <span role="columnheader">Última actividad</span>
+          <span role="columnheader">Alertas</span>
+          <span role="columnheader">Acciones</span>
+        </div>
+
+        {filteredSummaries.map((summary) => (
+          <article
+            className="registration-academies-directory__row"
+            key={summary.academy.id}
+            onClick={() => onOpenAcademy(summary.academy.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpenAcademy(summary.academy.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="registration-academies-directory__academy">
+              <RegistrationAcademyLogo initials={summary.initials} name={summary.academy.name} />
+              <span>
+                <strong>{summary.academy.name}</strong>
+                <small>{summary.academy.contactName || "Sin contacto principal"}</small>
+                <small>{[summary.academy.email, summary.academy.phone].filter(Boolean).join(" · ") || "Sin correo o teléfono"}</small>
+              </span>
+            </div>
+            <div>
+              <strong>{summary.locationLabel}</strong>
+              <small>{summary.locationDetail}</small>
+            </div>
+            <div>
+              <em className={getRegistrationAcademyStatusClass(summary.status)}>{getRegistrationAcademyStatusLabel(summary.status)}</em>
+              <small>Registrada el {getAdminDateLabel(summary.academy.createdAt)}</small>
+            </div>
+            <button
+              className="registration-academies-directory__metric"
+              onClick={(event) => {
+                event.stopPropagation();
+                onMetricNavigate({ purchaseTypeFilter: "registration", query: summary.academy.name, section: "payments" });
+              }}
+              type="button"
+            >
+              <strong>{summary.registrationOrderCount.toLocaleString("es-MX")}</strong>
+              <small>{summary.confirmedRegistrationCount} confirmadas</small>
+              <small>{summary.pendingRegistrationCount} pendientes</small>
+            </button>
+            <button
+              className="registration-academies-directory__metric"
+              onClick={(event) => {
+                event.stopPropagation();
+                onMetricNavigate({ query: summary.academy.name, section: "registrations" });
+              }}
+              type="button"
+            >
+              <strong>{summary.academy.participantCount.toLocaleString("es-MX")}</strong>
+              <small>Ver detalle</small>
+            </button>
+            <button
+              className="registration-academies-directory__metric"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenAcademy(summary.academy.id, "choreographers");
+              }}
+              type="button"
+            >
+              <strong>{summary.academy.choreographerCount.toLocaleString("es-MX")}</strong>
+              <small>Ver detalle</small>
+            </button>
+            <div>
+              <strong>{getDashboardActivityTimeLabel(summary.latestActivity.date)}</strong>
+              <small>{summary.latestActivity.title}</small>
+            </div>
+            <RegistrationAcademyAlerts alerts={summary.alerts} />
+            <button
+              className="registration-academies-directory__action"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenAcademy(summary.academy.id);
+              }}
+              type="button"
+              aria-label={`Abrir ${summary.academy.name}`}
+            >
+              <Eye aria-hidden="true" size={17} />
+            </button>
+          </article>
+        ))}
+
+        {filteredSummaries.length === 0 ? (
+          <p className="registration-academies-empty">
+            {isLoading ? "Cargando academias..." : "No hay academias que coincidan con esos filtros."}
+          </p>
+        ) : null}
+
+        <footer className="registration-academies-directory__footer">
+          <span>
+            Mostrando {filteredSummaries.length} de {summaries.length} academias
+          </span>
+          <small>10 por página</small>
+        </footer>
+      </section>
+    </section>
+  );
+}
+
+function RegistrationAcademyProfileList({
+  emptyMessage,
+  items,
+}: {
+  emptyMessage: string;
+  items: Array<{
+    detail?: string;
+    meta?: string;
+    title: string;
+  }>;
+}) {
+  if (items.length === 0) {
+    return <p className="registration-academy-profile__empty">{emptyMessage}</p>;
+  }
+
+  return (
+    <div className="registration-academy-profile__list">
+      {items.map((item) => (
+        <article key={`${item.title}-${item.meta ?? item.detail ?? ""}`}>
+          <strong>{item.title}</strong>
+          {item.detail ? <span>{item.detail}</span> : null}
+          {item.meta ? <small>{item.meta}</small> : null}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function getRegistrationAcademyProfileActivity(summary: RegistrationAcademyDirectorySummary) {
+  const activities: Array<{ date: string; detail: string; title: string }> = [];
+
+  for (const participant of summary.participants) {
+    activities.push({
+      date: participant.createdAt,
+      detail: participant.fullName,
+      title: "Participante agregado",
+    });
+  }
+
+  for (const dance of summary.choreographies) {
+    activities.push({
+      date: dance.createdAt,
+      detail: dance.title,
+      title: "Coreografía registrada",
+    });
+
+    if (dance.musicUpload) {
+      activities.push({
+        date: dance.musicUpload.uploadedAt,
+        detail: dance.title,
+        title: "Música cargada",
+      });
+    }
+  }
+
+  for (const order of summary.orders) {
+    activities.push({
+      date: order.reviewedAt || order.proof?.uploadedAt || order.updatedAt || order.createdAt,
+      detail: `${getRegistrationInscriptionPaymentReference(order)} · ${getAdminPaymentStatusLabel(order.status)}`,
+      title: getAdminOrderTypeLabel(order),
+    });
+  }
+
+  return activities
+    .filter((activity) => Number.isFinite(Date.parse(activity.date)))
+    .sort((left, right) => Date.parse(right.date) - Date.parse(left.date));
+}
+
+function RegistrationAcademyQuickPanel({
+  onClose,
+  onNavigate,
+  onTabChange,
+  summary,
+  tab,
+}: {
+  onClose: () => void;
+  onNavigate: (target: RegistrationDashboardTarget) => void;
+  onTabChange: (value: RegistrationAcademyProfileTab) => void;
+  summary: RegistrationAcademyDirectorySummary;
+  tab: RegistrationAcademyProfileTab;
+}) {
+  const ticketOrders = summary.orders.filter((order) => getOrderRequestedTicketCount(order) > 0);
+  const mediaOrders = summary.orders.filter((order) => getOrderMediaItemCount(order) > 0);
+  const choreographerNames = Array.from(
+    new Set(summary.choreographies.flatMap((dance) => dance.choreographers.map((choreographer) => choreographer.fullName)).filter(Boolean)),
+  ).sort((left, right) => left.localeCompare(right, "es"));
+  const activities = getRegistrationAcademyProfileActivity(summary);
+
+  return (
+    <aside className="registration-academy-profile" aria-label={`Perfil de ${summary.academy.name}`}>
+      <header className="registration-academy-profile__header">
+        <RegistrationAcademyLogo initials={summary.initials} name={summary.academy.name} />
+        <div>
+          <span>Academia</span>
+          <h2>{summary.academy.name}</h2>
+          <p>{summary.academy.contactName || "Sin contacto principal"}</p>
+        </div>
+        <button onClick={onClose} type="button" aria-label="Cerrar perfil">
+          <X aria-hidden="true" size={18} />
+        </button>
+      </header>
+
+      <div className="registration-academy-profile__meta">
+        <em className={getRegistrationAcademyStatusClass(summary.status)}>{getRegistrationAcademyStatusLabel(summary.status)}</em>
+        <span>{summary.locationLabel}</span>
+        <span>{summary.locationDetail}</span>
+      </div>
+
+      <nav className="registration-academy-profile__tabs" aria-label="Secciones del perfil de academia">
+        {registrationAcademyProfileTabs.map((profileTab) => (
+          <button
+            className={tab === profileTab.value ? "is-active" : ""}
+            key={profileTab.value}
+            onClick={() => onTabChange(profileTab.value)}
+            type="button"
+          >
+            {profileTab.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="registration-academy-profile__body">
+        {tab === "overview" ? (
+          <>
+            <section className="registration-academy-profile__stats" aria-label="Resumen rápido">
+              <button onClick={() => onNavigate({ purchaseTypeFilter: "registration", query: summary.academy.name, section: "payments" })} type="button">
+                <span>Inscripciones</span>
+                <strong>{summary.registrationOrderCount}</strong>
+                <small>{summary.confirmedRegistrationCount} confirmadas · {summary.pendingRegistrationCount} pendientes</small>
+              </button>
+              <button onClick={() => onNavigate({ query: summary.academy.name, section: "registrations" })} type="button">
+                <span>Participantes</span>
+                <strong>{summary.academy.participantCount}</strong>
+                <small>{summary.participants.length} en datos cargados</small>
+              </button>
+              <button onClick={() => onTabChange("choreographies")} type="button">
+                <span>Coreografías</span>
+                <strong>{summary.academy.danceCount}</strong>
+                <small>{summary.choreographies.length} en programa</small>
+              </button>
+              <button onClick={() => onTabChange("activity")} type="button">
+                <span>Pendientes</span>
+                <strong>{summary.pendingOrderCount}</strong>
+                <small>{summary.alerts.length} alerta(s)</small>
+              </button>
+            </section>
+            <section className="registration-academy-profile__block">
+              <h3>Última acción</h3>
+              <p>
+                <strong>{summary.latestActivity.title}</strong>
+                <span>{summary.latestActivity.description} · {getDashboardActivityTimeLabel(summary.latestActivity.date)}</span>
+              </p>
+            </section>
+            <section className="registration-academy-profile__block">
+              <h3>Alertas</h3>
+              <RegistrationAcademyAlerts alerts={summary.alerts} limit={6} />
+            </section>
+          </>
+        ) : null}
+
+        {tab === "participants" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay participantes asociados en los datos cargados."
+            items={summary.participants.map((participant) => ({
+              detail: `${participant.curp} · ${getProgramDivisionLabel(participant.division)} · ${getParticipantPaymentStatusLabel(getParticipantPaymentStatus(participant, summary.orders))}`,
+              meta: `Edad ${participant.age ?? "sin dato"} · Playera ${getOptionLabel(shirtSizes, participant.shirtSize)}`,
+              title: participant.fullName,
+            }))}
+          />
+        ) : null}
+
+        {tab === "choreographers" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay coreógrafos asociados a coreografías del programa cargado."
+            items={choreographerNames.map((name) => ({
+              detail: `${summary.choreographies.filter((dance) => dance.choreographers.some((choreographer) => choreographer.fullName === name)).length} coreografía(s)`,
+              title: name,
+            }))}
+          />
+        ) : null}
+
+        {tab === "choreographies" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay coreografías para esta academia en el programa cargado."
+            items={summary.choreographies.map((dance) => ({
+              detail: `${getVenueLabel(dance.venue)} · ${getOptionLabel(danceCategories, dance.category)} · ${getDanceLevelLabel(dance.level)}`,
+              meta: `${dance.participants.length} participante(s) · ${dance.musicUpload ? "Música cargada" : "Música pendiente"}`,
+              title: dance.title,
+            }))}
+          />
+        ) : null}
+
+        {tab === "payments" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay pagos u órdenes para esta academia."
+            items={summary.orders.map((order) => ({
+              detail: `${getAdminOrderTypeLabel(order)} · ${formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}`,
+              meta: `${getAdminPaymentStatusLabel(order.status)} · ${getAdminDateLabel(order.updatedAt || order.createdAt)}`,
+              title: getRegistrationInscriptionPaymentReference(order),
+            }))}
+          />
+        ) : null}
+
+        {tab === "tickets" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay órdenes de boletos para esta academia."
+            items={ticketOrders.map((order) => ({
+              detail: `${getOrderRequestedTicketCount(order)} boleto(s) · ${getAdminPaymentStatusLabel(order.status)}`,
+              meta: getRegistrationOrderBuyerLabel(order),
+              title: getRegistrationInscriptionPaymentReference(order),
+            }))}
+          />
+        ) : null}
+
+        {tab === "media" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay paquetes Foto/Video para esta academia."
+            items={mediaOrders.map((order) => ({
+              detail: `${getOrderMediaItemCount(order)} paquete(s) · ${getAdminPaymentStatusLabel(order.status)}`,
+              meta: getOrderMediaConcept(order),
+              title: getRegistrationInscriptionPaymentReference(order),
+            }))}
+          />
+        ) : null}
+
+        {tab === "activity" ? (
+          <RegistrationAcademyProfileList
+            emptyMessage="No hay actividad reciente para esta academia."
+            items={activities.slice(0, 12).map((activity) => ({
+              detail: activity.detail,
+              meta: getDashboardActivityTimeLabel(activity.date),
+              title: activity.title,
+            }))}
+          />
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
 function ParticipantRegistrationPanel({
   isAcademyInternational,
   registeredDanceCount,
@@ -6239,6 +7202,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [registrationVenueFilter, setRegistrationVenueFilter] = useState("all");
   const [registrationDivisionFilter, setRegistrationDivisionFilter] = useState("all");
   const [registrationPaymentStatusFilter, setRegistrationPaymentStatusFilter] = useState("all");
+  const [academyQuery, setAcademyQuery] = useState("");
+  const [academyEventFilter, setAcademyEventFilter] = useState("all");
+  const [academyStatusFilter, setAcademyStatusFilter] = useState("all");
+  const [academySort, setAcademySort] = useState<RegistrationAcademyDirectorySort>("recent");
   const [ticketQuery, setTicketQuery] = useState("");
   const [ticketVenueFilter, setTicketVenueFilter] = useState("all");
   const [ticketStatusFilter, setTicketStatusFilter] = useState("all");
@@ -6252,6 +7219,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [dashboardVenueMetric, setDashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
   const [adminLastUpdatedAt, setAdminLastUpdatedAt] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [selectedAcademyId, setSelectedAcademyId] = useState("");
+  const [academyProfileTab, setAcademyProfileTab] = useState<RegistrationAcademyProfileTab>("overview");
   const [adminAuthMessage, setAdminAuthMessage] = useState("");
   const [adminError, setAdminError] = useState("");
   const [isCheckingAdminSession, setIsCheckingAdminSession] = useState(true);
@@ -6391,19 +7360,19 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [adminSession?.user.role, loadAdminOrders]);
 
   useEffect(() => {
-    if (adminSession?.user.role === "admin" && (activeSection === "program" || activeSection === "dashboard")) {
+    if (adminSession?.user.role === "admin" && (activeSection === "program" || activeSection === "dashboard" || activeSection === "academies")) {
       void loadAdminProgram();
     }
   }, [activeSection, adminSession?.user.role, loadAdminProgram]);
 
   useEffect(() => {
-    if (adminSession?.user.role === "admin" && (activeSection === "registrations" || activeSection === "dashboard")) {
+    if (adminSession?.user.role === "admin" && (activeSection === "registrations" || activeSection === "dashboard" || activeSection === "academies")) {
       void loadAdminParticipants();
     }
   }, [activeSection, adminSession?.user.role, loadAdminParticipants]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || adminSession?.user.role !== "admin" || activeSection !== "dashboard") {
+    if (typeof window === "undefined" || adminSession?.user.role !== "admin" || (activeSection !== "dashboard" && activeSection !== "academies")) {
       return;
     }
 
@@ -6417,19 +7386,20 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
 
   useEffect(() => {
-    if (!selectedOrderId) {
+    if (!selectedOrderId && !selectedAcademyId) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setSelectedOrderId("");
+        setSelectedAcademyId("");
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedOrderId]);
+  }, [selectedAcademyId, selectedOrderId]);
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -6602,12 +7572,79 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [mediaOrders, mediaQuery, mediaStatusFilter, mediaVenueFilter]);
   const visibleMediaOrders = filteredMediaOrders.slice(0, 10);
   const mediaTotals = useMemo(() => getMediaDashboardTotals(filteredMediaOrders), [filteredMediaOrders]);
+  const academySummaries = useMemo(
+    () =>
+      adminAcademies.map((academy) =>
+        buildRegistrationAcademyDirectorySummary({
+          academy,
+          orders,
+          participants: adminParticipants,
+          programDances,
+        }),
+      ),
+    [adminAcademies, adminParticipants, orders, programDances],
+  );
+  const filteredAcademySummaries = useMemo(() => {
+    const normalizedQuery = normalizeDirectoryText(academyQuery);
+
+    return academySummaries
+      .filter((summary) => {
+        const matchesQuery =
+          !normalizedQuery ||
+          [
+            summary.academy.name,
+            summary.academy.contactName,
+            summary.academy.email,
+            summary.academy.phone ?? "",
+            summary.locationLabel,
+            summary.locationDetail,
+            summary.academy.username ?? "",
+            summary.academy.userEmail ?? "",
+          ]
+            .map(normalizeDirectoryText)
+            .join(" ")
+            .includes(normalizedQuery);
+        const matchesEvent = academyEventFilter === "all" || summary.academy.eventVenues.includes(academyEventFilter);
+        const matchesStatus =
+          academyStatusFilter === "all" ||
+          summary.status === academyStatusFilter ||
+          (academyStatusFilter === "with_registrations" && summary.registrationOrderCount > 0) ||
+          (academyStatusFilter === "needs_attention" && summary.alerts.length > 0);
+
+        return matchesQuery && matchesEvent && matchesStatus;
+      })
+      .sort((left, right) => {
+        if (academySort === "name") {
+          return left.academy.name.localeCompare(right.academy.name, "es");
+        }
+
+        if (academySort === "registrations") {
+          return right.registrationOrderCount - left.registrationOrderCount || left.academy.name.localeCompare(right.academy.name, "es");
+        }
+
+        if (academySort === "participants") {
+          return right.academy.participantCount - left.academy.participantCount || left.academy.name.localeCompare(right.academy.name, "es");
+        }
+
+        if (academySort === "pending") {
+          return right.pendingOrderCount - left.pendingOrderCount || left.academy.name.localeCompare(right.academy.name, "es");
+        }
+
+        if (academySort === "alerts") {
+          return right.alerts.length - left.alerts.length || left.academy.name.localeCompare(right.academy.name, "es");
+        }
+
+        return Date.parse(right.latestActivity.date) - Date.parse(left.latestActivity.date);
+      });
+  }, [academyEventFilter, academyQuery, academySort, academyStatusFilter, academySummaries]);
   const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
+  const selectedAcademySummary = selectedAcademyId ? academySummaries.find((summary) => summary.academy.id === selectedAcademyId) || null : null;
   const dashboardDateWindow = useMemo(
     () => getDashboardDateWindow(dashboardDateRange, dashboardCustomStartDate, dashboardCustomEndDate),
     [dashboardCustomEndDate, dashboardCustomStartDate, dashboardDateRange],
   );
   const isDashboardSection = activeSection === "dashboard";
+  const isAcademiesSection = activeSection === "academies";
   const isTicketSection = activeSection === "tickets";
   const isProgramSection = activeSection === "program";
   const isMediaSection = activeSection === "media";
@@ -6637,6 +7674,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
       if (section === "dashboard") {
         nextPath = "/admin/dashboard";
+      } else if (section === "academies") {
+        nextPath = "/admin/academias";
       } else if (section === "tickets") {
         nextPath = "/admin/boletos";
       } else if (section === "program") {
@@ -6654,12 +7693,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const handleSectionChange = (section: RegistrationAdminDashboardSection) => {
     setActiveSection(section);
     setSelectedOrderId("");
+    setSelectedAcademyId("");
     updateAdminSectionPath(section);
   };
 
   const handleDashboardNavigate = (target: RegistrationDashboardTarget) => {
     setActiveSection(target.section);
     setSelectedOrderId(target.orderId ?? "");
+    setSelectedAcademyId("");
     updateAdminSectionPath(target.section);
 
     if (target.section === "payments") {
@@ -6681,6 +7722,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
       setRegistrationPaymentStatusFilter(target.registrationPaymentStatusFilter ?? "all");
       setRegistrationAcademyFilter("all");
       setRegistrationDivisionFilter("all");
+    } else if (target.section === "academies") {
+      setAcademyQuery(target.query ?? "");
+      setAcademyEventFilter(target.venueFilter ?? "all");
+      setAcademyStatusFilter("all");
+    }
+  };
+
+  const handleOpenAcademyProfile = (academyId: string, tab: RegistrationAcademyProfileTab = "overview") => {
+    setSelectedAcademyId(academyId);
+    setAcademyProfileTab(tab);
+  };
+
+  const handleNewAcademy = () => {
+    if (typeof window !== "undefined") {
+      window.location.href = "/registro/academias";
     }
   };
 
@@ -6716,6 +7772,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
   if (isDashboardSection) {
     headerTitle = "Panel general";
     headerDescription = "Control operativo del periodo seleccionado";
+  } else if (isAcademiesSection) {
+    headerTitle = "Academias";
+    headerDescription = "Gestiona todas las academias registradas en la competencia";
   } else if (isTicketSection) {
     headerTitle = "Boletos";
     headerDescription = "Boletos confirmados por alumno y quiénes ya llegan a 3+ para bloque de competencia";
@@ -6799,7 +7858,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
         </div>
       </aside>
 
-      <section className={`registration-admin-workspace${isDashboardSection ? " registration-admin-workspace--dashboard" : ""}`}>
+      <section className={`registration-admin-workspace${isDashboardSection || isAcademiesSection ? " registration-admin-workspace--dashboard" : ""}`}>
         {!isDashboardSection ? (
           <header className="registration-admin-header">
             <div>
@@ -6807,40 +7866,55 @@ export function LevitateRegistrationAdminPaymentsRoute({
               <p>{headerDescription}</p>
             </div>
             {!isProgramSection ? (
-              <button
-                className="registration-admin-export"
-                disabled={
-                  isTicketSection
-                    ? filteredTicketRows.length === 0
-                    : isMediaSection
-                      ? filteredMediaOrders.length === 0
-                      : isRegistrationsSection
-                        ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
-                        : filteredOrders.length === 0
-                }
-                onClick={() => {
-                  if (isTicketSection) {
-                    downloadTicketDashboardCsv(filteredTicketRows);
-                    return;
+              <div className="registration-admin-header__actions">
+                {isAcademiesSection ? (
+                  <button className="registration-admin-new-action" onClick={handleNewAcademy} type="button">
+                    <Plus aria-hidden="true" size={16} />
+                    Nueva academia
+                  </button>
+                ) : null}
+                <button
+                  className="registration-admin-export"
+                  disabled={
+                    isAcademiesSection
+                      ? filteredAcademySummaries.length === 0
+                      : isTicketSection
+                        ? filteredTicketRows.length === 0
+                        : isMediaSection
+                          ? filteredMediaOrders.length === 0
+                          : isRegistrationsSection
+                            ? filteredAdminAcademies.length === 0 && filteredAdminParticipants.length === 0
+                            : filteredOrders.length === 0
                   }
+                  onClick={() => {
+                    if (isAcademiesSection) {
+                      downloadRegistrationAcademiesDirectoryCsv(filteredAcademySummaries);
+                      return;
+                    }
 
-                  if (isMediaSection) {
-                    downloadMediaOrdersCsv(filteredMediaOrders);
-                    return;
-                  }
+                    if (isTicketSection) {
+                      downloadTicketDashboardCsv(filteredTicketRows);
+                      return;
+                    }
 
-                  if (isRegistrationsSection) {
-                    downloadAdminParticipantsCsv(filteredAdminAcademies, filteredAdminParticipants, orders);
-                    return;
-                  }
+                    if (isMediaSection) {
+                      downloadMediaOrdersCsv(filteredMediaOrders);
+                      return;
+                    }
 
-                  downloadRegistrationOrdersCsv(filteredOrders);
-                }}
-                type="button"
-              >
-                <Download aria-hidden="true" size={16} />
-                Exportar
-              </button>
+                    if (isRegistrationsSection) {
+                      downloadAdminParticipantsCsv(filteredAdminAcademies, filteredAdminParticipants, orders);
+                      return;
+                    }
+
+                    downloadRegistrationOrdersCsv(filteredOrders);
+                  }}
+                  type="button"
+                >
+                  <Download aria-hidden="true" size={16} />
+                  Exportar
+                </button>
+              </div>
             ) : null}
           </header>
         ) : null}
@@ -6870,6 +7944,23 @@ export function LevitateRegistrationAdminPaymentsRoute({
             userName={adminSession.user.name}
             venueFilter={dashboardVenueFilter}
             venueMetric={dashboardVenueMetric}
+          />
+        ) : isAcademiesSection ? (
+          <RegistrationAcademiesDirectoryPanel
+            eventFilter={academyEventFilter}
+            filteredSummaries={filteredAcademySummaries}
+            isLoading={isParticipantsLoading || isProgramLoading || isLoading}
+            onEventFilterChange={setAcademyEventFilter}
+            onMetricNavigate={handleDashboardNavigate}
+            onNewAcademy={handleNewAcademy}
+            onOpenAcademy={handleOpenAcademyProfile}
+            onQueryChange={setAcademyQuery}
+            onSortChange={setAcademySort}
+            onStatusFilterChange={setAcademyStatusFilter}
+            query={academyQuery}
+            sort={academySort}
+            statusFilter={academyStatusFilter}
+            summaries={academySummaries}
           />
         ) : isProgramSection ? (
           <ProgramPanel
@@ -7537,6 +8628,26 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </>
         )}
       </section>
+
+      {selectedAcademySummary ? (
+        <div
+          className="registration-admin-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Perfil de academia ${selectedAcademySummary.academy.name}`}
+        >
+          <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedAcademyId("")} type="button" aria-label="Cerrar perfil" />
+          <aside className="registration-admin-sidepanel registration-admin-sidepanel--academy">
+            <RegistrationAcademyQuickPanel
+              onClose={() => setSelectedAcademyId("")}
+              onNavigate={handleDashboardNavigate}
+              onTabChange={setAcademyProfileTab}
+              summary={selectedAcademySummary}
+              tab={academyProfileTab}
+            />
+          </aside>
+        </div>
+      ) : null}
 
       {selectedOrder ? (
         <div
