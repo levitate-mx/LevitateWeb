@@ -542,7 +542,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
                 </article>
               ))}
             </div>
-            <p className="sedes-note">*Horarios a definir. La logística puede cambiar.</p>
+            <p className="sedes-note">*Horarios en tiempo de Ciudad de México. La logística puede cambiar.</p>
           </section>
         ) : null}
       </div>
@@ -581,7 +581,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
 
           <div className="sedes-workshop-agenda">
             <div className="sedes-workshop-agenda__head" aria-hidden="true">
-              <span>Hora</span>
+              <span>Hora CDMX</span>
               <span>Grupo</span>
               <span>Clase</span>
               <span>Ponente</span>

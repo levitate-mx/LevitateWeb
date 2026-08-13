@@ -12,6 +12,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
+import { formatMexicoCityDate } from "../../utils/mexicoCityTime";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -1764,8 +1765,7 @@ function InscriptionLookupPanel() {
                       <span>{isRejectedPaymentOrder ? "Comprobante anterior" : "Comprobante cargado"}</span>
                       <strong>{lookup.order.proof.fileName}</strong>
                       <p>
-                        Recibido el {new Date(lookup.order.proof.uploadedAt).toLocaleDateString("es-MX")} ·{" "}
-                        {formatProofSize(lookup.order.proof.fileSize)}
+                        Recibido el {formatMexicoCityDate(lookup.order.proof.uploadedAt)} · {formatProofSize(lookup.order.proof.fileSize)}
                       </p>
                       <a download={lookup.order.proof.fileName} href={lookup.order.proof.dataUrl}>
                         Descargar comprobante

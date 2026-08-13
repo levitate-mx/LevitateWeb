@@ -62,6 +62,16 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import {
+  addMexicoCityDays,
+  formatMexicoCityDate,
+  formatMexicoCityDateTime,
+  formatMexicoCityTime,
+  getMexicoCityDateInputValue,
+  getMexicoCityEndOfDay,
+  getMexicoCityStartOfDay,
+  parseMexicoCityDateInput,
+} from "../../utils/mexicoCityTime";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
@@ -1520,8 +1530,8 @@ function getAdminOrderDate(order: RegistrationInscriptionOrder) {
   }
 
   return {
-    date: date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" }),
-    time: date.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }),
+    date: formatMexicoCityDate(date),
+    time: formatMexicoCityTime(date),
   };
 }
 
@@ -1597,7 +1607,7 @@ function getAdminDateLabel(rawDate?: string | null) {
     return rawDate;
   }
 
-  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatMexicoCityDate(date);
 }
 
 function getAdminAcademyMovementCount(academy: RegistrationAdminAcademy) {
@@ -2817,48 +2827,23 @@ function getTicketBlockMissingCount(row: TicketDashboardRow) {
 }
 
 function getDashboardStartOfDay(date: Date) {
-  const nextDate = new Date(date);
-
-  nextDate.setHours(0, 0, 0, 0);
-  return nextDate;
+  return getMexicoCityStartOfDay(date);
 }
 
 function getDashboardEndOfDay(date: Date) {
-  const nextDate = new Date(date);
-
-  nextDate.setHours(23, 59, 59, 999);
-  return nextDate;
+  return getMexicoCityEndOfDay(date);
 }
 
 function addDashboardDays(date: Date, days: number) {
-  const nextDate = new Date(date);
-
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate;
+  return addMexicoCityDays(date, days);
 }
 
 function parseDashboardInputDate(value: string, endOfDay = false) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-
-  if (!match) {
-    return null;
-  }
-
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return endOfDay ? getDashboardEndOfDay(date) : getDashboardStartOfDay(date);
+  return parseMexicoCityDateInput(value, endOfDay);
 }
 
 function getDashboardDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return getMexicoCityDateInputValue(date);
 }
 
 function getDashboardCurrentEventVenue(now = new Date()) {
@@ -2873,7 +2858,7 @@ function getDashboardCurrentEventVenue(now = new Date()) {
 }
 
 function formatDashboardDateLabel(date: Date) {
-  return date.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+  return formatMexicoCityDate(date, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function getDashboardDateWindow(
@@ -3434,7 +3419,7 @@ function getDashboardActivityTimeLabel(rawDate: string) {
 
   const today = getDashboardStartOfDay(new Date());
   const activityDay = getDashboardStartOfDay(date);
-  const time = date.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  const time = formatMexicoCityTime(date);
 
   if (activityDay.getTime() === today.getTime()) {
     return `Hoy, ${time}`;
@@ -3444,7 +3429,7 @@ function getDashboardActivityTimeLabel(rawDate: string) {
     return `Ayer, ${time}`;
   }
 
-  return `${date.toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}, ${time}`;
+  return `${formatMexicoCityDate(date, { day: "2-digit", month: "short" })}, ${time}`;
 }
 
 function buildDashboardUpcomingEvents(programDances: RegistrationDance[]) {
@@ -4357,7 +4342,7 @@ function downloadRegistrationDashboardCsv({
     ["Reporte", "Panel general Levitate MX"],
     ["Periodo", dateWindow.label],
     ["Filtro sede", venueFilter === "all" ? "Todas" : getVenueLabel(venueFilter)],
-    ["Generado", new Date().toLocaleString("es-MX")],
+    ["Generado", formatMexicoCityDateTime(new Date())],
     [],
     ["Métrica", "Valor"],
     ["Academias con actividad", academyCount],
@@ -7826,6 +7811,18 @@ function ProgramPanel({
 
   return (
     <section className="levitate-admin-program" aria-label="Programa de competencia">
+      <header className="levitate-admin-program__toolbar">
+        <p>
+          {totalRows > 0
+            ? `Programa creado con ${totalRows} ${totalRows === 1 ? "coreografía" : "coreografías"} en orden de salida.`
+            : emptyMessage}
+        </p>
+        <button disabled={totalRows === 0} onClick={() => downloadProgramXls(programBlocks)} type="button">
+          <Download aria-hidden="true" size={16} />
+          Descargar XLS
+        </button>
+      </header>
+
       {programBlocks.map((block) => {
         const includeLevel = isAerialProgramBlock(block);
         const headers = getProgramHeaders(includeLevel, hasDeleteAction);
@@ -8424,7 +8421,7 @@ function InscriptionOrderCard({
             <span>Comprobante</span>
             <strong>{order.proof.fileName}</strong>
             <p>
-              {new Date(order.proof.uploadedAt).toLocaleDateString("es-MX")} · {formatAdminFileSize(order.proof.fileSize)}
+              {formatMexicoCityDate(order.proof.uploadedAt)} · {formatAdminFileSize(order.proof.fileSize)}
             </p>
           </div>
           <button onClick={handleOpenProof} type="button">

@@ -27,6 +27,7 @@ import {
   passportPilotEvent,
   type PassportStation,
 } from "../../data/passportContent";
+import { formatMexicoCityDateTime } from "../../utils/mexicoCityTime";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
@@ -185,10 +186,7 @@ function formatPassportDate(value: string | null) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("es-MX", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatMexicoCityDateTime(date, { dateStyle: "medium", timeStyle: "short" }, value);
 }
 
 function svgText(value: string | null | undefined) {
