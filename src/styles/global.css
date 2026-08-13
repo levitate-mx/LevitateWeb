@@ -20058,6 +20058,7 @@ button {
 }
 
 .registration-admin-collapse {
+  display: none !important;
   justify-content: center;
   justify-self: center;
   width: 44px;
@@ -20256,6 +20257,11 @@ button {
   gap: 14px;
 }
 
+.registration-academies-panel > .registration-academies-summary,
+.registration-choreographers-panel > .registration-academies-summary {
+  display: none;
+}
+
 .registration-academies-summary-card {
   --academy-accent: #f05293;
   display: grid;
@@ -20446,7 +20452,7 @@ button {
     minmax(110px, 0.48fr)
     minmax(154px, 0.72fr)
     minmax(180px, 0.8fr)
-    52px;
+    92px;
   align-items: center;
   gap: 14px;
   min-width: 1120px;
@@ -20643,6 +20649,18 @@ button {
   background: transparent;
   color: #fff;
   cursor: pointer;
+}
+
+.registration-academies-directory__actions {
+  display: flex !important;
+  justify-content: flex-end;
+  gap: 8px !important;
+}
+
+.registration-academies-directory__actions .levitate-admin-delete-action {
+  border-color: rgba(255, 126, 155, 0.36);
+  background: rgba(255, 126, 155, 0.08);
+  color: #ff9aae;
 }
 
 .registration-academies-directory__action:hover,
@@ -21408,7 +21426,7 @@ button {
 }
 
 .registration-admin-summary {
-  display: grid;
+  display: none;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid #dedede;
@@ -21591,6 +21609,10 @@ button {
   overflow-x: auto;
 }
 
+.registration-admin-table-footer div {
+  display: none;
+}
+
 .registration-admin-table__head,
 .registration-admin-table__row {
   display: grid;
@@ -21649,18 +21671,53 @@ button {
   font-size: 0.76rem;
 }
 
+.levitate-admin-delete-action {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(193, 57, 79, 0.28);
+  border-radius: 6px;
+  background: rgba(193, 57, 79, 0.06);
+  color: #a62c45;
+  cursor: pointer;
+}
+
+.levitate-admin-delete-action:hover,
+.levitate-admin-delete-action:focus-visible {
+  border-color: rgba(193, 57, 79, 0.5);
+  background: rgba(193, 57, 79, 0.12);
+}
+
+.levitate-admin-delete-action:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .registration-admin-ticket-table {
-  min-width: 1280px;
+  min-width: 760px;
 }
 
 .registration-admin-ticket-table .registration-admin-table__head,
 .registration-admin-ticket-table .registration-admin-table__row {
-  grid-template-columns: 1.16fr 1.04fr 1.14fr 0.82fr 0.54fr 1fr 0.68fr 0.64fr 0.64fr 1.04fr;
+  grid-template-columns: minmax(150px, 1.3fr) minmax(140px, 1.1fr) minmax(108px, 0.72fr) minmax(96px, 0.62fr) minmax(150px, 1fr);
+}
+
+.registration-admin-payments-table,
+.registration-admin-media-table {
+  min-width: 820px;
+}
+
+.registration-admin-payments-table .registration-admin-table__head,
+.registration-admin-payments-table .registration-admin-table__row,
+.registration-admin-media-table .registration-admin-table__head,
+.registration-admin-media-table .registration-admin-table__row {
+  grid-template-columns: minmax(124px, 0.9fr) minmax(160px, 1.15fr) minmax(180px, 1.35fr) minmax(108px, 0.72fr) minmax(118px, 0.76fr) 52px;
 }
 
 .registration-admin-media-table .registration-admin-table__head,
 .registration-admin-media-table .registration-admin-table__row {
-  grid-template-columns: 1.1fr 1.1fr 1.16fr 1.08fr 1.3fr 0.74fr 0.86fr 0.92fr 0.78fr 0.52fr;
+  grid-template-columns: minmax(124px, 0.9fr) minmax(160px, 1.15fr) minmax(180px, 1.35fr) minmax(108px, 0.72fr) minmax(118px, 0.76fr) 52px;
 }
 
 .registration-admin-participants-card {
@@ -23113,6 +23170,12 @@ button {
   border-color: rgba(193, 57, 79, 0.58);
   color: #a62c45;
   text-decoration: none;
+}
+
+.registration-admin-detail-actions__danger {
+  border-color: rgba(193, 57, 79, 0.58) !important;
+  background: rgba(193, 57, 79, 0.06) !important;
+  color: #a62c45 !important;
 }
 
 .registration-admin-whatsapp-action {
@@ -25666,8 +25729,33 @@ button {
   max-width: 620px;
 }
 
-.levitate-admin-music-form > .levitate-admin-save {
-  justify-self: start;
+.levitate-admin-music-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.levitate-admin-delete-text-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(193, 57, 79, 0.42);
+  border-radius: 6px;
+  background: rgba(193, 57, 79, 0.06);
+  color: #a62c45;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 860;
+}
+
+.levitate-admin-delete-text-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .levitate-admin-music-selected {
@@ -25858,6 +25946,21 @@ button {
   align-items: center;
   gap: 12px;
   padding: 0 16px;
+}
+
+.levitate-admin-program-table--aerial .levitate-admin-program-table__head,
+.levitate-admin-program-table--aerial .levitate-admin-program-table__row {
+  grid-template-columns: 1.1fr 0.95fr 0.8fr 0.92fr 0.84fr 0.68fr 0.95fr 1.12fr 0.8fr;
+}
+
+.levitate-admin-program-table--with-action .levitate-admin-program-table__head,
+.levitate-admin-program-table--with-action .levitate-admin-program-table__row {
+  grid-template-columns: 1.12fr 0.98fr 0.8fr 0.94fr 0.9fr 0.98fr 1.12fr 0.82fr 44px;
+}
+
+.levitate-admin-program-table--aerial.levitate-admin-program-table--with-action .levitate-admin-program-table__head,
+.levitate-admin-program-table--aerial.levitate-admin-program-table--with-action .levitate-admin-program-table__row {
+  grid-template-columns: 1.06fr 0.9fr 0.75fr 0.86fr 0.78fr 0.64fr 0.9fr 1.04fr 0.76fr 44px;
 }
 
 .levitate-admin-program-table__head {

@@ -16,11 +16,9 @@ import {
   Download,
   Eye,
   FileText,
-  FileSpreadsheet,
   Globe2,
   GraduationCap,
   Home,
-  Info,
   KeyRound,
   LayoutDashboard,
   ListFilter,
@@ -42,7 +40,6 @@ import {
   Shirt,
   Ticket,
   Trash2,
-  TriangleAlert,
   Upload,
   UserPlus,
   UserRoundPlus,
@@ -75,6 +72,7 @@ type RegistrationDashboardAlertSeverity = "critical" | "important" | "info";
 type RegistrationAcademyDirectoryStatus = "active" | "incomplete" | "inactive" | "archived";
 type RegistrationAcademyDirectorySort = "recent" | "name" | "registrations" | "participants" | "pending" | "alerts";
 type RegistrationChoreographerDirectorySort = "recent" | "name" | "academy" | "dances";
+type RegistrationDeleteEntityType = "academy" | "choreographer" | "dance" | "music" | "order" | "participant";
 type RegistrationParticipantOperationalStatus = "registered" | "pending_payment" | "pending_tickets" | "incomplete";
 type RegistrationAcademyProfileTab =
   | "overview"
@@ -583,7 +581,6 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
   { label: "Subir música", icon: Upload, screen: "music" },
-  { label: "Feedback", icon: MessageCircle, screen: "feedback" },
   { label: "Pagos", icon: CreditCard, screen: "payments" },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
@@ -603,8 +600,6 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Ventas y pagos", label: "Boletos", icon: Ticket, section: "tickets", badgeKey: "tickets" },
   { group: "Ventas y pagos", label: "Foto/Video", icon: Camera, section: "media", badgeKey: "media" },
   { group: "Operación de competencia", label: "Programa", icon: ClipboardList, section: "program", badgeKey: "program" },
-  { group: "Operación de competencia", label: "Hojas de jueceo", icon: BadgeCheck },
-  { group: "Análisis", label: "Reportes", icon: FileSpreadsheet },
 ];
 
 const maxMusicUploadBytes = 12000000;
@@ -894,6 +889,47 @@ async function requestRegistrationApi<T>(path: string, options: RequestInit = {}
   }
 
   return payload as T;
+}
+
+function confirmRegistrationDelete(title: string, detail: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.confirm(`${title}\n\n${detail}\n\nEsta accion no se puede deshacer.`);
+}
+
+function requestRegistrationDelete(path: string, payload: Record<string, unknown>) {
+  return requestRegistrationApi<{ entityType?: RegistrationDeleteEntityType; id: string; ok: boolean }>(path, {
+    body: JSON.stringify(payload),
+    method: "DELETE",
+  });
+}
+
+function DeleteIconButton({
+  disabled = false,
+  label,
+  onClick,
+}: {
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      className="levitate-admin-delete-action"
+      disabled={disabled}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      title={label}
+      type="button"
+    >
+      <Trash2 aria-hidden="true" size={16} />
+    </button>
+  );
 }
 
 function getFormValue(formData: FormData, name: string) {
@@ -4323,13 +4359,33 @@ function downloadRegistrationDashboardCsv({
   URL.revokeObjectURL(url);
 }
 
-function getProgramRowDisplay(row: ProgramRow) {
+function isAerialProgramBlock(block: ProgramBlock) {
+  return block.rows.some((row) => row.genre === "aereo");
+}
+
+function getProgramHeaders(includeLevel = false, includeAction = false) {
+  return [
+    "COREOGRAFÍA",
+    "ACADEMIA",
+    "DIVISIÓN",
+    "SUBGÉNERO",
+    "CATEGORÍA",
+    ...(includeLevel ? ["NIVEL"] : []),
+    "COREÓGRAFOS",
+    "PARTICIPANTE",
+    "ESTADO",
+    ...(includeAction ? ["ACCIÓN"] : []),
+  ];
+}
+
+function getProgramRowDisplay(row: ProgramRow, includeLevel = false) {
   return [
     row.danceTitle,
     row.academyName,
     getProgramDivisionLabel(row.division),
     getOptionLabel(danceSubgenresByGenre[row.genre] ?? [], row.subgenre),
     getOptionLabel(danceCategories, row.category),
+    ...(includeLevel ? [getDanceLevelLabel(row.level)] : []),
     row.choreographers,
     row.participants,
     getVenueLabel(row.venue),
@@ -4337,12 +4393,16 @@ function getProgramRowDisplay(row: ProgramRow) {
 }
 
 function downloadProgramXls(blocks: ProgramBlock[]) {
-  const headers = ["COREOGRAFÍA", "ACADEMIA", "DIVISIÓN", "SUBGÉNERO", "CATEGORÍA", "COREÓGRAFOS", "PARTICIPANTE", "ESTADO"];
-  const rows = blocks.flatMap((block) => [
-    `<tr><td colspan="${headers.length}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
-    `<tr>${headers.map((header) => `<th>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
-    ...block.rows.map((row) => `<tr>${getProgramRowDisplay(row).map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}</tr>`),
-  ]);
+  const rows = blocks.flatMap((block) => {
+    const includeLevel = isAerialProgramBlock(block);
+    const headers = getProgramHeaders(includeLevel);
+
+    return [
+      `<tr><td colspan="${headers.length}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
+      `<tr>${headers.map((header) => `<th>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
+      ...block.rows.map((row) => `<tr>${getProgramRowDisplay(row, includeLevel).map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}</tr>`),
+    ];
+  });
   const worksheet = `<!doctype html>
 <html>
   <head>
@@ -5529,7 +5589,6 @@ function RegistrationAdminDashboardOverview({
     () => previousOrders.filter((order) => getAdminOrderType(order) === "shop" && getOrderMediaLineItems(order).length > 0),
     [previousOrders],
   );
-  const previousMediaTotals = useMemo(() => getMediaDashboardTotals(previousMediaOrders), [previousMediaOrders]);
   const academyCount = getDashboardAcademyKeys(scopedParticipants, scopedOrders).size;
   const previousAcademyCount = getDashboardAcademyKeys(previousParticipants, previousOrders).size;
   const participantCount = getDashboardUniqueParticipantCount(scopedParticipants);
@@ -5546,7 +5605,6 @@ function RegistrationAdminDashboardOverview({
   const confirmedRevenue = getDashboardPaidRevenue(scopedOrders);
   const previousConfirmedRevenue = getDashboardPaidRevenue(previousOrders);
   const pendingRevenue = getDashboardPendingVerificationRevenue(scopedOrders);
-  const revenueBreakdown = getDashboardRevenueBreakdown(scopedOrders);
   const venueSlices = useMemo(
     () =>
       buildDashboardVenueSlices({
@@ -5557,10 +5615,6 @@ function RegistrationAdminDashboardOverview({
         ticketRows,
       }),
     [scopedOrders, scopedParticipants, scopedProgramDances, ticketRows, venueMetric],
-  );
-  const alerts = useMemo(
-    () => buildDashboardAlerts({ orders: scopedOrders, participants: scopedParticipants, programDances: scopedProgramDances }).slice(0, 5),
-    [scopedOrders, scopedParticipants, scopedProgramDances],
   );
   const hasAnyDashboardData = scopedOrders.length > 0 || scopedParticipants.length > 0 || scopedProgramDances.length > 0;
   const isDashboardLoading = isLoading || isParticipantsLoading || isProgramLoading;
@@ -5721,72 +5775,6 @@ function RegistrationAdminDashboardOverview({
         />
       </section>
 
-      <section className="registration-dashboard-bottom-grid">
-        <article className="registration-dashboard-panel registration-dashboard-status">
-          <RegistrationDashboardSectionHeader title="Estado general" />
-          <div className="registration-dashboard-status__grid">
-            <button onClick={() => onNavigate({ registrationPaymentStatusFilter: "requires_payment", section: "registrations" })} type="button">
-              <Building2 aria-hidden="true" size={22} />
-              <span>Inscripciones</span>
-              <strong>{participantCount.toLocaleString("es-MX")}</strong>
-              <small>{participantPaymentCounts.withoutConfirmedOrder} requieren pago o confirmación</small>
-            </button>
-            <button onClick={() => onNavigate({ section: "payments", statusFilter: "payment_reported" })} type="button">
-              <CreditCard aria-hidden="true" size={22} />
-              <span>Pagos</span>
-              <strong>{formatAdminCurrency(revenueBreakdown.registrations + revenueBreakdown.tickets + revenueBreakdown.media + revenueBreakdown.other)}</strong>
-              <small>{scopedOrders.filter((order) => order.status === "payment_reported").length} pagos por revisar</small>
-            </button>
-            <button onClick={() => onNavigate({ section: "tickets", ticketStatusFilter: "pending" })} type="button">
-              <Ticket aria-hidden="true" size={22} />
-              <span>Boletos</span>
-              <strong>
-                {ticketTotals.paidTickets.toLocaleString("es-MX")} / {ticketTotals.requestedTickets.toLocaleString("es-MX")}
-              </strong>
-              <small>{ticketTotals.pendingTickets} pendientes de confirmación</small>
-            </button>
-            <button onClick={() => onNavigate({ mediaStatusFilter: "payment_reported", section: "media" })} type="button">
-              <Camera aria-hidden="true" size={22} />
-              <span>Foto/Video</span>
-              <strong>{mediaTotals.requestedItems.toLocaleString("es-MX")}</strong>
-              <small>{mediaTotals.pending} pendientes de pago o revisión</small>
-            </button>
-          </div>
-        </article>
-
-        <article className="registration-dashboard-panel registration-dashboard-alerts">
-          <RegistrationDashboardSectionHeader
-            actionLabel="Ver todas"
-            onAction={() => onNavigate({ section: "payments", statusFilter: "payment_reported" })}
-            title="Alertas"
-          />
-          <div className="registration-dashboard-alerts__list">
-            {alerts.map((alert) => {
-              const Icon = alert.severity === "critical" ? TriangleAlert : alert.severity === "important" ? CircleAlert : Info;
-
-              return (
-                <button key={alert.id} onClick={() => onNavigate(alert.target)} type="button">
-                  <span className={`registration-dashboard-alerts__icon registration-dashboard-alerts__icon--${alert.severity}`}>
-                    <Icon aria-hidden="true" size={18} />
-                  </span>
-                  <span>
-                    <strong>
-                      {alert.count} · {alert.title}
-                    </strong>
-                    <small>
-                      {getDashboardAlertSeverityLabel(alert.severity)} · {alert.reason}
-                    </small>
-                  </span>
-                  <em>{alert.actionLabel}</em>
-                </button>
-              );
-            })}
-            {alerts.length === 0 ? (
-              <p className="registration-dashboard-empty">No hay alertas accionables para este periodo.</p>
-            ) : null}
-          </div>
-        </article>
-      </section>
     </section>
   );
 }
@@ -5845,9 +5833,11 @@ function RegistrationAcademyAlerts({ alerts, limit = 2 }: { alerts: string[]; li
 }
 
 function RegistrationAcademiesDirectoryPanel({
+  deletingEntityKey = "",
   eventFilter,
   filteredSummaries,
   isLoading,
+  onDeleteAcademy,
   onEventFilterChange,
   onMetricNavigate,
   onNewAcademy,
@@ -5860,9 +5850,11 @@ function RegistrationAcademiesDirectoryPanel({
   statusFilter,
   summaries,
 }: {
+  deletingEntityKey?: string;
   eventFilter: string;
   filteredSummaries: RegistrationAcademyDirectorySummary[];
   isLoading: boolean;
+  onDeleteAcademy?: (academyId: string, academyName: string) => void;
   onEventFilterChange: (value: string) => void;
   onMetricNavigate: (target: RegistrationDashboardTarget) => void;
   onNewAcademy: () => void;
@@ -6061,17 +6053,26 @@ function RegistrationAcademiesDirectoryPanel({
               <small>{summary.latestActivity.title}</small>
             </div>
             <RegistrationAcademyAlerts alerts={summary.alerts} />
-            <button
-              className="registration-academies-directory__action"
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpenAcademy(summary.academy.id);
-              }}
-              type="button"
-              aria-label={`Abrir ${summary.academy.name}`}
-            >
-              <Eye aria-hidden="true" size={17} />
-            </button>
+            <div className="registration-academies-directory__actions">
+              <button
+                className="registration-academies-directory__action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenAcademy(summary.academy.id);
+                }}
+                type="button"
+                aria-label={`Abrir ${summary.academy.name}`}
+              >
+                <Eye aria-hidden="true" size={17} />
+              </button>
+              {onDeleteAcademy ? (
+                <DeleteIconButton
+                  disabled={deletingEntityKey === `academy:${summary.academy.id}`}
+                  label={`Eliminar ${summary.academy.name}`}
+                  onClick={() => onDeleteAcademy(summary.academy.id, summary.academy.name)}
+                />
+              ) : null}
+            </div>
           </article>
         ))}
 
@@ -6336,10 +6337,12 @@ function RegistrationAdminChoreographersPanel({
   academyOptions,
   activityFilter,
   choreographers,
+  deletingEntityKey = "",
   filteredChoreographers,
   isLoading,
   onAcademyFilterChange,
   onActivityFilterChange,
+  onDeleteChoreographer,
   onExportChoreographer,
   onOpenAcademy,
   onOpenChoreographer,
@@ -6357,10 +6360,12 @@ function RegistrationAdminChoreographersPanel({
   academyOptions: FieldOption[];
   activityFilter: string;
   choreographers: RegistrationAdminChoreographer[];
+  deletingEntityKey?: string;
   filteredChoreographers: RegistrationAdminChoreographer[];
   isLoading: boolean;
   onAcademyFilterChange: (value: string) => void;
   onActivityFilterChange: (value: string) => void;
+  onDeleteChoreographer?: (choreographer: RegistrationAdminChoreographer) => void;
   onExportChoreographer: (choreographer: RegistrationAdminChoreographer) => void;
   onOpenAcademy: (academyId: string) => void;
   onOpenChoreographer: (choreographerId: string) => void;
@@ -6563,6 +6568,15 @@ function RegistrationAdminChoreographersPanel({
                         <button onClick={() => onExportChoreographer(choreographer)} type="button">
                           Exportar resumen
                         </button>
+                        {onDeleteChoreographer ? (
+                          <button
+                            disabled={deletingEntityKey === `choreographer:${choreographer.id}`}
+                            onClick={() => onDeleteChoreographer(choreographer)}
+                            type="button"
+                          >
+                            Eliminar
+                          </button>
+                        ) : null}
                       </div>
                     </details>
                   </span>
@@ -6672,11 +6686,13 @@ function RegistrationChoreographerQuickPanel({
 function RegistrationParticipantsOperationalPanel({
   academyFilter,
   academyOptions,
+  deletingEntityKey = "",
   disciplineFilter,
   disciplineOptions,
   filteredRows,
   isLoading,
   onAcademyFilterChange,
+  onDeleteParticipant,
   onDisciplineFilterChange,
   onExportRow,
   onOpenOrder,
@@ -6698,11 +6714,13 @@ function RegistrationParticipantsOperationalPanel({
 }: {
   academyFilter: string;
   academyOptions: FieldOption[];
+  deletingEntityKey?: string;
   disciplineFilter: string;
   disciplineOptions: FieldOption[];
   filteredRows: RegistrationParticipantOperationalRow[];
   isLoading: boolean;
   onAcademyFilterChange: (value: string) => void;
+  onDeleteParticipant?: (participant: RegistrationAdminParticipant) => void;
   onDisciplineFilterChange: (value: string) => void;
   onExportRow: (row: RegistrationParticipantOperationalRow) => void;
   onOpenOrder: (orderId: string) => void;
@@ -6986,6 +7004,15 @@ function RegistrationParticipantsOperationalPanel({
                         <button onClick={() => onExportRow(row)} type="button">
                           Exportar resumen
                         </button>
+                        {onDeleteParticipant ? (
+                          <button
+                            disabled={deletingEntityKey === `participant:${row.participant.id}`}
+                            onClick={() => onDeleteParticipant(row.participant)}
+                            type="button"
+                          >
+                            Eliminar
+                          </button>
+                        ) : null}
                       </div>
                     </details>
                   </span>
@@ -7617,58 +7644,71 @@ function ProgramPanel({
   academyName = "",
   dances,
   emptyMessage = "Todavía no hay coreografías para armar el programa.",
+  onDanceDeleted,
 }: {
   academyName?: string;
   dances: RegistrationDance[];
   emptyMessage?: string;
+  onDanceDeleted?: (row: ProgramRow) => void;
 }) {
   const programRows = useMemo(() => buildProgramRows(dances, academyName), [academyName, dances]);
   const programBlocks = useMemo(() => buildProgramBlocks(programRows), [programRows]);
   const totalRows = programRows.length;
+  const hasDeleteAction = Boolean(onDanceDeleted);
 
   return (
     <section className="levitate-admin-program" aria-label="Programa de competencia">
-      {programBlocks.map((block) => (
-        <section className="levitate-admin-program-block" key={block.id} aria-label={block.title}>
-          <header>
-            <div>
-              <span>{toProgramUpper(block.title)}</span>
-              <strong>
-                {block.rows.length} {block.rows.length === 1 ? "COREOGRAFÍA" : "COREOGRAFÍAS"}
-              </strong>
-            </div>
-          </header>
+      {programBlocks.map((block) => {
+        const includeLevel = isAerialProgramBlock(block);
+        const headers = getProgramHeaders(includeLevel, hasDeleteAction);
 
-          <div className="levitate-admin-program-table" role="table" aria-label={`Programa ${block.title}`}>
-            <div className="levitate-admin-program-table__head" role="row">
-              <span role="columnheader">COREOGRAFÍA</span>
-              <span role="columnheader">ACADEMIA</span>
-              <span role="columnheader">DIVISIÓN</span>
-              <span role="columnheader">SUBGÉNERO</span>
-              <span role="columnheader">CATEGORÍA</span>
-              <span role="columnheader">COREÓGRAFOS</span>
-              <span role="columnheader">PARTICIPANTE</span>
-              <span role="columnheader">ESTADO</span>
-            </div>
-            {block.rows.map((row) => {
-              const [danceTitle, rowAcademyName, division, subgenre, category, choreographers, participants, venue] = getProgramRowDisplay(row);
+        return (
+          <section className="levitate-admin-program-block" key={block.id} aria-label={block.title}>
+            <header>
+              <div>
+                <span>{toProgramUpper(block.title)}</span>
+                <strong>
+                  {block.rows.length} {block.rows.length === 1 ? "COREOGRAFÍA" : "COREOGRAFÍAS"}
+                </strong>
+              </div>
+            </header>
 
-              return (
+            <div
+              className={[
+                "levitate-admin-program-table",
+                includeLevel ? "levitate-admin-program-table--aerial" : "",
+                hasDeleteAction ? "levitate-admin-program-table--with-action" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              role="table"
+              aria-label={`Programa ${block.title}`}
+            >
+              <div className="levitate-admin-program-table__head" role="row">
+                {headers.map((header) => (
+                  <span key={header} role="columnheader">
+                    {header}
+                  </span>
+                ))}
+              </div>
+              {block.rows.map((row) => (
                 <div className="levitate-admin-program-table__row" key={row.danceId} role="row">
-                  <span role="cell">{toProgramUpper(danceTitle)}</span>
-                  <span role="cell">{toProgramUpper(rowAcademyName)}</span>
-                  <span role="cell">{toProgramUpper(division)}</span>
-                  <span role="cell">{toProgramUpper(subgenre)}</span>
-                  <span role="cell">{toProgramUpper(category)}</span>
-                  <span role="cell">{toProgramUpper(choreographers)}</span>
-                  <span role="cell">{toProgramUpper(participants)}</span>
-                  <span role="cell">{toProgramUpper(venue)}</span>
+                  {getProgramRowDisplay(row, includeLevel).map((value, index) => (
+                    <span key={`${row.danceId}-${index}`} role="cell">
+                      {toProgramUpper(value)}
+                    </span>
+                  ))}
+                  {hasDeleteAction ? (
+                    <span role="cell">
+                      <DeleteIconButton label={`Eliminar ${row.danceTitle}`} onClick={() => onDanceDeleted?.(row)} />
+                    </span>
+                  ) : null}
                 </div>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
       {totalRows === 0 ? <p className="levitate-admin-empty-state">{emptyMessage}</p> : null}
     </section>
@@ -7690,6 +7730,7 @@ function MusicUploadPanel({
   const [fileInputVersion, setFileInputVersion] = useState(0);
   const [isCheckingMusicDuration, setIsCheckingMusicDuration] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeletingMusic, setIsDeletingMusic] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploadError, setUploadError] = useState("");
   const selectedDance = dances.find((dance) => dance.id === selectedDanceId) ?? dances[0] ?? null;
@@ -7812,6 +7853,38 @@ function MusicUploadPanel({
     }
   };
 
+  const handleDeleteMusic = async () => {
+    if (!selectedDance || !currentMusicUpload) {
+      return;
+    }
+
+    if (
+      !confirmRegistrationDelete(
+        `Eliminar musica de ${selectedDance.title}`,
+        "Se quitara el archivo de musica asociado a esta coreografia.",
+      )
+    ) {
+      return;
+    }
+
+    setIsDeletingMusic(true);
+    setUploadError("");
+    setUploadMessage("");
+
+    try {
+      await requestRegistrationDelete("/api/registration/music", { danceId: selectedDance.id });
+      onDanceUpdated({ ...selectedDance, musicUpload: null });
+      setUploadMessage("Música eliminada.");
+      setSelectedFile(null);
+      setSelectedMusicDurationCheck(null);
+      setFileInputVersion((current) => current + 1);
+    } catch (error) {
+      setUploadError(getErrorMessage(error, "No pudimos eliminar la música."));
+    } finally {
+      setIsDeletingMusic(false);
+    }
+  };
+
   return (
     <AdminPanel className="levitate-admin-panel--music" eyebrow="Música" title="Subir música">
       <form className="levitate-admin-music-form" onSubmit={handleSubmit}>
@@ -7863,20 +7936,28 @@ function MusicUploadPanel({
           <input
             key={fileInputVersion}
             accept=".mp3,audio/mpeg"
-            disabled={!selectedDance || isUploading || isCheckingMusicDuration}
+            disabled={!selectedDance || isUploading || isCheckingMusicDuration || isDeletingMusic}
             onChange={handleFileChange}
             type="file"
           />
         </label>
 
-        <button
-          className="levitate-admin-save"
-          disabled={!selectedDance || !selectedFile || isUploading || isCheckingMusicDuration || selectedMusicDurationCheck?.status === "blocked"}
-          type="submit"
-        >
-          <Upload aria-hidden="true" size={18} />
-          {isUploading ? "Subiendo música..." : "Subir música"}
-        </button>
+        <div className="levitate-admin-music-actions">
+          <button
+            className="levitate-admin-save"
+            disabled={!selectedDance || !selectedFile || isUploading || isCheckingMusicDuration || isDeletingMusic || selectedMusicDurationCheck?.status === "blocked"}
+            type="submit"
+          >
+            <Upload aria-hidden="true" size={18} />
+            {isUploading ? "Subiendo música..." : "Subir música"}
+          </button>
+          {currentMusicUpload ? (
+            <button className="levitate-admin-delete-text-action" disabled={isDeletingMusic || isUploading} onClick={handleDeleteMusic} type="button">
+              <Trash2 aria-hidden="true" size={17} />
+              {isDeletingMusic ? "Eliminando..." : "Eliminar música"}
+            </button>
+          ) : null}
+        </div>
 
         {selectedMusicDurationCheck && selectedMusicDurationCheck.status !== "blocked" ? (
           <AdminStatusMessage
@@ -8250,6 +8331,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [deletingAdminEntityKey, setDeletingAdminEntityKey] = useState("");
   const activeAdminNavItemRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -8783,6 +8865,103 @@ export function LevitateRegistrationAdminPaymentsRoute({
     void loadAdminOrders();
   };
 
+  const reloadAdminDataAfterDelete = () => {
+    void loadAdminOrders();
+    void loadAdminParticipants();
+    void loadAdminProgram();
+  };
+
+  const deleteAdminEntity = async ({
+    detail,
+    entityType,
+    id,
+    label,
+    orderType,
+  }: {
+    detail: string;
+    entityType: RegistrationDeleteEntityType;
+    id: string;
+    label: string;
+    orderType?: "registration" | "shop";
+  }) => {
+    if (!confirmRegistrationDelete(`Eliminar ${label}`, detail)) {
+      return false;
+    }
+
+    const deleteKey = `${entityType}:${id}`;
+    setDeletingAdminEntityKey(deleteKey);
+    setAdminError("");
+
+    try {
+      await requestRegistrationDelete("/api/registration/admin/delete", {
+        entityType,
+        id,
+        orderType,
+      });
+      reloadAdminDataAfterDelete();
+      return true;
+    } catch (error) {
+      setAdminError(getErrorMessage(error, `No se pudo eliminar ${label}.`));
+      return false;
+    } finally {
+      setDeletingAdminEntityKey("");
+    }
+  };
+
+  const handleAdminOrderDeleted = (orderId: string) => {
+    setOrders((current) => current.filter((order) => order.id !== orderId));
+    setSelectedOrderId("");
+    reloadAdminDataAfterDelete();
+  };
+
+  const handleAdminAcademyDelete = async (academyId: string, academyName: string) => {
+    const wasDeleted = await deleteAdminEntity({
+      detail: "Se eliminaran sus registros relacionados y ordenes asociadas.",
+      entityType: "academy",
+      id: academyId,
+      label: academyName,
+    });
+
+    if (wasDeleted) {
+      setSelectedAcademyId("");
+    }
+  };
+
+  const handleAdminParticipantDelete = async (participant: RegistrationAdminParticipant) => {
+    const wasDeleted = await deleteAdminEntity({
+      detail: "Se eliminara el participante de sus coreografias y del registro.",
+      entityType: "participant",
+      id: participant.id,
+      label: participant.fullName,
+    });
+
+    if (wasDeleted) {
+      setSelectedParticipantId("");
+    }
+  };
+
+  const handleAdminChoreographerDelete = async (choreographer: RegistrationAdminChoreographer) => {
+    const wasDeleted = await deleteAdminEntity({
+      detail: "Se eliminara de las coreografias donde este asignado.",
+      entityType: "choreographer",
+      id: choreographer.id,
+      label: choreographer.fullName,
+    });
+
+    if (wasDeleted) {
+      setSelectedChoreographerId("");
+    }
+  };
+
+  const handleAdminProgramDanceDelete = async (row: ProgramRow) => {
+    await deleteAdminEntity({
+      detail: "Se eliminara la coreografia del programa y sus relaciones.",
+      entityType: "dance",
+      id: row.danceId,
+      label: row.danceTitle,
+    });
+  };
+
   const updateAdminSectionPath = (section: RegistrationAdminDashboardSection) => {
     if (typeof window !== "undefined") {
       let nextPath = "/admin/inscripciones";
@@ -9022,9 +9201,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
             <LogOut aria-hidden="true" size={17} />
             <span>{isLoggingOut ? "Cerrando..." : "Cerrar sesión"}</span>
           </button>
-          <button className="registration-admin-collapse" type="button" aria-label="Contraer menú">
-            <ArrowLeft aria-hidden="true" size={18} />
-          </button>
         </div>
       </aside>
 
@@ -9129,9 +9305,11 @@ export function LevitateRegistrationAdminPaymentsRoute({
           />
         ) : isAcademiesSection ? (
           <RegistrationAcademiesDirectoryPanel
+            deletingEntityKey={deletingAdminEntityKey}
             eventFilter={academyEventFilter}
             filteredSummaries={filteredAcademySummaries}
             isLoading={isParticipantsLoading || isProgramLoading || isLoading}
+            onDeleteAcademy={handleAdminAcademyDelete}
             onEventFilterChange={setAcademyEventFilter}
             onMetricNavigate={handleDashboardNavigate}
             onNewAcademy={handleNewAcademy}
@@ -9150,10 +9328,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
             academyOptions={choreographerAcademyOptions}
             activityFilter={choreographerActivityFilter}
             choreographers={adminChoreographers}
+            deletingEntityKey={deletingAdminEntityKey}
             filteredChoreographers={filteredAdminChoreographers}
             isLoading={isParticipantsLoading}
             onAcademyFilterChange={setChoreographerAcademyFilter}
             onActivityFilterChange={setChoreographerActivityFilter}
+            onDeleteChoreographer={handleAdminChoreographerDelete}
             onExportChoreographer={(choreographer) =>
               downloadAdminChoreographersCsv([choreographer], `levitate-coreografo-${normalizeDirectoryText(choreographer.fullName) || choreographer.id}.csv`)
             }
@@ -9173,17 +9353,20 @@ export function LevitateRegistrationAdminPaymentsRoute({
           <ProgramPanel
             dances={programDances}
             emptyMessage={isProgramLoading ? "Cargando programa..." : "Todavía no hay coreografías para armar el programa."}
+            onDanceDeleted={handleAdminProgramDanceDelete}
           />
         ) : isRegistrationsSection ? (
           <RegistrationParticipantsOperationalPanel
             academyFilter={registrationAcademyFilter}
             academyOptions={registrationAcademyOptions}
+            deletingEntityKey={deletingAdminEntityKey}
             disciplineFilter={registrationDisciplineFilter}
             disciplineOptions={registrationDisciplineOptions}
             divisionFilter={registrationDivisionFilter}
             filteredRows={filteredAdminParticipantRows}
             isLoading={isParticipantsLoading || isProgramLoading || isLoading}
             onAcademyFilterChange={setRegistrationAcademyFilter}
+            onDeleteParticipant={handleAdminParticipantDelete}
             onDisciplineFilterChange={setRegistrationDisciplineFilter}
             onDivisionFilterChange={setRegistrationDivisionFilter}
             onExportRow={(row) => downloadAdminParticipantsCsv([row], `levitate-participante-${normalizeCurpInput(row.participant.curp) || row.participant.id}.csv`)}
@@ -9273,14 +9456,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <div className="registration-admin-table registration-admin-ticket-table" role="table" aria-label="Boletos comprados por alumno">
                   <div className="registration-admin-table__head" role="row">
                     <span role="columnheader">Alumno</span>
-                    <span role="columnheader">CURP</span>
                     <span role="columnheader">Academia</span>
-                    <span role="columnheader">Sede</span>
-                    <span role="columnheader">Pedidos</span>
                     <span role="columnheader">Confirmados</span>
-                    <span role="columnheader">QR activos</span>
                     <span role="columnheader">Pendientes</span>
-                    <span role="columnheader">Rechazados</span>
                     <span role="columnheader">Última orden</span>
                   </div>
 
@@ -9296,12 +9474,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
                         role="row"
                         type="button"
                       >
-                        <span role="cell">{row.participantName}</span>
-                        <span role="cell">{row.curp || "Sin CURP"}</span>
-                        <span role="cell">{row.academyName}</span>
-                        <span role="cell">{getVenueLabel(row.venue)}</span>
                         <span role="cell">
-                          <strong className="registration-admin-ticket-number">{row.requestedTickets}</strong>
+                          {row.participantName}
+                          <small>{row.curp || "Sin CURP"}</small>
+                        </span>
+                        <span role="cell">
+                          {row.academyName}
+                          <small>{getVenueLabel(row.venue)}</small>
                         </span>
                         <span role="cell">
                           <strong className="registration-admin-ticket-number registration-admin-ticket-number--primary">{row.paidTickets}</strong>
@@ -9318,7 +9497,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           <small>{row.usedTickets} usados</small>
                         </span>
                         <span role="cell">{row.pendingTickets}</span>
-                        <span role="cell">{row.rejectedTickets}</span>
                         <span role="cell">
                           {row.latestReference}
                           <small>
@@ -9419,20 +9597,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
                   <div className="registration-admin-table__head" role="row">
                     <span role="columnheader">Orden</span>
                     <span role="columnheader">Contacto</span>
-                    <span role="columnheader">Participante</span>
-                    <span role="columnheader">Academia</span>
                     <span role="columnheader">Paquete</span>
                     <span role="columnheader">Monto</span>
-                    <span role="columnheader">Comprobante</span>
                     <span role="columnheader">Status</span>
-                    <span role="columnheader">Fecha</span>
                     <span role="columnheader">Acción</span>
                   </div>
 
-                  {visibleMediaOrders.map((order) => {
-                    const date = getAdminOrderDate(order);
-
-                    return (
+                  {visibleMediaOrders.map((order) => (
                       <button
                         className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
                         key={order.id}
@@ -9448,27 +9619,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           {getRegistrationOrderBuyerLabel(order)}
                           <small>{getRegistrationOrderBuyerMeta(order)}</small>
                         </span>
-                        <span role="cell">{order.participantName}</span>
-                        <span role="cell">{order.academyName}</span>
                         <span role="cell">
                           {getOrderMediaConcept(order)}
-                          <small>{getOrderMediaItemCount(order)} paquete(s)</small>
+                          <small>
+                            {order.participantName} · {order.academyName}
+                          </small>
                         </span>
                         <span role="cell">{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</span>
-                        <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
                         <span role="cell">
                           <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
-                        </span>
-                        <span role="cell">
-                          {date.date}
-                          <small>{date.time}</small>
                         </span>
                         <span role="cell">
                           <Eye aria-hidden="true" size={18} />
                         </span>
                       </button>
-                    );
-                  })}
+                  ))}
 
                   {visibleMediaOrders.length === 0 ? (
                     <p className="registration-admin-empty">{isLoading ? "Cargando compras..." : "No hay compras de foto/video con esos filtros."}</p>
@@ -9553,13 +9718,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <ChevronDown aria-hidden="true" size={16} />
               </label>
               <label>
-                <span>Bloque</span>
-                <select defaultValue="all">
-                  <option value="all">Todos</option>
-                </select>
-                <ChevronDown aria-hidden="true" size={16} />
-              </label>
-              <label>
                 <span>Tipo de compra</span>
                 <select onChange={(event) => setPurchaseTypeFilter(event.target.value)} value={purchaseTypeFilter}>
                   <option value="all">Todas</option>
@@ -9568,33 +9726,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 </select>
                 <ChevronDown aria-hidden="true" size={16} />
               </label>
-              <label>
-                <span>Fecha</span>
-                <input readOnly value="01/06/26 - 30/06/26" />
-                <CalendarDays aria-hidden="true" size={16} />
-              </label>
             </section>
 
             <section className="registration-admin-grid">
               <div className="registration-admin-table-card">
-                <div className="registration-admin-table" role="table" aria-label="Pagos de inscripción">
+                <div className="registration-admin-table registration-admin-payments-table" role="table" aria-label="Pagos de inscripción">
                   <div className="registration-admin-table__head" role="row">
                     <span role="columnheader">Orden</span>
                     <span role="columnheader">Comprador</span>
-                    <span role="columnheader">Participante</span>
-                    <span role="columnheader">Academia</span>
                     <span role="columnheader">Concepto</span>
                     <span role="columnheader">Monto</span>
-                    <span role="columnheader">Comprobante</span>
                     <span role="columnheader">Status</span>
-                    <span role="columnheader">Fecha</span>
                     <span role="columnheader">Acción</span>
                   </div>
 
-                  {visibleOrders.map((order) => {
-                    const date = getAdminOrderDate(order);
-
-                    return (
+                  {visibleOrders.map((order) => (
                       <button
                         className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
                         key={order.id}
@@ -9610,24 +9756,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           {getRegistrationOrderBuyerLabel(order)}
                           <small>{getRegistrationOrderBuyerMeta(order)}</small>
                         </span>
-                        <span role="cell">{order.participantName}</span>
-                        <span role="cell">{order.academyName}</span>
-                        <span role="cell">{getInscriptionOrderConcept(order)}</span>
+                        <span role="cell">
+                          {getInscriptionOrderConcept(order)}
+                          <small>
+                            {order.participantName} · {order.academyName}
+                          </small>
+                        </span>
                         <span role="cell">{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</span>
-                        <span role="cell">{order.proof ? <FileText aria-label="Comprobante subido" size={18} /> : "—"}</span>
                         <span role="cell">
                           <em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em>
-                        </span>
-                        <span role="cell">
-                          {date.date}
-                          <small>{date.time}</small>
                         </span>
                         <span role="cell">
                           <Eye aria-hidden="true" size={18} />
                         </span>
                       </button>
-                    );
-                  })}
+                  ))}
 
                   {visibleOrders.length === 0 ? <p className="registration-admin-empty">{isLoading ? "Cargando órdenes..." : "No hay pagos con esos filtros."}</p> : null}
                 </div>
@@ -9717,7 +9860,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
         >
           <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedOrderId("")} type="button" aria-label="Cerrar detalle" />
           <aside className="registration-admin-sidepanel">
-            <RegistrationAdminOrderDetail onClose={() => setSelectedOrderId("")} onOrderUpdated={handleOrderUpdated} order={selectedOrder} />
+            <RegistrationAdminOrderDetail
+              onClose={() => setSelectedOrderId("")}
+              onOrderDeleted={handleAdminOrderDeleted}
+              onOrderUpdated={handleOrderUpdated}
+              order={selectedOrder}
+            />
           </aside>
         </div>
       ) : null}
@@ -9727,10 +9875,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
 function RegistrationAdminOrderDetail({
   onClose,
+  onOrderDeleted,
   onOrderUpdated,
   order,
 }: {
   onClose: () => void;
+  onOrderDeleted: (id: string) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
   order: RegistrationInscriptionOrder | null;
 }) {
@@ -9939,6 +10089,40 @@ function RegistrationAdminOrderDetail({
     }
   };
 
+  const handleDeleteOrder = async () => {
+    if (!order) {
+      return;
+    }
+
+    const reference = getRegistrationInscriptionPaymentReference(order);
+
+    if (
+      !confirmRegistrationDelete(
+        `Eliminar pago ${reference}`,
+        "Se eliminaran el pago, comprobantes y boletos QR ligados a esta orden.",
+      )
+    ) {
+      return;
+    }
+
+    setIsSaving(true);
+    setStatusMessage("");
+    setErrorMessage("");
+
+    try {
+      await requestRegistrationDelete("/api/registration/admin/delete", {
+        entityType: "order",
+        id: order.id,
+        orderType: getAdminOrderType(order),
+      });
+      onOrderDeleted(order.id);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo eliminar el pago."));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (!order) {
     return (
       <section className="registration-admin-detail">
@@ -10084,6 +10268,9 @@ function RegistrationAdminOrderDetail({
         </button>
         <button aria-expanded={isRejectionOpen} disabled={isSaving} onClick={handleRejectToggle} type="button">
           Rechazar
+        </button>
+        <button className="registration-admin-detail-actions__danger" disabled={isSaving} onClick={handleDeleteOrder} type="button">
+          Eliminar pago
         </button>
       </div>
 

@@ -477,6 +477,10 @@ export default {
       return handleRegistrationAdminParticipants(request, env);
     }
 
+    if (url.pathname === "/api/registration/admin/delete") {
+      return handleRegistrationAdminDelete(request, env);
+    }
+
     if (url.pathname === "/api/registration/admin/inscription-order/status") {
       return handleRegistrationAdminInscriptionOrderStatus(request, env);
     }
@@ -1719,6 +1723,46 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
   }
 }
 
+async function handleRegistrationAdminDelete(request, env) {
+  try {
+    assertMethod(request, ["DELETE"]);
+
+    const db = getDb(env);
+    const admin = await requireRegistrationAdmin(request, env, db);
+    const body = await readJsonBody(request);
+    const entityType = requireRegistrationChoice(
+      body.entityType,
+      "entityType",
+      new Set(["academy", "choreographer", "dance", "music", "order", "participant"]),
+    );
+    const id = requireString(body.id, "id");
+
+    if (entityType === "academy") {
+      if (id === admin.session.academy.id) {
+        throwHttpError("registration_admin_academy_delete_forbidden", "No puedes eliminar la academia de tu propia sesión admin.", 400);
+      }
+
+      await deleteRegistrationAdminAcademy(db, { academyId: id });
+    } else if (entityType === "choreographer") {
+      await deleteRegistrationAdminChoreographer(db, { choreographerId: id });
+    } else if (entityType === "dance") {
+      await deleteRegistrationAdminDance(db, { danceId: id });
+    } else if (entityType === "music") {
+      await deleteRegistrationAdminMusicUpload(db, { danceId: id });
+    } else if (entityType === "order") {
+      const orderType = optionalString(body.orderType || body.sourceOrderType) === "shop" ? "shop" : "registration";
+
+      await deleteRegistrationAdminOrder(db, { orderId: id, orderType });
+    } else if (entityType === "participant") {
+      await deleteRegistrationAdminParticipant(db, { participantId: id });
+    }
+
+    return sendJson({ ok: true, entityType, id });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
 async function handleRegistrationAdminTicketScan(request, env) {
   try {
     assertMethod(request, ["POST"]);
@@ -2133,13 +2177,22 @@ async function handleRegistrationDances(request, env) {
 
 async function handleRegistrationMusic(request, env) {
   try {
-    assertMethod(request, ["POST"]);
+    assertMethod(request, ["POST", "DELETE"]);
 
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
     const body = await readJsonBody(request);
     const danceId = requireString(body.danceId, "danceId");
+
+    if (request.method === "DELETE") {
+      await deleteRegistrationAdminMusicUpload(db, { academyId, danceId });
+      return sendJson({
+        dance: await getRegistrationDanceById(db, academyId, danceId),
+        musicUpload: null,
+      });
+    }
+
     const musicUpload = getRegistrationMusicUploadInput(body);
 
     await ensureRegistrationMusicUploadsTable(db);
@@ -4995,6 +5048,258 @@ async function deleteRegistrationDance(db, academyId, danceId) {
     db.prepare("DELETE FROM registration_dance_participants WHERE dance_id = ?").bind(danceId),
     db.prepare("DELETE FROM registration_dances WHERE academy_id = ? AND id = ?").bind(academyId, danceId),
   ]);
+}
+
+async function deleteRegistrationAdminParticipant(db, { participantId }) {
+  const participant = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_participants
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(participantId)
+    .first();
+
+  if (!participant) {
+    throwHttpError("registration_participant_not_found", "Participante no encontrado", 404);
+  }
+
+  await db.batch([
+    db.prepare("DELETE FROM registration_dance_participants WHERE participant_id = ?").bind(participantId),
+    db.prepare("DELETE FROM registration_participants WHERE id = ?").bind(participantId),
+  ]);
+}
+
+async function deleteRegistrationAdminChoreographer(db, { choreographerId }) {
+  const choreographer = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_choreographers
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(choreographerId)
+    .first();
+
+  if (!choreographer) {
+    throwHttpError("registration_choreographer_not_found", "Coreógrafo no encontrado", 404);
+  }
+
+  await db.batch([
+    db.prepare("DELETE FROM registration_dance_choreographers WHERE choreographer_id = ?").bind(choreographerId),
+    db.prepare("DELETE FROM registration_choreographers WHERE id = ?").bind(choreographerId),
+  ]);
+}
+
+async function deleteRegistrationAdminDance(db, { danceId }) {
+  const dance = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_dances
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(danceId)
+    .first();
+
+  if (!dance) {
+    throwHttpError("registration_dance_not_found", "Coreografía no encontrada", 404);
+  }
+
+  await ensureRegistrationMusicUploadsTable(db);
+  await db.batch([
+    db.prepare("DELETE FROM registration_music_uploads WHERE dance_id = ?").bind(danceId),
+    db.prepare("DELETE FROM registration_dance_choreographers WHERE dance_id = ?").bind(danceId),
+    db.prepare("DELETE FROM registration_dance_participants WHERE dance_id = ?").bind(danceId),
+    db.prepare("DELETE FROM registration_dances WHERE id = ?").bind(danceId),
+  ]);
+}
+
+async function deleteRegistrationAdminMusicUpload(db, { academyId = "", danceId }) {
+  await ensureRegistrationMusicUploadsTable(db);
+
+  const academyClause = academyId ? "AND academy_id = ?" : "";
+  const bindings = academyId ? [danceId, academyId] : [danceId];
+  const upload = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_music_uploads
+        WHERE dance_id = ?
+          ${academyClause}
+        LIMIT 1
+      `,
+    )
+    .bind(...bindings)
+    .first();
+
+  if (!upload) {
+    throwHttpError("registration_music_upload_not_found", "Música no encontrada", 404);
+  }
+
+  await db
+    .prepare(
+      `
+        DELETE FROM registration_music_uploads
+        WHERE dance_id = ?
+          ${academyClause}
+      `,
+    )
+    .bind(...bindings)
+    .run();
+}
+
+async function deleteRegistrationAdminInscriptionOrder(db, { academyId = "", orderId }) {
+  await getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId, academyId || undefined);
+  await deleteRegistrationAdminEventTicketsForSource(db, "registration", orderId);
+  await deleteRegistrationAdminTableRowsByColumn(db, "registration_inscription_payment_proofs", "order_id", orderId);
+  await db
+    .prepare(
+      `
+        DELETE FROM registration_inscription_orders
+        WHERE id = ?
+          ${academyId ? "AND academy_id = ?" : ""}
+      `,
+    )
+    .bind(...(academyId ? [orderId, academyId] : [orderId]))
+    .run();
+}
+
+async function deleteRegistrationAdminShopOrder(db, { orderId }) {
+  await getRegistrationShopOrderRecordForStatusUpdate(db, orderId);
+  await deleteRegistrationAdminEventTicketsForSource(db, "shop", orderId);
+  await deleteRegistrationAdminTableRowsByColumn(db, "registration_shop_payment_proofs", "order_id", orderId);
+  await db.prepare("DELETE FROM registration_shop_orders WHERE id = ?").bind(orderId).run();
+}
+
+async function deleteRegistrationAdminOrder(db, { orderId, orderType }) {
+  if (orderType === "shop") {
+    await deleteRegistrationAdminShopOrder(db, { orderId });
+    return;
+  }
+
+  await deleteRegistrationAdminInscriptionOrder(db, { orderId });
+}
+
+async function deleteRegistrationAdminAcademy(db, { academyId }) {
+  const academy = await db
+    .prepare(
+      `
+        SELECT id
+        FROM registration_academies
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(academyId)
+    .first();
+
+  if (!academy) {
+    throwHttpError("registration_academy_not_found", "Academia no encontrada", 404);
+  }
+
+  const orderTargets = await getRegistrationAdminOrderDeleteTargetsForAcademy(db, academyId);
+
+  for (const target of orderTargets) {
+    await deleteRegistrationAdminOrder(db, target);
+  }
+
+  await db.prepare("DELETE FROM registration_academies WHERE id = ?").bind(academyId).run();
+}
+
+async function getRegistrationAdminOrderDeleteTargetsForAcademy(db, academyId) {
+  const targets = [];
+
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT id
+          FROM registration_inscription_orders
+          WHERE academy_id = ?
+        `,
+      )
+      .bind(academyId)
+      .all();
+
+    targets.push(...results.map((order) => ({ orderId: order.id, orderType: "registration" })));
+  } catch (error) {
+    if (!isMissingRegistrationInscriptionOrdersTable(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT id
+          FROM registration_shop_orders
+          WHERE academy_id = ?
+        `,
+      )
+      .bind(academyId)
+      .all();
+
+    targets.push(...results.map((order) => ({ orderId: order.id, orderType: "shop" })));
+  } catch (error) {
+    if (!isMissingRegistrationShopOrdersTable(error)) {
+      throw error;
+    }
+  }
+
+  return targets;
+}
+
+async function deleteRegistrationAdminEventTicketsForSource(db, sourceOrderType, sourceOrderId) {
+  try {
+    await db
+      .prepare(
+        `
+          DELETE FROM registration_event_tickets
+          WHERE source_order_type = ?
+            AND source_order_id = ?
+        `,
+      )
+      .bind(sourceOrderType, sourceOrderId)
+      .run();
+  } catch (error) {
+    if (!isMissingRegistrationEventTicketsTable(error)) {
+      throw error;
+    }
+  }
+}
+
+async function deleteRegistrationAdminTableRowsByColumn(db, tableName, columnName, value) {
+  const allowedDeletes = new Map([
+    ["registration_inscription_payment_proofs", new Set(["order_id"])],
+    ["registration_shop_payment_proofs", new Set(["order_id"])],
+  ]);
+  const allowedColumns = allowedDeletes.get(tableName);
+
+  if (!allowedColumns?.has(columnName)) {
+    throwHttpError("registration_invalid_table", "Tabla de registro inválida", 500);
+  }
+
+  try {
+    await db.prepare(`DELETE FROM ${tableName} WHERE ${columnName} = ?`).bind(value).run();
+  } catch (error) {
+    const isMissingTable =
+      tableName === "registration_inscription_payment_proofs"
+        ? isMissingRegistrationPaymentProofsTable(error)
+        : isMissingRegistrationShopPaymentProofsTable(error);
+
+    if (!isMissingTable) {
+      throw error;
+    }
+  }
 }
 
 async function assertRegistrationDanceBelongsToAcademy(db, academyId, danceId) {
