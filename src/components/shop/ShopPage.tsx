@@ -159,6 +159,7 @@ type MediaParticipantLookupLine = {
   level?: string | null;
   participantCount?: number;
   subgenre: string;
+  subgenreDetail?: string | null;
   title: string;
   venue: string;
 };
@@ -745,13 +746,23 @@ function getShopPaymentReferencePrefix(lineItems: ShopOrderLineItem[]) {
 }
 
 function getMediaLineTitle(line: MediaParticipantLookupLine) {
-  return line.title || mediaSubgenreLabels[line.subgenre] || mediaGenreLabels[line.genre] || "Coreografía";
+  return line.title || getMediaLineSubgenreLabel(line) || mediaGenreLabels[line.genre] || "Coreografía";
+}
+
+function getMediaLineSubgenreLabel(line: Pick<MediaParticipantLookupLine, "subgenre" | "subgenreDetail">) {
+  const detail = line.subgenreDetail?.trim();
+
+  if (line.subgenre === "open_otro" && detail) {
+    return `OPEN: ${detail}`;
+  }
+
+  return mediaSubgenreLabels[line.subgenre] ?? line.subgenre;
 }
 
 function getMediaLineMeta(line: MediaParticipantLookupLine) {
   const parts = [
     mediaGenreLabels[line.genre] ?? line.genre,
-    mediaSubgenreLabels[line.subgenre] ?? line.subgenre,
+    getMediaLineSubgenreLabel(line),
     mediaCategoryLabels[line.category] ?? line.category,
   ];
 

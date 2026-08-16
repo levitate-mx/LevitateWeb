@@ -247,7 +247,6 @@ CREATE TABLE IF NOT EXISTS registration_dances (
     subgenre IN (
       'aro',
       'tela',
-      'open_aerial',
       'open_trapecio',
       'open_cuna',
       'open_luna',
@@ -266,6 +265,7 @@ CREATE TABLE IF NOT EXISTS registration_dances (
       'urbanos'
     )
   ),
+  subgenre_detail TEXT,
   category TEXT NOT NULL CHECK (
     category IN (
       'solo',

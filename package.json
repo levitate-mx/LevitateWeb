@@ -17,6 +17,8 @@
     "db:migrate:registration:choreographer-shirt-size:local": "wrangler d1 execute levitate-passport --local --file db/registration_choreographer_shirt_size.sql",
     "db:migrate:registration:choreographer-releve-teacher": "wrangler d1 execute levitate-passport --remote --file db/registration_choreographer_releve_teacher.sql",
     "db:migrate:registration:choreographer-releve-teacher:local": "wrangler d1 execute levitate-passport --local --file db/registration_choreographer_releve_teacher.sql",
+    "db:migrate:registration:dance-subgenre-detail": "wrangler d1 execute levitate-passport --remote --file db/registration_dance_subgenre_detail.sql",
+    "db:migrate:registration:dance-subgenre-detail:local": "wrangler d1 execute levitate-passport --local --file db/registration_dance_subgenre_detail.sql",
     "db:migrate:registration:shirt-sizes": "wrangler d1 execute levitate-passport --remote --file db/registration_shirt_sizes.sql",
     "db:migrate:registration:shirt-sizes:local": "wrangler d1 execute levitate-passport --local --file db/registration_shirt_sizes.sql",
     "db:migrate:registration:participant-releve-teacher": "wrangler d1 execute levitate-passport --remote --file db/registration_participant_releve_teacher.sql",

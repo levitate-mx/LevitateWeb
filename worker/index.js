@@ -48,7 +48,6 @@ const registrationSubgenresByGenre = {
   aereo: new Set([
     "aro",
     "tela",
-    "open_aerial",
     "open_trapecio",
     "open_cuna",
     "open_luna",
@@ -88,6 +87,7 @@ const registrationDriveSubgenreLabels = {
   tela: "TELA",
   urbanos: "URBANOS",
 };
+const registrationCustomSubgenreMaxLength = 60;
 const registrationDriveCategoryLabels = {
   duo: "Duo",
   duo_2_aparatos: "Duo 2 Aparatos",
@@ -1110,6 +1110,7 @@ async function handleRegistrationBootstrap(request, env) {
     const academyId = session.academy.id;
 
     await ensureRegistrationChoreographerReleveTeacherColumn(db);
+    await ensureRegistrationDanceSubgenreDetailColumn(db);
 
     return sendJson({
       ...session,
@@ -2097,6 +2098,7 @@ async function handleRegistrationDances(request, env) {
     const title = requireString(body.title, "title");
     const genre = requireRegistrationChoice(body.genre, "genre", registrationGenres);
     const subgenre = requireRegistrationSubgenre(genre, body.subgenre);
+    const subgenreDetail = normalizeRegistrationSubgenreDetail(subgenre, body.subgenreDetail);
     const category = requireRegistrationCategory(genre, body.category);
     const level = requireRegistrationLevel(genre, body.level);
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
@@ -2147,15 +2149,16 @@ async function handleRegistrationDances(request, env) {
               title,
               genre,
               subgenre,
+              subgenre_detail,
               category,
               level,
               venue,
               created_by_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
-        .bind(danceId, academyId, title, genre, subgenre, category, level, venue, session.user.id),
+        .bind(danceId, academyId, title, genre, subgenre, subgenreDetail, category, level, venue, session.user.id),
       ...choreographerIds.map((choreographerId) =>
         db
           .prepare(
@@ -3208,6 +3211,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
   await ensureRegistrationChoreographerReleveTeacherColumn(db);
   await ensureRegistrationParticipantInternationalColumn(db);
   await ensureRegistrationParticipantReleveTeacherColumn(db);
+  await ensureRegistrationDanceSubgenreDetailColumn(db);
 
   const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
   const lookupBindings = academyId ? [curp, academyId] : [curp];
@@ -3251,6 +3255,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
           registration_dances.title,
           registration_dances.genre,
           registration_dances.subgenre,
+          registration_dances.subgenre_detail,
           registration_dances.category,
           registration_dances.level,
           (
@@ -5403,6 +5408,7 @@ async function serializeRegistrationDances(db, academyId, dances) {
     title: dance.title,
     genre: dance.genre,
     subgenre: dance.subgenre,
+    subgenreDetail: dance.subgenre_detail || null,
     category: dance.category,
     level: dance.level,
     venue: dance.venue,
@@ -5462,6 +5468,7 @@ async function serializeRegistrationProgramDances(db, dances) {
     title: dance.title,
     genre: dance.genre,
     subgenre: dance.subgenre,
+    subgenreDetail: dance.subgenre_detail || null,
     category: dance.category,
     level: dance.level,
     venue: dance.venue,
@@ -5744,6 +5751,7 @@ function serializeRegistrationInscriptionLine(dance, { isInternational = false }
     title: dance.title,
     genre: dance.genre,
     subgenre: dance.subgenre,
+    subgenreDetail: dance.subgenre_detail || null,
     category: dance.category,
     division: getRegistrationMusicDriveDivision(dance),
     level: dance.level,
@@ -6099,6 +6107,30 @@ async function ensureRegistrationChoreographerReleveTeacherColumn(db) {
         `
           ALTER TABLE registration_choreographers
           ADD COLUMN is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))
+        `,
+      )
+      .run();
+  } catch (error) {
+    if (!String(error?.message || error).match(/duplicate column name/i)) {
+      throw error;
+    }
+  }
+}
+
+async function ensureRegistrationDanceSubgenreDetailColumn(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_dances)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+
+  if (existingColumns.has("subgenre_detail")) {
+    return;
+  }
+
+  try {
+    await db
+      .prepare(
+        `
+          ALTER TABLE registration_dances
+          ADD COLUMN subgenre_detail TEXT
         `,
       )
       .run();
@@ -6942,7 +6974,7 @@ async function importGoogleServiceAccountPrivateKey(privateKey) {
 function buildRegistrationMusicDriveFileName({ dance, session }) {
   const modalityAndGenre = [
     getRegistrationDriveOptionLabel(registrationDriveGenreLabels, dance.genre),
-    getRegistrationDriveOptionLabel(registrationDriveSubgenreLabels, dance.subgenre),
+    getRegistrationDriveSubgenreLabel(dance),
   ]
     .filter(Boolean)
     .join(" ");
@@ -6957,6 +6989,18 @@ function buildRegistrationMusicDriveFileName({ dance, session }) {
   const name = parts.filter(Boolean).join(" - ");
 
   return `${name || "Levitate musica"}.mp3`;
+}
+
+function getRegistrationDriveSubgenreLabel(dance) {
+  if (dance.subgenre === "open_otro" && dance.subgenreDetail) {
+    return `OPEN ${dance.subgenreDetail}`;
+  }
+
+  if (dance.subgenre === "open_otro" && dance.subgenre_detail) {
+    return `OPEN ${dance.subgenre_detail}`;
+  }
+
+  return getRegistrationDriveOptionLabel(registrationDriveSubgenreLabels, dance.subgenre);
 }
 
 function getRegistrationMusicDriveDivision(dance) {
@@ -7194,6 +7238,28 @@ function requireRegistrationSubgenre(genre, value) {
   }
 
   return requireRegistrationChoice(value, "subgenre", allowedValues);
+}
+
+function normalizeRegistrationSubgenreDetail(subgenre, value) {
+  if (subgenre !== "open_otro") {
+    return null;
+  }
+
+  const detail = optionalString(value).replace(/\s+/g, " ");
+
+  if (!detail) {
+    throwHttpError("missing_subgenre_detail", "Escribe qué aparato usarán en OPEN: Otro", 400);
+  }
+
+  if (detail.length > registrationCustomSubgenreMaxLength) {
+    throwHttpError(
+      "invalid_subgenre_detail",
+      `El aparato de OPEN: Otro debe tener máximo ${registrationCustomSubgenreMaxLength} caracteres`,
+      400,
+    );
+  }
+
+  return detail;
 }
 
 function requireRegistrationCategory(genre, value) {

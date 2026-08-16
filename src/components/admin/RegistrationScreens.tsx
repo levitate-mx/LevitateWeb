@@ -268,6 +268,7 @@ type RegistrationDance = {
   title: string;
   genre: string;
   subgenre: string;
+  subgenreDetail?: string | null;
   category: string;
   level: string | null;
   venue: string;
@@ -330,6 +331,7 @@ type RegistrationInscriptionLineItem = {
   title: string;
   genre: string;
   subgenre: string;
+  subgenreDetail?: string | null;
   category: string;
   productCategory?: string;
   productId?: string;
@@ -694,7 +696,6 @@ const danceSubgenresByGenre: Record<string, FieldOption[]> = {
   aereo: [
     { value: "aro", label: "ARO" },
     { value: "tela", label: "TELA" },
-    { value: "open_aerial", label: "OPEN: AERIAL" },
     { value: "open_trapecio", label: "OPEN: Trapecio" },
     { value: "open_cuna", label: "OPEN: Cuna" },
     { value: "open_luna", label: "OPEN: Luna" },
@@ -993,6 +994,29 @@ function getOptionLabel(options: FieldOption[], value: string) {
   return options.find((option) => option.value === value)?.label || value;
 }
 
+function getDanceSubgenreLabel({
+  genre,
+  subgenre,
+  subgenreDetail,
+}: {
+  genre?: string | null;
+  subgenre?: string | null;
+  subgenreDetail?: string | null;
+}) {
+  const normalizedSubgenre = String(subgenre || "").trim();
+  const normalizedDetail = String(subgenreDetail || "").trim();
+
+  if (normalizedSubgenre === "open_otro" && normalizedDetail) {
+    return `OPEN: ${normalizedDetail}`;
+  }
+
+  if (normalizedSubgenre === "open_aerial") {
+    return "OPEN: AERIAL";
+  }
+
+  return getOptionLabel(danceSubgenresByGenre[String(genre || "")] ?? [], normalizedSubgenre);
+}
+
 function getVenueLabel(venue: string) {
   return getOptionLabel(venueLabelOptions, venue);
 }
@@ -1058,6 +1082,7 @@ type ProgramRow = {
   level: string;
   participants: string;
   subgenre: string;
+  subgenreDetail?: string | null;
   venue: string;
 };
 
@@ -1462,6 +1487,7 @@ function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "")
         level: dance.level || "",
         participants: dance.participants.map((participant) => participant.fullName).join(", "),
         subgenre: dance.subgenre,
+        subgenreDetail: dance.subgenreDetail || "",
         venue: dance.venue,
       };
     })
@@ -1509,14 +1535,14 @@ function getRegistrationOrderCurrency(order: Pick<RegistrationInscriptionOrder, 
 }
 
 function getRegistrationLineTitle(lineItem: RegistrationInscriptionLineItem) {
-  return lineItem.title || lineItem.productName || lineItem.name || getOptionLabel(danceSubgenresByGenre[lineItem.genre] ?? [], lineItem.subgenre) || "Inscripción";
+  return lineItem.title || lineItem.productName || lineItem.name || getDanceSubgenreLabel(lineItem) || "Inscripción";
 }
 
 function getRegistrationLineMeta(lineItem: RegistrationInscriptionLineItem) {
   const categoryOptions = danceCategoriesByGenre[lineItem.genre] ?? danceCategories;
   const parts = [
     getOptionLabel(danceGenres, lineItem.genre),
-    getOptionLabel(danceSubgenresByGenre[lineItem.genre] ?? [], lineItem.subgenre),
+    getDanceSubgenreLabel(lineItem),
     getOptionLabel(categoryOptions, lineItem.category),
   ].filter(Boolean);
 
@@ -2097,8 +2123,8 @@ function getParticipantRegisteredDances(participant: RegistrationAdminParticipan
     .sort((left, right) => left.title.localeCompare(right.title, "es"));
 }
 
-function getDanceDisciplineLabel(dance: Pick<RegistrationDance, "genre" | "subgenre">) {
-  return [getOptionLabel(danceGenres, dance.genre), getOptionLabel(danceSubgenresByGenre[dance.genre] ?? [], dance.subgenre)]
+function getDanceDisciplineLabel(dance: Pick<RegistrationDance, "genre" | "subgenre" | "subgenreDetail">) {
+  return [getOptionLabel(danceGenres, dance.genre), getDanceSubgenreLabel(dance)]
     .filter(Boolean)
     .join(" · ");
 }
@@ -2114,7 +2140,7 @@ function getParticipantDisciplineLabel(dances: RegistrationDance[], registration
     new Set(
       registrationOrders
         .flatMap((order) => order.lineItems ?? [])
-        .map((lineItem) => [getOptionLabel(danceGenres, lineItem.genre), getOptionLabel(danceSubgenresByGenre[lineItem.genre] ?? [], lineItem.subgenre)].filter(Boolean).join(" · "))
+        .map((lineItem) => [getOptionLabel(danceGenres, lineItem.genre), getDanceSubgenreLabel(lineItem)].filter(Boolean).join(" · "))
         .filter(Boolean),
     ),
   );
@@ -4982,7 +5008,7 @@ function downloadAdminChoreographiesCsv(dances: RegistrationDance[], fileName = 
     dance.title,
     dance.academyName ?? "",
     getOptionLabel(danceGenres, dance.genre),
-    getOptionLabel(danceSubgenresByGenre[dance.genre] ?? [], dance.subgenre),
+    getDanceSubgenreLabel(dance),
     getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category),
     getDanceLevelLabel(dance.level),
     getProgramDivisionLabel(getDanceProgramDivision(dance)),
@@ -5089,7 +5115,7 @@ function getProgramRowDisplay(row: ProgramRow, includeLevel = false) {
     row.danceTitle,
     row.academyName,
     getProgramDivisionLabel(row.division),
-    getOptionLabel(danceSubgenresByGenre[row.genre] ?? [], row.subgenre),
+    getDanceSubgenreLabel(row),
     getOptionLabel(danceCategories, row.category),
     ...(includeLevel ? [getDanceLevelLabel(row.level)] : []),
     row.choreographers,
@@ -8342,6 +8368,7 @@ function DanceRegistrationPanel({
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
   const [selectedSubgenre, setSelectedSubgenre] = useState("");
+  const [openOtherApparatus, setOpenOtherApparatus] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -8350,6 +8377,7 @@ function DanceRegistrationPanel({
   const subgenreOptions = selectedGenre ? (danceSubgenresByGenre[selectedGenre] ?? []) : [];
   const categoryOptions = selectedGenre ? (danceCategoriesByGenre[selectedGenre] ?? []) : [];
   const shouldShowLevel = selectedGenre === "aereo";
+  const shouldShowOpenOtherApparatus = selectedGenre === "aereo" && selectedSubgenre === "open_otro";
   const choreographerItems = choreographers.map((choreographer) => ({
     id: choreographer.id,
     fullName: choreographer.fullName,
@@ -8378,6 +8406,7 @@ function DanceRegistrationPanel({
 
     setSelectedGenre(nextGenre);
     setSelectedSubgenre("");
+    setOpenOtherApparatus("");
     setSelectedCategory("");
   };
 
@@ -8394,6 +8423,11 @@ function DanceRegistrationPanel({
       return;
     }
 
+    if (shouldShowOpenOtherApparatus && !openOtherApparatus.trim()) {
+      setErrorMessage("Escribe qué aparato usarán en OPEN: Otro.");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -8402,6 +8436,7 @@ function DanceRegistrationPanel({
           title: getFormValue(formData, "title"),
           genre: getFormValue(formData, "genre"),
           subgenre: getFormValue(formData, "subgenre"),
+          subgenreDetail: shouldShowOpenOtherApparatus ? getFormValue(formData, "subgenreDetail") : "",
           category: getFormValue(formData, "category"),
           level: shouldShowLevel ? getFormValue(formData, "level") : null,
           venue: getFormValue(formData, "venue"),
@@ -8415,6 +8450,7 @@ function DanceRegistrationPanel({
       form.reset();
       setSelectedGenre("");
       setSelectedSubgenre("");
+      setOpenOtherApparatus("");
       setSelectedCategory("");
       setSelectedChoreographerIds([]);
       setSelectedParticipantIds([]);
@@ -8451,11 +8487,29 @@ function DanceRegistrationPanel({
             disabled={!selectedGenre}
             id="dance-subgenre"
             name="subgenre"
-            onChange={(event) => setSelectedSubgenre(event.target.value)}
+            onChange={(event) => {
+              setSelectedSubgenre(event.target.value);
+              if (event.target.value !== "open_otro") {
+                setOpenOtherApparatus("");
+              }
+            }}
             options={subgenreOptions}
             placeholder={selectedGenre ? "Selecciona un subgénero" : "Selecciona primero un género"}
             value={selectedSubgenre}
           />
+          {shouldShowOpenOtherApparatus ? (
+            <input
+              autoComplete="off"
+              className="levitate-admin-open-subgenre-input"
+              maxLength={60}
+              name="subgenreDetail"
+              onChange={(event) => setOpenOtherApparatus(event.target.value)}
+              placeholder="Escribe el aparato que usarán"
+              required
+              type="text"
+              value={openOtherApparatus}
+            />
+          ) : null}
         </AdminField>
         <AdminField icon={Users} label="Categoría">
           <AdminSelect
@@ -8629,10 +8683,7 @@ function MusicUploadPanel({
   const selectedDivision = selectedDance ? getDanceProgramDivision(selectedDance) : "";
   const selectedDivisionLabel = selectedDivision ? getProgramDivisionLabel(selectedDivision).split(":")[0] : "";
   const suggestedFileName = selectedDance
-    ? `${selectedDance.title} - ${academyName} - ${getOptionLabel(danceGenres, selectedDance.genre)} ${getOptionLabel(
-        danceSubgenresByGenre[selectedDance.genre] ?? [],
-        selectedDance.subgenre,
-      )} - ${getOptionLabel(selectedCategoryOptions, selectedDance.category)}${selectedDivisionLabel ? ` - ${selectedDivisionLabel}` : ""}`
+    ? `${selectedDance.title} - ${academyName} - ${getOptionLabel(danceGenres, selectedDance.genre)} ${getDanceSubgenreLabel(selectedDance)} - ${getOptionLabel(selectedCategoryOptions, selectedDance.category)}${selectedDivisionLabel ? ` - ${selectedDivisionLabel}` : ""}`
     : "";
   const danceOptions = dances.map((dance) => ({
     value: dance.id,
@@ -11705,7 +11756,6 @@ function AdminLookupPanel({
             <span role="columnheader">Acciones</span>
             {dances.map((dance) => {
               const categoryOptions = danceCategoriesByGenre[dance.genre] ?? danceCategories;
-              const subgenreOptions = danceSubgenresByGenre[dance.genre] ?? [];
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
               const compactDivisionLabel = divisionLabel.split(":")[0] || "Sin división";
               const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");
@@ -11714,7 +11764,7 @@ function AdminLookupPanel({
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
                   <span role="cell">{dance.title}</span>
-                  <span role="cell">{getOptionLabel(subgenreOptions, dance.subgenre)}</span>
+                  <span role="cell">{getDanceSubgenreLabel(dance)}</span>
                   <span role="cell">{getOptionLabel(categoryOptions, dance.category)}</span>
                   <span role="cell" title={divisionLabel}>{compactDivisionLabel}</span>
                   <span role="cell">{getDanceLevelLabel(dance.level)}</span>

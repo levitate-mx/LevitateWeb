@@ -50,6 +50,7 @@ type InscriptionLookupLine = {
   title: string;
   genre: string;
   subgenre: string;
+  subgenreDetail?: string | null;
   category: string;
   level?: string | null;
   venue: string;
@@ -324,13 +325,23 @@ function getVenueLabel(venue?: string | null) {
 }
 
 function getLineTitle(line: InscriptionLookupLine) {
-  return line.title || subgenreLabels[line.subgenre] || genreLabels[line.genre] || "Inscripción";
+  return line.title || getLineSubgenreLabel(line) || genreLabels[line.genre] || "Inscripción";
+}
+
+function getLineSubgenreLabel(line: Pick<InscriptionLookupLine, "subgenre" | "subgenreDetail">) {
+  const detail = line.subgenreDetail?.trim();
+
+  if (line.subgenre === "open_otro" && detail) {
+    return `OPEN: ${detail}`;
+  }
+
+  return subgenreLabels[line.subgenre] ?? line.subgenre;
 }
 
 function getLineMeta(line: InscriptionLookupLine) {
   const parts = [
     genreLabels[line.genre] ?? line.genre,
-    subgenreLabels[line.subgenre] ?? line.subgenre,
+    getLineSubgenreLabel(line),
     categoryLabels[line.category] ?? line.category,
   ];
 
