@@ -1240,9 +1240,11 @@ async function handleRegistrationInscriptionLookup(request, env) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
-    await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
-    const lookup = await getRegistrationInscriptionLookup(db, curp);
+    const lookup = await getRegistrationInscriptionLookup(db, curp, {
+      academyId: access.scope === "academy" ? access.session.academy.id : null,
+    });
     return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
   } catch (error) {
     return sendRegistrationError(error);

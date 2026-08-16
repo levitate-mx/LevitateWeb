@@ -15,6 +15,11 @@ import {
 import { formatMexicoCityDate } from "../../utils/mexicoCityTime";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
+import {
+  registrationPaymentConceptLabel,
+  registrationPaymentConsultationPath,
+  registrationPaymentMethodSections,
+} from "./paymentDetails";
 
 type RegistrationPath = {
   eyebrow: string;
@@ -120,7 +125,7 @@ type ApiErrorResponse = {
   };
 };
 
-const consultationPath = "/inscripciones/consulta-curp";
+const consultationPath = registrationPaymentConsultationPath;
 const proofUploadAccept = "image/jpeg,image/png,image/webp,application/pdf";
 const maxProofUploadBytes = 1800000;
 const defaultPhoneCountryCode = "+52";
@@ -177,28 +182,8 @@ const inscriptionIncludes = [
   "Kit de bienvenida Oficial LevitateMX",
 ];
 
-const paymentMethodSections = [
-  {
-    id: "banamex",
-    title: "Banamex",
-    rows: [
-      { label: "Titular", value: "MARIA LAURA PONCE" },
-      { label: "No. de Cuenta (CLABE)", value: "002540477000269880" },
-      { label: "Cuenta", value: "26988 - Sucursal 4770" },
-    ],
-  },
-  {
-    id: "oxxo",
-    title: "OXXO",
-    rows: [
-      { label: "Banco", value: "Spin by Oxxo" },
-      { label: "Cuenta CLABE", value: "728969000061103602" },
-      { label: "Titular", value: "Rodolfo Javier Serrano" },
-    ],
-  },
-];
-
-const paymentConceptLabel = "Concepto";
+const paymentMethodSections = registrationPaymentMethodSections;
+const paymentConceptLabel = registrationPaymentConceptLabel;
 
 const genreLabels: Record<string, string> = {
   aereo: "Aerial",

@@ -19687,6 +19687,17 @@ button {
   margin: 0;
 }
 
+.levitate-admin-payment-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.levitate-admin-payment-toolbar__actions button {
+  white-space: nowrap;
+}
+
 .levitate-admin-payment-card {
   display: grid;
   gap: 22px;
@@ -24402,6 +24413,14 @@ button {
   .levitate-admin-payment-proof,
   .levitate-admin-payment-card__fields {
     grid-template-columns: 1fr;
+  }
+
+  .levitate-admin-payment-toolbar__actions {
+    justify-content: stretch;
+  }
+
+  .levitate-admin-payment-toolbar__actions button {
+    flex: 1 1 180px;
   }
 
   .levitate-admin-payment-line {

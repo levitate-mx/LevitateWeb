@@ -72,6 +72,10 @@ import {
   getMexicoCityStartOfDay,
   parseMexicoCityDateInput,
 } from "../../utils/mexicoCityTime";
+import {
+  registrationPaymentConsultationPath,
+  registrationPaymentMethodSections,
+} from "../inscripciones/paymentDetails";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
@@ -376,6 +380,37 @@ type RegistrationInscriptionOrder = {
   updatedAt: string;
   proof?: RegistrationPaymentProof | null;
   tickets?: RegistrationEventTicket[];
+};
+
+type RegistrationInscriptionLookup = {
+  curp: string;
+  participantName: string;
+  academyName: string;
+  venue: string;
+  reference: string;
+  paymentReference?: string;
+  registrations: Array<{
+    id: string;
+    fullName: string;
+    curp: string;
+    academyName: string;
+    division?: string | null;
+    shirtSize?: string | null;
+  }>;
+  lines: RegistrationInscriptionLineItem[];
+  subtotal: number;
+  currency?: string;
+  pricingMode?: "mexico" | "international";
+  order?: RegistrationInscriptionOrder | null;
+};
+
+type AcademyPaymentSummaryPdfRow = {
+  participantName: string;
+  curp: string;
+  choreographyTitle: string;
+  category: string;
+  totalAmount: number;
+  currency: string;
 };
 
 type RegistrationBootstrap = RegistrationSession & {
@@ -4065,6 +4100,652 @@ export async function createTicketsPdfBlob(order: RegistrationTicketPdfOrder) {
   return createMultiImagePdfBlob(pages);
 }
 
+function getRegistrationLineCategoryLabel(lineItem: RegistrationInscriptionLineItem) {
+  const categoryOptions = danceCategoriesByGenre[lineItem.genre] ?? danceCategories;
+  return getOptionLabel(categoryOptions, lineItem.category) || lineItem.category || "Pendiente";
+}
+
+function getAcademyPaymentLookupCurrency(lookup: RegistrationInscriptionLookup) {
+  return lookup.currency || lookup.lines.find((lineItem) => lineItem.currency)?.currency || "MXN";
+}
+
+function getAcademyPaymentSummaryRows(lookups: RegistrationInscriptionLookup[]) {
+  return lookups.flatMap((lookup): AcademyPaymentSummaryPdfRow[] => {
+    const currency = getAcademyPaymentLookupCurrency(lookup);
+    const totalAmount = Number(lookup.subtotal || 0);
+
+    if (lookup.lines.length === 0) {
+      return [
+        {
+          category: "Pendiente",
+          choreographyTitle: "Sin coreografía registrada",
+          currency,
+          curp: lookup.curp,
+          participantName: lookup.participantName,
+          totalAmount,
+        },
+      ];
+    }
+
+    return lookup.lines.map((lineItem) => ({
+      category: getRegistrationLineCategoryLabel(lineItem),
+      choreographyTitle: getRegistrationLineTitle(lineItem),
+      currency,
+      curp: lookup.curp,
+      participantName: lookup.participantName,
+      totalAmount,
+    }));
+  });
+}
+
+function getAcademyPaymentSummaryUrl() {
+  if (typeof window === "undefined") {
+    return registrationPaymentConsultationPath;
+  }
+
+  return new URL(registrationPaymentConsultationPath, window.location.origin).toString();
+}
+
+function toAdminFileSlug(value: string, fallback = "levitate") {
+  const slug = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || fallback;
+}
+
+function setAcademyPdfFont(context: CanvasRenderingContext2D, size: number, weight = 700) {
+  context.font = `${weight} ${size}px Inter, Arial, sans-serif`;
+}
+
+function getAcademyPdfWrappedLines(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
+
+  if (!normalizedText) {
+    return [""];
+  }
+
+  const lines: string[] = [];
+  let currentLine = "";
+
+  normalizedText.split(" ").forEach((word) => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+    if (context.measureText(candidate).width <= maxWidth || !currentLine) {
+      currentLine = candidate;
+      return;
+    }
+
+    lines.push(currentLine);
+    currentLine = word;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function drawAcademyPdfWrappedText({
+  color,
+  context,
+  lineHeight,
+  maxLines = 4,
+  maxWidth,
+  size,
+  text,
+  weight = 700,
+  x,
+  y,
+}: {
+  color: string;
+  context: CanvasRenderingContext2D;
+  lineHeight: number;
+  maxLines?: number;
+  maxWidth: number;
+  size: number;
+  text: string;
+  weight?: number;
+  x: number;
+  y: number;
+}) {
+  setAcademyPdfFont(context, size, weight);
+  context.fillStyle = color;
+
+  const lines = getAcademyPdfWrappedLines(context, text, maxWidth).slice(0, maxLines);
+
+  lines.forEach((line, index) => {
+    const visibleLine = index === maxLines - 1 && getAcademyPdfWrappedLines(context, text, maxWidth).length > maxLines
+      ? `${line.replace(/\s+$/g, "")}...`
+      : line;
+    context.fillText(visibleLine, x, y + index * lineHeight);
+  });
+
+  return lines.length;
+}
+
+function drawAcademyPdfFittedRightText({
+  color,
+  context,
+  maxWidth,
+  minSize = 10,
+  size,
+  text,
+  weight = 800,
+  x,
+  y,
+}: {
+  color: string;
+  context: CanvasRenderingContext2D;
+  maxWidth: number;
+  minSize?: number;
+  size: number;
+  text: string;
+  weight?: number;
+  x: number;
+  y: number;
+}) {
+  let nextSize = size;
+  setAcademyPdfFont(context, nextSize, weight);
+
+  while (context.measureText(text).width > maxWidth && nextSize > minSize) {
+    nextSize -= 1;
+    setAcademyPdfFont(context, nextSize, weight);
+  }
+
+  context.fillStyle = color;
+  context.textAlign = "right";
+  context.fillText(text, x, y);
+  context.textAlign = "left";
+}
+
+function drawAcademyPdfRoundRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  rectWidth: number,
+  rectHeight: number,
+  radius: number,
+  fillStyle?: string,
+  strokeStyle?: string,
+) {
+  const nextRadius = Math.min(radius, rectWidth / 2, rectHeight / 2);
+
+  context.beginPath();
+  context.moveTo(x + nextRadius, y);
+  context.lineTo(x + rectWidth - nextRadius, y);
+  context.quadraticCurveTo(x + rectWidth, y, x + rectWidth, y + nextRadius);
+  context.lineTo(x + rectWidth, y + rectHeight - nextRadius);
+  context.quadraticCurveTo(x + rectWidth, y + rectHeight, x + rectWidth - nextRadius, y + rectHeight);
+  context.lineTo(x + nextRadius, y + rectHeight);
+  context.quadraticCurveTo(x, y + rectHeight, x, y + rectHeight - nextRadius);
+  context.lineTo(x, y + nextRadius);
+  context.quadraticCurveTo(x, y, x + nextRadius, y);
+  context.closePath();
+
+  if (fillStyle) {
+    context.fillStyle = fillStyle;
+    context.fill();
+  }
+
+  if (strokeStyle) {
+    context.strokeStyle = strokeStyle;
+    context.lineWidth = 1;
+    context.stroke();
+  }
+}
+
+function createAcademyPaymentSummaryCanvasPage() {
+  const scale = 2;
+  const width = 842;
+  const height = 1191;
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("No se pudo preparar el PDF.");
+  }
+
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  context.scale(scale, scale);
+
+  return { canvas, context, height, width };
+}
+
+function drawAcademyPaymentSummaryHeader({
+  academyName,
+  context,
+  generatedAt,
+  logo,
+  totalAmount,
+  currency,
+  participantCount,
+  width,
+}: {
+  academyName: string;
+  context: CanvasRenderingContext2D;
+  generatedAt: string;
+  logo: HTMLImageElement | null;
+  totalAmount: number;
+  currency: string;
+  participantCount: number;
+  width: number;
+}) {
+  const padding = 56;
+  const ink = "#242221";
+  const muted = "rgba(36, 34, 33, 0.58)";
+  const pink = "#df4f95";
+  const cyan = "#57bdd1";
+  const border = "rgba(36, 34, 33, 0.14)";
+
+  context.fillStyle = "#fffaf4";
+  context.fillRect(0, 0, width, 1191);
+
+  if (logo) {
+    const logoWidth = 138;
+    const logoHeight = logoWidth * (logo.naturalHeight / logo.naturalWidth);
+    context.drawImage(logo, padding, 42, logoWidth, logoHeight);
+  } else {
+    setAcademyPdfFont(context, 28, 900);
+    context.fillStyle = ink;
+    context.fillText("LEVITATE", padding, 74);
+  }
+
+  setAcademyPdfFont(context, 13, 900);
+  context.fillStyle = pink;
+  context.fillText("RESUMEN DE PAGOS", padding, 142);
+
+  drawAcademyPdfWrappedText({
+    color: ink,
+    context,
+    lineHeight: 34,
+    maxLines: 2,
+    maxWidth: 430,
+    size: 32,
+    text: academyName,
+    weight: 900,
+    x: padding,
+    y: 184,
+  });
+
+  setAcademyPdfFont(context, 11, 800);
+  context.fillStyle = muted;
+  context.fillText(`Generado: ${generatedAt}`, padding, 238);
+
+  drawAcademyPdfRoundRect(context, width - padding - 230, 56, 230, 142, 10, "rgba(255,255,255,0.72)", border);
+  setAcademyPdfFont(context, 11, 900);
+  context.fillStyle = muted;
+  context.fillText("TOTAL A PAGAR", width - padding - 206, 91);
+  setAcademyPdfFont(context, 28, 900);
+  context.fillStyle = pink;
+  context.fillText(formatAdminCurrency(totalAmount, currency), width - padding - 206, 131);
+  setAcademyPdfFont(context, 12, 800);
+  context.fillStyle = muted;
+  context.fillText(`${participantCount} participante${participantCount === 1 ? "" : "s"}`, width - padding - 206, 165);
+
+  context.fillStyle = cyan;
+  context.fillRect(padding, 262, width - padding * 2, 3);
+}
+
+function drawAcademyPaymentSummaryFooter(
+  page: { context: CanvasRenderingContext2D; height: number; width: number },
+  pageIndex: number,
+  totalPages: number,
+) {
+  const padding = 56;
+  const y = page.height - 48;
+
+  page.context.strokeStyle = "rgba(36, 34, 33, 0.12)";
+  page.context.beginPath();
+  page.context.moveTo(padding, y - 26);
+  page.context.lineTo(page.width - padding, y - 26);
+  page.context.stroke();
+
+  setAcademyPdfFont(page.context, 10, 800);
+  page.context.fillStyle = "rgba(36, 34, 33, 0.52)";
+  page.context.fillText("Levitate MX - Pagos de inscripción", padding, y);
+  page.context.textAlign = "right";
+  page.context.fillText(`${pageIndex + 1} / ${totalPages}`, page.width - padding, y);
+  page.context.textAlign = "left";
+}
+
+function getAcademyPaymentSummaryRowLayout(context: CanvasRenderingContext2D, row: AcademyPaymentSummaryPdfRow) {
+  const columns = [
+    { key: "participant", width: 186 },
+    { key: "choreography", width: 236 },
+    { key: "category", width: 140 },
+    { key: "total", width: 126 },
+  ] as const;
+  setAcademyPdfFont(context, 12, 800);
+  const participantLines = getAcademyPdfWrappedLines(context, row.participantName, columns[0].width).slice(0, 2);
+  const choreographyLines = getAcademyPdfWrappedLines(context, row.choreographyTitle, columns[1].width).slice(0, 2);
+  const categoryLines = getAcademyPdfWrappedLines(context, row.category, columns[2].width).slice(0, 2);
+  const maxLineCount = Math.max(participantLines.length, choreographyLines.length, categoryLines.length);
+
+  return {
+    categoryLines,
+    choreographyLines,
+    height: Math.max(62, 28 + maxLineCount * 17),
+    participantLines,
+  };
+}
+
+function drawAcademyPaymentSummaryTableHeader(context: CanvasRenderingContext2D, y: number) {
+  const padding = 56;
+  const columnGap = 14;
+  const columns = [
+    { title: "Alumno", width: 186 },
+    { title: "Coreografía", width: 236 },
+    { title: "Categoría", width: 140 },
+    { title: "Monto total", width: 126 },
+  ];
+  let x = padding;
+
+  drawAcademyPdfRoundRect(context, padding, y, 730, 36, 8, "#242221");
+  setAcademyPdfFont(context, 10, 900);
+  context.fillStyle = "#fffaf4";
+
+  columns.forEach((column) => {
+    context.fillText(column.title.toUpperCase(), x + 14, y + 23);
+    x += column.width + columnGap;
+  });
+}
+
+function drawAcademyPaymentSummaryRow({
+  context,
+  index,
+  row,
+  y,
+}: {
+  context: CanvasRenderingContext2D;
+  index: number;
+  row: AcademyPaymentSummaryPdfRow;
+  y: number;
+}) {
+  const padding = 56;
+  const columnGap = 14;
+  const columns = [
+    { width: 186 },
+    { width: 236 },
+    { width: 140 },
+    { width: 126 },
+  ];
+  const layout = getAcademyPaymentSummaryRowLayout(context, row);
+  const rowHeight = layout.height;
+  const background = index % 2 === 0 ? "rgba(255,255,255,0.76)" : "rgba(255,255,255,0.48)";
+  const ink = "#242221";
+  const muted = "rgba(36, 34, 33, 0.56)";
+  const pink = "#df4f95";
+  let x = padding;
+
+  drawAcademyPdfRoundRect(context, padding, y, 730, rowHeight, 8, background, "rgba(36, 34, 33, 0.1)");
+
+  setAcademyPdfFont(context, 12, 850);
+  context.fillStyle = ink;
+  layout.participantLines.forEach((line, lineIndex) => {
+    context.fillText(line, x + 14, y + 22 + lineIndex * 17);
+  });
+  setAcademyPdfFont(context, 9, 800);
+  context.fillStyle = muted;
+  context.fillText(row.curp, x + 14, y + rowHeight - 13);
+  x += columns[0].width + columnGap;
+
+  setAcademyPdfFont(context, 12, 850);
+  context.fillStyle = ink;
+  layout.choreographyLines.forEach((line, lineIndex) => {
+    context.fillText(line, x + 14, y + 22 + lineIndex * 17);
+  });
+  x += columns[1].width + columnGap;
+
+  setAcademyPdfFont(context, 12, 800);
+  context.fillStyle = muted;
+  layout.categoryLines.forEach((line, lineIndex) => {
+    context.fillText(line, x + 14, y + 22 + lineIndex * 17);
+  });
+  x += columns[2].width + columnGap;
+
+  drawAcademyPdfFittedRightText({
+    color: pink,
+    context,
+    maxWidth: columns[3].width - 18,
+    size: 14,
+    text: formatAdminCurrency(row.totalAmount, row.currency),
+    weight: 900,
+    x: x + columns[3].width - 12,
+    y: y + 27,
+  });
+
+  setAcademyPdfFont(context, 8, 850);
+  context.fillStyle = muted;
+  context.textAlign = "right";
+  context.fillText("por alumno", x + columns[3].width - 12, y + 45);
+  context.textAlign = "left";
+
+  return rowHeight;
+}
+
+function createAcademyPaymentInstructionsPage({
+  academyName,
+  currency,
+  generatedAt,
+  logo,
+  participantCount,
+  totalAmount,
+}: {
+  academyName: string;
+  currency: string;
+  generatedAt: string;
+  logo: HTMLImageElement | null;
+  participantCount: number;
+  totalAmount: number;
+}) {
+  const page = createAcademyPaymentSummaryCanvasPage();
+  const { context, width } = page;
+  const padding = 56;
+  const card = "rgba(255,255,255,0.72)";
+  const border = "rgba(36, 34, 33, 0.12)";
+  const ink = "#242221";
+  const muted = "rgba(36, 34, 33, 0.62)";
+  const pink = "#df4f95";
+  const cyan = "#57bdd1";
+  const paymentUrl = getAcademyPaymentSummaryUrl();
+  const steps = [
+    `Entrar a ${paymentUrl}.`,
+    "Consultar la CURP del alumno que se va a pagar.",
+    "Revisar el monto final y abrir las opciones de pago.",
+    "Elegir Banamex u OXXO y copiar el concepto individual exactamente como aparece.",
+    "Realizar el pago por el monto exacto y subir el comprobante en la misma página.",
+  ];
+
+  drawAcademyPaymentSummaryHeader({
+    academyName,
+    context,
+    currency,
+    generatedAt,
+    logo,
+    participantCount,
+    totalAmount,
+    width,
+  });
+
+  setAcademyPdfFont(context, 24, 900);
+  context.fillStyle = ink;
+  context.fillText("Cómo realizar el pago", padding, 336);
+
+  drawAcademyPdfRoundRect(context, padding, 370, width - padding * 2, 316, 10, card, border);
+  let y = 420;
+
+  steps.forEach((step, index) => {
+    context.beginPath();
+    context.fillStyle = index === 0 ? pink : "rgba(223, 79, 149, 0.14)";
+    context.arc(padding + 24, y - 5, 14, 0, Math.PI * 2);
+    context.fill();
+    setAcademyPdfFont(context, 10, 900);
+    context.fillStyle = index === 0 ? "#fffaf4" : pink;
+    context.textAlign = "center";
+    context.fillText(String(index + 1), padding + 24, y - 1);
+    context.textAlign = "left";
+
+    const usedLines = drawAcademyPdfWrappedText({
+      color: ink,
+      context,
+      lineHeight: 18,
+      maxLines: 2,
+      maxWidth: width - padding * 2 - 84,
+      size: 13,
+      text: step,
+      weight: 760,
+      x: padding + 56,
+      y,
+    });
+    y += Math.max(42, usedLines * 18 + 20);
+  });
+
+  setAcademyPdfFont(context, 18, 900);
+  context.fillStyle = ink;
+  context.fillText("Datos de pago disponibles", padding, 746);
+
+  const methodGap = 18;
+  const methodWidth = (width - padding * 2 - methodGap) / 2;
+
+  registrationPaymentMethodSections.forEach((method, methodIndex) => {
+    const x = padding + methodIndex * (methodWidth + methodGap);
+    const methodY = 780;
+
+    drawAcademyPdfRoundRect(context, x, methodY, methodWidth, 204, 10, card, border);
+    setAcademyPdfFont(context, 15, 900);
+    context.fillStyle = methodIndex === 0 ? pink : ink;
+    context.fillText(method.title, x + 22, methodY + 38);
+
+    method.rows.forEach((row, rowIndex) => {
+      const rowY = methodY + 76 + rowIndex * 42;
+
+      setAcademyPdfFont(context, 9, 900);
+      context.fillStyle = muted;
+      context.fillText(row.label.toUpperCase(), x + 22, rowY);
+      drawAcademyPdfWrappedText({
+        color: ink,
+        context,
+        lineHeight: 15,
+        maxLines: 2,
+        maxWidth: methodWidth - 44,
+        size: 12,
+        text: row.value,
+        weight: 820,
+        x: x + 22,
+        y: rowY + 20,
+      });
+    });
+  });
+
+  drawAcademyPdfRoundRect(context, padding, 1028, width - padding * 2, 72, 10, "rgba(87, 189, 209, 0.12)", "rgba(87, 189, 209, 0.34)");
+  context.fillStyle = cyan;
+  context.fillRect(padding + 22, 1048, 4, 32);
+  drawAcademyPdfWrappedText({
+    color: ink,
+    context,
+    lineHeight: 17,
+    maxLines: 2,
+    maxWidth: width - padding * 2 - 62,
+    size: 12,
+    text: "Importante: cada alumno tiene un concepto individual. Si el pago se realiza sin ese concepto o por un monto distinto, la validación puede tardar más.",
+    weight: 780,
+    x: padding + 42,
+    y: 1054,
+  });
+
+  return page;
+}
+
+async function createAcademyPaymentSummaryPdfBlob({
+  academyName,
+  lookups,
+}: {
+  academyName: string;
+  lookups: RegistrationInscriptionLookup[];
+}) {
+  await document.fonts?.ready;
+
+  const rows = getAcademyPaymentSummaryRows(lookups);
+  const participantCount = lookups.length;
+  const currency = lookups.find((lookup) => getAcademyPaymentLookupCurrency(lookup)) ? getAcademyPaymentLookupCurrency(lookups[0]) : "MXN";
+  const totalAmount = lookups.reduce((sum, lookup) => sum + Number(lookup.subtotal || 0), 0);
+  const generatedAt = formatMexicoCityDateTime(new Date());
+  const logo = await loadAdminImage("/assets/levitate-logo-mx.png").catch(() => null);
+  const pages: Array<ReturnType<typeof createAcademyPaymentSummaryCanvasPage>> = [];
+  const createTablePage = () => {
+    const page = createAcademyPaymentSummaryCanvasPage();
+
+    drawAcademyPaymentSummaryHeader({
+      academyName,
+      context: page.context,
+      currency,
+      generatedAt,
+      logo,
+      participantCount,
+      totalAmount,
+      width: page.width,
+    });
+    drawAcademyPaymentSummaryTableHeader(page.context, 300);
+    return page;
+  };
+  let page = createTablePage();
+  let y = 348;
+  const bottomY = 1090;
+
+  if (rows.length === 0) {
+    drawAcademyPdfRoundRect(page.context, 56, y, 730, 92, 10, "rgba(255,255,255,0.72)", "rgba(36, 34, 33, 0.12)");
+    drawAcademyPdfWrappedText({
+      color: "rgba(36, 34, 33, 0.66)",
+      context: page.context,
+      lineHeight: 20,
+      maxLines: 2,
+      maxWidth: 650,
+      size: 14,
+      text: "Todavía no hay participantes registrados para generar el resumen.",
+      weight: 800,
+      x: 84,
+      y: y + 38,
+    });
+  }
+
+  rows.forEach((row, index) => {
+    const rowHeight = getAcademyPaymentSummaryRowLayout(page.context, row).height;
+
+    if (y + rowHeight > bottomY) {
+      pages.push(page);
+      page = createTablePage();
+      y = 348;
+    }
+
+    const drawnHeight = drawAcademyPaymentSummaryRow({ context: page.context, index, row, y });
+    y += drawnHeight + 8;
+  });
+
+  pages.push(page);
+  pages.push(
+    createAcademyPaymentInstructionsPage({
+      academyName,
+      currency,
+      generatedAt,
+      logo,
+      participantCount,
+      totalAmount,
+    }),
+  );
+
+  pages.forEach((summaryPage, pageIndex) => {
+    drawAcademyPaymentSummaryFooter(summaryPage, pageIndex, pages.length);
+  });
+
+  return createMultiImagePdfBlob(pages);
+}
+
 function getPendingRegistrationAmount(totals: RegistrationAdminOrderTotals | null) {
   return Math.max(0, (totals?.amount ?? 0) - (totals?.paidAmount ?? 0));
 }
@@ -5141,7 +5822,7 @@ function LevitateAuthScreen({
               </AdminField>
               {academyOriginType === "mexico" ? (
                 <AdminField icon={MapPin} label="Estado">
-                  <AdminSelect defaultValue="estado_de_mexico" id="academy-origin-state" name="academyState" options={mexicoStateOptions} />
+                  <AdminSelect defaultValue="" id="academy-origin-state" name="academyState" options={mexicoStateOptions} placeholder="Selecciona un estado" />
                 </AdminField>
               ) : (
                 <AdminField icon={Globe2} label="País">
@@ -5431,16 +6112,14 @@ function LevitateStudentPortal({
 
 function AdminSidebar({
   activeScreen,
-  isInternationalAcademy,
   onScreenChange,
   onLogout,
 }: {
   activeScreen: AdminScreenId;
-  isInternationalAcademy: boolean;
   onScreenChange: (screen: AdminScreenId) => void;
   onLogout: () => void;
 }) {
-  const visibleMenuItems = adminMenuItems.filter((item) => item.screen !== "payments" || isInternationalAcademy);
+  const visibleMenuItems = adminMenuItems;
 
   return (
     <aside className="levitate-admin-sidebar" aria-label="Menú administrativo">
@@ -8205,6 +8884,246 @@ function FeedbackPanel({ dances }: { dances: RegistrationDance[] }) {
   );
 }
 
+function AcademyMexicoPaymentsPanel({
+  academyName,
+  participants,
+}: {
+  academyName: string;
+  participants: RegistrationParticipant[];
+}) {
+  const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [lookup, setLookup] = useState<RegistrationInscriptionLookup | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportErrorMessage, setExportErrorMessage] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const lookupRequestIdRef = useRef(0);
+  const participantOptions = useMemo(
+    () =>
+      [...participants]
+        .sort((left, right) => left.fullName.localeCompare(right.fullName, "es"))
+        .map((participant) => ({
+          value: participant.id,
+          label: `${participant.fullName} · ${participant.curp}`,
+        })),
+    [participants],
+  );
+  const selectedParticipant = participants.find((participant) => participant.id === selectedParticipantId) ?? null;
+
+  useEffect(() => {
+    if (!selectedParticipantId) {
+      return;
+    }
+
+    if (!participants.some((participant) => participant.id === selectedParticipantId)) {
+      lookupRequestIdRef.current += 1;
+      setSelectedParticipantId("");
+      setLookup(null);
+      setErrorMessage("");
+    }
+  }, [participants, selectedParticipantId]);
+
+  const fetchParticipantPaymentLookup = (participant: RegistrationParticipant) =>
+    requestRegistrationApi<RegistrationInscriptionLookup>(
+      "/api/registration/inscription/lookup",
+      {
+        body: JSON.stringify({ curp: participant.curp }),
+        method: "POST",
+      },
+    );
+
+  const loadParticipantPayment = async (participant: RegistrationParticipant) => {
+    const requestId = lookupRequestIdRef.current + 1;
+    lookupRequestIdRef.current = requestId;
+    setIsLoading(true);
+    setErrorMessage("");
+    setExportMessage("");
+    setExportErrorMessage("");
+    setLookup(null);
+
+    try {
+      const nextLookup = await fetchParticipantPaymentLookup(participant);
+      if (lookupRequestIdRef.current === requestId) {
+        setLookup(nextLookup);
+      }
+    } catch (error) {
+      if (lookupRequestIdRef.current === requestId) {
+        setErrorMessage(getErrorMessage(error, "No se pudo consultar el monto del participante."));
+      }
+    } finally {
+      if (lookupRequestIdRef.current === requestId) {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleParticipantChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextParticipantId = event.target.value;
+    const nextParticipant = participants.find((participant) => participant.id === nextParticipantId) ?? null;
+    setSelectedParticipantId(nextParticipantId);
+    setLookup(null);
+    setErrorMessage("");
+    setExportMessage("");
+    setExportErrorMessage("");
+
+    if (nextParticipant) {
+      void loadParticipantPayment(nextParticipant);
+    }
+  };
+
+  const handleRefreshPayment = () => {
+    if (selectedParticipant) {
+      void loadParticipantPayment(selectedParticipant);
+    }
+  };
+
+  const handleExportAcademySummary = async () => {
+    if (participants.length === 0) {
+      setExportErrorMessage("Registra participantes para poder exportar el resumen.");
+      setExportMessage("");
+      return;
+    }
+
+    setIsExporting(true);
+    setExportErrorMessage("");
+    setExportMessage("");
+
+    try {
+      const sortedParticipants = [...participants].sort((left, right) => left.fullName.localeCompare(right.fullName, "es"));
+      const lookups: RegistrationInscriptionLookup[] = [];
+
+      for (const participant of sortedParticipants) {
+        lookups.push(await fetchParticipantPaymentLookup(participant));
+      }
+
+      const pdf = await createAcademyPaymentSummaryPdfBlob({ academyName, lookups });
+      downloadBlob(pdf, `resumen-pagos-${toAdminFileSlug(academyName, "academia")}.pdf`);
+      setExportMessage("Resumen de pagos exportado.");
+    } catch (error) {
+      setExportErrorMessage(getErrorMessage(error, "No se pudo exportar el resumen de pagos."));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <AdminPanel className="levitate-admin-panel--mexico-payments" title="Pagos" eyebrow="Registro">
+      <div className="levitate-admin-payment-toolbar">
+        <AdminField icon={Users} label="Participante">
+          <AdminSelect
+            disabled={participantOptions.length === 0 || isLoading || isExporting}
+            id="mexico-payment-participant"
+            name="participantId"
+            onChange={handleParticipantChange}
+            options={participantOptions}
+            placeholder="Selecciona un participante"
+            value={selectedParticipantId}
+          />
+        </AdminField>
+        <div className="levitate-admin-payment-toolbar__actions">
+          <button className="levitate-admin-save" disabled={isExporting || isLoading || participants.length === 0} onClick={handleExportAcademySummary} type="button">
+            <Download aria-hidden="true" size={18} />
+            {isExporting ? "Exportando..." : "Exportar PDF"}
+          </button>
+          <button className="levitate-admin-save" disabled={isLoading || isExporting || !selectedParticipant} onClick={handleRefreshPayment} type="button">
+            <CreditCard aria-hidden="true" size={18} />
+            {isLoading ? "Consultando..." : "Actualizar monto"}
+          </button>
+        </div>
+      </div>
+
+      <AdminStatusMessage message={errorMessage} tone="error" />
+      <AdminStatusMessage message={exportMessage} />
+      <AdminStatusMessage message={exportErrorMessage} tone="error" />
+
+      <div className="levitate-admin-payment-list">
+        {lookup ? (
+          <AcademyMexicoPaymentSummaryCard lookup={lookup} />
+        ) : (
+          <p className="levitate-admin-empty-state">
+            {participants.length === 0
+              ? "Registra participantes para consultar sus pagos."
+              : "Selecciona un participante para consultar su monto final."}
+          </p>
+        )}
+      </div>
+    </AdminPanel>
+  );
+}
+
+function AcademyMexicoPaymentSummaryCard({
+  lookup,
+}: {
+  lookup: RegistrationInscriptionLookup;
+}) {
+  const currency = lookup.currency || lookup.lines.find((lineItem) => lineItem.currency)?.currency || "MXN";
+  const paymentReference = lookup.paymentReference || lookup.reference;
+  const orderStatus = lookup.order ? getInscriptionOrderStatusLabel(lookup.order.status) : "Sin orden generada";
+  const paidAmount = lookup.order?.paidAmount ?? 0;
+
+  return (
+    <article className="levitate-admin-payment-card levitate-admin-payment-card--academy">
+      <header>
+        <div>
+          <span>{paymentReference}</span>
+          <h3>{lookup.participantName}</h3>
+          <p>
+            {lookup.curp} · {getVenueLabel(lookup.venue)}
+          </p>
+        </div>
+        <strong>{formatAdminCurrency(lookup.subtotal, currency)}</strong>
+      </header>
+
+      <dl>
+        <div>
+          <dt>Monto final</dt>
+          <dd>{formatAdminCurrency(lookup.subtotal, currency)}</dd>
+        </div>
+        <div>
+          <dt>Estado</dt>
+          <dd>{orderStatus}</dd>
+        </div>
+        <div>
+          <dt>Coreografías</dt>
+          <dd>{lookup.lines.length}</dd>
+        </div>
+        <div>
+          <dt>Pagado</dt>
+          <dd>{formatAdminCurrency(paidAmount, currency)}</dd>
+        </div>
+      </dl>
+
+      {lookup.lines.length > 0 ? (
+        <div className="levitate-admin-payment-lines" aria-label="Coreografías incluidas">
+          {lookup.lines.map((lineItem, index) => {
+            const lineCurrency = lineItem.currency || currency;
+            const baseAmount = lineItem.baseAmount ?? lineItem.amount;
+            const hasDiscount = Boolean(lineItem.discountAmount);
+
+            return (
+              <div className="levitate-admin-payment-line" key={`${lineItem.id || lookup.curp}-${index}`}>
+                <span>{lineItem.pricingPosition ?? index + 1}</span>
+                <div>
+                  <strong>{getRegistrationLineTitle(lineItem)}</strong>
+                  <small>{getRegistrationLineMeta(lineItem)}</small>
+                  {lineItem.isCourtesy ? <em>Cortesía Levitate</em> : hasDiscount ? <em>Descuento aplicado</em> : null}
+                </div>
+                <b>
+                  {hasDiscount ? <del>{formatAdminCurrency(baseAmount, lineCurrency)}</del> : null}
+                  {lineItem.isCourtesy ? "Cortesía" : formatAdminCurrency(lineItem.amount, lineCurrency)}
+                </b>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="levitate-admin-empty-state">No hay conceptos pendientes para este participante.</p>
+      )}
+    </article>
+  );
+}
+
 function AcademyInternationalPaymentsPanel({
   orders,
   participants,
@@ -10932,15 +11851,7 @@ function getAdminScreen({
     }
 
     return (
-      <AdminWelcomePanel
-        academyName={session.academy.name}
-        choreographers={choreographers}
-        dances={dances}
-        inscriptionOrders={inscriptionOrders}
-        isInternationalAcademy={false}
-        onDeleteRecord={onDeleteRecord}
-        participants={participants}
-      />
+      <AcademyMexicoPaymentsPanel academyName={session.academy.name} participants={participants} />
     );
   }
 
@@ -11111,7 +12022,6 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     <main className={`levitate-admin-shell${isMobileMenuOpen ? " is-mobile-menu-open" : ""}`}>
       <AdminSidebar
         activeScreen={activeScreen}
-        isInternationalAcademy={session.academy.originType === "international"}
         onLogout={handleLogout}
         onScreenChange={handleScreenChange}
       />
