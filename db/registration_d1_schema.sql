@@ -232,6 +232,7 @@ CREATE TABLE IF NOT EXISTS registration_choreographers (
   email TEXT COLLATE NOCASE,
   phone TEXT,
   shirt_size TEXT NOT NULL DEFAULT 'm' CHECK (shirt_size IN ('6_8', '10_12', 'xs', 's', 'm', 'l', 'xl')),
+  is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1)),
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

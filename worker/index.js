@@ -1109,6 +1109,8 @@ async function handleRegistrationBootstrap(request, env) {
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
+    await ensureRegistrationChoreographerReleveTeacherColumn(db);
+
     return sendJson({
       ...session,
       participants: await getRegistrationParticipants(db, academyId),
@@ -1129,6 +1131,7 @@ async function handleRegistrationParticipants(request, env) {
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
+    await ensureRegistrationChoreographerReleveTeacherColumn(db);
     await ensureRegistrationParticipantInternationalColumn(db);
     await ensureRegistrationParticipantReleveTeacherColumn(db);
 
@@ -1632,6 +1635,7 @@ async function handleRegistrationAdminProgram(request, env) {
 
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
+    await ensureRegistrationChoreographerReleveTeacherColumn(db);
 
     return sendJson({
       dances: await getAllRegistrationProgramDances(db),
@@ -1648,6 +1652,7 @@ async function handleRegistrationAdminParticipants(request, env) {
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
     await ensureRegistrationAcademyOriginColumns(db);
+    await ensureRegistrationChoreographerReleveTeacherColumn(db);
     await ensureRegistrationParticipantInternationalColumn(db);
     await ensureRegistrationParticipantReleveTeacherColumn(db);
 
@@ -2002,6 +2007,8 @@ async function handleRegistrationChoreographers(request, env) {
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
+    await ensureRegistrationChoreographerReleveTeacherColumn(db);
+
     if (request.method === "GET") {
       return sendJson({ choreographers: await getRegistrationChoreographers(db, academyId) });
     }
@@ -2020,7 +2027,12 @@ async function handleRegistrationChoreographers(request, env) {
     const email = optionalEmail(body.email);
     const phone = requireString(body.phone, "phone");
     const shirtSize = requireRegistrationChoice(body.shirtSize, "shirtSize", registrationShirtSizes);
+    const isReleveTeacher = optionalBoolean(body.isReleveTeacher);
     const choreographerId = crypto.randomUUID();
+
+    if (isReleveTeacher) {
+      await assertRegistrationReleveTeacherEligibility(db, academyId);
+    }
 
     await db
       .prepare(
@@ -2032,12 +2044,13 @@ async function handleRegistrationChoreographers(request, env) {
             email,
             phone,
             shirt_size,
+            is_releve_teacher,
             created_by_user_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
-      .bind(choreographerId, academyId, fullName, email || null, phone, shirtSize, session.user.id)
+      .bind(choreographerId, academyId, fullName, email || null, phone, shirtSize, isReleveTeacher ? 1 : 0, session.user.id)
       .run();
 
     const choreographer = await db
@@ -2065,6 +2078,8 @@ async function handleRegistrationDances(request, env) {
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
+
+    await ensureRegistrationChoreographerReleveTeacherColumn(db);
 
     if (request.method === "GET") {
       return sendJson({ dances: await getRegistrationDances(db, academyId) });
@@ -3188,6 +3203,7 @@ async function getRegistrationStudentState(db, user) {
 
 async function getRegistrationInscriptionLookup(db, curp, { academyId = null } = {}) {
   await ensureRegistrationAcademyOriginColumns(db);
+  await ensureRegistrationChoreographerReleveTeacherColumn(db);
   await ensureRegistrationParticipantInternationalColumn(db);
   await ensureRegistrationParticipantReleveTeacherColumn(db);
 
@@ -3242,6 +3258,14 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
           ) AS participant_count,
           registration_participants.is_international AS selected_participant_is_international,
           registration_participants.is_releve_teacher AS selected_participant_is_releve_teacher,
+          (
+            SELECT COUNT(1)
+            FROM registration_dance_choreographers
+            INNER JOIN registration_choreographers
+              ON registration_choreographers.id = registration_dance_choreographers.choreographer_id
+            WHERE registration_dance_choreographers.dance_id = registration_dances.id
+              AND registration_choreographers.is_releve_teacher = 1
+          ) AS has_releve_teacher_choreographer,
           registration_dances.venue,
           registration_academies.name AS academy_name,
           registration_academies.origin_type AS academy_origin_type,
@@ -5325,6 +5349,9 @@ async function serializeRegistrationDances(db, academyId, dances) {
     return [];
   }
 
+  await ensureRegistrationChoreographerReleveTeacherColumn(db);
+  await ensureRegistrationParticipantReleveTeacherColumn(db);
+
   const danceIds = new Set(dances.map((dance) => dance.id));
   const { results: choreographers = [] } = await db
     .prepare(
@@ -5332,7 +5359,8 @@ async function serializeRegistrationDances(db, academyId, dances) {
         SELECT
           registration_dance_choreographers.dance_id,
           registration_choreographers.id,
-          registration_choreographers.full_name
+          registration_choreographers.full_name,
+          registration_choreographers.is_releve_teacher
         FROM registration_dance_choreographers
         INNER JOIN registration_dances
           ON registration_dances.id = registration_dance_choreographers.dance_id
@@ -5352,7 +5380,8 @@ async function serializeRegistrationDances(db, academyId, dances) {
           registration_participants.full_name,
           registration_participants.age,
           registration_participants.division,
-          registration_participants.shirt_size
+          registration_participants.shirt_size,
+          registration_participants.is_releve_teacher
         FROM registration_dance_participants
         INNER JOIN registration_dances
           ON registration_dances.id = registration_dance_participants.dance_id
@@ -5387,6 +5416,9 @@ async function serializeRegistrationProgramDances(db, dances) {
     return [];
   }
 
+  await ensureRegistrationChoreographerReleveTeacherColumn(db);
+  await ensureRegistrationParticipantReleveTeacherColumn(db);
+
   const danceIds = new Set(dances.map((dance) => dance.id));
   const { results: choreographers = [] } = await db
     .prepare(
@@ -5394,7 +5426,8 @@ async function serializeRegistrationProgramDances(db, dances) {
         SELECT
           registration_dance_choreographers.dance_id,
           registration_choreographers.id,
-          registration_choreographers.full_name
+          registration_choreographers.full_name,
+          registration_choreographers.is_releve_teacher
         FROM registration_dance_choreographers
         INNER JOIN registration_choreographers
           ON registration_choreographers.id = registration_dance_choreographers.choreographer_id
@@ -5457,7 +5490,8 @@ async function attachRegistrationDanceParticipants(db, dances) {
           registration_participants.full_name,
           registration_participants.age,
           registration_participants.division,
-          registration_participants.shirt_size
+          registration_participants.shirt_size,
+          registration_participants.is_releve_teacher
         FROM registration_dance_participants
         INNER JOIN registration_participants
           ON registration_participants.id = registration_dance_participants.participant_id
@@ -5799,9 +5833,16 @@ function isRegistrationReleveTeacherDance(dance) {
     return true;
   }
 
-  return Array.isArray(dance.participants)
-    ? dance.participants.some((participant) => Boolean(participant.isReleveTeacher || participant.is_releve_teacher))
-    : false;
+  if (Boolean(Number(dance.has_releve_teacher_choreographer || 0))) {
+    return true;
+  }
+
+  const people = [
+    ...(Array.isArray(dance.choreographers) ? dance.choreographers : []),
+    ...(Array.isArray(dance.participants) ? dance.participants : []),
+  ];
+
+  return people.some((person) => Boolean(person.isReleveTeacher || person.is_releve_teacher));
 }
 
 function buildRegistrationInscriptionReference(curp, venue, { academyId = "", isInternational = false } = {}) {
@@ -6031,6 +6072,30 @@ async function ensureRegistrationParticipantReleveTeacherColumn(db) {
       .prepare(
         `
           ALTER TABLE registration_participants
+          ADD COLUMN is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))
+        `,
+      )
+      .run();
+  } catch (error) {
+    if (!String(error?.message || error).match(/duplicate column name/i)) {
+      throw error;
+    }
+  }
+}
+
+async function ensureRegistrationChoreographerReleveTeacherColumn(db) {
+  const { results = [] } = await db.prepare("PRAGMA table_info(registration_choreographers)").all();
+  const existingColumns = new Set(results.map((column) => column.name));
+
+  if (existingColumns.has("is_releve_teacher")) {
+    return;
+  }
+
+  try {
+    await db
+      .prepare(
+        `
+          ALTER TABLE registration_choreographers
           ADD COLUMN is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))
         `,
       )
@@ -6893,6 +6958,10 @@ function buildRegistrationMusicDriveFileName({ dance, session }) {
 }
 
 function getRegistrationMusicDriveDivision(dance) {
+  if (isRegistrationReleveTeacherDance(dance)) {
+    return "releve";
+  }
+
   const participants = Array.isArray(dance.participants)
     ? dance.participants.filter((participant) => Boolean(participant.division))
     : [];
@@ -7086,6 +7155,7 @@ function serializeRegistrationChoreographer(choreographer) {
     email: choreographer.email,
     phone: choreographer.phone,
     shirtSize: choreographer.shirt_size || "m",
+    isReleveTeacher: Boolean(Number(choreographer.is_releve_teacher || 0)),
     createdAt: choreographer.created_at,
   };
 }

@@ -222,6 +222,7 @@ type RegistrationChoreographer = {
   email: string | null;
   phone: string | null;
   shirtSize: string;
+  isReleveTeacher: boolean;
   createdAt: string;
 };
 
@@ -239,6 +240,7 @@ type RegistrationDanceRelation = {
   division?: string;
   id: string;
   fullName: string;
+  isReleveTeacher?: boolean;
   shirtSize?: string;
 };
 
@@ -599,6 +601,7 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
   { label: "Subir música", icon: Upload, screen: "music" },
+  { label: "Hojas de jueceo", icon: BadgeCheck, screen: "feedback" },
   { label: "Pagos", icon: CreditCard, screen: "payments" },
   { label: "Salir", icon: LogOut, action: "logout" },
 ];
@@ -678,9 +681,6 @@ const danceSubgenresByGenre: Record<string, FieldOption[]> = {
   ],
 };
 
-const defaultDanceGenre = "aereo";
-const defaultDanceSubgenre = danceSubgenresByGenre[defaultDanceGenre][0].value;
-
 const motionDanceCategories: FieldOption[] = [
   { value: "solo", label: "Solo" },
   { value: "duo", label: "Dúo" },
@@ -702,7 +702,6 @@ const danceCategoriesByGenre: Record<string, FieldOption[]> = {
 };
 
 const danceCategories = [...motionDanceCategories, ...aerialDanceCategories.filter((option) => !motionDanceCategories.some((category) => category.value === option.value))];
-const defaultDanceCategory = danceCategoriesByGenre[defaultDanceGenre][0].value;
 const danceCategoryParticipantRequirements: Record<string, number> = {
   solo: 1,
   duo: 2,
@@ -1211,6 +1210,10 @@ function getBirthDateFromCurp(curp: string, referenceDate: string) {
 }
 
 function getDanceProgramDivision(dance: RegistrationDance) {
+  if (isReleveTeacherDance(dance)) {
+    return "releve";
+  }
+
   const participantsWithDivision = dance.participants.filter((participant) => Boolean(participant.division));
 
   if (participantsWithDivision.length === 0) {
@@ -1227,6 +1230,10 @@ function getDanceProgramDivision(dance: RegistrationDance) {
   const selectedParticipant = participantsByAge[0];
 
   return selectedParticipant?.division ?? "";
+}
+
+function isReleveTeacherDance(dance: RegistrationDance) {
+  return [...dance.choreographers, ...dance.participants].some((person) => Boolean(person.isReleveTeacher));
 }
 
 function getMusicDurationLimitForDance(dance: RegistrationDance) {
@@ -4251,13 +4258,14 @@ function downloadAdminParticipantsCsv(rows: RegistrationParticipantOperationalRo
 }
 
 function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreographer[], fileName = "levitate-coreografos.csv") {
-  const headers = ["Nombre", "Academia", "Correo", "Teléfono", "Talla", "Coreografías", "Última actividad"];
+  const headers = ["Nombre", "Academia", "Correo", "Teléfono", "Talla", "Maestro Relevé", "Coreografías", "Última actividad"];
   const rows = choreographers.map((choreographer) => [
     choreographer.fullName,
     choreographer.academyName,
     choreographer.email ?? "",
     choreographer.phone ?? "",
     getOptionLabel(shirtSizes, choreographer.shirtSize),
+    choreographer.isReleveTeacher ? "Sí" : "No",
     choreographer.danceCount,
     choreographer.latestDanceTitle
       ? `${choreographer.latestDanceTitle} · ${getAdminDateLabel(choreographer.latestDanceAt ?? choreographer.createdAt)}`
@@ -4519,6 +4527,7 @@ function AdminSelect({
   options,
   defaultValue,
   disabled = false,
+  placeholder,
   value,
   onChange,
 }: {
@@ -4527,6 +4536,7 @@ function AdminSelect({
   options: FieldOption[];
   defaultValue?: string;
   disabled?: boolean;
+  placeholder?: string;
   value?: string;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
@@ -4541,6 +4551,11 @@ function AdminSelect({
         required
         value={value}
       >
+        {placeholder ? (
+          <option disabled value="">
+            {placeholder}
+          </option>
+        ) : null}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -6380,6 +6395,7 @@ function RegistrationAdminChoreographersPanel({
   const withDancesCount = choreographers.filter((choreographer) => choreographer.danceCount > 0).length;
   const withoutDancesCount = choreographers.filter((choreographer) => choreographer.danceCount === 0).length;
   const withoutContactCount = choreographers.filter((choreographer) => !choreographer.email && !choreographer.phone).length;
+  const releveTeacherCount = choreographers.filter((choreographer) => choreographer.isReleveTeacher).length;
 
   return (
     <section className="registration-choreographers-panel" aria-label="Directorio de coreógrafos">
@@ -6415,6 +6431,14 @@ function RegistrationAdminChoreographersPanel({
           onClick={() => onActivityFilterChange("without_contact")}
           tone="red"
           value={withoutContactCount.toLocaleString("es-MX")}
+        />
+        <RegistrationAcademySummaryCard
+          icon={BadgeCheck}
+          label="Maestros Relevé"
+          meta="Marcados en coreógrafos"
+          onClick={() => onActivityFilterChange("releve")}
+          tone="pink"
+          value={releveTeacherCount.toLocaleString("es-MX")}
         />
       </section>
 
@@ -6458,6 +6482,7 @@ function RegistrationAdminChoreographersPanel({
             <option value="all">Todos</option>
             <option value="with_dances">Con coreografías</option>
             <option value="without_dances">Sin coreografías</option>
+            <option value="releve">Maestros Relevé</option>
             <option value="without_contact">Sin contacto</option>
           </select>
           <ChevronDown aria-hidden="true" size={16} />
@@ -6482,6 +6507,7 @@ function RegistrationAdminChoreographersPanel({
               <span role="columnheader">Academia</span>
               <span role="columnheader">Contacto</span>
               <span role="columnheader">Talla</span>
+              <span role="columnheader">Maestro Relevé</span>
               <span role="columnheader">Coreografías</span>
               <span role="columnheader">Última actividad</span>
               <span role="columnheader">Acciones</span>
@@ -6528,6 +6554,7 @@ function RegistrationAdminChoreographersPanel({
                     <small>{choreographer.email && choreographer.phone ? choreographer.phone : choreographer.email ? "Sin teléfono" : "Sin correo"}</small>
                   </span>
                   <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+                  <span role="cell">{choreographer.isReleveTeacher ? "Sí" : "No"}</span>
                   <span role="cell">
                     <strong className="registration-choreographers-number">{choreographer.danceCount}</strong>
                     <small>{choreographer.danceCount === 1 ? "coreografía" : "coreografías"}</small>
@@ -6612,6 +6639,7 @@ function RegistrationChoreographerQuickPanel({
 
       <div className="registration-participant-profile__meta">
         <span>{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+        <span>{choreographer.isReleveTeacher ? "Maestro Relevé" : "Coreógrafo"}</span>
         <span>{choreographer.danceCount} coreografía(s)</span>
       </div>
 
@@ -6642,6 +6670,10 @@ function RegistrationChoreographerQuickPanel({
           <div>
             <dt>Talla</dt>
             <dd>{getOptionLabel(shirtSizes, choreographer.shirtSize)}</dd>
+          </div>
+          <div>
+            <dt>Maestro Relevé</dt>
+            <dd>{choreographer.isReleveTeacher ? "Sí" : "No"}</dd>
           </div>
         </dl>
       </section>
@@ -7354,17 +7386,13 @@ function RegistrationParticipantQuickPanel({
 
 function ParticipantRegistrationPanel({
   isAcademyInternational,
-  registeredDanceCount,
   onParticipantCreated,
 }: {
   isAcademyInternational: boolean;
-  registeredDanceCount: number;
   onParticipantCreated: (participant: RegistrationParticipant) => void;
 }) {
   const eventDate = venueEventDates.edomex;
   const isInternational = isAcademyInternational;
-  const releveTeacherMinimumDances = 3;
-  const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
   const [curp, setCurp] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [ageValue, setAgeValue] = useState("");
@@ -7442,18 +7470,9 @@ function ParticipantRegistrationPanel({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const wantsReleveTeacher = formData.get("isReleveTeacher") === "on";
     setIsSaving(true);
     setStatusMessage("");
     setErrorMessage("");
-
-    if (wantsReleveTeacher && !canRegisterReleveTeacher) {
-      setErrorMessage(
-        `Para registrar un Maestro Relevé, tu academia debe tener al menos ${releveTeacherMinimumDances} coreografías inscritas.`,
-      );
-      setIsSaving(false);
-      return;
-    }
 
     try {
       const response = await requestRegistrationApi<{ participant: RegistrationParticipant }>("/api/registration/participants", {
@@ -7465,7 +7484,6 @@ function ParticipantRegistrationPanel({
           division: getFormValue(formData, "division"),
           shirtSize: getFormValue(formData, "shirtSize"),
           isInternational,
-          isReleveTeacher: wantsReleveTeacher,
         }),
         method: "POST",
       });
@@ -7526,12 +7544,6 @@ function ParticipantRegistrationPanel({
         <AdminField icon={Shirt} label="Talla playera">
           <AdminSelect defaultValue="6_8" id="participant-shirt" name="shirtSize" options={shirtSizes} />
         </AdminField>
-        <label className={`levitate-admin-check-card${canRegisterReleveTeacher ? "" : " levitate-admin-check-card--disabled"}`}>
-          <input disabled={!canRegisterReleveTeacher} name="isReleveTeacher" type="checkbox" />
-          <span>
-            <strong>Soy Maestro Relevé</strong>
-          </span>
-        </label>
         <div className="levitate-admin-form__wide-block">
           <AdminStatusMessage message={statusMessage} />
           <AdminStatusMessage message={errorMessage} tone="error" />
@@ -7546,11 +7558,18 @@ function ParticipantRegistrationPanel({
 
 function ChoreographerRegistrationPanel({
   academyName,
+  registeredDanceCount,
   onChoreographerCreated,
 }: {
   academyName: string;
+  registeredDanceCount: number;
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
 }) {
+  const releveTeacherMinimumDances = 3;
+  const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
+  const releveTeacherEligibilityMessage = canRegisterReleveTeacher
+    ? `Tu academia tiene ${registeredDanceCount} coreografías inscritas. Ya puedes marcar maestros Relevé.`
+    : `Tu academia tiene ${registeredDanceCount} de ${releveTeacherMinimumDances} coreografías inscritas para activar Maestro Relevé.`;
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -7560,9 +7579,18 @@ function ChoreographerRegistrationPanel({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const isReleveTeacher = formData.get("isReleveTeacher") === "on";
     setIsSaving(true);
     setStatusMessage("");
     setErrorMessage("");
+
+    if (isReleveTeacher && !canRegisterReleveTeacher) {
+      setErrorMessage(
+        `Para registrar un Maestro Relevé, tu academia debe tener al menos ${releveTeacherMinimumDances} coreografías inscritas. Actualmente tiene ${registeredDanceCount}.`,
+      );
+      setIsSaving(false);
+      return;
+    }
 
     try {
       const response = await requestRegistrationApi<{ choreographer: RegistrationChoreographer }>(
@@ -7572,6 +7600,7 @@ function ChoreographerRegistrationPanel({
             fullName: getFormValue(formData, "fullName"),
             phone: getFormValue(formData, "phone"),
             shirtSize: getFormValue(formData, "shirtSize"),
+            isReleveTeacher,
           }),
           method: "POST",
         },
@@ -7602,6 +7631,13 @@ function ChoreographerRegistrationPanel({
         <AdminField icon={Building2} label="Nombre de la academia">
           <input readOnly required type="text" value={academyName} />
         </AdminField>
+        <label className={`levitate-admin-check-card${canRegisterReleveTeacher ? "" : " levitate-admin-check-card--disabled"}`}>
+          <input disabled={!canRegisterReleveTeacher} name="isReleveTeacher" type="checkbox" />
+          <span>
+            <strong>Es Maestro Relevé</strong>
+            <small>{releveTeacherEligibilityMessage}</small>
+          </span>
+        </label>
         <div className="levitate-admin-form__wide-block">
           <AdminStatusMessage message={statusMessage} />
           <AdminStatusMessage message={errorMessage} tone="error" />
@@ -7625,16 +7661,16 @@ function DanceRegistrationPanel({
 }) {
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
-  const [selectedGenre, setSelectedGenre] = useState(defaultDanceGenre);
-  const [selectedSubgenre, setSelectedSubgenre] = useState(defaultDanceSubgenre);
-  const [selectedCategory, setSelectedCategory] = useState(defaultDanceCategory);
+  const [selectedGenre, setSelectedGenre] = useState("");
+  const [selectedSubgenre, setSelectedSubgenre] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const subgenreOptions = danceSubgenresByGenre[selectedGenre] ?? danceSubgenresByGenre[defaultDanceGenre];
-  const categoryOptions = danceCategoriesByGenre[selectedGenre] ?? danceCategoriesByGenre[defaultDanceGenre];
-  const shouldShowLevel = selectedGenre !== "motion";
+  const subgenreOptions = selectedGenre ? (danceSubgenresByGenre[selectedGenre] ?? []) : [];
+  const categoryOptions = selectedGenre ? (danceCategoriesByGenre[selectedGenre] ?? []) : [];
+  const shouldShowLevel = selectedGenre === "aereo";
   const choreographerItems = choreographers.map((choreographer) => ({
     id: choreographer.id,
     fullName: choreographer.fullName,
@@ -7660,12 +7696,10 @@ function DanceRegistrationPanel({
 
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
-    const nextSubgenre = danceSubgenresByGenre[nextGenre]?.[0]?.value ?? defaultDanceSubgenre;
-    const nextCategory = danceCategoriesByGenre[nextGenre]?.[0]?.value ?? defaultDanceCategory;
 
     setSelectedGenre(nextGenre);
-    setSelectedSubgenre(nextSubgenre);
-    setSelectedCategory(nextCategory);
+    setSelectedSubgenre("");
+    setSelectedCategory("");
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -7700,9 +7734,9 @@ function DanceRegistrationPanel({
 
       onDanceCreated(response.dance);
       form.reset();
-      setSelectedGenre(defaultDanceGenre);
-      setSelectedSubgenre(defaultDanceSubgenre);
-      setSelectedCategory(defaultDanceCategory);
+      setSelectedGenre("");
+      setSelectedSubgenre("");
+      setSelectedCategory("");
       setSelectedChoreographerIds([]);
       setSelectedParticipantIds([]);
       setHasAttemptedSubmit(false);
@@ -7721,32 +7755,43 @@ function DanceRegistrationPanel({
           <input name="title" required type="text" />
         </AdminField>
         <AdminField icon={MapPin} label="Sede de competencia">
-          <AdminSelect defaultValue="edomex" id="dance-venue" name="venue" options={venueOptions} />
+          <AdminSelect defaultValue="" id="dance-venue" name="venue" options={venueOptions} placeholder="Selecciona una sede" />
         </AdminField>
         <AdminField icon={Music2} label="Género de coreografía">
-          <AdminSelect id="dance-genre" name="genre" onChange={handleGenreChange} options={danceGenres} value={selectedGenre} />
+          <AdminSelect
+            id="dance-genre"
+            name="genre"
+            onChange={handleGenreChange}
+            options={danceGenres}
+            placeholder="Selecciona un género"
+            value={selectedGenre}
+          />
         </AdminField>
         <AdminField icon={Music2} label="Subgénero">
           <AdminSelect
+            disabled={!selectedGenre}
             id="dance-subgenre"
             name="subgenre"
             onChange={(event) => setSelectedSubgenre(event.target.value)}
             options={subgenreOptions}
+            placeholder={selectedGenre ? "Selecciona un subgénero" : "Selecciona primero un género"}
             value={selectedSubgenre}
           />
         </AdminField>
         <AdminField icon={Users} label="Categoría">
           <AdminSelect
+            disabled={!selectedGenre}
             id="dance-category"
             name="category"
             onChange={(event) => setSelectedCategory(event.target.value)}
             options={categoryOptions}
+            placeholder={selectedGenre ? "Selecciona una categoría" : "Selecciona primero un género"}
             value={selectedCategory}
           />
         </AdminField>
         {shouldShowLevel ? (
           <AdminField icon={BadgeCheck} label="Nivel">
-            <AdminSelect defaultValue="nudo" id="dance-level" name="level" options={danceLevels} />
+            <AdminSelect defaultValue="" id="dance-level" name="level" options={danceLevels} placeholder="Selecciona un nivel" />
           </AdminField>
         ) : null}
 
@@ -8140,7 +8185,7 @@ function MusicUploadPanel({
 
 function FeedbackPanel({ dances }: { dances: RegistrationDance[] }) {
   return (
-    <AdminPanel className="levitate-admin-panel--feedback" eyebrow="Jueceo" title="Feedback">
+    <AdminPanel className="levitate-admin-panel--feedback" eyebrow="Jueceo" title="Hojas de jueceo">
       <div className="levitate-admin-feedback-list">
         {dances.map((dance) => (
           <article className="levitate-admin-feedback-card" key={dance.id}>
@@ -8153,7 +8198,7 @@ function FeedbackPanel({ dances }: { dances: RegistrationDance[] }) {
           </article>
         ))}
         {dances.length === 0 ? (
-          <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas para mostrar feedback.</p>
+          <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas para mostrar hojas de jueceo.</p>
         ) : null}
       </div>
     </AdminPanel>
@@ -8828,6 +8873,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           choreographerActivityFilter === "all" ||
           (choreographerActivityFilter === "with_dances" && choreographer.danceCount > 0) ||
           (choreographerActivityFilter === "without_dances" && choreographer.danceCount === 0) ||
+          (choreographerActivityFilter === "releve" && choreographer.isReleveTeacher) ||
           (choreographerActivityFilter === "without_contact" && !choreographer.email && !choreographer.phone);
         const matchesQuery =
           !normalizedQuery ||
@@ -8837,6 +8883,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
             choreographer.email ?? "",
             choreographer.phone ?? "",
             getOptionLabel(shirtSizes, choreographer.shirtSize),
+            choreographer.isReleveTeacher ? "Maestro Relevé" : "",
             choreographer.latestDanceTitle ?? "",
           ]
             .map(normalizeDirectoryText)
@@ -10496,23 +10543,43 @@ function AdminLookupPanel({
   const [deleteMessage, setDeleteMessage] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [pendingDelete, setPendingDelete] = useState<{
+    description: string;
     id: string;
     label: string;
     recordType: AdminLookupTab;
     recordTypeLabel: string;
+    title: string;
   } | null>(null);
 
   const openDeleteConfirmation = (recordType: AdminLookupTab, recordId: string, recordLabel: string) => {
-    const recordTypeLabel =
-      recordType === "participants" ? "participante" : recordType === "choreographers" ? "coreógrafo" : "coreografía";
+    const recordTypeCopy = {
+      participants: {
+        description: "Se eliminará permanentemente el registro de este participante:",
+        label: "participante",
+        title: "Eliminar participante",
+      },
+      choreographers: {
+        description: "Se eliminará permanentemente el registro de este coreógrafo:",
+        label: "coreógrafo",
+        title: "Eliminar coreógrafo",
+      },
+      dances: {
+        description: "Se eliminará permanentemente esta coreografía:",
+        label: "coreografía",
+        title: "Eliminar coreografía",
+      },
+    } satisfies Record<AdminLookupTab, { description: string; label: string; title: string }>;
+    const copy = recordTypeCopy[recordType];
 
     setDeleteMessage("");
     setDeleteError("");
     setPendingDelete({
+      description: copy.description,
       id: recordId,
       label: recordLabel,
       recordType,
-      recordTypeLabel,
+      recordTypeLabel: copy.label,
+      title: copy.title,
     });
   };
 
@@ -10528,10 +10595,10 @@ function AdminLookupPanel({
 
     try {
       await onDeleteRecord(pendingDelete.recordType, pendingDelete.id);
-      setDeleteMessage(`${pendingDelete.label} se borró correctamente.`);
+      setDeleteMessage(`${pendingDelete.label} se eliminó correctamente.`);
       setPendingDelete(null);
     } catch (error) {
-      setDeleteError(getErrorMessage(error, `No se pudo borrar ${pendingDelete.recordTypeLabel}.`));
+      setDeleteError(getErrorMessage(error, `No se pudo eliminar ${pendingDelete.recordTypeLabel}.`));
     } finally {
       setDeletingRecordKey("");
     }
@@ -10582,10 +10649,9 @@ function AdminLookupPanel({
             <span className="levitate-admin-confirm-dialog__icon" aria-hidden="true">
               <Trash2 size={20} />
             </span>
-            <h3 id="levitate-delete-confirm-title">Confirmar borrado</h3>
+            <h3 id="levitate-delete-confirm-title">{pendingDelete.title}</h3>
             <p>
-              Vas a borrar el {pendingDelete.recordTypeLabel} <strong>{pendingDelete.label}</strong>. Esta acción no se
-              puede deshacer.
+              {pendingDelete.description} <strong>{pendingDelete.label}</strong>. Esta acción no se puede deshacer.
             </p>
             <div className="levitate-admin-confirm-dialog__actions">
               <button
@@ -10603,7 +10669,7 @@ function AdminLookupPanel({
                 type="button"
               >
                 <Trash2 aria-hidden="true" size={17} />
-                {deletingRecordKey === `${pendingDelete.recordType}:${pendingDelete.id}` ? "Borrando..." : "Borrar"}
+                {deletingRecordKey === `${pendingDelete.recordType}:${pendingDelete.id}` ? "Eliminando..." : "Eliminar"}
               </button>
             </div>
           </div>
@@ -10623,7 +10689,6 @@ function AdminLookupPanel({
             <span role="columnheader">CURP / Documento</span>
             <span role="columnheader">División</span>
             <span role="columnheader">Edad</span>
-            <span role="columnheader">Maestro Relevé</span>
             {!isInternationalAcademy ? <span role="columnheader">Pago</span> : null}
             <span role="columnheader">Acciones</span>
             {participants.map((participant) => {
@@ -10643,7 +10708,6 @@ function AdminLookupPanel({
                     {compactDivisionLabel}
                   </span>
                   <span role="cell">{participant.age || "Sin edad"}</span>
-                  <span role="cell">{participant.isReleveTeacher ? "Sí" : "No"}</span>
                   {!isInternationalAcademy ? (
                     <span className={`levitate-admin-payment-badge${isPaid ? " is-paid" : ""}`} role="cell">
                       {isPaid ? "Pagado" : "Falta pagar"}
@@ -10651,11 +10715,11 @@ function AdminLookupPanel({
                   ) : null}
                   <span className="levitate-admin-lookup-table__actions" role="cell">
                     <button
-                      aria-label={`Borrar participante ${participant.fullName}`}
+                      aria-label={`Eliminar participante ${participant.fullName}`}
                       className="levitate-admin-lookup-delete-button"
                       disabled={deletingRecordKey === recordKey}
                       onClick={() => openDeleteConfirmation("participants", participant.id, participant.fullName)}
-                      title="Borrar participante"
+                      title="Eliminar participante"
                       type="button"
                     >
                       <Trash2 aria-hidden="true" size={17} />
@@ -10679,6 +10743,7 @@ function AdminLookupPanel({
             <span role="columnheader">Coreógrafo</span>
             <span role="columnheader">Teléfono</span>
             <span role="columnheader">Talla</span>
+            <span role="columnheader">Maestro Relevé</span>
             <span role="columnheader">Acciones</span>
             {choreographers.map((choreographer) => {
               const recordKey = `choreographers:${choreographer.id}`;
@@ -10688,13 +10753,14 @@ function AdminLookupPanel({
                   <span role="cell">{choreographer.fullName}</span>
                   <span role="cell">{choreographer.phone || "Sin teléfono"}</span>
                   <span role="cell">{getOptionLabel(shirtSizes, choreographer.shirtSize)}</span>
+                  <span role="cell">{choreographer.isReleveTeacher ? "Sí" : "No"}</span>
                   <span className="levitate-admin-lookup-table__actions" role="cell">
                     <button
-                      aria-label={`Borrar coreógrafo ${choreographer.fullName}`}
+                      aria-label={`Eliminar coreógrafo ${choreographer.fullName}`}
                       className="levitate-admin-lookup-delete-button"
                       disabled={deletingRecordKey === recordKey}
                       onClick={() => openDeleteConfirmation("choreographers", choreographer.id, choreographer.fullName)}
-                      title="Borrar coreógrafo"
+                      title="Eliminar coreógrafo"
                       type="button"
                     >
                       <Trash2 aria-hidden="true" size={17} />
@@ -10736,11 +10802,11 @@ function AdminLookupPanel({
                   <span role="cell">{participantNames || "Sin participantes"}</span>
                   <span className="levitate-admin-lookup-table__actions" role="cell">
                     <button
-                      aria-label={`Borrar coreografía ${dance.title}`}
+                      aria-label={`Eliminar coreografía ${dance.title}`}
                       className="levitate-admin-lookup-delete-button"
                       disabled={deletingRecordKey === recordKey}
                       onClick={() => openDeleteConfirmation("dances", dance.id, dance.title)}
-                      title="Borrar coreografía"
+                      title="Eliminar coreografía"
                       type="button"
                     >
                       <Trash2 aria-hidden="true" size={17} />
@@ -10818,7 +10884,13 @@ function getAdminScreen({
   onDeleteRecord: (recordType: AdminLookupTab, recordId: string) => Promise<void>;
 }) {
   if (screen === "choreographers") {
-    return <ChoreographerRegistrationPanel academyName={session.academy.name} onChoreographerCreated={onChoreographerCreated} />;
+    return (
+      <ChoreographerRegistrationPanel
+        academyName={session.academy.name}
+        onChoreographerCreated={onChoreographerCreated}
+        registeredDanceCount={dances.length}
+      />
+    );
   }
 
   if (screen === "participants") {
@@ -10826,7 +10898,6 @@ function getAdminScreen({
       <ParticipantRegistrationPanel
         isAcademyInternational={session.academy.originType === "international"}
         onParticipantCreated={onParticipantCreated}
-        registeredDanceCount={dances.length}
       />
     );
   }
@@ -11142,7 +11213,7 @@ export function LevitateAuthRoute() {
 export function LevitateParticipantRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ParticipantRegistrationPanel isAcademyInternational={false} onParticipantCreated={() => undefined} registeredDanceCount={0} />
+      <ParticipantRegistrationPanel isAcademyInternational={false} onParticipantCreated={() => undefined} />
     </RegistrationPageScaffold>
   );
 }
@@ -11150,7 +11221,7 @@ export function LevitateParticipantRegistrationScreen() {
 export function LevitateChoreographerRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ChoreographerRegistrationPanel academyName="Levitate MX" onChoreographerCreated={() => undefined} />
+      <ChoreographerRegistrationPanel academyName="Levitate MX" onChoreographerCreated={() => undefined} registeredDanceCount={0} />
     </RegistrationPageScaffold>
   );
 }

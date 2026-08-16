@@ -21760,11 +21760,11 @@ button {
 }
 
 .registration-choreographers-summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .registration-admin-choreographers-table {
-  min-width: 1120px;
+  min-width: 1250px;
 }
 
 .registration-admin-choreographers-table .registration-admin-table__head,
@@ -21774,6 +21774,7 @@ button {
     minmax(180px, 0.9fr)
     minmax(190px, 0.96fr)
     minmax(100px, 0.44fr)
+    minmax(120px, 0.5fr)
     minmax(120px, 0.48fr)
     minmax(160px, 0.72fr)
     minmax(62px, 0.28fr);
@@ -25389,15 +25390,15 @@ button {
 }
 
 .levitate-admin-lookup-table--participants {
-  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(128px, 0.56fr) minmax(72px, 0.28fr);
+  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(128px, 0.56fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table--participants-international {
-  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(104px, 0.48fr) minmax(72px, 0.28fr);
+  --admin-lookup-columns: minmax(160px, 1fr) minmax(180px, 0.95fr) minmax(102px, 0.48fr) minmax(72px, 0.34fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table--choreographers {
-  --admin-lookup-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(90px, 0.42fr) minmax(72px, 0.28fr);
+  --admin-lookup-columns: minmax(200px, 1fr) minmax(150px, 0.66fr) minmax(90px, 0.38fr) minmax(116px, 0.52fr) minmax(72px, 0.28fr);
 }
 
 .levitate-admin-lookup-table--dances {
