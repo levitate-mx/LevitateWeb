@@ -8,11 +8,6 @@ const lodgingDocuments = [
     description: "Consulta detalles del hotel sede, ubicación y datos principales para planear tu estancia.",
     href: "/assets/hotel-levitate-2026.pdf",
   },
-  {
-    title: "Beneficios para huéspedes",
-    description: "Revisa los beneficios disponibles para huéspedes Levitate 2026.",
-    href: "/assets/beneficios-huespedes-levitate-2026.pdf",
-  },
 ];
 
 export function HospedajePage() {
@@ -53,7 +48,7 @@ export function HospedajePage() {
           <div>
             <strong>Proceso de hospedaje</strong>
             <span>
-              Ya puedes consultar los documentos base para revisar información del hotel y beneficios para huéspedes.
+              Ya puedes consultar el documento base para revisar información del hotel.
             </span>
           </div>
         </article>

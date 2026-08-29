@@ -23,7 +23,8 @@ type PillMenuSection = {
   links?: PillMenuLink[];
 };
 
-const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+const motionRegulationsPdfHref = "/assets/reglamento-levitate-primavera-2026-motion.pdf";
+const aerialRegulationsPdfHref = "/assets/reglamento-levitate-primavera-2026-aerial.pdf";
 const documentsHubHref = "/documentos";
 
 const navItems: NavItem[] = [
@@ -46,7 +47,7 @@ const navItems: NavItem[] = [
         children: [
           { label: "Géneros", href: "/modalidades/levitate-motion/generos" },
           { label: "Evaluación", href: "/evaluaciones" },
-          { label: "Reglamento", href: regulationsPdfHref, download: true },
+          { label: "Reglamento", href: motionRegulationsPdfHref, download: true },
         ],
       },
       {
@@ -55,7 +56,7 @@ const navItems: NavItem[] = [
         children: [
           { label: "Niveles", href: "/modalidades/levitate-aerial/evaluacion" },
           { label: "Evaluación", href: "/modalidades/levitate-aerial/evaluacion" },
-          { label: "Reglamento", href: regulationsPdfHref, download: true },
+          { label: "Reglamento", href: aerialRegulationsPdfHref, download: true },
         ],
       },
       {

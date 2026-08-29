@@ -1,10 +1,8 @@
 import {
   ArrowUpRight,
-  Award,
   BedDouble,
   ClipboardList,
   FileCheck2,
-  FileText,
   ListChecks,
   Search,
 } from "lucide-react";
@@ -13,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-type DocumentCategory = "Convocatoria" | "Reglamentos" | "Hospedaje" | "Reconocimientos";
+type DocumentCategory = "Convocatoria" | "Reglamentos" | "Hospedaje";
 
 type LevitateDocument = {
   title: string;
@@ -24,7 +22,7 @@ type LevitateDocument = {
   icon: LucideIcon;
 };
 
-const documentFilters = ["Todos", "Convocatoria", "Reglamentos", "Hospedaje", "Reconocimientos"] as const;
+const documentFilters = ["Todos", "Convocatoria", "Reglamentos", "Hospedaje"] as const;
 
 const levitateDocuments: LevitateDocument[] = [
   {
@@ -60,36 +58,12 @@ const levitateDocuments: LevitateDocument[] = [
     icon: ListChecks,
   },
   {
-    title: "Reglamento Levitate MX",
-    href: "/assets/reglamento-levitate.pdf",
-    fileName: "reglamento-levitate.pdf",
-    category: "Reglamentos",
-    context: "General",
-    icon: FileText,
-  },
-  {
     title: "Hotel Levitate 2026",
     href: "/assets/hotel-levitate-2026.pdf",
     fileName: "hotel-levitate-2026.pdf",
     category: "Hospedaje",
     context: "Hotel sede",
     icon: BedDouble,
-  },
-  {
-    title: "Beneficios Huéspedes Levitate 2026",
-    href: "/assets/beneficios-huespedes-levitate-2026.pdf",
-    fileName: "beneficios-huespedes-levitate-2026.pdf",
-    category: "Hospedaje",
-    context: "Beneficios",
-    icon: BedDouble,
-  },
-  {
-    title: "Becados Próxima Edición",
-    href: "/assets/becados-proxima-edicion.pdf",
-    fileName: "becados-proxima-edicion.pdf",
-    category: "Reconocimientos",
-    context: "Becados",
-    icon: Award,
   },
 ];
 

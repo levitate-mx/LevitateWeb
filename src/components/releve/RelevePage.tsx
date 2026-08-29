@@ -2,7 +2,7 @@ import { ArrowRight, CheckCircle2, Clock3, FileText, Sparkles, Trophy, UsersRoun
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+const documentsHubHref = "/documentos";
 
 const roleCards = [
   {
@@ -65,9 +65,9 @@ export function RelevePage() {
             <span aria-hidden="true">Levitate</span>
             <span aria-hidden="true">Relevé</span>
           </h1>
-          <a className="releve-hero__download" download href={regulationsPdfHref}>
+          <a className="releve-hero__download" href={documentsHubHref}>
             <FileText aria-hidden="true" size={18} />
-            <span>PDF de reglamento</span>
+            <span>Ver documentos</span>
           </a>
         </div>
       </section>
