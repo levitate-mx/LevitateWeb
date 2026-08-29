@@ -114,10 +114,6 @@ const capsuleNavItems: PillMenuSection[] = [
     href: "/sedes/estado-de-mexico",
   },
   {
-    title: "Documentos",
-    href: "/documentos",
-  },
-  {
     title: "Inscripciones",
     href: "/inscripciones",
   },
