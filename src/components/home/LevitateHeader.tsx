@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Download, Grip, UserRound, X } from "lucide-react";
+import { ArrowUpRight, Download, FileText, Grip, UserRound, X } from "lucide-react";
 
 type NavItem = {
   label: string;
@@ -24,6 +24,7 @@ type PillMenuSection = {
 };
 
 const regulationsPdfHref = "/assets/reglamento-levitate.pdf";
+const documentsHubHref = "/documentos";
 
 const navItems: NavItem[] = [
   { label: "Inicio", href: "#inicio" },
@@ -34,10 +35,6 @@ const navItems: NavItem[] = [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
       { label: "Veracruz", href: "/sedes/veracruz" },
     ],
-  },
-  {
-    label: "Documentos",
-    href: "/documentos",
   },
   {
     label: "Modalidades",
@@ -138,10 +135,6 @@ const pillMenuSections: PillMenuSection[] = [
   {
     title: "Workshops",
     href: "/workshops",
-  },
-  {
-    title: "Documentos",
-    href: "/documentos",
   },
   {
     title: "Premiación",
@@ -644,6 +637,26 @@ export function LevitateHeader({
                 ))}
               </div>
 
+              <a
+                className="levitate-pill-menu__documents-cta"
+                href={resolveHref(documentsHubHref, useRootLinks)}
+                onClick={closePillMenu}
+              >
+                <span className="levitate-pill-menu__documents-icon" aria-hidden="true">
+                  <FileText size={22} strokeWidth={2} />
+                </span>
+                <span className="levitate-pill-menu__documents-copy">
+                  <strong>Documentos</strong>
+                  <small>Todos los PDFs</small>
+                </span>
+                <ArrowUpRight
+                  aria-hidden="true"
+                  className="levitate-pill-menu__documents-arrow"
+                  size={17}
+                  strokeWidth={2.2}
+                />
+              </a>
+
               <aside className="levitate-pill-menu__contact" aria-label="Contacto">
                 <strong>
                   Levitate MX<sup>®</sup>
@@ -786,6 +799,25 @@ export function LevitateHeader({
                 )
               ))}
             </nav>
+            <a
+              className="levitate-classic-mobile-menu__documents-cta"
+              href={resolveHref(documentsHubHref, useRootLinks)}
+              onClick={closePillMenu}
+            >
+              <span className="levitate-classic-mobile-menu__documents-icon" aria-hidden="true">
+                <FileText size={20} strokeWidth={2} />
+              </span>
+              <span className="levitate-classic-mobile-menu__documents-copy">
+                <strong>Documentos</strong>
+                <small>Todos los PDFs</small>
+              </span>
+              <ArrowUpRight
+                aria-hidden="true"
+                className="levitate-classic-mobile-menu__documents-arrow"
+                size={16}
+                strokeWidth={2.2}
+              />
+            </a>
           </div>
         ) : null}
       </header>
