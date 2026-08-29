@@ -5,6 +5,7 @@ import {
   LevitateRegistrationRoute,
   LevitateStudentRegistrationRoute,
 } from "./components/admin";
+import { DocumentsPage } from "./components/documents/DocumentsPage";
 import { HallOfFamePage } from "./components/hall-of-fame/HallOfFamePage";
 import { HomePage } from "./components/home/HomePage";
 import { InscripcionesConsultaPage, InscripcionesPage } from "./components/inscripciones/InscripcionesPage";
@@ -29,6 +30,7 @@ export default function App() {
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
+  const documentsMatch = window.location.pathname.match(/^\/documentos\/?$/);
   const loginMatch = window.location.pathname.match(/^\/login\/?$/);
   const hallOfFameMvpsMatch = window.location.pathname.match(/^\/salon-de-la-fama\/mvps\/?$/);
   const hospedajeMatch = window.location.pathname.match(/^\/hospedaje\/?$/);
@@ -64,6 +66,10 @@ export default function App() {
 
   if (adminMediaMatch) {
     return <LevitateRegistrationRoute />;
+  }
+
+  if (documentsMatch) {
+    return <DocumentsPage />;
   }
 
   if (registrationAdminDashboardMatch) {

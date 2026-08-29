@@ -36,6 +36,10 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    label: "Documentos",
+    href: "/documentos",
+  },
+  {
     label: "Modalidades",
     href: "/modalidades/levitate-motion/generos",
     children: [
@@ -110,6 +114,10 @@ const capsuleNavItems: PillMenuSection[] = [
     href: "/sedes/estado-de-mexico",
   },
   {
+    title: "Documentos",
+    href: "/documentos",
+  },
+  {
     title: "Inscripciones",
     href: "/inscripciones",
   },
@@ -134,6 +142,10 @@ const pillMenuSections: PillMenuSection[] = [
   {
     title: "Workshops",
     href: "/workshops",
+  },
+  {
+    title: "Documentos",
+    href: "/documentos",
   },
   {
     title: "Premiación",
