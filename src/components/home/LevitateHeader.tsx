@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, Download, FileText, Grip, UserRound, X } from "lucide-react";
+import { Download, FileText, Grip, UserRound, X } from "lucide-react";
 
 type NavItem = {
   label: string;
@@ -643,17 +643,11 @@ export function LevitateHeader({
                 onClick={closePillMenu}
               >
                 <span className="levitate-pill-menu__documents-icon" aria-hidden="true">
-                  <FileText size={22} strokeWidth={2} />
+                  <FileText size={16} strokeWidth={2} />
                 </span>
                 <span className="levitate-pill-menu__documents-copy">
                   <strong>Documentos</strong>
                 </span>
-                <ArrowUpRight
-                  aria-hidden="true"
-                  className="levitate-pill-menu__documents-arrow"
-                  size={17}
-                  strokeWidth={2.2}
-                />
               </a>
 
               <aside className="levitate-pill-menu__contact" aria-label="Contacto">
@@ -804,17 +798,11 @@ export function LevitateHeader({
               onClick={closePillMenu}
             >
               <span className="levitate-classic-mobile-menu__documents-icon" aria-hidden="true">
-                <FileText size={20} strokeWidth={2} />
+                <FileText size={16} strokeWidth={2} />
               </span>
               <span className="levitate-classic-mobile-menu__documents-copy">
                 <strong>Documentos</strong>
               </span>
-              <ArrowUpRight
-                aria-hidden="true"
-                className="levitate-classic-mobile-menu__documents-arrow"
-                size={16}
-                strokeWidth={2.2}
-              />
             </a>
           </div>
         ) : null}
