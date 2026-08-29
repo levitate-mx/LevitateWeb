@@ -647,7 +647,6 @@ export function LevitateHeader({
                 </span>
                 <span className="levitate-pill-menu__documents-copy">
                   <strong>Documentos</strong>
-                  <small>Todos los PDFs</small>
                 </span>
                 <ArrowUpRight
                   aria-hidden="true"
@@ -809,7 +808,6 @@ export function LevitateHeader({
               </span>
               <span className="levitate-classic-mobile-menu__documents-copy">
                 <strong>Documentos</strong>
-                <small>Todos los PDFs</small>
               </span>
               <ArrowUpRight
                 aria-hidden="true"

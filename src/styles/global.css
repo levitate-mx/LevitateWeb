@@ -29358,7 +29358,6 @@ button {
 .motion-genres-hero,
 .passport-hero,
 .reference-hero,
-.documents-hero,
 .levitate-hero,
 .levitate-home-hero,
 .rules-hero,
@@ -29376,7 +29375,6 @@ button {
 .motion-genres-hero,
 .passport-hero,
 .reference-hero,
-.documents-hero,
 .sedes-hero,
 .levitate-home-hero,
 .shop-hero {
@@ -29405,7 +29403,6 @@ button {
 .motion-genres-hero__content,
 .passport-hero__content,
 .reference-hero__content,
-.documents-hero__content,
 .sedes-hero__content,
 .inscripciones-hero__content,
 .levitate-home-hero__inner,
@@ -29433,7 +29430,6 @@ button {
 .releve-hero__image,
 .motion-genres-hero__image,
 .reference-hero__image,
-.documents-hero__image,
 .sedes-hero__image {
   width: 100%;
   height: 100%;
@@ -29449,7 +29445,6 @@ button {
 .motion-genres-hero h1,
 .passport-hero h1,
 .reference-hero h1,
-.documents-hero h1,
 .levitate-hero h1 span,
 .rules-hero h1,
 .sedes-hero h1 {
@@ -29466,7 +29461,6 @@ button {
 
 .levitate-hero h1,
 .motion-genres-hero h1,
-.documents-hero h1,
 .reference-hero h1 {
   gap: 0.16em;
 }
@@ -29498,7 +29492,6 @@ button {
 .releve-hero__footer p,
 .passport-hero__copy > p:not(.passport-kicker),
 .reference-hero__copy > p:not(.reference-eyebrow),
-.documents-hero__lead,
 .rules-hero__intro {
   max-width: 620px;
   color: rgba(247, 243, 239, 0.82);
@@ -41446,5 +41439,180 @@ button {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+}
+
+/* Compact documents list override. */
+.documents-page .documents-library {
+  min-height: 100vh;
+  gap: 24px;
+  padding: clamp(7.5rem, 13vw, 10rem) clamp(1.125rem, 5vw, 4.875rem) clamp(5.5rem, 9vw, 8rem);
+}
+
+.documents-page .documents-library__header {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.documents-page .documents-library__header h1 {
+  max-width: 760px;
+  margin: 0;
+  color: var(--documents-ink);
+  font-family: var(--font-body);
+  font-size: clamp(3.3rem, 8vw, 6.6rem);
+  font-weight: 620;
+  letter-spacing: 0;
+  line-height: 0.92;
+}
+
+.documents-page .documents-controls {
+  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.documents-page .documents-results {
+  gap: 10px;
+}
+
+.documents-list {
+  display: grid;
+  border-top: 1px solid var(--documents-line);
+}
+
+.documents-row {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 82px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--documents-line);
+  color: var(--documents-ink);
+  text-decoration: none;
+  transition:
+    color 180ms ease,
+    transform 180ms var(--ease-out);
+}
+
+.documents-row:hover,
+.documents-row:focus-visible {
+  color: var(--documents-pink);
+  transform: translateX(4px);
+}
+
+.documents-row__icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(87, 189, 209, 0.26);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--documents-blue);
+}
+
+.documents-row__body {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.documents-row strong {
+  color: currentColor;
+  font-size: clamp(1.06rem, 1.7vw, 1.42rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.documents-row small {
+  color: rgba(42, 41, 40, 0.5);
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.documents-row__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--documents-ink);
+  font-size: 0.86rem;
+  font-weight: 820;
+  line-height: 1;
+}
+
+.documents-row__action svg {
+  transition: transform 180ms var(--ease-out);
+}
+
+.documents-row:hover .documents-row__action svg,
+.documents-row:focus-visible .documents-row__action svg {
+  transform: translate(2px, -2px);
+}
+
+.levitate-home-redesign .levitate-pill-menu__documents-cta {
+  grid-template-columns: 40px minmax(0, 1fr) 18px;
+  width: min(100%, 246px);
+  min-height: 58px;
+  margin-top: clamp(22px, 5vh, 46px);
+}
+
+.levitate-home-redesign .levitate-pill-menu__documents-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.levitate-home-redesign .levitate-pill-menu__documents-copy {
+  gap: 0;
+}
+
+.levitate-home-redesign .levitate-pill-menu__documents-copy strong {
+  font-size: 0.98rem;
+}
+
+.levitate-classic-mobile-menu__documents-cta {
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
+  min-height: 58px;
+}
+
+@media (max-width: 760px) {
+  .documents-page .documents-library {
+    gap: 22px;
+    padding: 118px 18px 76px;
+  }
+
+  .documents-page .documents-library__header h1 {
+    font-size: clamp(3rem, 14vw, 4.45rem);
+  }
+
+  .documents-page .documents-controls,
+  .documents-page .documents-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .documents-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 14px;
+    min-height: 76px;
+  }
+
+  .documents-row__icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .documents-row__action {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .levitate-home-redesign .levitate-pill-menu__documents-cta {
+    width: 100%;
+    margin-top: 12px;
   }
 }
