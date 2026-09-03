@@ -322,6 +322,8 @@ type RegistrationInscriptionLineItem = {
   baseAmount?: number;
   count?: number;
   currency?: string;
+  danceId?: string;
+  danceTitle?: string;
   discountAmount?: number;
   discountRate?: number;
   id: string;
@@ -338,6 +340,7 @@ type RegistrationInscriptionLineItem = {
   productName?: string;
   quantity?: number;
   qty?: number;
+  participantCount?: number;
   level?: string | null;
   pricingPosition?: number;
   pricingType?: string;
@@ -566,6 +569,25 @@ type RegistrationDashboardVenueSlice = {
   venue: string;
 };
 
+type RegistrationDashboardAcademyStateSlice = {
+  academies: string[];
+  key: string;
+  label: string;
+  percent: number;
+  value: number;
+};
+
+type RegistrationDashboardChoreographyPaymentStats = {
+  missing: number;
+  paid: number;
+  paidPercent: number;
+  pendingPayment: number;
+  pendingReview: number;
+  rejected: number;
+  total: number;
+  withoutOrder: number;
+};
+
 type RegistrationDashboardActivityItem = {
   academyName: string;
   description: string;
@@ -789,6 +811,8 @@ const registrationDashboardVenueMetricOptions: Array<{ label: string; value: Reg
   { value: "revenue", label: "Ingresos" },
   { value: "tickets", label: "Boletos vendidos" },
 ];
+
+const registrationDashboardChartColors = ["#f05293", "#8b5fd8", "#55a8e8", "#72cf72", "#f0b44c", "#56c4d5", "#ff7d9e"];
 
 const registrationDashboardEventStatusByVenue: Record<string, string> = {
   edomex: "Registro abierto",
@@ -3195,6 +3219,308 @@ function getDashboardRevenueBreakdown(orders: RegistrationInscriptionOrder[]) {
   );
 }
 
+function getDashboardAcademyScopeTokens({
+  orders,
+  participants,
+  programDances,
+}: {
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+}) {
+  const tokens = new Set<string>();
+  const addAcademy = (academyId?: string | null, academyName?: string | null) => {
+    const id = String(academyId || "").trim();
+    const name = normalizeDirectoryText(academyName);
+
+    if (id) {
+      tokens.add(`id:${id}`);
+    }
+
+    if (name) {
+      tokens.add(`name:${name}`);
+    }
+  };
+
+  for (const participant of participants) {
+    addAcademy(participant.academyId, participant.academyName);
+  }
+
+  for (const order of orders) {
+    addAcademy(order.academyId, order.academyName);
+  }
+
+  for (const dance of programDances) {
+    addAcademy(null, dance.academyName);
+  }
+
+  return tokens;
+}
+
+function doesDashboardAcademyMatchScope(academy: RegistrationAdminAcademy, scopeTokens: Set<string>) {
+  return scopeTokens.has(`id:${academy.id}`) || scopeTokens.has(`name:${normalizeDirectoryText(academy.name)}`);
+}
+
+function getDashboardAcademyLocationKey({
+  originCountry,
+  originState,
+  originType,
+}: {
+  originCountry?: string | null;
+  originState?: string | null;
+  originType?: string | null;
+}) {
+  if (originType === "international") {
+    const country = originCountry && originCountry !== "México" ? originCountry : "Internacional";
+
+    return {
+      key: `international:${normalizeDirectoryText(country) || "international"}`,
+      label: country,
+    };
+  }
+
+  if (originState) {
+    return {
+      key: originState,
+      label: getOptionLabel(mexicoStateOptions, originState),
+    };
+  }
+
+  return {
+    key: "mexico_unknown",
+    label: "México sin estado",
+  };
+}
+
+function buildDashboardAcademyStateSlices({
+  academies,
+  orders,
+  participants,
+  programDances,
+}: {
+  academies: RegistrationAdminAcademy[];
+  orders: RegistrationInscriptionOrder[];
+  participants: RegistrationAdminParticipant[];
+  programDances: RegistrationDance[];
+}): RegistrationDashboardAcademyStateSlice[] {
+  const scopeTokens = getDashboardAcademyScopeTokens({ orders, participants, programDances });
+  const seenAcademyTokens = new Set<string>();
+  const sliceMap = new Map<string, Omit<RegistrationDashboardAcademyStateSlice, "percent">>();
+  const markAcademySeen = (academyId?: string | null, academyName?: string | null) => {
+    const id = String(academyId || "").trim();
+    const name = normalizeDirectoryText(academyName);
+
+    if (id) {
+      seenAcademyTokens.add(`id:${id}`);
+    }
+
+    if (name) {
+      seenAcademyTokens.add(`name:${name}`);
+    }
+  };
+  const wasAcademySeen = (academyId?: string | null, academyName?: string | null) => {
+    const id = String(academyId || "").trim();
+    const name = normalizeDirectoryText(academyName);
+
+    return (id && seenAcademyTokens.has(`id:${id}`)) || (name && seenAcademyTokens.has(`name:${name}`));
+  };
+  const addAcademy = ({
+    academyName,
+    originCountry,
+    originState,
+    originType,
+  }: {
+    academyName: string;
+    originCountry?: string | null;
+    originState?: string | null;
+    originType?: string | null;
+  }) => {
+    const location = getDashboardAcademyLocationKey({ originCountry, originState, originType });
+    const currentSlice =
+      sliceMap.get(location.key) ??
+      ({
+        academies: [],
+        key: location.key,
+        label: location.label,
+        value: 0,
+      } satisfies Omit<RegistrationDashboardAcademyStateSlice, "percent">);
+
+    currentSlice.academies.push(academyName);
+    currentSlice.value += 1;
+    sliceMap.set(location.key, currentSlice);
+  };
+
+  for (const academy of academies) {
+    if (scopeTokens.size > 0 && !doesDashboardAcademyMatchScope(academy, scopeTokens)) {
+      continue;
+    }
+
+    addAcademy({
+      academyName: academy.name,
+      originCountry: academy.originCountry,
+      originState: academy.originState,
+      originType: academy.originType,
+    });
+    markAcademySeen(academy.id, academy.name);
+  }
+
+  for (const participant of participants) {
+    if (wasAcademySeen(participant.academyId, participant.academyName)) {
+      continue;
+    }
+
+    addAcademy({
+      academyName: participant.academyName,
+      originCountry: participant.academyOriginCountry,
+      originState: participant.academyOriginState,
+      originType: participant.academyOriginType,
+    });
+    markAcademySeen(participant.academyId, participant.academyName);
+  }
+
+  for (const dance of programDances) {
+    if (!dance.academyName || wasAcademySeen(null, dance.academyName)) {
+      continue;
+    }
+
+    addAcademy({
+      academyName: dance.academyName,
+      originState: null,
+      originType: "mexico",
+    });
+    markAcademySeen(null, dance.academyName);
+  }
+
+  const total = Array.from(sliceMap.values()).reduce((sum, slice) => sum + slice.value, 0);
+
+  return Array.from(sliceMap.values())
+    .map((slice) => ({
+      ...slice,
+      academies: Array.from(new Set(slice.academies)).sort((left, right) => left.localeCompare(right, "es")),
+      percent: total > 0 ? (slice.value / total) * 100 : 0,
+    }))
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label, "es"));
+}
+
+function getDashboardDanceFallbackKey({
+  academyName,
+  title,
+  venue,
+}: {
+  academyName?: string | null;
+  title?: string | null;
+  venue?: string | null;
+}) {
+  return [normalizeDirectoryText(title), normalizeDirectoryText(academyName), String(venue || "").trim()]
+    .filter(Boolean)
+    .join("|");
+}
+
+function getDashboardDanceOrderKeys(order: RegistrationInscriptionOrder, lineItem: RegistrationInscriptionLineItem) {
+  const keys = new Set<string>();
+  const lineDanceId = String(lineItem.danceId || lineItem.id || "").trim();
+  const fallbackKey = getDashboardDanceFallbackKey({
+    academyName: lineItem.academyName || order.academyName,
+    title: lineItem.danceTitle || lineItem.title,
+    venue: lineItem.venue || order.venue,
+  });
+
+  if (lineDanceId) {
+    keys.add(`id:${lineDanceId}`);
+  }
+
+  if (fallbackKey) {
+    keys.add(`fallback:${fallbackKey}`);
+  }
+
+  return keys;
+}
+
+function getDashboardDanceKeys(dance: RegistrationDance) {
+  const keys = new Set<string>();
+  const fallbackKey = getDashboardDanceFallbackKey(dance);
+
+  if (dance.id) {
+    keys.add(`id:${dance.id}`);
+  }
+
+  if (fallbackKey) {
+    keys.add(`fallback:${fallbackKey}`);
+  }
+
+  return keys;
+}
+
+function getDashboardOrderStatusRank(status: RegistrationInscriptionOrderStatus) {
+  const ranks: Record<RegistrationInscriptionOrderStatus, number> = {
+    paid: 4,
+    payment_reported: 3,
+    pending_payment: 2,
+    rejected: 1,
+  };
+
+  return ranks[status];
+}
+
+function buildDashboardChoreographyPaymentStats(
+  programDances: RegistrationDance[],
+  orders: RegistrationInscriptionOrder[],
+): RegistrationDashboardChoreographyPaymentStats {
+  const statusByDanceKey = new Map<string, RegistrationInscriptionOrderStatus>();
+
+  for (const order of orders) {
+    if (getAdminOrderType(order) !== "registration") {
+      continue;
+    }
+
+    for (const lineItem of order.lineItems ?? []) {
+      for (const key of getDashboardDanceOrderKeys(order, lineItem)) {
+        const currentStatus = statusByDanceKey.get(key);
+
+        if (!currentStatus || getDashboardOrderStatusRank(order.status) > getDashboardOrderStatusRank(currentStatus)) {
+          statusByDanceKey.set(key, order.status);
+        }
+      }
+    }
+  }
+
+  const stats: RegistrationDashboardChoreographyPaymentStats = {
+    missing: 0,
+    paid: 0,
+    paidPercent: 0,
+    pendingPayment: 0,
+    pendingReview: 0,
+    rejected: 0,
+    total: programDances.length,
+    withoutOrder: 0,
+  };
+
+  for (const dance of programDances) {
+    const matchingStatuses = Array.from(getDashboardDanceKeys(dance))
+      .map((key) => statusByDanceKey.get(key))
+      .filter((status): status is RegistrationInscriptionOrderStatus => Boolean(status))
+      .sort((left, right) => getDashboardOrderStatusRank(right) - getDashboardOrderStatusRank(left));
+    const status = matchingStatuses[0];
+
+    if (status === "paid") {
+      stats.paid += 1;
+    } else if (status === "payment_reported") {
+      stats.pendingReview += 1;
+    } else if (status === "pending_payment") {
+      stats.pendingPayment += 1;
+    } else if (status === "rejected") {
+      stats.rejected += 1;
+    } else {
+      stats.withoutOrder += 1;
+    }
+  }
+
+  stats.missing = Math.max(0, stats.total - stats.paid);
+  stats.paidPercent = stats.total > 0 ? (stats.paid / stats.total) * 100 : 0;
+
+  return stats;
+}
+
 function getDashboardVenueMetricValue(
   slice: Omit<RegistrationDashboardVenueSlice, "percent" | "value">,
   metric: RegistrationDashboardVenueMetric,
@@ -3333,11 +3659,10 @@ function getDashboardPieGradient(slices: RegistrationDashboardVenueSlice[]) {
     return "conic-gradient(rgba(255,255,255,0.1) 0 100%)";
   }
 
-  const colors = ["#f05293", "#8b5fd8", "#55a8e8", "#72cf72", "#f0b44c", "#56c4d5"];
   let start = 0;
   const stops = slices.map((slice, index) => {
     const end = start + slice.percent;
-    const stop = `${colors[index % colors.length]} ${start}% ${end}%`;
+    const stop = `${registrationDashboardChartColors[index % registrationDashboardChartColors.length]} ${start}% ${end}%`;
 
     start = end;
     return stop;
@@ -5030,6 +5355,8 @@ function downloadAdminChoreographiesCsv(dances: RegistrationDance[], fileName = 
 }
 
 function downloadRegistrationDashboardCsv({
+  academyStateSlices,
+  choreographyPaymentStats,
   dateWindow,
   mediaTotals,
   orders,
@@ -5040,6 +5367,8 @@ function downloadRegistrationDashboardCsv({
   venueMetric,
   venueSlices,
 }: {
+  academyStateSlices: RegistrationDashboardAcademyStateSlice[];
+  choreographyPaymentStats: RegistrationDashboardChoreographyPaymentStats;
   dateWindow: RegistrationDashboardDateWindow;
   mediaTotals: ReturnType<typeof getMediaDashboardTotals>;
   orders: RegistrationInscriptionOrder[];
@@ -5064,6 +5393,8 @@ function downloadRegistrationDashboardCsv({
     ["Participantes únicos", getDashboardUniqueParticipantCount(participants)],
     ["Participantes sin inscripción confirmada", participantPaymentCounts.withoutConfirmedOrder],
     ["Coreografías en programa", programDances.length],
+    ["Coreografías pagadas", choreographyPaymentStats.paid],
+    ["Coreografías faltantes", choreographyPaymentStats.missing],
     ["Boletos confirmados", ticketTotals.paidTickets],
     ["Boletos pendientes", ticketTotals.pendingTickets],
     ["Paquetes Foto/Video comprados", mediaTotals.requestedItems],
@@ -5076,6 +5407,18 @@ function downloadRegistrationDashboardCsv({
     ["Boletos", revenueBreakdown.tickets],
     ["Foto/Video", revenueBreakdown.media],
     ["Otros", revenueBreakdown.other],
+    [],
+    ["Coreografías", "Valor"],
+    ["Inscritas", choreographyPaymentStats.total],
+    ["Pagadas", choreographyPaymentStats.paid],
+    ["Por revisar", choreographyPaymentStats.pendingReview],
+    ["Pendientes de comprobante", choreographyPaymentStats.pendingPayment],
+    ["Rechazadas", choreographyPaymentStats.rejected],
+    ["Sin orden", choreographyPaymentStats.withoutOrder],
+    ["Faltantes", choreographyPaymentStats.missing],
+    [],
+    ["Estados de academias", "Academias", "Porcentaje"],
+    ...academyStateSlices.map((slice) => [slice.label, slice.value, `${Math.round(slice.percent)}%`]),
     [],
     [`Distribución por sede (${getOptionLabel(registrationDashboardVenueMetricOptions, venueMetric)})`, "Valor", "Porcentaje"],
     ...venueSlices.map((slice) => [slice.label, slice.value, `${Math.round(slice.percent)}%`]),
@@ -6252,7 +6595,236 @@ function RegistrationDashboardSectionHeader({
   );
 }
 
+function RegistrationDashboardChoreographyChart({
+  onNavigate,
+  stats,
+}: {
+  onNavigate: (target: RegistrationDashboardTarget) => void;
+  stats: RegistrationDashboardChoreographyPaymentStats;
+}) {
+  const segments = [
+    {
+      color: "#69d28f",
+      label: "Pagadas",
+      target: { purchaseTypeFilter: "registration", section: "payments" as const, statusFilter: "paid" },
+      value: stats.paid,
+    },
+    {
+      color: "#f05293",
+      label: "Por revisar",
+      target: { purchaseTypeFilter: "registration", section: "payments" as const, statusFilter: "payment_reported" },
+      value: stats.pendingReview,
+    },
+    {
+      color: "#f0b44c",
+      label: "Sin comprobante",
+      target: { purchaseTypeFilter: "registration", section: "payments" as const, statusFilter: "pending_payment" },
+      value: stats.pendingPayment,
+    },
+    {
+      color: "#ff7d9e",
+      label: "Rechazadas",
+      target: { purchaseTypeFilter: "registration", section: "payments" as const, statusFilter: "rejected" },
+      value: stats.rejected,
+    },
+    {
+      color: "rgba(255, 255, 255, 0.28)",
+      label: "Sin orden",
+      target: { section: "choreographies" as const },
+      value: stats.withoutOrder,
+    },
+  ];
+  const visibleSegments = stats.total > 0 ? segments.filter((segment) => segment.value > 0) : [];
+
+  return (
+    <div className="registration-dashboard-choreography-chart">
+      <button className="registration-dashboard-choreography-chart__hero" onClick={() => onNavigate({ section: "choreographies" })} type="button">
+        <span>
+          <strong>
+            {stats.paid.toLocaleString("es-MX")}/{stats.total.toLocaleString("es-MX")}
+          </strong>
+          <small>pagadas / inscritas</small>
+        </span>
+        <em>{stats.missing.toLocaleString("es-MX")} faltantes</em>
+      </button>
+
+      <div
+        className="registration-dashboard-stack"
+        role="img"
+        aria-label={`${stats.paid.toLocaleString("es-MX")} de ${stats.total.toLocaleString("es-MX")} coreografías pagadas`}
+      >
+        {visibleSegments.length > 0 ? (
+          visibleSegments.map((segment) => (
+            <span
+              aria-hidden="true"
+              key={segment.label}
+              style={
+                {
+                  "--dashboard-segment-color": segment.color,
+                  "--dashboard-segment-width": `${(segment.value / stats.total) * 100}%`,
+                } as CSSProperties
+              }
+            />
+          ))
+        ) : (
+          <span
+            aria-hidden="true"
+            style={
+              {
+                "--dashboard-segment-color": "rgba(255, 255, 255, 0.18)",
+                "--dashboard-segment-width": "100%",
+              } as CSSProperties
+            }
+          />
+        )}
+      </div>
+
+      <div className="registration-dashboard-chart-breakdown" aria-label="Detalle de coreografías por estado">
+        {segments.map((segment) => (
+          <button disabled={segment.value === 0} key={segment.label} onClick={() => onNavigate(segment.target)} type="button">
+            <span style={{ "--dashboard-dot-color": segment.color } as CSSProperties} aria-hidden="true" />
+            <strong>{segment.label}</strong>
+            <small>{segment.value.toLocaleString("es-MX")}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RegistrationDashboardAcademyStateBars({
+  onNavigate,
+  slices,
+}: {
+  onNavigate: (target: RegistrationDashboardTarget) => void;
+  slices: RegistrationDashboardAcademyStateSlice[];
+}) {
+  const visibleSlices = slices.slice(0, 6);
+  const hiddenSlices = slices.slice(6);
+  const hiddenTotal = hiddenSlices.reduce((total, slice) => total + slice.value, 0);
+  const displaySlices =
+    hiddenTotal > 0
+      ? [
+          ...visibleSlices,
+          {
+            academies: hiddenSlices.flatMap((slice) => slice.academies),
+            key: "other",
+            label: "Otros estados",
+            percent: hiddenSlices.reduce((total, slice) => total + slice.percent, 0),
+            value: hiddenTotal,
+          },
+        ]
+      : visibleSlices;
+
+  if (displaySlices.length === 0) {
+    return <p className="registration-dashboard-empty">Sin estados de academias en el periodo seleccionado.</p>;
+  }
+
+  return (
+    <div className="registration-dashboard-state-bars">
+      {displaySlices.map((slice, index) => (
+        <button
+          aria-label={`${slice.label}: ${slice.value.toLocaleString("es-MX")} academia(s)`}
+          key={slice.key}
+          onClick={() => onNavigate({ query: slice.key === "other" ? "" : slice.label, section: "academies" })}
+          type="button"
+        >
+          <span>
+            <strong>{slice.label}</strong>
+            <small>{slice.value.toLocaleString("es-MX")} academia(s)</small>
+          </span>
+          <em>{Math.round(slice.percent)}%</em>
+          <i
+            aria-hidden="true"
+            style={
+              {
+                "--dashboard-bar-color": registrationDashboardChartColors[index % registrationDashboardChartColors.length],
+                "--dashboard-bar-width": `${Math.max(4, slice.percent)}%`,
+              } as CSSProperties
+            }
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RegistrationDashboardVenueDistribution({
+  metric,
+  onMetricChange,
+  onVenueFilterChange,
+  slices,
+}: {
+  metric: RegistrationDashboardVenueMetric;
+  onMetricChange: (value: RegistrationDashboardVenueMetric) => void;
+  onVenueFilterChange: (value: string) => void;
+  slices: RegistrationDashboardVenueSlice[];
+}) {
+  const totalValue = slices.reduce((total, slice) => total + slice.value, 0);
+  const metricLabel = getOptionLabel(registrationDashboardVenueMetricOptions, metric);
+
+  return (
+    <>
+      <RegistrationDashboardSectionHeader title="Sedes">
+        <label className="registration-dashboard-venue__metric">
+          <LayoutDashboard aria-hidden="true" size={15} />
+          <select onChange={(event) => onMetricChange(event.target.value as RegistrationDashboardVenueMetric)} value={metric}>
+            {registrationDashboardVenueMetricOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={14} />
+        </label>
+      </RegistrationDashboardSectionHeader>
+      <div className="registration-dashboard-venue__body">
+        <button
+          className="registration-dashboard-donut"
+          disabled={slices.length === 0}
+          onClick={() => {
+            const primarySlice = slices[0];
+
+            if (primarySlice) {
+              onVenueFilterChange(primarySlice.venue);
+            }
+          }}
+          style={{ "--dashboard-pie": getDashboardPieGradient(slices) } as CSSProperties}
+          type="button"
+        >
+          <span>
+            <strong>{getDashboardVenueMetricLabel(metric, totalValue)}</strong>
+            <small>{metricLabel}</small>
+          </span>
+        </button>
+
+        {slices.length > 0 ? (
+          <div className="registration-dashboard-venue__legend">
+            {slices.slice(0, 6).map((slice, index) => (
+              <button
+                key={slice.venue}
+                onClick={() => onVenueFilterChange(slice.venue)}
+                style={{ "--slice-color": registrationDashboardChartColors[index % registrationDashboardChartColors.length] } as CSSProperties}
+                type="button"
+              >
+                <span aria-hidden="true" />
+                <strong>{slice.label}</strong>
+                <small>
+                  {getDashboardVenueMetricLabel(metric, slice.value)} · {Math.round(slice.percent)}%
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="registration-dashboard-empty">Sin datos por sede en el periodo seleccionado.</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 function RegistrationAdminDashboardOverview({
+  academies,
   customEndDate,
   customStartDate,
   dateRange,
@@ -6266,6 +6838,7 @@ function RegistrationAdminDashboardOverview({
   onDateRangeChange,
   onNavigate,
   onRefresh,
+  onVenueMetricChange,
   onVenueFilterChange,
   orders,
   participants,
@@ -6274,6 +6847,7 @@ function RegistrationAdminDashboardOverview({
   venueFilter,
   venueMetric,
 }: {
+  academies: RegistrationAdminAcademy[];
   customEndDate: string;
   customStartDate: string;
   dateRange: RegistrationDashboardDateRangeId;
@@ -6287,6 +6861,7 @@ function RegistrationAdminDashboardOverview({
   onDateRangeChange: (value: RegistrationDashboardDateRangeId) => void;
   onNavigate: (target: RegistrationDashboardTarget) => void;
   onRefresh: () => void;
+  onVenueMetricChange: (value: RegistrationDashboardVenueMetric) => void;
   onVenueFilterChange: (value: string) => void;
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationAdminParticipant[];
@@ -6317,6 +6892,10 @@ function RegistrationAdminDashboardOverview({
   const ticketRows = useMemo(() => getTicketDashboardRows(scopedOrders), [scopedOrders]);
   const ticketTotals = useMemo(() => getTicketDashboardTotals(ticketRows), [ticketRows]);
   const previousTicketTotals = useMemo(() => getTicketDashboardTotals(getTicketDashboardRows(previousOrders)), [previousOrders]);
+  const choreographyPaymentStats = useMemo(
+    () => buildDashboardChoreographyPaymentStats(scopedProgramDances, scopedOrders),
+    [scopedOrders, scopedProgramDances],
+  );
   const mediaOrders = useMemo(
     () => scopedOrders.filter((order) => getAdminOrderType(order) === "shop" && getOrderMediaLineItems(order).length > 0),
     [scopedOrders],
@@ -6353,6 +6932,16 @@ function RegistrationAdminDashboardOverview({
       }),
     [scopedOrders, scopedParticipants, scopedProgramDances, ticketRows, venueMetric],
   );
+  const academyStateSlices = useMemo(
+    () =>
+      buildDashboardAcademyStateSlices({
+        academies,
+        orders: scopedOrders,
+        participants: scopedParticipants,
+        programDances: scopedProgramDances,
+      }),
+    [academies, scopedOrders, scopedParticipants, scopedProgramDances],
+  );
   const hasAnyDashboardData = scopedOrders.length > 0 || scopedParticipants.length > 0 || scopedProgramDances.length > 0;
   const isDashboardLoading = isLoading || isParticipantsLoading || isProgramLoading;
   const ticketProgress = ticketTotals.requestedTickets > 0 ? (ticketTotals.paidTickets / ticketTotals.requestedTickets) * 100 : 0;
@@ -6361,6 +6950,8 @@ function RegistrationAdminDashboardOverview({
 
   const handleExportDashboard = () => {
     downloadRegistrationDashboardCsv({
+      academyStateSlices,
+      choreographyPaymentStats,
       dateWindow,
       mediaTotals,
       orders: scopedOrders,
@@ -6510,6 +7101,31 @@ function RegistrationAdminDashboardOverview({
           onClick={() => onNavigate({ section: "payments", statusFilter: "paid" })}
           value={formatAdminCurrency(confirmedRevenue)}
         />
+      </section>
+
+      <section className="registration-dashboard-main-grid" aria-label="Gráficas operativas">
+        <article className="registration-dashboard-panel" aria-label="Coreografías pagadas e inscritas">
+          <RegistrationDashboardSectionHeader title="Coreografías">
+            <p>{Math.round(choreographyPaymentStats.paidPercent)}% pagadas</p>
+          </RegistrationDashboardSectionHeader>
+          <RegistrationDashboardChoreographyChart onNavigate={onNavigate} stats={choreographyPaymentStats} />
+        </article>
+
+        <article className="registration-dashboard-panel" aria-label="Estados de origen de academias">
+          <RegistrationDashboardSectionHeader title="Estados">
+            <p>{academyStateSlices.length.toLocaleString("es-MX")} origen(es)</p>
+          </RegistrationDashboardSectionHeader>
+          <RegistrationDashboardAcademyStateBars onNavigate={onNavigate} slices={academyStateSlices} />
+        </article>
+
+        <article className="registration-dashboard-panel" aria-label="Distribución por sede">
+          <RegistrationDashboardVenueDistribution
+            metric={venueMetric}
+            onMetricChange={onVenueMetricChange}
+            onVenueFilterChange={onVenueFilterChange}
+            slices={venueSlices}
+          />
+        </article>
       </section>
 
     </section>
@@ -9494,7 +10110,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [dashboardCustomStartDate, setDashboardCustomStartDate] = useState(() => getDashboardDateInputValue(addDashboardDays(new Date(), -29)));
   const [dashboardCustomEndDate, setDashboardCustomEndDate] = useState(() => getDashboardDateInputValue(new Date()));
   const [dashboardVenueFilter, setDashboardVenueFilter] = useState("all");
-  const [dashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
+  const [dashboardVenueMetric, setDashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
   const [adminLastUpdatedAt, setAdminLastUpdatedAt] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedAcademyId, setSelectedAcademyId] = useState("");
@@ -10475,6 +11091,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
         {isDashboardSection ? (
           <RegistrationAdminDashboardOverview
+            academies={adminAcademies}
             customEndDate={dashboardCustomEndDate}
             customStartDate={dashboardCustomStartDate}
             dateRange={dashboardDateRange}
@@ -10488,6 +11105,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
             onDateRangeChange={setDashboardDateRange}
             onNavigate={handleDashboardNavigate}
             onRefresh={handleDashboardRefresh}
+            onVenueMetricChange={setDashboardVenueMetric}
             onVenueFilterChange={setDashboardVenueFilter}
             orders={orders}
             participants={adminParticipants}

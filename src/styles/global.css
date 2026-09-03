@@ -21067,6 +21067,172 @@ button {
   content: "";
 }
 
+.registration-dashboard-choreography-chart,
+.registration-dashboard-state-bars {
+  display: grid;
+  gap: 12px;
+  padding: 2px 16px 16px;
+}
+
+.registration-dashboard-choreography-chart__hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 74px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.registration-dashboard-choreography-chart__hero span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.registration-dashboard-choreography-chart__hero strong {
+  color: #fff;
+  font-size: clamp(1.5rem, 2.1vw, 2.2rem);
+  font-weight: 920;
+  line-height: 0.95;
+}
+
+.registration-dashboard-choreography-chart__hero small,
+.registration-dashboard-choreography-chart__hero em {
+  color: var(--dashboard-muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 780;
+  line-height: 1.2;
+}
+
+.registration-dashboard-choreography-chart__hero em {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: rgba(240, 82, 147, 0.14);
+  color: #ff92c1;
+}
+
+.registration-dashboard-stack {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.registration-dashboard-stack span {
+  flex: 0 0 var(--dashboard-segment-width);
+  min-width: 3px;
+  background: var(--dashboard-segment-color);
+}
+
+.registration-dashboard-chart-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.registration-dashboard-chart-breakdown button,
+.registration-dashboard-state-bars button {
+  min-width: 0;
+  border: 1px solid var(--dashboard-line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.registration-dashboard-chart-breakdown button {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.registration-dashboard-chart-breakdown button:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.registration-dashboard-chart-breakdown button > span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--dashboard-dot-color);
+}
+
+.registration-dashboard-chart-breakdown strong,
+.registration-dashboard-state-bars strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.77rem;
+  font-weight: 820;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registration-dashboard-chart-breakdown small,
+.registration-dashboard-state-bars small {
+  color: var(--dashboard-muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.registration-dashboard-state-bars button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 10px;
+  min-height: 48px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.registration-dashboard-state-bars button > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.registration-dashboard-state-bars em {
+  color: var(--dashboard-soft);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 820;
+}
+
+.registration-dashboard-state-bars i {
+  grid-column: 1 / -1;
+  display: block;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.registration-dashboard-state-bars i::before {
+  display: block;
+  width: var(--dashboard-bar-width);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dashboard-bar-color);
+  content: "";
+}
+
 .registration-dashboard-main-grid {
   display: grid;
   grid-template-columns: minmax(300px, 1.04fr) minmax(360px, 1fr) minmax(300px, 0.98fr);
@@ -21102,6 +21268,13 @@ button {
   font-size: 1rem;
   font-weight: 880;
   letter-spacing: 0;
+}
+
+.registration-dashboard-panel__header p {
+  margin: 5px 0 0;
+  color: var(--dashboard-muted);
+  font-size: 0.76rem;
+  font-weight: 760;
 }
 
 .registration-dashboard-panel__header button,
@@ -23894,6 +24067,7 @@ button {
   .registration-dashboard-controls,
   .registration-dashboard-controls label,
   .registration-dashboard-controls__date,
+  .registration-dashboard-chart-breakdown,
   .registration-dashboard-metrics,
   .registration-dashboard-venue__body,
   .registration-dashboard-status__grid,
@@ -23914,6 +24088,11 @@ button {
 
   .registration-dashboard-metric {
     min-height: 124px;
+  }
+
+  .registration-dashboard-choreography-chart__hero {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .registration-dashboard-activity__list button,
