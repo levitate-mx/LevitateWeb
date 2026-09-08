@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "test:registration": "node --test tests/registration-*.test.mjs",
+    "db:check:registration": "node scripts/prepare-registration-db.mjs --remote --check",
+    "db:check:registration:local": "node scripts/prepare-registration-db.mjs --local --check",
+    "db:prepare:registration": "node scripts/prepare-registration-db.mjs --remote --apply",
+    "db:prepare:registration:local": "node scripts/prepare-registration-db.mjs --local --apply",
     "db:migrate:codi": "node scripts/migrate-codi-db.mjs",
     "db:migrate:passport": "wrangler d1 execute levitate-passport --remote --file db/passport_d1_schema.sql",
     "db:migrate:passport:local": "wrangler d1 execute levitate-passport --local --file db/passport_d1_schema.sql",
@@ -59,7 +64,7 @@
     "db:migrate:all": "npm run db:migrate:codi && npm run db:migrate:passport && npm run db:migrate:registration",
     "passport:generate": "node scripts/generate-passport-qr.mjs",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run test:registration && npm run build && npm run db:prepare:registration && wrangler deploy"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS registration_shop_orders (
   academy_name TEXT NOT NULL,
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  access_token TEXT UNIQUE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
   paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),

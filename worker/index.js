@@ -682,7 +682,6 @@ async function handleRegistrationRegister(request, env) {
     }
 
     const db = getDb(env);
-    await ensureRegistrationAcademyOriginColumns(db);
     const existingUser = await db
       .prepare(
         `
@@ -1109,9 +1108,6 @@ async function handleRegistrationBootstrap(request, env) {
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
-    await ensureRegistrationChoreographerReleveTeacherColumn(db);
-    await ensureRegistrationDanceSubgenreDetailColumn(db);
-
     return sendJson({
       ...session,
       participants: await getRegistrationParticipants(db, academyId),
@@ -1131,10 +1127,6 @@ async function handleRegistrationParticipants(request, env) {
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
-
-    await ensureRegistrationChoreographerReleveTeacherColumn(db);
-    await ensureRegistrationParticipantInternationalColumn(db);
-    await ensureRegistrationParticipantReleveTeacherColumn(db);
 
     if (request.method === "GET") {
       return sendJson({ participants: await getRegistrationParticipants(db, academyId) });
@@ -1384,7 +1376,6 @@ async function handleRegistrationShopOrderLookup(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
-    await ensureRegistrationShopOrderTables(db);
     const body = await readJsonBody(request);
     const orderId = requireString(body.orderId, "orderId");
     const accessToken = requireString(body.accessToken, "accessToken");
@@ -1401,8 +1392,6 @@ async function handleRegistrationShopOrderProof(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
-    await ensureRegistrationShopOrderTables(db);
-    await ensureRegistrationPaymentProofTables(db);
 
     const body = await readJsonBody(request);
     const orderId = requireString(body.orderId, "orderId");
@@ -1477,7 +1466,6 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
     assertMethod(request, ["POST"]);
 
     const db = getDb(env);
-    await ensureRegistrationPaymentProofTables(db);
 
     const body = await readJsonBody(request);
     const curp = normalizeCurp(requireString(body.curp, "curp"));
@@ -1614,7 +1602,6 @@ async function handleRegistrationAdminInscriptionOrders(request, env) {
 
     const db = getDb(env);
     const admin = await requireRegistrationAdmin(request, env, db);
-    await ensureRegistrationPaymentProofTables(db);
 
     const orders =
       admin.scope === "global"
@@ -1638,7 +1625,6 @@ async function handleRegistrationAdminProgram(request, env) {
 
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
-    await ensureRegistrationChoreographerReleveTeacherColumn(db);
 
     return sendJson({
       dances: await getAllRegistrationProgramDances(db),
@@ -1654,10 +1640,6 @@ async function handleRegistrationAdminParticipants(request, env) {
 
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
-    await ensureRegistrationAcademyOriginColumns(db);
-    await ensureRegistrationChoreographerReleveTeacherColumn(db);
-    await ensureRegistrationParticipantInternationalColumn(db);
-    await ensureRegistrationParticipantReleveTeacherColumn(db);
 
     return sendJson({
       academies: await getAllRegistrationAdminAcademies(db),
@@ -2010,8 +1992,6 @@ async function handleRegistrationChoreographers(request, env) {
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
 
-    await ensureRegistrationChoreographerReleveTeacherColumn(db);
-
     if (request.method === "GET") {
       return sendJson({ choreographers: await getRegistrationChoreographers(db, academyId) });
     }
@@ -2081,8 +2061,6 @@ async function handleRegistrationDances(request, env) {
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
-
-    await ensureRegistrationChoreographerReleveTeacherColumn(db);
 
     if (request.method === "GET") {
       return sendJson({ dances: await getRegistrationDances(db, academyId) });
@@ -2215,7 +2193,6 @@ async function handleRegistrationMusic(request, env) {
 
     const musicUpload = getRegistrationMusicUploadInput(body);
 
-    await ensureRegistrationMusicUploadsTable(db);
     await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
 
     const dance = await getRegistrationDanceById(db, academyId, danceId);
@@ -2872,9 +2849,6 @@ async function ensureRegistrationStudentProfile(db, curp) {
 }
 
 async function getRegistrationStateFromRequest({ db, request }) {
-  await ensureRegistrationUserRoleColumn(db);
-  await ensureRegistrationAcademyOriginColumns(db);
-
   const sessionToken = readCookie(request, registrationSessionCookieName);
 
   if (!sessionToken) {
@@ -3078,9 +3052,6 @@ async function requireRegistrationCurpExists(db, curp) {
 }
 
 async function getRegistrationStateByUserId(db, userId) {
-  await ensureRegistrationUserRoleColumn(db);
-  await ensureRegistrationAcademyOriginColumns(db);
-
   const row = await db
     .prepare(
       `
@@ -3207,12 +3178,6 @@ async function getRegistrationStudentState(db, user) {
 }
 
 async function getRegistrationInscriptionLookup(db, curp, { academyId = null } = {}) {
-  await ensureRegistrationAcademyOriginColumns(db);
-  await ensureRegistrationChoreographerReleveTeacherColumn(db);
-  await ensureRegistrationParticipantInternationalColumn(db);
-  await ensureRegistrationParticipantReleveTeacherColumn(db);
-  await ensureRegistrationDanceSubgenreDetailColumn(db);
-
   const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
   const lookupBindings = academyId ? [curp, academyId] : [curp];
   const { results: registrationRows = [] } = await db
@@ -3346,8 +3311,6 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
 }
 
 async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false } = {}) {
-  await ensureRegistrationInscriptionOrderBuyerPhoneColumns(db);
-
   const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId });
 
   if (skipEmpty && lookup.lines.length === 0) {
@@ -3494,10 +3457,6 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
 }
 
 async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact, curp, discountCode, items }) {
-  await ensureRegistrationShopOrderTables(db);
-  await ensureRegistrationShopOrderBuyerContactColumns(db);
-  await ensureRegistrationPaymentProofTables(db);
-
   const participant = await getRegistrationShopParticipantByCurp(db, curp);
   const normalizedCart = normalizeRegistrationShopCart(items, discountCode);
   normalizedCart.lineItems = await validateRegistrationShopMediaLineItems(db, curp, normalizedCart.lineItems);
@@ -5071,7 +5030,6 @@ async function deleteRegistrationChoreographer(db, academyId, choreographerId) {
 
 async function deleteRegistrationDance(db, academyId, danceId) {
   await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
-  await ensureRegistrationMusicUploadsTable(db);
 
   await db.batch([
     db.prepare("DELETE FROM registration_music_uploads WHERE academy_id = ? AND dance_id = ?").bind(academyId, danceId),
@@ -5144,7 +5102,6 @@ async function deleteRegistrationAdminDance(db, { danceId }) {
     throwHttpError("registration_dance_not_found", "Coreografía no encontrada", 404);
   }
 
-  await ensureRegistrationMusicUploadsTable(db);
   await db.batch([
     db.prepare("DELETE FROM registration_music_uploads WHERE dance_id = ?").bind(danceId),
     db.prepare("DELETE FROM registration_dance_choreographers WHERE dance_id = ?").bind(danceId),
@@ -5154,8 +5111,6 @@ async function deleteRegistrationAdminDance(db, { danceId }) {
 }
 
 async function deleteRegistrationAdminMusicUpload(db, { academyId = "", danceId }) {
-  await ensureRegistrationMusicUploadsTable(db);
-
   const academyClause = academyId ? "AND academy_id = ?" : "";
   const bindings = academyId ? [danceId, academyId] : [danceId];
   const upload = await db
@@ -5356,9 +5311,6 @@ async function serializeRegistrationDances(db, academyId, dances) {
     return [];
   }
 
-  await ensureRegistrationChoreographerReleveTeacherColumn(db);
-  await ensureRegistrationParticipantReleveTeacherColumn(db);
-
   const danceIds = new Set(dances.map((dance) => dance.id));
   const { results: choreographers = [] } = await db
     .prepare(
@@ -5423,9 +5375,6 @@ async function serializeRegistrationProgramDances(db, dances) {
   if (dances.length === 0) {
     return [];
   }
-
-  await ensureRegistrationChoreographerReleveTeacherColumn(db);
-  await ensureRegistrationParticipantReleveTeacherColumn(db);
 
   const danceIds = new Set(dances.map((dance) => dance.id));
   const { results: choreographers = [] } = await db
@@ -5913,49 +5862,6 @@ function getRegistrationShopBuyerContact(body) {
   };
 }
 
-async function ensureRegistrationShopOrderBuyerContactColumns(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_shop_orders)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-  const requiredColumns = [
-    ["buyer_name", "TEXT"],
-    ["buyer_email", "TEXT"],
-  ];
-
-  for (const [name, definition] of requiredColumns) {
-    if (!existingColumns.has(name)) {
-      try {
-        await db.prepare(`ALTER TABLE registration_shop_orders ADD COLUMN ${name} ${definition}`).run();
-      } catch (error) {
-        if (!String(error?.message || error).match(/duplicate column name/i)) {
-          throw error;
-        }
-      }
-    }
-  }
-}
-
-async function ensureRegistrationInscriptionOrderBuyerPhoneColumns(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_inscription_orders)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-  const requiredColumns = [
-    ["buyer_phone_country_code", "TEXT"],
-    ["buyer_phone_number", "TEXT"],
-    ["buyer_phone", "TEXT"],
-  ];
-
-  for (const [name, definition] of requiredColumns) {
-    if (!existingColumns.has(name)) {
-      try {
-        await db.prepare(`ALTER TABLE registration_inscription_orders ADD COLUMN ${name} ${definition}`).run();
-      } catch (error) {
-        if (!String(error?.message || error).match(/duplicate column name/i)) {
-          throw error;
-        }
-      }
-    }
-  }
-}
-
 async function createRegistrationAcademy(db, {
   academyId,
   academyName,
@@ -5966,6 +5872,7 @@ async function createRegistrationAcademy(db, {
   email,
   phone,
 }) {
+  // Older databases still require venue on INSERT; schema preparation preserves that column.
   const { results = [] } = await db.prepare("PRAGMA table_info(registration_academies)").all();
   const hasLegacyVenueColumn = results.some((column) => column.name === "venue");
 
@@ -6020,154 +5927,6 @@ async function createRegistrationAcademy(db, {
     )
     .bind(academyId, academyName, contactName, email, phone || null, academyOriginType, academyOriginState, academyOriginCountry)
     .run();
-}
-
-async function ensureRegistrationAcademyOriginColumns(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_academies)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-  const requiredColumns = [
-    ["origin_type", "TEXT NOT NULL DEFAULT 'mexico' CHECK (origin_type IN ('mexico', 'international'))"],
-    ["origin_state", "TEXT"],
-    ["origin_country", "TEXT NOT NULL DEFAULT 'México'"],
-  ];
-
-  for (const [name, definition] of requiredColumns) {
-    if (existingColumns.has(name)) {
-      continue;
-    }
-
-    try {
-      await db.prepare(`ALTER TABLE registration_academies ADD COLUMN ${name} ${definition}`).run();
-    } catch (error) {
-      if (!String(error?.message || error).match(/duplicate column name/i)) {
-        throw error;
-      }
-    }
-  }
-}
-
-async function ensureRegistrationParticipantInternationalColumn(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_participants)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-
-  if (existingColumns.has("is_international")) {
-    return;
-  }
-
-  try {
-    await db
-      .prepare(
-        `
-          ALTER TABLE registration_participants
-          ADD COLUMN is_international INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1))
-        `,
-      )
-      .run();
-  } catch (error) {
-    if (!String(error?.message || error).match(/duplicate column name/i)) {
-      throw error;
-    }
-  }
-}
-
-async function ensureRegistrationParticipantReleveTeacherColumn(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_participants)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-
-  if (existingColumns.has("is_releve_teacher")) {
-    return;
-  }
-
-  try {
-    await db
-      .prepare(
-        `
-          ALTER TABLE registration_participants
-          ADD COLUMN is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))
-        `,
-      )
-      .run();
-  } catch (error) {
-    if (!String(error?.message || error).match(/duplicate column name/i)) {
-      throw error;
-    }
-  }
-}
-
-async function ensureRegistrationChoreographerReleveTeacherColumn(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_choreographers)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-
-  if (existingColumns.has("is_releve_teacher")) {
-    return;
-  }
-
-  try {
-    await db
-      .prepare(
-        `
-          ALTER TABLE registration_choreographers
-          ADD COLUMN is_releve_teacher INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))
-        `,
-      )
-      .run();
-  } catch (error) {
-    if (!String(error?.message || error).match(/duplicate column name/i)) {
-      throw error;
-    }
-  }
-}
-
-async function ensureRegistrationDanceSubgenreDetailColumn(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_dances)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-
-  if (existingColumns.has("subgenre_detail")) {
-    return;
-  }
-
-  try {
-    await db
-      .prepare(
-        `
-          ALTER TABLE registration_dances
-          ADD COLUMN subgenre_detail TEXT
-        `,
-      )
-      .run();
-  } catch (error) {
-    if (!String(error?.message || error).match(/duplicate column name/i)) {
-      throw error;
-    }
-  }
-}
-
-async function ensureRegistrationUserRoleColumn(db) {
-  const existingColumns = await getTableColumnNames(db, "registration_users");
-
-  if (existingColumns.has("role")) {
-    return;
-  }
-
-  await db
-    .prepare(
-      `
-        ALTER TABLE registration_users
-          ADD COLUMN role TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin'))
-      `,
-    )
-    .run();
-}
-
-async function getTableColumnNames(db, tableName) {
-  const allowedTables = new Set(["registration_users"]);
-
-  if (!allowedTables.has(tableName)) {
-    throwHttpError("registration_invalid_table", "Tabla de registro inválida", 500);
-  }
-
-  const { results = [] } = await db.prepare(`PRAGMA table_info(${tableName})`).all();
-  return new Set(results.map((row) => row.name));
 }
 
 function normalizePhoneCountryCode(value) {
@@ -6523,162 +6282,6 @@ function isMissingRegistrationShopPaymentProofsTable(error) {
 
 function isMissingRegistrationMusicUploadsTable(error) {
   return String(error?.message || error).includes("registration_music_uploads");
-}
-
-async function ensureRegistrationShopOrderTables(db) {
-  await db
-    .prepare(
-      `
-        CREATE TABLE IF NOT EXISTS registration_shop_orders (
-          id TEXT PRIMARY KEY,
-          curp TEXT NOT NULL COLLATE NOCASE,
-          participant_name TEXT NOT NULL,
-          academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
-          academy_name TEXT NOT NULL,
-          venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
-          reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
-          access_token TEXT UNIQUE,
-          amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
-          paid_amount INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
-          status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('pending_payment', 'payment_reported', 'paid', 'rejected')),
-          payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
-          buyer_name TEXT,
-          buyer_email TEXT,
-          buyer_phone_country_code TEXT,
-          buyer_phone_number TEXT,
-          buyer_phone TEXT,
-          discount_code TEXT,
-          discount_amount INTEGER NOT NULL DEFAULT 0 CHECK (discount_amount >= 0),
-          line_items_json TEXT NOT NULL DEFAULT '[]',
-          notes TEXT,
-          paid_at TEXT,
-          reviewed_by TEXT,
-          reviewed_at TEXT,
-          rejection_reason TEXT,
-          rejection_message TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-      `,
-    )
-    .run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp)`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id)`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status)`).run();
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_shop_orders)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-
-  if (!existingColumns.has("access_token")) {
-    try {
-      await db.prepare("ALTER TABLE registration_shop_orders ADD COLUMN access_token TEXT").run();
-    } catch (error) {
-      if (!String(error?.message || error).match(/duplicate column name/i)) {
-        throw error;
-      }
-    }
-  }
-
-  await db
-    .prepare("UPDATE registration_shop_orders SET access_token = lower(hex(randomblob(16))) WHERE access_token IS NULL OR access_token = ''")
-    .run();
-  await db
-    .prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_shop_orders_access_token ON registration_shop_orders(access_token) WHERE access_token IS NOT NULL")
-    .run();
-}
-
-async function ensureRegistrationPaymentProofTables(db) {
-  await db
-    .prepare(
-      `
-        CREATE TABLE IF NOT EXISTS registration_inscription_payment_proofs (
-          id TEXT PRIMARY KEY,
-          order_id TEXT NOT NULL REFERENCES registration_inscription_orders(id) ON DELETE CASCADE,
-          file_name TEXT NOT NULL,
-          content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
-          file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 1800000),
-          data_url TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
-          uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-      `,
-    )
-    .run();
-  await db
-    .prepare(
-      `
-        CREATE TABLE IF NOT EXISTS registration_shop_payment_proofs (
-          id TEXT PRIMARY KEY,
-          order_id TEXT NOT NULL REFERENCES registration_shop_orders(id) ON DELETE CASCADE,
-          file_name TEXT NOT NULL,
-          content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
-          file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 1800000),
-          data_url TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
-          uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-      `,
-    )
-    .run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id)`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON registration_shop_payment_proofs(order_id)`).run();
-}
-
-async function ensureRegistrationMusicUploadsTable(db) {
-  await db
-    .prepare(
-      `
-        CREATE TABLE IF NOT EXISTS registration_music_uploads (
-          id TEXT PRIMARY KEY,
-          academy_id TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE,
-          dance_id TEXT NOT NULL REFERENCES registration_dances(id) ON DELETE CASCADE,
-          file_name TEXT NOT NULL,
-          content_type TEXT NOT NULL CHECK (content_type IN ('audio/mpeg', 'audio/mp3')),
-          file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 12000000),
-          data_url TEXT NOT NULL,
-          storage_provider TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive')),
-          drive_file_id TEXT,
-          drive_web_view_link TEXT,
-          drive_web_content_link TEXT,
-          uploaded_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
-          uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-          UNIQUE (dance_id)
-        )
-      `,
-    )
-    .run();
-  await ensureRegistrationMusicUploadsStorageColumns(db);
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id)`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id)`).run();
-}
-
-async function ensureRegistrationMusicUploadsStorageColumns(db) {
-  const { results = [] } = await db.prepare("PRAGMA table_info(registration_music_uploads)").all();
-  const existingColumns = new Set(results.map((column) => column.name));
-  const columns = [
-    {
-      definition: "TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive'))",
-      name: "storage_provider",
-    },
-    { definition: "TEXT", name: "drive_file_id" },
-    { definition: "TEXT", name: "drive_web_view_link" },
-    { definition: "TEXT", name: "drive_web_content_link" },
-  ];
-
-  for (const { definition, name } of columns) {
-    if (!existingColumns.has(name)) {
-      try {
-        await db.prepare(`ALTER TABLE registration_music_uploads ADD COLUMN ${name} ${definition}`).run();
-      } catch (error) {
-        if (!String(error?.message || error).match(/duplicate column name/i)) {
-          throw error;
-        }
-      }
-    }
-  }
 }
 
 function serializeRegistrationMusicUpload(upload) {
