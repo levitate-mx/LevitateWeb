@@ -117,10 +117,9 @@ export function DocumentsPage() {
     <main className="documents-page levitate-home-redesign">
       <LevitateHeader activeLabel="Documentos" useRootLinks variant="pill" />
 
-      <section className="documents-library" id="documentos" aria-labelledby="documents-library-title">
+      <section className="documents-library" id="documentos" aria-label="Documentos">
         <div className="documents-library__header" data-docs-reveal>
           <p className="documents-kicker">Documentos</p>
-          <h1 id="documents-library-title">PDFs Levitate.</h1>
         </div>
 
         <div className="documents-controls" data-docs-reveal>

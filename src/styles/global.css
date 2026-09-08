@@ -41428,17 +41428,6 @@ button {
   align-items: start;
 }
 
-.documents-page .documents-library__header h1 {
-  max-width: 760px;
-  margin: 0;
-  color: var(--documents-ink);
-  font-family: var(--font-body);
-  font-size: clamp(3.3rem, 8vw, 6.6rem);
-  font-weight: 620;
-  letter-spacing: 0;
-  line-height: 0.92;
-}
-
 .documents-page .documents-controls {
   grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
   gap: 14px;
@@ -41554,10 +41543,6 @@ button {
   .documents-page .documents-library {
     gap: 22px;
     padding: 118px 18px 76px;
-  }
-
-  .documents-page .documents-library__header h1 {
-    font-size: clamp(3rem, 14vw, 4.45rem);
   }
 
   .documents-page .documents-controls,

@@ -5463,6 +5463,7 @@ async function serializeRegistrationProgramDances(db, dances) {
   const participantsByDance = groupRegistrationRelations(participants, danceIds);
 
   return dances.map((dance) => ({
+    academyId: dance.academy_id,
     academyName: dance.academy_name,
     id: dance.id,
     title: dance.title,

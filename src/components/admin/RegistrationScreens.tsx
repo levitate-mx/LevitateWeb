@@ -278,6 +278,11 @@ type RegistrationDance = {
   musicUpload?: RegistrationMusicUpload | null;
 };
 
+type RegistrationAdminDance = RegistrationDance & {
+  academyId: string;
+  academyName: string;
+};
+
 type RegistrationInscriptionOrderStatus = "pending_payment" | "payment_reported" | "paid" | "rejected";
 type RegistrationParticipantPaymentStatus = RegistrationInscriptionOrderStatus | "no_order";
 type RegistrationPaymentRejectionReason = "missing_proof" | "incomplete_amount" | "payment_not_found" | "invalid_or_unreadable_proof";
@@ -439,7 +444,7 @@ type RegistrationAdminOrdersPayload = {
 };
 
 type RegistrationAdminProgramPayload = {
-  dances: RegistrationDance[];
+  dances: RegistrationAdminDance[];
 };
 
 type RegistrationAdminParticipantsPayload = {
@@ -1720,15 +1725,15 @@ function getRegistrationAcademyInitials(name: string) {
 }
 
 function doesOrderBelongToAcademy(order: RegistrationInscriptionOrder, academy: RegistrationAdminAcademy) {
-  return order.academyId === academy.id || normalizeDirectoryText(order.academyName) === normalizeDirectoryText(academy.name);
+  return order.academyId === academy.id;
 }
 
 function doesParticipantBelongToAcademy(participant: RegistrationAdminParticipant, academy: RegistrationAdminAcademy) {
-  return participant.academyId === academy.id || normalizeDirectoryText(participant.academyName) === normalizeDirectoryText(academy.name);
+  return participant.academyId === academy.id;
 }
 
-function doesDanceBelongToAcademy(dance: RegistrationDance, academy: RegistrationAdminAcademy) {
-  return normalizeDirectoryText(dance.academyName) === normalizeDirectoryText(academy.name);
+function doesDanceBelongToAcademy(dance: RegistrationAdminDance, academy: RegistrationAdminAcademy) {
+  return dance.academyId === academy.id;
 }
 
 function getRegistrationAcademyLocation(academy: RegistrationAdminAcademy) {
@@ -1945,7 +1950,7 @@ function buildRegistrationAcademyDirectorySummary({
   academy: RegistrationAdminAcademy;
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationAdminParticipant[];
-  programDances: RegistrationDance[];
+  programDances: RegistrationAdminDance[];
 }): RegistrationAcademyDirectorySummary {
   const academyOrders = orders.filter((order) => doesOrderBelongToAcademy(order, academy));
   const academyParticipants = participants.filter((participant) => doesParticipantBelongToAcademy(participant, academy));
@@ -2109,16 +2114,12 @@ function getParticipantTicketOrders(participant: RegistrationParticipant, orders
   );
 }
 
-function getParticipantRegisteredDances(participant: RegistrationAdminParticipant, dances: RegistrationDance[]) {
-  const participantName = normalizeDirectoryText(participant.fullName);
-
+function getParticipantRegisteredDances(participant: RegistrationAdminParticipant, dances: RegistrationAdminDance[]) {
   return dances
     .filter(
       (dance) =>
-        (!dance.academyName || dance.academyName === participant.academyName) &&
-        dance.participants.some(
-          (relation) => relation.id === participant.id || normalizeDirectoryText(relation.fullName) === participantName,
-        ),
+        dance.academyId === participant.academyId &&
+        dance.participants.some((relation) => relation.id === participant.id),
     )
     .sort((left, right) => left.title.localeCompare(right.title, "es"));
 }
@@ -2302,7 +2303,7 @@ function getParticipantLatestActivity(
 function getParticipantOperationalRows(
   participants: RegistrationAdminParticipant[],
   orders: RegistrationInscriptionOrder[],
-  dances: RegistrationDance[],
+  dances: RegistrationAdminDance[],
 ): RegistrationParticipantOperationalRow[] {
   return participants
     .map((participant) => {
@@ -7408,7 +7409,7 @@ function RegistrationAdminChoreographiesPanel({
   isLoading,
   onDanceDeleted,
 }: {
-  dances: RegistrationDance[];
+  dances: RegistrationAdminDance[];
   deletingEntityKey?: string;
   isLoading: boolean;
   onDanceDeleted?: (dance: RegistrationDance) => void | Promise<void>;
@@ -7418,10 +7419,28 @@ function RegistrationAdminChoreographiesPanel({
   const [genreFilter, setGenreFilter] = useState("all");
   const [venueFilter, setVenueFilter] = useState("all");
   const academyOptions = useMemo(() => {
-    const academyNames = dances.map((dance) => dance.academyName).filter((name): name is string => Boolean(name));
+    const academyMap = new Map<string, string>();
 
-    return Array.from(new Set(academyNames))
-      .map((academyName) => ({ label: academyName, value: academyName }))
+    for (const dance of dances) {
+      academyMap.set(dance.academyId, dance.academyName);
+    }
+
+    const academyEntries = Array.from(academyMap.entries());
+    const academyNameCounts = academyEntries.reduce<Map<string, number>>((counts, [, academyName]) => {
+      const normalizedName = normalizeDirectoryText(academyName);
+
+      counts.set(normalizedName, (counts.get(normalizedName) ?? 0) + 1);
+      return counts;
+    }, new Map());
+
+    return academyEntries
+      .map(([academyId, academyName]) => ({
+        label:
+          (academyNameCounts.get(normalizeDirectoryText(academyName)) ?? 0) > 1
+            ? `${academyName} · ${academyId.slice(0, 8)}`
+            : academyName,
+        value: academyId,
+      }))
       .sort((left, right) => left.label.localeCompare(right.label, "es"));
   }, [dances]);
   const venueOptions = useMemo(() => {
@@ -7438,7 +7457,7 @@ function RegistrationAdminChoreographiesPanel({
       .filter((dance) => {
         const categoryLabel = getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category);
         const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
-        const matchesAcademy = academyFilter === "all" || dance.academyName === academyFilter;
+        const matchesAcademy = academyFilter === "all" || dance.academyId === academyFilter;
         const matchesGenre = genreFilter === "all" || dance.genre === genreFilter;
         const matchesVenue = venueFilter === "all" || dance.venue === venueFilter;
         const matchesQuery =
@@ -9463,7 +9482,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [adminAcademies, setAdminAcademies] = useState<RegistrationAdminAcademy[]>([]);
   const [adminChoreographers, setAdminChoreographers] = useState<RegistrationAdminChoreographer[]>([]);
   const [adminParticipants, setAdminParticipants] = useState<RegistrationAdminParticipant[]>([]);
-  const [programDances, setProgramDances] = useState<RegistrationDance[]>([]);
+  const [programDances, setProgramDances] = useState<RegistrationAdminDance[]>([]);
   const [totals, setTotals] = useState<RegistrationAdminOrderTotals | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
