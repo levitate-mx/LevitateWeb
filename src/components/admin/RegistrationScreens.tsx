@@ -8594,85 +8594,156 @@ function ProgramPanel({
   academyName = "",
   dances,
   emptyMessage = "Todavía no hay coreografías para armar el programa.",
+  isLoading = false,
   onDanceDeleted,
 }: {
   academyName?: string;
   dances: RegistrationDance[];
   emptyMessage?: string;
+  isLoading?: boolean;
   onDanceDeleted?: (row: ProgramRow) => void;
 }) {
-  const programRows = useMemo(() => buildProgramRows(dances, academyName), [academyName, dances]);
+  const [venueFilter, setVenueFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState("all");
+  const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(() => new Set());
+  const availableVenues = useMemo(
+    () => Array.from(new Set([
+      ...dances.map((dance) => dance.venue),
+      ...(venueFilter === "all" ? [] : [venueFilter]),
+    ])).sort((left, right) => getVenueLabel(left).localeCompare(getVenueLabel(right), "es")),
+    [dances, venueFilter],
+  );
+  const filteredDances = useMemo(
+    () => dances.filter((dance) => (venueFilter === "all" || dance.venue === venueFilter) && (genreFilter === "all" || dance.genre === genreFilter)),
+    [dances, genreFilter, venueFilter],
+  );
+  const programRows = useMemo(() => buildProgramRows(filteredDances, academyName), [academyName, filteredDances]);
   const programBlocks = useMemo(() => buildProgramBlocks(programRows), [programRows]);
   const totalRows = programRows.length;
+  const assignedBlockCount = programBlocks.filter((block) => block.id !== 99).length;
   const hasDeleteAction = Boolean(onDanceDeleted);
+  const hasFilters = venueFilter !== "all" || genreFilter !== "all";
+  const allBlocksExpanded = programBlocks.length > 0 && programBlocks.every((block) => expandedBlocks.has(block.id));
+  const anyBlockExpanded = programBlocks.some((block) => expandedBlocks.has(block.id));
+
+  const toggleBlock = (blockId: number) => {
+    setExpandedBlocks((current) => {
+      const next = new Set(current);
+      if (next.has(blockId)) next.delete(blockId);
+      else next.add(blockId);
+      return next;
+    });
+  };
 
   return (
-    <section className="levitate-admin-program" aria-label="Programa de competencia">
+    <section className="levitate-admin-program" aria-label="Programa de competencia" aria-busy={isLoading}>
       <header className="levitate-admin-program__toolbar">
-        <p>
-          {totalRows > 0
-            ? `Programa creado con ${totalRows} ${totalRows === 1 ? "coreografía" : "coreografías"} en orden de salida.`
-            : emptyMessage}
-        </p>
+        <div aria-live="polite">
+          <strong>
+            {assignedBlockCount} {assignedBlockCount === 1 ? "bloque" : "bloques"}
+            <span> · {totalRows} {totalRows === 1 ? "coreografía" : "coreografías"}{hasFilters ? ` de ${dances.length}` : ""}</span>
+          </strong>
+          <p>Abre un bloque para ver sus coreografías en orden de salida.</p>
+        </div>
         <button disabled={totalRows === 0} onClick={() => downloadProgramXls(programBlocks)} type="button">
           <Download aria-hidden="true" size={16} />
           Descargar XLS
         </button>
       </header>
 
+      <div className="levitate-admin-program__filters">
+        <label>
+          <span>Sede</span>
+          <select value={venueFilter} onChange={(event) => setVenueFilter(event.target.value)}>
+            <option value="all">Todas las sedes</option>
+            {availableVenues.map((venue) => <option key={venue} value={venue}>{getVenueLabel(venue)}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Disciplina</span>
+          <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)}>
+            <option value="all">Todas las disciplinas</option>
+            <option value="motion">Motion</option>
+            <option value="aereo">Aerial</option>
+          </select>
+        </label>
+        <div className="levitate-admin-program__expand-actions">
+          <button disabled={programBlocks.length === 0 || allBlocksExpanded} onClick={() => setExpandedBlocks(new Set(programBlocks.map((block) => block.id)))} type="button">Abrir todos</button>
+          <button disabled={!anyBlockExpanded} onClick={() => setExpandedBlocks(new Set())} type="button">Cerrar todos</button>
+        </div>
+      </div>
+
       {programBlocks.map((block) => {
         const includeLevel = isAerialProgramBlock(block);
         const headers = getProgramHeaders(includeLevel, hasDeleteAction);
+        const isExpanded = expandedBlocks.has(block.id);
+        const isUnassigned = block.id === 99;
+        const discipline = isUnassigned ? "Revisar división" : includeLevel ? "Aerial" : "Motion";
+        const title = block.title.replace(/^BLOQUE \d+:\s*/, "");
+        const regionId = `admin-program-block-${block.id}`;
+        const headingId = `${regionId}-heading`;
 
         return (
-          <section className="levitate-admin-program-block" key={block.id} aria-label={block.title}>
-            <header>
-              <div>
-                <span>{toProgramUpper(block.title)}</span>
-                <strong>
-                  {block.rows.length} {block.rows.length === 1 ? "COREOGRAFÍA" : "COREOGRAFÍAS"}
-                </strong>
-              </div>
-            </header>
-
+          <section className={`levitate-admin-program-block${isExpanded ? " is-expanded" : ""}${isUnassigned ? " is-unassigned" : ""}`} key={block.id} aria-labelledby={headingId}>
+            <h2 className="levitate-admin-program-block__heading">
+              <button
+                aria-controls={regionId}
+                aria-expanded={isExpanded}
+                className="levitate-admin-program-block__toggle"
+                id={headingId}
+                onClick={() => toggleBlock(block.id)}
+                type="button"
+              >
+                <span className="levitate-admin-program-block__number" aria-hidden="true">{isUnassigned ? "—" : String(block.id).padStart(2, "0")}</span>
+                <span className="levitate-admin-program-block__label">
+                  <span className="levitate-admin-program-block__eyebrow">{isUnassigned ? "Sin asignar" : `Bloque ${block.id}`} <span>· {discipline}</span></span>
+                  <span className="levitate-admin-program-block__title">{title}</span>
+                </span>
+                <span className="levitate-admin-program-block__count">{block.rows.length} {block.rows.length === 1 ? "coreografía" : "coreografías"}</span>
+                <ChevronDown aria-hidden="true" className="levitate-admin-program-block__chevron" size={20} />
+              </button>
+            </h2>
             <div
-              className={[
-                "levitate-admin-program-table",
-                includeLevel ? "levitate-admin-program-table--aerial" : "",
-                hasDeleteAction ? "levitate-admin-program-table--with-action" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              role="table"
-              aria-label={`Programa ${block.title}`}
+              aria-labelledby={headingId}
+              className="levitate-admin-program-table-scroll"
+              hidden={!isExpanded}
+              id={regionId}
+              role="region"
+              tabIndex={isExpanded ? 0 : -1}
             >
-              <div className="levitate-admin-program-table__head" role="row">
-                {headers.map((header) => (
-                  <span key={header} role="columnheader">
-                    {header}
-                  </span>
-                ))}
-              </div>
-              {block.rows.map((row) => (
-                <div className="levitate-admin-program-table__row" key={row.danceId} role="row">
-                  {getProgramRowDisplay(row, includeLevel).map((value, index) => (
-                    <span key={`${row.danceId}-${index}`} role="cell">
-                      {toProgramUpper(value)}
-                    </span>
+              {isExpanded ? (
+                <div
+                  className={["levitate-admin-program-table", includeLevel ? "levitate-admin-program-table--aerial" : "", hasDeleteAction ? "levitate-admin-program-table--with-action" : ""].filter(Boolean).join(" ")}
+                  role="table"
+                  aria-label={`Programa ${block.title}`}
+                >
+                  <div className="levitate-admin-program-table__head" role="row">
+                    {headers.map((header) => <span key={header} role="columnheader">{header}</span>)}
+                  </div>
+                  {block.rows.map((row) => (
+                    <div className="levitate-admin-program-table__row" key={row.danceId} role="row">
+                      {getProgramRowDisplay(row, includeLevel).map((value, index) => (
+                        <span key={`${row.danceId}-${index}`} role="cell">{toProgramUpper(value)}</span>
+                      ))}
+                      {hasDeleteAction ? (
+                        <span role="cell"><DeleteIconButton label={`Eliminar ${row.danceTitle}`} onClick={() => onDanceDeleted?.(row)} /></span>
+                      ) : null}
+                    </div>
                   ))}
-                  {hasDeleteAction ? (
-                    <span role="cell">
-                      <DeleteIconButton label={`Eliminar ${row.danceTitle}`} onClick={() => onDanceDeleted?.(row)} />
-                    </span>
-                  ) : null}
                 </div>
-              ))}
+              ) : null}
             </div>
           </section>
         );
       })}
 
-      {totalRows === 0 ? <p className="levitate-admin-empty-state">{emptyMessage}</p> : null}
+      {totalRows === 0 ? (
+        <div className="levitate-admin-program__empty" role="status">
+          <ClipboardList aria-hidden="true" size={30} />
+          <p>{isLoading || !hasFilters ? emptyMessage : "No hay coreografías para esta sede y disciplina."}</p>
+          {hasFilters ? <button onClick={() => { setVenueFilter("all"); setGenreFilter("all"); }} type="button">Limpiar filtros</button> : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -10334,7 +10405,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     headerDescription = "Boletos confirmados por alumno y quiénes ya llegan a 3+ para bloque de competencia";
   } else if (isProgramSection) {
     headerTitle = "Programa";
-    headerDescription = "Orden de salida global con coreografías de todas las academias";
+    headerDescription = "Bloques de competencia por disciplina y división";
   } else if (isMediaSection) {
     headerTitle = "Foto/Video";
     headerDescription = "Compras de paquetes de fotografía y video realizadas en tienda";
@@ -10568,6 +10639,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           <ProgramPanel
             dances={programDances}
             emptyMessage={isProgramLoading ? "Cargando programa..." : "Todavía no hay coreografías para armar el programa."}
+            isLoading={isProgramLoading}
             onDanceDeleted={handleAdminProgramDanceDelete}
           />
         ) : isRegistrationsSection ? (

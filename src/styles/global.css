@@ -25738,8 +25738,13 @@ button {
 }
 
 .levitate-admin-program {
+  --program-border: rgba(255, 255, 255, 0.12);
+  --program-muted: #aaa6ab;
+  --program-pink: #f084b8;
   display: grid;
-  gap: 18px;
+  min-width: 0;
+  gap: 12px;
+  color: #f6f3f5;
 }
 
 .levitate-admin-program__toolbar {
@@ -25747,15 +25752,24 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: clamp(22px, 3vw, 32px) clamp(20px, 4vw, 44px);
+  padding: 6px 0 12px;
+}
+
+.levitate-admin-program__toolbar strong {
+  font-size: 1.04rem;
+}
+
+.levitate-admin-program__toolbar strong span {
+  color: var(--program-muted);
+  font-weight: 500;
 }
 
 .levitate-admin-program__toolbar p {
   max-width: 680px;
-  margin: 0;
-  color: rgba(39, 37, 37, 0.62);
-  font-size: 0.95rem;
-  font-weight: 680;
+  margin: 6px 0 0;
+  color: var(--program-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
   line-height: 1.45;
 }
 
@@ -25766,22 +25780,98 @@ button {
   justify-content: center;
   gap: 9px;
   min-height: 44px;
-  border: 1px solid #111;
+  border: 1px solid var(--program-border);
   border-radius: 7px;
-  background: #111;
+  background: #252025;
   color: #fff;
   cursor: pointer;
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 880;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0;
   padding: 0 16px;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
-.levitate-admin-program__toolbar button:disabled {
+.levitate-admin-program button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.levitate-admin-program button:focus-visible,
+.levitate-admin-program select:focus-visible,
+.levitate-admin-program-table-scroll:focus-visible {
+  outline: 2px solid var(--program-pink);
+  outline-offset: 3px;
+}
+
+.levitate-admin-program__filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--program-border);
+  border-radius: 12px;
+  background: #171717;
+}
+
+.levitate-admin-program__filters label {
+  display: grid;
+  flex: 1 1 170px;
+  gap: 7px;
+  min-width: 0;
+  color: var(--program-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.levitate-admin-program__filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--program-border);
+  border-radius: 7px;
+  background: #222;
+  color: #f6f3f5;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.levitate-admin-program__expand-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.levitate-admin-program__expand-actions button,
+.levitate-admin-program__empty button {
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--program-border);
+  border-radius: 7px;
+  background: transparent;
+  color: #f6f3f5;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.levitate-admin-program__empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 44px 20px;
+  border: 1px dashed var(--program-border);
+  border-radius: 12px;
+  color: var(--program-muted);
+  text-align: center;
+}
+
+.levitate-admin-program__empty p {
+  margin: 0;
 }
 
 .levitate-admin-feedback-list {
@@ -26021,49 +26111,112 @@ button {
 }
 
 .levitate-admin-program-block {
+  min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: var(--admin-soft-shadow);
+  border: 1px solid var(--program-border);
+  border-radius: 12px;
+  background: #191919;
 }
 
-.levitate-admin-program-block header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px clamp(18px, 3vw, 28px);
-  border-bottom: 1px solid var(--admin-border-soft);
+.levitate-admin-program-block.is-expanded {
+  border-color: rgba(240, 132, 184, 0.4);
 }
 
-.levitate-admin-program-block header div {
+.levitate-admin-program-block__heading {
+  margin: 0;
+  font: inherit;
+}
+
+.levitate-admin-program-block__toggle {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 48px minmax(0, 1fr) auto 20px;
+  align-items: center;
+  width: 100%;
+  min-height: 100px;
+  gap: 18px;
+  padding: 20px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.levitate-admin-program-block header span {
-  color: var(--admin-pink);
-  font-size: 0.76rem;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+.levitate-admin-program-block__toggle:hover {
+  background: rgba(255, 255, 255, 0.035);
 }
 
-.levitate-admin-program-block header strong {
-  color: rgba(39, 37, 37, 0.84);
-  font-size: 0.9rem;
-  font-weight: 860;
-  letter-spacing: 0.08em;
+.levitate-admin-program .levitate-admin-program-block__toggle:focus-visible {
+  outline-offset: -4px;
+}
+
+.levitate-admin-program-block__number {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(240, 132, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(240, 132, 184, 0.09);
+  color: var(--program-pink);
+  font-size: 1.2rem;
+  font-weight: 750;
+}
+
+.levitate-admin-program-block.is-unassigned .levitate-admin-program-block__number {
+  border-color: rgba(243, 196, 103, 0.22);
+  background: rgba(243, 196, 103, 0.09);
+  color: #f3c467;
+}
+
+.levitate-admin-program-block__label {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.levitate-admin-program-block__eyebrow {
+  color: var(--program-pink);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.levitate-admin-program-block__eyebrow span {
+  color: var(--program-muted);
+}
+
+.levitate-admin-program-block__title {
+  color: #f6f3f5;
+  font-size: clamp(0.88rem, 1.3vw, 1.05rem);
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.levitate-admin-program-block__count {
+  color: var(--program-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.levitate-admin-program-block__chevron {
+  color: var(--program-muted);
+  transition: transform 150ms ease;
+}
+
+.levitate-admin-program-block.is-expanded .levitate-admin-program-block__chevron {
+  transform: rotate(180deg);
+}
+
+.levitate-admin-program-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border-top: 1px solid var(--program-border);
 }
 
 .levitate-admin-program-table {
   min-width: 1240px;
-  overflow-x: auto;
-}
-
-.levitate-admin-program-block {
-  overflow-x: auto;
 }
 
 .levitate-admin-program-table__head,
@@ -26092,7 +26245,8 @@ button {
 
 .levitate-admin-program-table__head {
   min-height: 50px;
-  color: rgba(39, 37, 37, 0.58);
+  background: #202020;
+  color: var(--program-muted);
   font-size: 0.72rem;
   font-weight: 920;
   letter-spacing: 0.1em;
@@ -26100,8 +26254,8 @@ button {
 
 .levitate-admin-program-table__row {
   min-height: 62px;
-  border-top: 1px solid var(--admin-border-soft);
-  color: rgba(39, 37, 37, 0.78);
+  border-top: 1px solid var(--program-border);
+  color: #ece8eb;
   font-size: 0.78rem;
   font-weight: 760;
   letter-spacing: 0.02em;
@@ -26109,14 +26263,20 @@ button {
 }
 
 .levitate-admin-program-table__row:nth-child(odd) {
-  background: rgba(247, 243, 239, 0.45);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .levitate-admin-program-table__head span,
 .levitate-admin-program-table__row span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 14px 0;
+  overflow-wrap: anywhere;
+}
+
+.levitate-admin-program .levitate-admin-delete-action {
+  color: #f084b8;
+  border-color: rgba(240, 132, 184, 0.25);
+  background: rgba(240, 132, 184, 0.08);
 }
 
 @media (max-width: 720px) {
@@ -26126,6 +26286,36 @@ button {
 
   .levitate-admin-program__toolbar button {
     width: 100%;
+  }
+
+  .levitate-admin-program-block__toggle {
+    grid-template-columns: 38px minmax(0, 1fr) 20px;
+    gap: 8px 12px;
+    padding: 16px 14px;
+  }
+
+  .levitate-admin-program-block__number {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+  }
+
+  .levitate-admin-program-block__count {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .levitate-admin-program-block__chevron {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .levitate-admin-program__expand-actions {
+    width: 100%;
+  }
+
+  .levitate-admin-program__expand-actions button {
+    flex: 1;
   }
 
   .levitate-admin-feedback-card {
