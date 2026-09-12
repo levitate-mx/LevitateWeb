@@ -193,7 +193,7 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
     },
     jury: [
       { name: "Daniel Herrera", specialty: "Acrobacias aéreas · Técnica de piso", image: "/assets/daniel-herrera.jpg" },
-      { name: "Vladimir Garza", specialty: "Técnicas aéreas circenses", image: "/assets/vladimir-garza.jpg" },
+      { name: "Renata Pinal", specialty: "Jurada invitada", image: "/assets/renata-pinal.jpg" },
       { name: "Ana Karen Rojas", specialty: "Artista Circense", image: "/assets/ana-karen-rojas.jpg" },
       { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
       { name: "Ivonne Robles", specialty: "Maestra de danza clásica y neoclásica", image: "/assets/ivonne-robles.jpg" },
