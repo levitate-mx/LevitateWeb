@@ -15,21 +15,14 @@ type CompetitionBlockLegendItem = {
   tone: "motion" | "aerial";
 };
 
-type WorkshopSession = {
-  label?: string;
-  block: number;
-  group: string;
-};
-
-type WorkshopCoach = {
+type WorkshopPresenter = {
   name: string;
-  specialty?: string;
-  sessions: WorkshopSession[];
+  classes: string[];
 };
 
-type WorkshopTableRow = WorkshopSession & {
-  className: string;
-  coachName: string;
+type WorkshopTrack = {
+  title: string;
+  presenters: WorkshopPresenter[];
 };
 
 type JuryMember = {
@@ -65,7 +58,7 @@ type SedeContent = {
     location: string;
     groups: Array<{ label: string; text: string }>;
     footnote: string;
-    coaches: WorkshopCoach[];
+    tracks: WorkshopTrack[];
   };
   hotel?: HotelFeature;
   jury?: JuryMember[];
@@ -134,51 +127,26 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
         { label: "Grupo D", text: "Motion\nMayores de 12 años" },
       ],
       footnote: "*La inscripción incluye acceso a 3 workshops de la elección del participante.",
-      coaches: [
+      tracks: [
         {
-          name: "Ana Karen Rojas",
-          specialty: "Flex",
-          sessions: [
-            { label: "Todos los grupos", block: 1, group: "Flex" },
+          title: "Aerial",
+          presenters: [
+            { name: "Renata Pinal", classes: ["Aro", "Trapecio"] },
+            { name: "Daniel Herrera", classes: ["Tela", "Cuna"] },
           ],
         },
         {
-          name: "Vladimir Garza",
-          specialty: "Aerial",
-          sessions: [
-            { label: "Aro", block: 2, group: "Grupo A · Hasta 12 años" },
-            { label: "Trapecio", block: 1, group: "Grupo B · Mayores de 12 años" },
+          title: "Motion",
+          presenters: [
+            { name: "Daniel Montalvo", classes: ["Contemporary Jazz"] },
+            { name: "Jorge Díaz", classes: ["Comedia musical"] },
+            { name: "Pablo Díaz", classes: ["Urbanos"] },
           ],
         },
         {
-          name: "Daniel Herrera",
-          specialty: "Aerial",
-          sessions: [
-            { label: "Tela", block: 4, group: "Grupo A · Hasta 12 años" },
-            { label: "Cuna", block: 3, group: "Grupo B · Mayores de 12 años" },
-          ],
-        },
-        {
-          name: "Jorge Díaz",
-          specialty: "Motion",
-          sessions: [
-            { label: "Comedia musical", block: 3, group: "Grupo C · Hasta 12 años" },
-            { label: "Comedia musical", block: 1, group: "Grupo D · Mayores de 12 años" },
-          ],
-        },
-        {
-          name: "Daniel Montalvo",
-          specialty: "Motion",
-          sessions: [
-            { label: "Contemporary Jazz", block: 4, group: "Grupo C · Hasta 12 años" },
-            { label: "Contemporary Jazz", block: 3, group: "Grupo D · Mayores de 12 años" },
-          ],
-        },
-        {
-          name: "Pablo Emmanuel",
-          specialty: "Motion",
-          sessions: [
-            { label: "Urbanos", block: 4, group: "Grupo D · Mayores de 12 años" },
+          title: "Flex",
+          presenters: [
+            { name: "Ana Karen Rojas", classes: ["Flex"] },
           ],
         },
       ],
@@ -261,45 +229,6 @@ function buildJuryLineup(jury: JuryMember[]) {
   return lineup;
 }
 
-function getWorkshopGroupLabel(group: string) {
-  return group.split("·")[0]?.trim() || group;
-}
-
-function buildWorkshopRows(workshops: NonNullable<SedeContent["workshops"]>) {
-  return workshops.coaches
-    .flatMap((coach) =>
-      coach.sessions.map((session) => {
-        const labelIsGroup = session.label?.toLowerCase().includes("grupo");
-
-        return {
-          ...session,
-          coachName: coach.name,
-          className: labelIsGroup ? session.group : session.label ?? coach.specialty ?? "Workshop",
-          group: labelIsGroup ? session.label ?? session.group : getWorkshopGroupLabel(session.group),
-        };
-      }),
-    )
-    .sort((left, right) => left.block - right.block);
-}
-
-function buildWorkshopBlocks(workshops: NonNullable<SedeContent["workshops"]>) {
-  const rows = buildWorkshopRows(workshops);
-  const groups: Array<{ block: number; rows: WorkshopTableRow[] }> = [];
-
-  rows.forEach((row) => {
-    const group = groups.find((item) => item.block === row.block);
-
-    if (group) {
-      group.rows.push(row);
-      return;
-    }
-
-    groups.push({ block: row.block, rows: [row] });
-  });
-
-  return groups;
-}
-
 type SedesPageProps = {
   venueKey?: keyof typeof sedesContent;
 };
@@ -309,7 +238,6 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
   const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
   const hasPublishedConvocation = venueKey === "edomex";
   const juryLineup = venue.jury?.length ? buildJuryLineup(venue.jury) : [];
-  const workshopBlocks = venue.workshops ? buildWorkshopBlocks(venue.workshops) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
   const juryStepRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -561,17 +489,17 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
           </div>
 
           <div className="sedes-workshop-agenda">
-            {workshopBlocks.map((slot) => (
-              <article className="sedes-workshop-slot" key={`workshop-block-${slot.block}`}>
+            {venue.workshops.tracks.map((track) => (
+              <article className="sedes-workshop-slot" key={track.title}>
+                <h3 className="sedes-workshop-slot__title">{track.title}</h3>
                 <div className="sedes-workshop-slot__sessions">
-                  {slot.rows.map((session) => (
+                  {track.presenters.map((presenter) => (
                     <div
                       className="sedes-workshop-slot__session"
-                      key={`${session.block}-${session.group}-${session.className}-${session.coachName}`}
+                      key={`${track.title}-${presenter.name}`}
                     >
-                      <span className="sedes-workshop-slot__group" data-label="Grupo">{session.group}</span>
-                      <span className="sedes-workshop-slot__class" data-label="Clase">{session.className}</span>
-                      <span className="sedes-workshop-slot__speaker" data-label="Ponente">{session.coachName}</span>
+                      <span className="sedes-workshop-slot__class" data-label="Clase">{presenter.classes.join(" · ")}</span>
+                      <span className="sedes-workshop-slot__speaker" data-label="Ponente">{presenter.name}</span>
                     </div>
                   ))}
                 </div>

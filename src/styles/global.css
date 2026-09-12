@@ -30610,6 +30610,20 @@ button {
   box-shadow: 0 22px 54px rgba(42, 41, 40, 0.06);
 }
 
+.sedes-workshop-slot__title {
+  margin: 0;
+  padding: 18px clamp(18px, 2.2vw, 28px);
+  border-bottom: 1px solid rgba(42, 41, 40, 0.1);
+  color: var(--sedes-pink);
+  font-family: var(--font-body);
+  font-size: clamp(1.42rem, 1.8vw, 2.1rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1.02;
+  text-align: center;
+  text-transform: none;
+}
+
 .sedes-workshop-slot__sessions {
   display: grid;
   gap: 0;
@@ -30617,7 +30631,7 @@ button {
 
 .sedes-workshop-slot__session {
   display: grid;
-  grid-template-columns: minmax(112px, 0.26fr) minmax(170px, 0.35fr) minmax(170px, 0.39fr);
+  grid-template-columns: minmax(170px, 0.48fr) minmax(170px, 0.52fr);
   gap: clamp(12px, 1.8vw, 24px);
   align-items: center;
   justify-items: center;
@@ -30628,15 +30642,6 @@ button {
 
 .sedes-workshop-slot__session + .sedes-workshop-slot__session {
   border-top: 1px solid rgba(42, 41, 40, 0.08);
-}
-
-.sedes-workshop-slot__group {
-  color: var(--sedes-pink);
-  font-size: clamp(0.76rem, 0.84vw, 0.92rem);
-  font-weight: 820;
-  letter-spacing: 0.12em;
-  line-height: 1.12;
-  text-transform: uppercase;
 }
 
 .sedes-workshop-slot__class,
@@ -31600,6 +31605,11 @@ button {
     gap: 12px;
   }
 
+  .sedes-workshop-slot__title {
+    padding: 17px 18px;
+    font-size: clamp(1.38rem, 7vw, 1.85rem);
+  }
+
   .sedes-workshop-slot__session {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -31621,17 +31631,11 @@ button {
     text-transform: uppercase;
   }
 
-  .sedes-workshop-slot__group,
   .sedes-workshop-slot__class,
   .sedes-workshop-slot__speaker {
     font-size: 1rem;
     letter-spacing: 0;
     text-transform: none;
-  }
-
-  .sedes-workshop-slot__group {
-    color: var(--sedes-pink);
-    font-weight: 780;
   }
 
   .sedes-workshop-card {
