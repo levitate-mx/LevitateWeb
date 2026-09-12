@@ -417,11 +417,12 @@ export function InscripcionesPage() {
       <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
         <div className="inscripciones-section-head">
           <h2 id="inscripciones-pricing-title">Costos Oficiales</h2>
+          <p className="inscripciones-pricing-note">Costo por participante.</p>
         </div>
 
         <div className="inscripciones-cost-grid">
           <article className="inscripciones-cost-card">
-            <div className="inscripciones-cost-table" aria-label="Costos por categoría">
+            <div className="inscripciones-cost-table" aria-label="Costos por participante y categoría">
               <div className="inscripciones-cost-table__head" aria-hidden="true">
                 <span>Categoría</span>
                 <span>Preventa</span>

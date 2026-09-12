@@ -27559,6 +27559,16 @@ button {
   text-transform: none;
 }
 
+.inscripciones-pricing-note {
+  margin: 12px 0 0;
+  color: var(--home-pink);
+  font-size: clamp(0.78rem, 0.92vw, 0.94rem);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 .inscripciones-step-grid {
   width: min(100%, 1180px);
   margin: 0 auto;
