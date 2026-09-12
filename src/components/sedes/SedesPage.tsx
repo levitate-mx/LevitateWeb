@@ -17,7 +17,7 @@ type CompetitionBlockLegendItem = {
 
 type WorkshopSession = {
   label?: string;
-  time: string;
+  block: number;
   group: string;
 };
 
@@ -30,7 +30,6 @@ type WorkshopCoach = {
 type WorkshopTableRow = WorkshopSession & {
   className: string;
   coachName: string;
-  sortValue: number;
 };
 
 type JuryMember = {
@@ -140,46 +139,46 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
           name: "Ana Karen Rojas",
           specialty: "Flex",
           sessions: [
-            { label: "Todos los grupos", time: "10:00 AM - 11:30 AM", group: "Flex" },
+            { label: "Todos los grupos", block: 1, group: "Flex" },
           ],
         },
         {
           name: "Vladimir Garza",
           specialty: "Aerial",
           sessions: [
-            { label: "Aro", time: "12:00 PM - 1:30 PM", group: "Grupo A · Hasta 12 años" },
-            { label: "Trapecio", time: "10:00 AM - 11:30 AM", group: "Grupo B · Mayores de 12 años" },
+            { label: "Aro", block: 2, group: "Grupo A · Hasta 12 años" },
+            { label: "Trapecio", block: 1, group: "Grupo B · Mayores de 12 años" },
           ],
         },
         {
           name: "Daniel Herrera",
           specialty: "Aerial",
           sessions: [
-            { label: "Tela", time: "2:30 PM - 4:30 PM", group: "Grupo A · Hasta 12 años" },
-            { label: "Cuna", time: "12:00 PM - 2:00 PM", group: "Grupo B · Mayores de 12 años" },
+            { label: "Tela", block: 4, group: "Grupo A · Hasta 12 años" },
+            { label: "Cuna", block: 3, group: "Grupo B · Mayores de 12 años" },
           ],
         },
         {
           name: "Jorge Díaz",
           specialty: "Motion",
           sessions: [
-            { label: "Comedia musical", time: "12:00 PM - 2:00 PM", group: "Grupo C · Hasta 12 años" },
-            { label: "Comedia musical", time: "10:00 AM - 11:30 AM", group: "Grupo D · Mayores de 12 años" },
+            { label: "Comedia musical", block: 3, group: "Grupo C · Hasta 12 años" },
+            { label: "Comedia musical", block: 1, group: "Grupo D · Mayores de 12 años" },
           ],
         },
         {
           name: "Daniel Montalvo",
           specialty: "Motion",
           sessions: [
-            { label: "Contemporary Jazz", time: "2:30 PM - 4:30 PM", group: "Grupo C · Hasta 12 años" },
-            { label: "Contemporary Jazz", time: "12:00 PM - 2:00 PM", group: "Grupo D · Mayores de 12 años" },
+            { label: "Contemporary Jazz", block: 4, group: "Grupo C · Hasta 12 años" },
+            { label: "Contemporary Jazz", block: 3, group: "Grupo D · Mayores de 12 años" },
           ],
         },
         {
           name: "Pablo Emmanuel",
           specialty: "Motion",
           sessions: [
-            { label: "Urbanos", time: "2:30 PM - 4:30 PM", group: "Grupo D · Mayores de 12 años" },
+            { label: "Urbanos", block: 4, group: "Grupo D · Mayores de 12 años" },
           ],
         },
       ],
@@ -262,23 +261,6 @@ function buildJuryLineup(jury: JuryMember[]) {
   return lineup;
 }
 
-function getWorkshopStartMinutes(time: string) {
-  const [start = ""] = time.split("-");
-  const match = start.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-
-  if (!match) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  const [, hourValue, minuteValue, periodValue] = match;
-  const period = periodValue.toUpperCase();
-  const hour = Number(hourValue);
-  const minute = Number(minuteValue);
-  const normalizedHour = period === "PM" && hour !== 12 ? hour + 12 : period === "AM" && hour === 12 ? 0 : hour;
-
-  return normalizedHour * 60 + minute;
-}
-
 function getWorkshopGroupLabel(group: string) {
   return group.split("·")[0]?.trim() || group;
 }
@@ -294,26 +276,25 @@ function buildWorkshopRows(workshops: NonNullable<SedeContent["workshops"]>) {
           coachName: coach.name,
           className: labelIsGroup ? session.group : session.label ?? coach.specialty ?? "Workshop",
           group: labelIsGroup ? session.label ?? session.group : getWorkshopGroupLabel(session.group),
-          sortValue: getWorkshopStartMinutes(session.time),
         };
       }),
     )
-    .sort((left, right) => left.sortValue - right.sortValue);
+    .sort((left, right) => left.block - right.block);
 }
 
-function buildWorkshopTimeGroups(workshops: NonNullable<SedeContent["workshops"]>) {
+function buildWorkshopBlocks(workshops: NonNullable<SedeContent["workshops"]>) {
   const rows = buildWorkshopRows(workshops);
-  const groups: Array<{ time: string; rows: WorkshopTableRow[] }> = [];
+  const groups: Array<{ block: number; rows: WorkshopTableRow[] }> = [];
 
   rows.forEach((row) => {
-    const group = groups.find((item) => item.time === row.time);
+    const group = groups.find((item) => item.block === row.block);
 
     if (group) {
       group.rows.push(row);
       return;
     }
 
-    groups.push({ time: row.time, rows: [row] });
+    groups.push({ block: row.block, rows: [row] });
   });
 
   return groups;
@@ -328,7 +309,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
   const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
   const hasPublishedConvocation = venueKey === "edomex";
   const juryLineup = venue.jury?.length ? buildJuryLineup(venue.jury) : [];
-  const workshopTimeGroups = venue.workshops ? buildWorkshopTimeGroups(venue.workshops) : [];
+  const workshopBlocks = venue.workshops ? buildWorkshopBlocks(venue.workshops) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
   const juryStepRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -542,7 +523,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
                 </article>
               ))}
             </div>
-            <p className="sedes-note">*Horarios en tiempo de Ciudad de México. La logística puede cambiar.</p>
+            <p className="sedes-note">*La logística puede cambiar.</p>
           </section>
         ) : null}
       </div>
@@ -580,20 +561,13 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
           </div>
 
           <div className="sedes-workshop-agenda">
-            <div className="sedes-workshop-agenda__head" aria-hidden="true">
-              <span>Hora CDMX</span>
-              <span>Grupo</span>
-              <span>Clase</span>
-              <span>Ponente</span>
-            </div>
-            {workshopTimeGroups.map((slot) => (
-              <article className="sedes-workshop-slot" key={slot.time}>
-                <time>{slot.time}</time>
+            {workshopBlocks.map((slot) => (
+              <article className="sedes-workshop-slot" key={`workshop-block-${slot.block}`}>
                 <div className="sedes-workshop-slot__sessions">
                   {slot.rows.map((session) => (
                     <div
                       className="sedes-workshop-slot__session"
-                      key={`${session.time}-${session.group}-${session.className}-${session.coachName}`}
+                      key={`${session.block}-${session.group}-${session.className}-${session.coachName}`}
                     >
                       <span className="sedes-workshop-slot__group" data-label="Grupo">{session.group}</span>
                       <span className="sedes-workshop-slot__class" data-label="Clase">{session.className}</span>

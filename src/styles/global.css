@@ -30601,10 +30601,6 @@ button {
   align-self: start;
 }
 
-.sedes-workshop-agenda__head {
-  display: none;
-}
-
 .sedes-workshop-slot {
   display: grid;
   overflow: hidden;
@@ -30612,19 +30608,6 @@ button {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.54);
   box-shadow: 0 22px 54px rgba(42, 41, 40, 0.06);
-}
-
-.sedes-workshop-slot time {
-  display: grid;
-  min-height: 0;
-  padding: 18px clamp(18px, 2.2vw, 28px);
-  border-bottom: 1px solid rgba(42, 41, 40, 0.1);
-  color: var(--sedes-ink);
-  font-size: clamp(1.2rem, 1.48vw, 1.7rem);
-  font-weight: 780;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
-  text-align: center;
 }
 
 .sedes-workshop-slot__sessions {
@@ -31615,12 +31598,6 @@ button {
 
   .sedes-workshop-agenda {
     gap: 12px;
-  }
-
-  .sedes-workshop-slot time {
-    padding: 17px 18px;
-    font-size: clamp(1.28rem, 7vw, 1.85rem);
-    text-align: center;
   }
 
   .sedes-workshop-slot__session {
