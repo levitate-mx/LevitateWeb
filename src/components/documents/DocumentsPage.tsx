@@ -27,7 +27,7 @@ const documentFilters = ["Todos", "Convocatoria", "Reglamentos", "Hospedaje"] as
 const levitateDocuments: LevitateDocument[] = [
   {
     title: "Convocatoria Nacional Otoño 2026",
-    href: "/assets/convocatoria-nacional-otono-2026.pdf",
+    href: "/assets/convocatoria-nacional-otono-2026.pdf?v=20260915",
     fileName: "convocatoria-nacional-otono-2026.pdf",
     category: "Convocatoria",
     context: "Próxima edición",
