@@ -124,6 +124,67 @@ async function createDance(f, academy, curp = curpA) {
   return { participant, choreographer, dance };
 }
 
+async function createAerialPricingDances(f, academy, categories) {
+  const record = await createDance(f, academy);
+  const participantIds = [record.participant.id];
+  for (const curp of [curpB, 'CCCC100101MDFBBB01']) {
+    const { json: { participant } } = await f.request('/participants', {
+      method: 'POST', cookie: academy.cookie, status: 201,
+      body: { fullName: `Participante ${curp}`, curp, birthDate: '2010-01-01', age: 16, division: 'teen', shirtSize: 'm' },
+    });
+    participantIds.push(participant.id);
+  }
+  for (const [index, [category, participantCount]] of categories.entries()) {
+    await f.request('/dances', {
+      method: 'POST', cookie: academy.cookie, status: 201,
+      body: { title: `Coreografía ${index + 1}`, genre: 'aereo', subgenre: 'aro', level: 'intermedio', category,
+        venue: 'edomex', choreographerIds: [record.choreographer.id], participantIds: participantIds.slice(0, participantCount) },
+    });
+  }
+}
+
+test('domestic Aerial prices match each category in presale and normal periods without changing discount positions', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'aerial-prices');
+  await createAerialPricingDances(f, academy, [
+    ['solo', 1], ['dupla_1_aparato', 2], ['duo_2_aparatos', 2], ['terna_1_aparato', 3], ['trio_3_aparatos', 3],
+  ]);
+  let now;
+  t.mock.method(Date, 'now', () => now);
+  for (const [date, solo, duo, trio] of [
+    ['2026-09-17T12:00:00Z', 1500, 1300, 950],
+    ['2026-10-14T12:00:00Z', 1750, 1400, 1200],
+  ]) {
+    now = Date.parse(date);
+    const { json: lookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: academy.cookie, body: { curp: curpA },
+    });
+    assert.equal(lookup.currency, 'MXN');
+    assert.deepEqual(Object.fromEntries(lookup.lines.map(line => [line.category, line.baseAmount])), {
+      solo, dupla_1_aparato: duo, duo_2_aparatos: duo, terna_1_aparato: trio, trio_3_aparatos: trio,
+    }, date);
+    assert.deepEqual(lookup.lines.map(line => line.baseAmount), [solo, solo, duo, duo, trio, trio]);
+    assert.deepEqual(lookup.lines.map(line => line.discountRate), [0, 0.5, 0, 0.5, 0, 0.5]);
+  }
+});
+
+test('two solos, a dupla and a trio total 4025 in presale for lookup and the generated payment order', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'aerial-total');
+  await createAerialPricingDances(f, academy, [['solo', 1], ['dupla_1_aparato', 2], ['trio_3_aparatos', 3]]);
+  t.mock.method(Date, 'now', () => Date.parse('2026-09-17T12:00:00Z'));
+  const { json: lookup } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA },
+  });
+  assert.deepEqual(lookup.lines.map(line => line.amount), [1500, 750, 1300, 475]);
+  assert.equal(lookup.subtotal, 4025);
+  const { json: { order } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(order.amount, 4025);
+  assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_inscription_orders WHERE id = ?').get(order.id).amount, 4025);
+});
+
 test('academy registration, verification, login, reset and logout work with prepared schema', async t => {
   const f = await fixture(t);
   f.db.allowAcademyVenueProbe = true;

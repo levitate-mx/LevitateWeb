@@ -66,7 +66,7 @@ type SedeContent = {
 
 const defaultMotionGenres = ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"];
 const defaultAerialGenres = ["Tela", "Aro", "Open"];
-const convocatoriaPdfHref = "/assets/convocatoria-nacional-otono-2026.pdf?v=20260915";
+const convocatoriaPdfHref = "/assets/convocatoria-nacional-otono-2026.pdf?v=20260917";
 const hotelDocumentDownloads = [
   {
     fileName: "Hotel_Levitate2026.pdf",

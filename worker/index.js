@@ -5756,7 +5756,7 @@ function getRegistrationInscriptionAmount(dance, { isInternational = false } = {
   const prices = Date.now() < registrationInscriptionPresaleEndsAt
     ? priceTable.presale
     : priceTable.normal;
-  const priceKey = getRegistrationInscriptionPriceKey(dance, { isInternational });
+  const priceKey = getRegistrationInscriptionPriceKey(dance);
 
   return prices[priceKey] ?? prices.grupo;
 }
@@ -5765,13 +5765,9 @@ function getRegistrationInscriptionCurrency(isInternational = false) {
   return isInternational ? registrationInscriptionCurrencies.international : registrationInscriptionCurrencies.mexico;
 }
 
-function getRegistrationInscriptionPriceKey(dance, { isInternational = false } = {}) {
+function getRegistrationInscriptionPriceKey(dance) {
   if (isRegistrationReleveTeacherDance(dance)) {
     return "releve";
-  }
-
-  if (!isInternational && dance.genre === "aereo") {
-    return "solo";
   }
 
   const categoryPriceKeys = {
