@@ -1610,7 +1610,7 @@ function TicketShopPage() {
         <span>
           {shopOrder?.status === "paid"
             ? "Cada QR es individual y sólo puede utilizarse una vez."
-            : "Al confirmarse el pago, tus accesos con QR aparecerán aquí y recibirás este enlace por WhatsApp."}
+            : "Al confirmarse el pago, se enviará el QR con sus accesos por WhatsApp o correo. Puede tardar hasta 2 días hábiles."}
         </span>
       </div>
     </section>
