@@ -10,6 +10,8 @@ import android.os.VibratorManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -76,6 +79,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import mx.levitate.scanner.ScannerViewModel
 import mx.levitate.scanner.model.ScannerDevice
+import mx.levitate.scanner.model.ScannerBlock
 import mx.levitate.scanner.model.ScanDecision
 import mx.levitate.scanner.model.ScannerUiState
 import mx.levitate.scanner.model.ScanState
@@ -98,6 +102,7 @@ fun LevitateScannerApp(viewModel: ScannerViewModel) {
             onScan = viewModel::scan,
             onRetry = viewModel::retryLastScan,
             onContinue = viewModel::continueScanning,
+            onSelectBlock = viewModel::selectBlock,
         )
     }
 }
@@ -179,35 +184,82 @@ private fun ScannerScreen(
     onScan: (String) -> Unit,
     onRetry: () -> Unit,
     onContinue: () -> Unit,
+    onSelectBlock: (String) -> Unit,
 ) {
     var torchEnabled by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
-    val scanEnabled = state.scanState is ScanState.Ready
+    var showBlockSelection by remember { mutableStateOf(false) }
+    val selectedBlock = state.selectedBlock
+    val isReady = state.scanState is ScanState.Ready
+    val scanEnabled = isReady && selectedBlock != null && !showBlockSelection && !showManualEntry
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(LevitateBlack),
     ) {
-        CameraSurface(
-            torchEnabled = torchEnabled,
-            onQrDetected = { if (scanEnabled) onScan(it) },
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (selectedBlock != null) {
+            CameraSurface(
+                torchEnabled = torchEnabled,
+                onQrDetected = { if (scanEnabled) onScan(it) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.16f)),
         )
-        ScanFrame(modifier = Modifier.fillMaxSize())
+        if (selectedBlock != null) {
+            ScanFrame(modifier = Modifier.fillMaxSize())
+        } else {
+            Column(
+                modifier = Modifier.align(Alignment.Center).padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                Text(
+                    "SELECCIONA EL BLOQUE ACTUAL",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    if (device.blocks.isEmpty()) "No hay bloques disponibles. Vuelve a abrir la app cuando administración haya habilitado el catálogo."
+                    else "Los boletos por bloque se validan contra esta selección. Los pases Día y Full se canjean una sola vez por pulsera.",
+                    color = Color(0xFFBDBDBD),
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
+                )
+                Button(onClick = { showBlockSelection = true }, enabled = device.blocks.isNotEmpty()) {
+                    Text("SELECCIONAR BLOQUE")
+                }
+            }
+        }
 
-        ScannerHeader(
-            device = device,
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(),
-        )
+        ) {
+            ScannerHeader(device = device)
+            if (selectedBlock != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(LevitatePink).padding(horizontal = 18.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("BLOQUE ACTUAL", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(selectedBlock.label, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Black)
+                    }
+                    TextButton(onClick = { showBlockSelection = true }, enabled = isReady) {
+                        Text("CAMBIAR", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
 
         ScannerControls(
             acceptedCount = state.acceptedCount,
@@ -215,6 +267,7 @@ private fun ScannerScreen(
             torchEnabled = torchEnabled,
             onToggleTorch = { torchEnabled = !torchEnabled },
             onManualEntry = { showManualEntry = true },
+            scanEnabled = scanEnabled,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(),
@@ -246,6 +299,46 @@ private fun ScannerScreen(
             },
         )
     }
+
+    if (showBlockSelection && isReady) {
+        BlockSelectionDialog(
+            blocks = device.blocks,
+            selectedBlockId = selectedBlock?.id,
+            onDismiss = { showBlockSelection = false },
+            onSelect = {
+                onSelectBlock(it)
+                showBlockSelection = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun BlockSelectionDialog(
+    blocks: List<ScannerBlock>,
+    selectedBlockId: String?,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Bloque de ingreso") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Elige el bloque que está ingresando ahora.")
+                blocks.forEach { block ->
+                    OutlinedButton(onClick = { onSelect(block.id) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (block.id == selectedBlockId) "${block.label} · Actual" else block.label)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("CANCELAR") } },
+    )
 }
 
 @Composable
@@ -319,6 +412,7 @@ private fun ScannerControls(
     torchEnabled: Boolean,
     onToggleTorch: () -> Unit,
     onManualEntry: () -> Unit,
+    scanEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -329,7 +423,7 @@ private fun ScannerControls(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "APUNTA AL QR DEL BOLETO",
+            text = if (scanEnabled) "APUNTA AL QR DEL BOLETO" else "EL ESCÁNER ESTÁ EN PAUSA",
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
@@ -352,6 +446,7 @@ private fun ScannerControls(
         ) {
             OutlinedButton(
                 onClick = onManualEntry,
+                enabled = scanEnabled,
                 modifier = Modifier
                     .weight(1f)
                     .height(52.dp),
@@ -363,6 +458,7 @@ private fun ScannerControls(
             }
             IconButton(
                 onClick = onToggleTorch,
+                enabled = scanEnabled,
                 modifier = Modifier
                     .size(52.dp)
                     .clip(CircleShape)
@@ -433,10 +529,11 @@ private fun DecisionScreen(
             .fillMaxSize()
             .background(background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.weight(0.5f))
+        Spacer(Modifier.height(12.dp))
         Icon(
             imageVector = if (decision.admitted) Icons.Filled.CheckCircle else Icons.Filled.Close,
             contentDescription = null,
@@ -480,7 +577,7 @@ private fun DecisionScreen(
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(28.dp))
         Button(
             onClick = onContinue,
             modifier = Modifier

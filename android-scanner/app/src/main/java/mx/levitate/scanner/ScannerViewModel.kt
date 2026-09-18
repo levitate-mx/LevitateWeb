@@ -20,6 +20,7 @@ import mx.levitate.scanner.model.ScannerPairingPayload
 import mx.levitate.scanner.model.ScanState
 import mx.levitate.scanner.model.SessionState
 import mx.levitate.scanner.model.TicketPayload
+import mx.levitate.scanner.model.TicketScanAttempt
 
 class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val api = LevitateApi(BuildConfig.API_BASE_URL, SecureSessionStore(application))
@@ -69,6 +70,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                             scanState = ScanState.Ready,
                             activationInProgress = false,
                             activationError = null,
+                            selectedBlockId = null,
                         )
                     }
                 }
@@ -84,8 +86,13 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun selectBlock(blockId: String) {
+        mutableState.update { it.selectBlock(blockId) }
+    }
+
     fun scan(rawValue: String) {
-        if (state.value.scanState !is ScanState.Ready) return
+        val currentState = state.value
+        if (currentState.scanState !is ScanState.Ready || currentState.selectedBlock == null) return
 
         val payload = TicketPayload.normalize(rawValue)
         if (payload == null) {
@@ -100,9 +107,14 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        mutableState.update { it.copy(scanState = ScanState.Checking(payload)) }
+        val attempt = currentState.newAttempt(payload) ?: return
+        submitScan(attempt)
+    }
+
+    private fun submitScan(attempt: TicketScanAttempt) {
+        mutableState.update { it.copy(scanState = ScanState.Checking(attempt)) }
         viewModelScope.launch {
-            runCatching { api.scanTicket(payload) }
+            runCatching { api.scanTicket(attempt.payload, attempt.blockId) }
                 .onSuccess(::completeLocally)
                 .onFailure { error ->
                     when (error) {
@@ -111,11 +123,12 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                                 sessionState = SessionState.SignedOut,
                                 scanState = ScanState.Ready,
                                 activationError = error.message,
+                                selectedBlockId = null,
                             )
                         }
 
                         else -> mutableState.update {
-                            it.copy(scanState = ScanState.NetworkFailure(payload, error.displayMessage()))
+                            it.copy(scanState = ScanState.NetworkFailure(attempt, error.displayMessage()))
                         }
                     }
                 }
@@ -124,8 +137,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     fun retryLastScan() {
         val failure = state.value.scanState as? ScanState.NetworkFailure ?: return
-        mutableState.update { it.copy(scanState = ScanState.Ready) }
-        scan(failure.payload)
+        submitScan(failure.attempt)
     }
 
     fun continueScanning() {

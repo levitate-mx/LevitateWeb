@@ -3,6 +3,17 @@ package mx.levitate.scanner.model
 data class ScannerDevice(
     val id: String,
     val name: String,
+    val blocks: List<ScannerBlock>,
+)
+
+data class ScannerBlock(
+    val id: String,
+    val label: String,
+)
+
+data class TicketScanAttempt(
+    val payload: String,
+    val blockId: String,
 )
 
 data class TicketInfo(
@@ -28,9 +39,9 @@ sealed interface SessionState {
 
 sealed interface ScanState {
     data object Ready : ScanState
-    data class Checking(val payload: String) : ScanState
+    data class Checking(val attempt: TicketScanAttempt) : ScanState
     data class Complete(val decision: ScanDecision) : ScanState
-    data class NetworkFailure(val payload: String, val message: String) : ScanState
+    data class NetworkFailure(val attempt: TicketScanAttempt, val message: String) : ScanState
 }
 
 data class ScannerUiState(
@@ -38,9 +49,27 @@ data class ScannerUiState(
     val scanState: ScanState = ScanState.Ready,
     val activationInProgress: Boolean = false,
     val activationError: String? = null,
+    val selectedBlockId: String? = null,
     val acceptedCount: Int = 0,
     val rejectedCount: Int = 0,
-)
+) {
+    val availableBlocks: List<ScannerBlock>
+        get() = (sessionState as? SessionState.SignedIn)?.device?.blocks.orEmpty()
+
+    val selectedBlock: ScannerBlock?
+        get() = availableBlocks.firstOrNull { it.id == selectedBlockId }
+
+    fun selectBlock(blockId: String): ScannerUiState {
+        if (scanState !is ScanState.Ready || availableBlocks.none { it.id == blockId }) return this
+        return copy(selectedBlockId = blockId)
+    }
+
+    fun newAttempt(payload: String): TicketScanAttempt? {
+        if (scanState !is ScanState.Ready) return null
+        val block = selectedBlock ?: return null
+        return TicketScanAttempt(payload, block.id)
+    }
+}
 
 object TicketPayload {
     private const val prefix = "LEVITATE:TICKET:"

@@ -3,6 +3,7 @@ package mx.levitate.scanner.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mx.levitate.scanner.model.ScanDecision
+import mx.levitate.scanner.model.ScannerBlock
 import mx.levitate.scanner.model.ScannerDevice
 import mx.levitate.scanner.model.TicketInfo
 import org.json.JSONObject
@@ -49,12 +50,12 @@ class LevitateApi(
         parseDevice(response.body)
     }
 
-    suspend fun scanTicket(payload: String): ScanDecision = withContext(Dispatchers.IO) {
+    suspend fun scanTicket(payload: String, blockId: String): ScanDecision = withContext(Dispatchers.IO) {
         val token = sessionStore.readToken() ?: throw SessionExpiredException()
         val response = request(
             path = "/api/registration/scanner/ticket/scan",
             method = "POST",
-            body = JSONObject().put("qrPayload", payload),
+            body = JSONObject().put("qrPayload", payload).put("blockId", blockId),
             scannerToken = token,
         )
 
@@ -85,6 +86,14 @@ class LevitateApi(
         return ScannerDevice(
             id = device.optString("id"),
             name = device.optString("name", "Escáner de entrada"),
+            blocks = body.optJSONArray("blocks")?.let { blocks ->
+                (0 until blocks.length()).mapNotNull { index ->
+                    val block = blocks.optJSONObject(index) ?: return@mapNotNull null
+                    val id = block.optString("id").trim()
+                    val label = block.optString("label").trim()
+                    if (id.isBlank() || label.isBlank()) null else ScannerBlock(id, label)
+                }.distinctBy { it.id }
+            }.orEmpty(),
         )
     }
 

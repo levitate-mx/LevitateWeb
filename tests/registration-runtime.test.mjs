@@ -72,10 +72,10 @@ async function fixture(t, { includeStudentSchema = false, workerUnderTest = work
   return {
     db,
     env,
-    async request(path, { method = 'GET', cookie, body, status = 200 } = {}) {
+    async request(path, { method = 'GET', cookie, headers = {}, body, status = 200 } = {}) {
       const response = await workerUnderTest.fetch(new Request(`http://localhost/api/registration${path}`, {
         method,
-        headers: { ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
+        headers: { ...headers, ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}),
       }), env);
       const json = await response.json();
@@ -108,6 +108,27 @@ const curpA = 'AAAA100101MDFBBB01';
 const curpB = 'BBBB100101MDFBBB01';
 const phone = { buyerPhoneCountryCode: '+52', buyerPhoneNumber: '5555555555' };
 const proof = { fileName: 'comprobante.png', contentType: 'image/png', dataUrl: 'data:image/png;base64,AQID', fileSize: 3 };
+
+async function createPaidTicketOrder(f, admin, items) {
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201,
+    body: { curp: curpA, buyerName: 'Titular de boletos', buyerEmail: 'boletos@example.test', ...phone, items } });
+  await f.request('/shop/order/proof', { method: 'POST', status: 201,
+    body: { orderId: order.id, accessToken: order.accessToken, ...proof } });
+  const { json: { order: paid } } = await f.request('/admin/inscription-order/status', {
+    method: 'POST', cookie: admin.cookie,
+    body: { id: order.id, orderType: 'shop', status: 'paid', paidAmount: order.amount },
+  });
+  return paid;
+}
+
+async function activateTicketScanner(f, admin, deviceName = 'Puerta de prueba') {
+  const { json: pairing } = await f.request('/admin/scanner/pairing-code', {
+    method: 'POST', cookie: admin.cookie, status: 201,
+  });
+  const { json: activation } = await f.request('/scanner/activate', { method: 'POST', status: 201,
+    body: { pairingPayload: pairing.pairingPayload, deviceName } });
+  return { ...activation, headers: { authorization: `Scanner ${activation.deviceToken}` } };
+}
 
 async function createDance(f, academy, curp = curpA) {
   const options = { method: 'POST', cookie: academy.cookie, status: 201 };
@@ -317,6 +338,206 @@ test('inscription and shop payments keep proof, approval, ticket creation and to
   assert.equal(rescanned.json.reason, 'already_used');
   const { json: allOrders } = await f.request('/admin/inscription-orders', { cookie: admin.cookie });
   assert.equal(allOrders.orders.length, 2);
+});
+
+test('ticket scanner block catalog is available only to activated devices and activation returns it', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-catalog-admin', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const expectedBlocks = Array.from({ length: 7 }, (_, index) => ({ id: `bloque-${index + 1}`, label: `Bloque ${index + 1}` }));
+  assert.deepEqual(scanner.blocks, expectedBlocks);
+  const { json: current } = await f.request('/scanner/me', { headers: scanner.headers });
+  assert.deepEqual(current.blocks, expectedBlocks);
+  assert.equal(current.device.id, scanner.device.id);
+  await f.request('/scanner/me', { status: 401 });
+  await f.request('/scanner/ticket/scan', { method: 'POST', body: { qrPayload: 'LEVITATE:TICKET:LV-AAAA-BBBB', blockId: 'bloque-1' }, status: 401 });
+  await f.request('/admin/ticket/scan', { method: 'POST', body: { qrPayload: 'LEVITATE:TICKET:LV-AAAA-BBBB', blockId: 'bloque-1' }, status: 401 });
+});
+
+test('ticket cart requires a canonical block and replaces client supplied block labels', async t => {
+  const f = await fixture(t);
+  const buyer = { curp: curpA, buyerName: 'Titular', buyerEmail: 'bloques@example.test', ...phone };
+  for (const productId of ['block', 'ticket-block']) {
+    for (const [optionId, code] of [[undefined, 'shop_ticket_block_required'], ['bloque-99', 'shop_ticket_block_invalid']]) {
+      const { json } = await f.request('/shop/order', { method: 'POST', status: 400,
+        body: { ...buyer, items: [{ productId, quantity: 1, optionId, optionLabel: 'Full pass' }] } });
+      assert.equal(json.error.code, code);
+    }
+  }
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_shop_orders').get().total, 0);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201,
+    body: { ...buyer, items: [
+      { productId: 'block', quantity: 1, optionId: 'bloque-1', optionLabel: 'Full pass' },
+      { productId: 'ticket-block', quantity: 1, optionId: 'bloque-7', optionLabel: 'Bloque 1' },
+    ] } });
+  assert.deepEqual(order.lineItems.map(item => item.optionLabel), ['Bloque 1', 'Bloque 7']);
+  assert.match(order.lineItems[0].title, /Bloque 1/);
+  assert.doesNotMatch(order.lineItems[0].title, /Full pass/);
+  assert.match(order.lineItems[1].title, /Bloque 7/);
+  assert.equal(order.amount, 500);
+});
+
+test('ticket scanner and admin reject missing or wrong blocks without consuming the QR', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-block-admin', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-3', quantity: 2 }]);
+  for (const [index, endpoint, auth] of [
+    [0, '/scanner/ticket/scan', { headers: scanner.headers }],
+    [1, '/admin/ticket/scan', { cookie: admin.cookie }],
+  ]) {
+    const ticket = order.tickets[index];
+    for (const [blockId, reason] of [[undefined, 'block_required'], ['bloque-99', 'invalid_block'], ['bloque-1', 'wrong_block']]) {
+      const { json } = await f.request(endpoint, { method: 'POST', ...auth, body: { qrPayload: ticket.qrPayload, blockId } });
+      assert.equal(json.admitted, false);
+      assert.equal(json.reason, reason);
+      const stored = f.db.sqlite.prepare('SELECT status, used_at FROM registration_event_tickets WHERE id = ?').get(ticket.id);
+      assert.equal(stored.status, 'active');
+      assert.equal(stored.used_at, null);
+    }
+    const { json: accepted } = await f.request(endpoint, { method: 'POST', ...auth,
+      body: { qrPayload: ticket.qrPayload, blockId: 'bloque-3' } });
+    assert.equal(accepted.admitted, true);
+    assert.equal(accepted.reason, 'accepted');
+    assert.equal(accepted.ticket.status, 'used');
+    f.db.sqlite.prepare("UPDATE registration_event_tickets SET ticket_label = 'Full pass · Bloque 7' WHERE id = ?").run(ticket.id);
+    const { json: reused } = await f.request(endpoint, { method: 'POST', ...auth,
+      body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
+    assert.equal(reused.admitted, false);
+    assert.equal(reused.reason, 'already_used');
+    assert.match(reused.message, /Boleto por bloque/);
+    assert.match(reused.message, /Bloque 3/);
+    assert.doesNotMatch(reused.message, /Full pass|Bloque 1|Bloque 7/, 'used-ticket guidance must identify the purchased block, not the current gate or an old forged label');
+  }
+});
+
+test('ticket scanner exchanges Day and Full passes once for a wristband regardless of selected block', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-wristband-admin', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const order = await createPaidTicketOrder(f, admin,
+    ['day', 'ticket-day-pass', 'full', 'ticket-full-pass'].map(productId => ({ productId, quantity: 1 })));
+  assert.equal(order.tickets.length, 4);
+  for (const [index, ticket] of order.tickets.entries()) {
+    const { json: accepted } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, ...(index % 2 === 0 ? { blockId: 'bloque-1' } : {}) } });
+    assert.equal(accepted.admitted, true);
+    assert.match(accepted.message, /brazalete/i);
+    const { json: duplicate } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, blockId: 'bloque-7' } });
+    assert.equal(duplicate.admitted, false);
+    assert.equal(duplicate.reason, 'already_used', 'changing blocks must never re-enable a redeemed Day/Full QR');
+    assert.match(duplicate.message, index < 2 ? /Day pass/ : /Full pass/);
+    assert.doesNotMatch(duplicate.message, index < 2 ? /Full pass/ : /Day pass/);
+    assert.match(duplicate.message, /brazalete/i);
+  }
+});
+
+test('ticket scanner maps existing QR numbers to original cart quantities instead of trusting printed labels', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-legacy-admin', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-1', quantity: 2 },
+    { productId: 'ticket-day-pass', quantity: 1 },
+    { productId: 'ticket-block', optionId: 'bloque-5', quantity: 2 },
+  ]);
+  // Simulate already issued mixed orders. Non-ticket products do not take a
+  // ticket number, and old display labels may be incomplete or client supplied.
+  const oldLines = [...order.lineItems];
+  oldLines.splice(1, 0, { productId: 'photo-solos', itemType: 'media', quantity: 3, title: 'Fotografías' });
+  f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?').run(JSON.stringify(oldLines), order.id);
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET ticket_label = 'Full pass · Bloque 7' WHERE source_order_id = ?").run(order.id);
+  assert.equal(order.tickets.length, 5);
+  const expectedBlocks = ['bloque-1', 'bloque-1', null, 'bloque-5', 'bloque-5'];
+  for (const [index, ticket] of order.tickets.entries()) {
+    if (expectedBlocks[index]) {
+      const { json: wrong } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+        body: { qrPayload: ticket.qrPayload, blockId: 'bloque-7' } });
+      assert.equal(wrong.reason, 'wrong_block');
+      assert.equal(wrong.admitted, false);
+    }
+    const { json: accepted } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+      body: { qrPayload: ticket.qrPayload, ...(expectedBlocks[index] ? { blockId: expectedBlocks[index] } : {}) } });
+    assert.equal(accepted.admitted, true);
+    assert.equal(accepted.ticket.ticketCode, ticket.ticketCode);
+    assert.equal(accepted.ticket.qrPayload, ticket.qrPayload, 'previously distributed QR payloads remain usable without reissuance');
+  }
+});
+
+test('ticket scanner fails closed for legacy block tickets with missing or unrecognized entitlement metadata', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-unknown-admin', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-2', quantity: 1 }]);
+  const ticket = order.tickets[0];
+  const originalLine = order.lineItems[0];
+  for (const [line, reason] of [
+    [{ ...originalLine, optionId: undefined, optionLabel: 'Bloque 2' }, 'ticket_block_unknown'],
+    [{ ...originalLine, optionId: 'bloque-99', optionLabel: 'Bloque 2' }, 'ticket_block_unknown'],
+    [{ ...originalLine, id: undefined, productId: undefined, title: 'Single pass · Bloque 2' }, 'ticket_details_missing'],
+    [{ ...originalLine, productId: 'unknown-ticket', title: 'Full pass' }, 'ticket_details_missing'],
+  ]) {
+    f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?').run(JSON.stringify([line]), order.id);
+    const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, blockId: 'bloque-2' } });
+    assert.equal(json.admitted, false);
+    assert.equal(json.reason, reason);
+    assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(ticket.id).status, 'active');
+  }
+});
+
+test('ticket scanner denies previously issued QR codes after approval is reversed', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-reversal-admin', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
+  await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie,
+    body: { id: order.id, orderType: 'shop', status: 'rejected', rejectionReason: 'payment_not_found',
+      rejectionMessage: 'La transferencia no se acreditó.' } });
+  const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+    body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-1' } });
+  assert.equal(json.admitted, false);
+  assert.equal(json.reason, 'payment_not_approved');
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id).status, 'active');
+});
+
+test('ticket scanner allows exactly one admission when two devices scan the same valid QR concurrently', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-concurrency-admin', { role: 'admin' });
+  const firstScanner = await activateTicketScanner(f, admin, 'Puerta uno');
+  const secondScanner = await activateTicketScanner(f, admin, 'Puerta dos');
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-4', quantity: 1 }]);
+  const results = await Promise.all([firstScanner, secondScanner].map(scanner => f.request('/scanner/ticket/scan', {
+    method: 'POST', headers: scanner.headers, body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-4' },
+  })));
+  assert.equal(results.filter(result => result.json.admitted).length, 1);
+  assert.deepEqual(results.map(result => result.json.reason).sort(), ['accepted', 'already_used']);
+  const duplicate = results.find(result => result.json.reason === 'already_used').json;
+  assert.match(duplicate.message, /Boleto por bloque/);
+  assert.match(duplicate.message, /Bloque 4/);
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id).status, 'used');
+});
+
+test('ticket scanner still rejects used QR codes when original ticket details or source order are missing', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-used-legacy-admin', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
+  const ticket = order.tickets[0];
+  const scan = () => f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
+  assert.equal((await scan()).json.admitted, true);
+  f.db.sqlite.prepare("UPDATE registration_shop_orders SET line_items_json = '[]' WHERE id = ?").run(order.id);
+  for (const sourceMissing of [false, true]) {
+    if (sourceMissing) {
+      f.db.sqlite.prepare("UPDATE registration_event_tickets SET source_order_id = 'missing-legacy-order' WHERE id = ?").run(ticket.id);
+    }
+    const { json } = await scan();
+    assert.equal(json.admitted, false);
+    assert.equal(json.reason, 'already_used');
+    assert.match(json.message, /QR ya fue utilizado/);
+    assert.doesNotMatch(json.message, /Full pass|Day pass|Boleto por bloque/, 'missing authoritative data must not be guessed from the printed ticket label');
+    assert.equal(json.ticket.status, 'used');
+  }
 });
 
 test('ticket shop orders can be created before participant registration and link by CURP later', async t => {

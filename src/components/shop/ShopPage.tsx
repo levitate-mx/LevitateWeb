@@ -225,7 +225,8 @@ const ticketProducts: TicketProduct[] = [
 const admissionRules = [
   "El acceso y lugares disponibles son por orden de llegada.",
   "No se pueden apartar lugares dentro del recinto.",
-  "Cada boleto es individual y permite un solo acceso por ticket.",
+  "Cada QR es individual y se valida una sola vez. Los boletos por bloque solo son válidos en el bloque comprado.",
+  "Day pass y Full pass se canjean por un brazalete en la entrada; el QR no puede volver a utilizarse.",
 ];
 
 const mediaDeliverables = [

@@ -184,6 +184,10 @@ const registrationShopDiscountCode = "COLIBRI26";
 const registrationShopDiscountRate = 0.1;
 const registrationMediaGroupBaseParticipantCount = 4;
 const registrationMediaGroupExtraParticipantPrice = 300;
+const registrationTicketBlocks = Array.from({ length: 7 }, (_, index) => ({
+  id: `bloque-${index + 1}`,
+  label: `Bloque ${index + 1}`,
+}));
 const registrationShopProducts = new Map([
   [
     "ticket-block",
@@ -1766,6 +1770,7 @@ async function handleRegistrationAdminTicketScan(request, env) {
 
     return sendJson(
       await scanRegistrationEventTicket(db, {
+        blockId: body.blockId,
         ticketCode,
         usedBy: admin.session.user.email || admin.session.user.id,
       }),
@@ -1869,6 +1874,7 @@ async function handleRegistrationScannerActivate(request, env) {
           name: deviceName,
         },
         deviceToken,
+        blocks: registrationTicketBlocks,
       },
       201,
     );
@@ -1882,7 +1888,7 @@ async function handleRegistrationScannerMe(request, env) {
     assertMethod(request, ["GET"]);
 
     const device = await requireRegistrationScannerDevice(request, getDb(env));
-    return sendJson({ device: serializeRegistrationScannerDevice(device) });
+    return sendJson({ device: serializeRegistrationScannerDevice(device), blocks: registrationTicketBlocks });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -1897,6 +1903,7 @@ async function handleRegistrationScannerTicketScan(request, env) {
     const body = await readJsonBody(request);
     const ticketCode = parseRegistrationTicketScanValue(body.qrPayload ?? body.ticketCode ?? body.code);
     const result = await scanRegistrationEventTicket(db, {
+      blockId: body.blockId,
       ticketCode,
       usedBy: `Scanner: ${device.name}`,
     });
@@ -1918,7 +1925,7 @@ async function handleRegistrationScannerTicketScan(request, env) {
   }
 }
 
-async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
+async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) {
   const ticket = await getRegistrationEventTicketByCode(db, ticketCode);
 
   if (!ticket) {
@@ -1940,14 +1947,82 @@ async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
     };
   }
 
+  const orderTable = ticket.source_order_type === "shop"
+    ? "registration_shop_orders"
+    : "registration_inscription_orders";
+  const order = await db.prepare(`SELECT * FROM ${orderTable} WHERE id = ? LIMIT 1`)
+    .bind(ticket.source_order_id)
+    .first();
+
+  // Ticket numbers follow the original order lines and quantities. Resolve the
+  // entitlement even for a used QR so the operator sees which pass it was.
+  const ticketSpec = order
+    ? getRegistrationEventTicketSpecs(order)[Number(ticket.ticket_number) - 1]
+    : null;
+
   if (ticket.status === "used") {
     return {
       admitted: false,
       reason: "already_used",
       valid: true,
-      message: "Este boleto ya fue utilizado.",
+      message: getRegistrationUsedTicketMessage(ticketSpec),
       ticket: serializeRegistrationEventTicket(ticket),
     };
+  }
+
+  if (!order || order.status !== "paid") {
+    return {
+      admitted: false,
+      reason: "payment_not_approved",
+      valid: false,
+      message: "El pago de este boleto no está aprobado. Consulta con administración.",
+      ticket: serializeRegistrationEventTicket(ticket),
+    };
+  }
+
+  if (!ticketSpec?.passType) {
+    return {
+      admitted: false,
+      reason: "ticket_details_missing",
+      valid: false,
+      message: "No se pudo identificar el tipo de boleto. Consulta con administración.",
+      ticket: serializeRegistrationEventTicket(ticket),
+    };
+  }
+
+  if (ticketSpec.passType === "block") {
+    if (!ticketSpec.block) {
+      return {
+        admitted: false,
+        reason: "ticket_block_unknown",
+        valid: false,
+        message: "Este boleto no tiene un bloque válido registrado. Consulta con administración.",
+        ticket: serializeRegistrationEventTicket(ticket),
+      };
+    }
+
+    const selectedBlockId = optionalString(blockId);
+    const selectedBlock = registrationTicketBlocks.find((block) => block.id === selectedBlockId);
+
+    if (!selectedBlock) {
+      return {
+        admitted: false,
+        reason: selectedBlockId ? "invalid_block" : "block_required",
+        valid: true,
+        message: "Selecciona el bloque actual en el escáner antes de validar este boleto.",
+        ticket: serializeRegistrationEventTicket(ticket),
+      };
+    }
+
+    if (selectedBlock.id !== ticketSpec.block.id) {
+      return {
+        admitted: false,
+        reason: "wrong_block",
+        valid: true,
+        message: `Este boleto corresponde al ${ticketSpec.block.label}. El escáner está en ${selectedBlock.label}. El boleto sigue disponible.`,
+        ticket: serializeRegistrationEventTicket(ticket),
+      };
+    }
   }
 
   const scanResult = await db
@@ -1961,6 +2036,11 @@ async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
           updated_at = datetime('now')
         WHERE id = ?
           AND status = 'active'
+          AND EXISTS (
+            SELECT 1 FROM ${orderTable} AS source_order
+            WHERE source_order.id = registration_event_tickets.source_order_id
+              AND source_order.status = 'paid'
+          )
       `,
     )
     .bind(usedBy, ticket.id)
@@ -1968,11 +2048,16 @@ async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
   const updatedTicket = await getRegistrationEventTicketByCode(db, ticketCode);
 
   if (Number(scanResult.meta?.changes || 0) === 0) {
+    const alreadyUsed = updatedTicket?.status === "used";
+    const cancelled = updatedTicket?.status === "cancelled";
+
     return {
       admitted: false,
-      reason: "already_used",
-      valid: true,
-      message: "Este boleto ya fue utilizado.",
+      reason: alreadyUsed ? "already_used" : cancelled ? "cancelled" : "payment_not_approved",
+      valid: alreadyUsed,
+      message: alreadyUsed
+        ? getRegistrationUsedTicketMessage(ticketSpec)
+        : cancelled ? "Este boleto fue cancelado." : "El pago de este boleto no está aprobado. Consulta con administración.",
       ticket: updatedTicket ? serializeRegistrationEventTicket(updatedTicket) : null,
     };
   }
@@ -1981,9 +2066,30 @@ async function scanRegistrationEventTicket(db, { ticketCode, usedBy }) {
     admitted: true,
     reason: "accepted",
     valid: true,
-    message: "Boleto válido. Acceso registrado.",
+    message: ticketSpec.passType === "day"
+      ? "Day pass válido. Entrega el brazalete del día indicado en el boleto. QR canjeado; no puede volver a utilizarse."
+      : ticketSpec.passType === "full"
+        ? "Full pass válido. Entrega el brazalete Full pass. QR canjeado; no puede volver a utilizarse."
+        : `Boleto válido para ${ticketSpec.block.label}. Acceso registrado.`,
     ticket: serializeRegistrationEventTicket(updatedTicket),
   };
+}
+
+function getRegistrationUsedTicketMessage(ticketSpec) {
+  if (ticketSpec?.passType === "day") {
+    return "Day pass ya utilizado. Este QR ya fue validado. Para reingresar, revisa el brazalete del día correspondiente. No entregues otro brazalete con este QR.";
+  }
+
+  if (ticketSpec?.passType === "full") {
+    return "Full pass ya utilizado. Este QR ya fue validado. Para reingresar, revisa el brazalete Full pass. No entregues otro brazalete con este QR.";
+  }
+
+  if (ticketSpec?.passType === "block") {
+    const blockLabel = ticketSpec.block ? ` · ${ticketSpec.block.label}` : "";
+    return `Boleto por bloque${blockLabel} ya utilizado. Este QR ya registró un acceso y no puede volver a utilizarse.`;
+  }
+
+  return "Este QR ya fue utilizado. No se pudo identificar el tipo de boleto; consulta con administración.";
 }
 
 async function handleRegistrationChoreographers(request, env) {
@@ -3731,7 +3837,21 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
     }
 
     const optionId = optionalString(rawItem?.optionId);
-    const optionLabel = optionalString(rawItem?.optionLabel);
+    let optionLabel = optionalString(rawItem?.optionLabel);
+
+    if (getRegistrationTicketPassType(product.id) === "block") {
+      if (!optionId) {
+        throwHttpError("shop_ticket_block_required", "Selecciona el bloque de tu boleto.", 400);
+      }
+
+      const block = registrationTicketBlocks.find((item) => item.id === optionId);
+
+      if (!block) {
+        throwHttpError("shop_ticket_block_invalid", "El bloque seleccionado no es válido.", 400);
+      }
+
+      optionLabel = block.label;
+    }
     const danceId = optionalString(rawItem?.danceId);
     const danceTitle = optionalString(rawItem?.danceTitle);
     const groupKey = [product.id, optionId, danceId].filter(Boolean).join(":");
@@ -4561,9 +4681,21 @@ function getRegistrationEventTicketSpecs(order) {
 
     const quantity = getRegistrationTicketLineQuantity(lineItem);
     const label = lineItem.title || lineItem.name || lineItem.productName || "Boleto Levitate";
+    const productId = optionalString(lineItem.productId || lineItem.id).split(":")[0];
+    const passType = getRegistrationTicketPassType(productId);
+    const block = passType === "block"
+      ? registrationTicketBlocks.find((item) => item.id === lineItem.optionId) || null
+      : null;
 
-    return Array.from({ length: quantity }, () => ({ label }));
+    return Array.from({ length: quantity }, () => ({ label, passType, block }));
   });
+}
+
+function getRegistrationTicketPassType(productId) {
+  if (productId === "block" || productId === "ticket-block") return "block";
+  if (productId === "day" || productId === "ticket-day-pass") return "day";
+  if (productId === "full" || productId === "ticket-full-pass") return "full";
+  return null;
 }
 
 function isRegistrationTicketLineItem(lineItem) {
