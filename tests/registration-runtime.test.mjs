@@ -319,6 +319,51 @@ test('inscription and shop payments keep proof, approval, ticket creation and to
   assert.equal(allOrders.orders.length, 2);
 });
 
+test('ticket shop orders can be created before participant registration and link by CURP later', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'future-ticket');
+  const admin = await seedAcademy(f, 'future-ticket-admin', { role: 'admin' });
+
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201,
+    body: { curp: curpB, buyerName: 'Compradora anticipada', buyerEmail: 'anticipada@example.test', ...phone,
+      items: [{ productId: 'ticket-day-pass', quantity: 2 }] } });
+
+  assert.equal(order.amount, 900);
+  assert.equal(order.academyId, null);
+  assert.equal(order.academyName, 'Registro pendiente');
+  assert.equal(order.participantName, 'Compradora anticipada');
+
+  await f.request('/shop/order', { method: 'POST', status: 404,
+    body: { curp: 'CCCC100101MDFBBB01', buyerName: 'Compra foto', buyerEmail: 'foto@example.test', ...phone,
+      items: [{ productId: 'photo-solos', quantity: 1, danceId: 'missing-dance' }] } });
+
+  const { json: { participant } } = await f.request('/participants', { method: 'POST', cookie: academy.cookie, status: 201,
+    body: { fullName: 'Participante boleto futuro', curp: curpB, birthDate: '2010-01-01', age: 16, division: 'teen', shirtSize: 'm' } });
+
+  let storedOrder = f.db.sqlite.prepare(
+    'SELECT participant_name, academy_id, academy_name, venue FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id);
+  assert.equal(storedOrder.participant_name, 'Participante boleto futuro');
+  assert.equal(storedOrder.academy_id, academy.academyId);
+  assert.equal(storedOrder.academy_name, 'Independiente');
+
+  const { json: { choreographer } } = await f.request('/choreographers', { method: 'POST', cookie: academy.cookie, status: 201,
+    body: { fullName: 'Coreógrafa boleto futuro', email: 'coreografa-boleto@example.test', phone: '5555555555', shirtSize: 's' } });
+  await f.request('/dances', { method: 'POST', cookie: academy.cookie, status: 201,
+    body: { title: 'Vuelo boleto futuro', genre: 'aereo', subgenre: 'open_otro', subgenreDetail: 'Aparato propio', level: 'principiante',
+      category: 'solo', venue: 'edomex', choreographerIds: [choreographer.id], participantIds: [participant.id] } });
+
+  storedOrder = f.db.sqlite.prepare(
+    'SELECT participant_name, academy_id, academy_name, venue FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id);
+  assert.equal(storedOrder.venue, 'edomex');
+
+  const { json: allOrders } = await f.request('/admin/inscription-orders', { cookie: admin.cookie });
+  const listedOrder = allOrders.orders.find(item => item.id === order.id);
+  assert.equal(listedOrder.academyId, academy.academyId);
+  assert.equal(listedOrder.venue, 'edomex');
+});
+
 test('legacy D1 and Drive music remain visible; upload, replacement and removal preserve ownership', async t => {
   const f = await fixture(t);
   const academy = await seedAcademy(f, 'music');

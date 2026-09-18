@@ -1203,6 +1203,8 @@ async function handleRegistrationParticipants(request, env) {
       )
       .run();
 
+    await syncRegistrationShopOrdersForParticipantCurp(db, curp, { includeLinked: true });
+
     const participant = await db
       .prepare(
         `
@@ -2166,6 +2168,8 @@ async function handleRegistrationDances(request, env) {
     ];
 
     await db.batch(statements);
+
+    await syncRegistrationShopOrdersForDanceParticipants(db, participantIds);
 
     return sendJson({ dance: await getRegistrationDanceById(db, academyId, danceId) }, 201);
   } catch (error) {
@@ -3457,8 +3461,11 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
 }
 
 async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact, curp, discountCode, items }) {
-  const participant = await getRegistrationShopParticipantByCurp(db, curp);
   const normalizedCart = normalizeRegistrationShopCart(items, discountCode);
+  const hasMediaLineItems = normalizedCart.lineItems.some((lineItem) => lineItem.itemType === "media");
+  const participant = await getRegistrationShopParticipantByCurp(db, curp, { required: hasMediaLineItems });
+  const participantSnapshot = getRegistrationShopParticipantSnapshot(participant, buyerContact);
+
   normalizedCart.lineItems = await validateRegistrationShopMediaLineItems(db, curp, normalizedCart.lineItems);
   Object.assign(normalizedCart, getRegistrationShopCartTotals(normalizedCart.lineItems, discountCode));
   const reusableOrder = await getReusableRegistrationShopOrderWithoutProof(db, curp);
@@ -3494,10 +3501,10 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
         `,
       )
       .bind(
-        participant.full_name,
-        participant.academy_id || null,
-        participant.academy_name,
-        participant.venue,
+        participantSnapshot.participantName,
+        participantSnapshot.academyId,
+        participantSnapshot.academyName,
+        participantSnapshot.venue,
         normalizedCart.amount,
         buyerContact.name,
         buyerContact.email,
@@ -3547,10 +3554,10 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
     .bind(
       orderId,
       curp,
-      participant.full_name,
-      participant.academy_id || null,
-      participant.academy_name,
-      participant.venue,
+      participantSnapshot.participantName,
+      participantSnapshot.academyId,
+      participantSnapshot.academyName,
+      participantSnapshot.venue,
       reference,
       crypto.randomUUID(),
       normalizedCart.amount,
@@ -3568,7 +3575,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
   return getRegistrationShopOrderRecordById(db, orderId);
 }
 
-async function getRegistrationShopParticipantByCurp(db, curp) {
+async function getRegistrationShopParticipantByCurp(db, curp, { required = true } = {}) {
   const participant = await db
     .prepare(
       `
@@ -3599,10 +3606,107 @@ async function getRegistrationShopParticipantByCurp(db, curp) {
     .first();
 
   if (!participant) {
+    if (!required) {
+      return null;
+    }
+
     throwHttpError("registration_participant_not_found", "No encontramos un registro para esa CURP.", 404);
   }
 
   return participant;
+}
+
+function getRegistrationShopParticipantSnapshot(participant, buyerContact) {
+  return {
+    academyId: participant?.academy_id || null,
+    academyName: participant?.academy_name || "Registro pendiente",
+    participantName: participant?.full_name || buyerContact.name,
+    venue: participant?.venue || defaultRegistrationEventVenue,
+  };
+}
+
+async function syncRegistrationShopOrdersForDanceParticipants(db, participantIds) {
+  if (!Array.isArray(participantIds) || participantIds.length === 0) {
+    return;
+  }
+
+  const curps = new Set();
+
+  for (const participantId of participantIds) {
+    const participant = await db
+      .prepare(
+        `
+          SELECT curp
+          FROM registration_participants
+          WHERE id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(participantId)
+      .first();
+
+    if (participant?.curp) {
+      curps.add(participant.curp);
+    }
+  }
+
+  for (const curp of curps) {
+    await syncRegistrationShopOrdersForParticipantCurp(db, curp, { includeLinked: true });
+  }
+}
+
+async function syncRegistrationShopOrdersForParticipantCurp(db, curp, { includeLinked = false } = {}) {
+  const participant = await getRegistrationShopParticipantByCurp(db, curp, { required: false });
+
+  if (!participant) {
+    return;
+  }
+
+  const academyClause = includeLinked
+    ? "AND (academy_id IS NULL OR academy_id = ?)"
+    : "AND academy_id IS NULL";
+  const bindings = includeLinked ? [curp, participant.academy_id] : [curp];
+  const { results = [] } = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_shop_orders
+        WHERE curp = ?
+          ${academyClause}
+      `,
+    )
+    .bind(...bindings)
+    .all();
+
+  for (const order of results) {
+    const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
+    const hasMediaLineItems = lineItems.some(isRegistrationShopMediaPaymentLineItem);
+
+    if (order.academy_id && hasMediaLineItems) {
+      continue;
+    }
+
+    await db
+      .prepare(
+        `
+          UPDATE registration_shop_orders
+          SET participant_name = ?,
+            academy_id = ?,
+            academy_name = ?,
+            venue = ?,
+            updated_at = datetime('now')
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        participant.full_name,
+        participant.academy_id || null,
+        participant.academy_name,
+        participant.venue,
+        order.id,
+      )
+      .run();
+  }
 }
 
 function normalizeRegistrationShopCart(rawItems, discountCode) {
