@@ -4586,11 +4586,6 @@ function drawAcademyPaymentSummaryRow({
     y: y + 43,
   });
 
-  setAcademyPdfFont(context, 8, 800);
-  context.fillStyle = softMuted;
-  context.fillText(row.curp, amountRightX, y + rowHeight - 13);
-  context.textAlign = "left";
-
   let conceptY = y + 28 + layout.participantLines.length * 17;
   layout.lineLayouts.forEach((lineLayout, lineIndex) => {
     const line = row.lines[lineIndex];
