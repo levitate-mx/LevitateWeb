@@ -414,10 +414,21 @@ type RegistrationInscriptionLookup = {
 type AcademyPaymentSummaryPdfRow = {
   participantName: string;
   curp: string;
-  choreographyTitle: string;
-  category: string;
+  lines: AcademyPaymentSummaryPdfLine[];
   totalAmount: number;
   currency: string;
+};
+
+type AcademyPaymentSummaryPdfLine = {
+  title: string;
+  category: string;
+  amount: number;
+  baseAmount: number;
+  currency: string;
+  discountAmount: number;
+  discountRate: number;
+  isCourtesy: boolean;
+  pricingPosition: number;
 };
 
 type RegistrationBootstrap = RegistrationSession & {
@@ -4136,32 +4147,88 @@ function getAcademyPaymentLookupCurrency(lookup: RegistrationInscriptionLookup) 
   return lookup.currency || lookup.lines.find((lineItem) => lineItem.currency)?.currency || "MXN";
 }
 
+function sortAcademyPaymentSummaryLineItems(lineItems: RegistrationInscriptionLineItem[]) {
+  return lineItems
+    .map((lineItem, index) => ({ index, lineItem }))
+    .sort((left, right) => {
+      const leftPosition = Number(left.lineItem.pricingPosition || 0);
+      const rightPosition = Number(right.lineItem.pricingPosition || 0);
+
+      if (leftPosition > 0 && rightPosition > 0 && leftPosition !== rightPosition) {
+        return leftPosition - rightPosition;
+      }
+
+      const leftBaseAmount = Number(left.lineItem.baseAmount ?? left.lineItem.amount ?? 0);
+      const rightBaseAmount = Number(right.lineItem.baseAmount ?? right.lineItem.amount ?? 0);
+      const amountDifference = rightBaseAmount - leftBaseAmount;
+
+      if (amountDifference !== 0) {
+        return amountDifference;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ lineItem }) => lineItem);
+}
+
+function toAcademyPaymentSummaryPdfLine(
+  lineItem: RegistrationInscriptionLineItem,
+  index: number,
+  fallbackCurrency: string,
+): AcademyPaymentSummaryPdfLine {
+  const amount = Number(lineItem.amount || 0);
+  const baseAmount = Number(lineItem.baseAmount ?? amount);
+  const discountAmount = Number(lineItem.discountAmount || 0);
+
+  return {
+    amount,
+    baseAmount,
+    category: getRegistrationLineCategoryLabel(lineItem),
+    currency: lineItem.currency || fallbackCurrency,
+    discountAmount,
+    discountRate: Number(lineItem.discountRate || 0),
+    isCourtesy: Boolean(lineItem.isCourtesy),
+    pricingPosition: Number(lineItem.pricingPosition || index + 1),
+    title: getRegistrationLineTitle(lineItem),
+  };
+}
+
 function getAcademyPaymentSummaryRows(lookups: RegistrationInscriptionLookup[]) {
-  return lookups.flatMap((lookup): AcademyPaymentSummaryPdfRow[] => {
+  return lookups.map((lookup): AcademyPaymentSummaryPdfRow => {
     const currency = getAcademyPaymentLookupCurrency(lookup);
     const totalAmount = Number(lookup.subtotal || 0);
 
     if (lookup.lines.length === 0) {
-      return [
-        {
-          category: "Pendiente",
-          choreographyTitle: "Sin coreografía registrada",
-          currency,
-          curp: lookup.curp,
-          participantName: lookup.participantName,
-          totalAmount,
-        },
-      ];
+      return {
+        currency,
+        curp: lookup.curp,
+        lines: [
+          {
+            amount: 0,
+            baseAmount: 0,
+            category: "Pendiente",
+            currency,
+            discountAmount: 0,
+            discountRate: 0,
+            isCourtesy: false,
+            pricingPosition: 1,
+            title: "Sin coreografía registrada",
+          },
+        ],
+        participantName: lookup.participantName,
+        totalAmount,
+      };
     }
 
-    return lookup.lines.map((lineItem) => ({
-      category: getRegistrationLineCategoryLabel(lineItem),
-      choreographyTitle: getRegistrationLineTitle(lineItem),
+    return {
       currency,
       curp: lookup.curp,
+      lines: sortAcademyPaymentSummaryLineItems(lookup.lines).map((lineItem, index) =>
+        toAcademyPaymentSummaryPdfLine(lineItem, index, currency),
+      ),
       participantName: lookup.participantName,
       totalAmount,
-    }));
+    };
   });
 }
 
@@ -4442,45 +4509,35 @@ function drawAcademyPaymentSummaryFooter(
 }
 
 function getAcademyPaymentSummaryRowLayout(context: CanvasRenderingContext2D, row: AcademyPaymentSummaryPdfRow) {
-  const columns = [
-    { key: "participant", width: 186 },
-    { key: "choreography", width: 236 },
-    { key: "category", width: 140 },
-    { key: "total", width: 126 },
-  ] as const;
-  setAcademyPdfFont(context, 12, 800);
-  const participantLines = getAcademyPdfWrappedLines(context, row.participantName, columns[0].width).slice(0, 2);
-  const choreographyLines = getAcademyPdfWrappedLines(context, row.choreographyTitle, columns[1].width).slice(0, 2);
-  const categoryLines = getAcademyPdfWrappedLines(context, row.category, columns[2].width).slice(0, 2);
-  const maxLineCount = Math.max(participantLines.length, choreographyLines.length, categoryLines.length);
+  setAcademyPdfFont(context, 13, 900);
+  const participantLines = getAcademyPdfWrappedLines(context, row.participantName, 430).slice(0, 2);
+  setAcademyPdfFont(context, 11, 850);
+  const lineLayouts = row.lines.map((line) => {
+    const titleLines = getAcademyPdfWrappedLines(context, line.title, 390).slice(0, 2);
+    return {
+      height: Math.max(42, titleLines.length * 15 + 23),
+      titleLines,
+    };
+  });
+  const conceptsHeight = lineLayouts.reduce((sum, layout) => sum + layout.height + 6, 0);
 
   return {
-    categoryLines,
-    choreographyLines,
-    height: Math.max(62, 28 + maxLineCount * 17),
+    height: Math.max(94, 50 + participantLines.length * 17 + conceptsHeight),
+    lineLayouts,
     participantLines,
   };
 }
 
 function drawAcademyPaymentSummaryTableHeader(context: CanvasRenderingContext2D, y: number) {
   const padding = 56;
-  const columnGap = 14;
-  const columns = [
-    { title: "Alumno", width: 186 },
-    { title: "Coreografía", width: 236 },
-    { title: "Categoría", width: 140 },
-    { title: "Monto total", width: 126 },
-  ];
-  let x = padding;
 
   drawAcademyPdfRoundRect(context, padding, y, 730, 36, 8, "#242221");
   setAcademyPdfFont(context, 10, 900);
   context.fillStyle = "#fffaf4";
-
-  columns.forEach((column) => {
-    context.fillText(column.title.toUpperCase(), x + 14, y + 23);
-    x += column.width + columnGap;
-  });
+  context.fillText("PARTICIPANTE Y COREOGRAFÍAS", padding + 14, y + 23);
+  context.textAlign = "right";
+  context.fillText("MONTO A PAGAR", padding + 716, y + 23);
+  context.textAlign = "left";
 }
 
 function drawAcademyPaymentSummaryRow({
@@ -4495,63 +4552,116 @@ function drawAcademyPaymentSummaryRow({
   y: number;
 }) {
   const padding = 56;
-  const columnGap = 14;
-  const columns = [
-    { width: 186 },
-    { width: 236 },
-    { width: 140 },
-    { width: 126 },
-  ];
   const layout = getAcademyPaymentSummaryRowLayout(context, row);
   const rowHeight = layout.height;
   const background = index % 2 === 0 ? "rgba(255,255,255,0.76)" : "rgba(255,255,255,0.48)";
   const ink = "#242221";
-  const muted = "rgba(36, 34, 33, 0.56)";
+  const muted = "rgba(36, 34, 33, 0.58)";
+  const softMuted = "rgba(36, 34, 33, 0.42)";
   const pink = "#df4f95";
-  let x = padding;
+  const contentX = padding + 18;
+  const amountRightX = padding + 712;
 
   drawAcademyPdfRoundRect(context, padding, y, 730, rowHeight, 8, background, "rgba(36, 34, 33, 0.1)");
 
-  setAcademyPdfFont(context, 12, 850);
+  setAcademyPdfFont(context, 13, 900);
   context.fillStyle = ink;
   layout.participantLines.forEach((line, lineIndex) => {
-    context.fillText(line, x + 14, y + 22 + lineIndex * 17);
+    context.fillText(line, contentX, y + 25 + lineIndex * 17);
   });
-  setAcademyPdfFont(context, 9, 800);
-  context.fillStyle = muted;
-  context.fillText(row.curp, x + 14, y + rowHeight - 13);
-  x += columns[0].width + columnGap;
 
-  setAcademyPdfFont(context, 12, 850);
-  context.fillStyle = ink;
-  layout.choreographyLines.forEach((line, lineIndex) => {
-    context.fillText(line, x + 14, y + 22 + lineIndex * 17);
-  });
-  x += columns[1].width + columnGap;
-
-  setAcademyPdfFont(context, 12, 800);
+  setAcademyPdfFont(context, 8, 900);
   context.fillStyle = muted;
-  layout.categoryLines.forEach((line, lineIndex) => {
-    context.fillText(line, x + 14, y + 22 + lineIndex * 17);
-  });
-  x += columns[2].width + columnGap;
+  context.textAlign = "right";
+  context.fillText("MONTO A PAGAR", amountRightX, y + 22);
 
   drawAcademyPdfFittedRightText({
     color: pink,
     context,
-    maxWidth: columns[3].width - 18,
-    size: 14,
+    maxWidth: 160,
+    size: 17,
     text: formatAdminCurrency(row.totalAmount, row.currency),
     weight: 900,
-    x: x + columns[3].width - 12,
-    y: y + 27,
+    x: amountRightX,
+    y: y + 43,
   });
 
-  setAcademyPdfFont(context, 8, 850);
-  context.fillStyle = muted;
-  context.textAlign = "right";
-  context.fillText("por alumno", x + columns[3].width - 12, y + 45);
+  setAcademyPdfFont(context, 8, 800);
+  context.fillStyle = softMuted;
+  context.fillText(row.curp, amountRightX, y + rowHeight - 13);
   context.textAlign = "left";
+
+  let conceptY = y + 28 + layout.participantLines.length * 17;
+  layout.lineLayouts.forEach((lineLayout, lineIndex) => {
+    const line = row.lines[lineIndex];
+    const lineAmountText = line.isCourtesy ? "Cortesía" : formatAdminCurrency(line.amount, line.currency);
+    const hasDiscount = line.discountAmount > 0 && !line.isCourtesy;
+    const discountPercent = Math.round(line.discountRate * 100);
+    const discountDetailText = discountPercent > 0
+      ? `${formatAdminCurrency(line.baseAmount, line.currency)} - ${discountPercent}%`
+      : `${formatAdminCurrency(line.baseAmount, line.currency)} - ${formatAdminCurrency(line.discountAmount, line.currency)}`;
+
+    context.fillStyle = "rgba(223, 79, 149, 0.18)";
+    context.fillRect(contentX, conceptY + 2, 3, lineLayout.height - 8);
+
+    setAcademyPdfFont(context, 9, 900);
+    context.fillStyle = pink;
+    context.fillText(String(line.pricingPosition), contentX + 12, conceptY + 16);
+
+    setAcademyPdfFont(context, 11, 850);
+    context.fillStyle = ink;
+    lineLayout.titleLines.forEach((titleLine, titleLineIndex) => {
+      context.fillText(titleLine, contentX + 34, conceptY + 16 + titleLineIndex * 15);
+    });
+
+    setAcademyPdfFont(context, 8, 850);
+    context.fillStyle = muted;
+    context.fillText(
+      `Categoría: ${line.category}`,
+      contentX + 34,
+      conceptY + 18 + lineLayout.titleLines.length * 15,
+    );
+
+    drawAcademyPdfFittedRightText({
+      color: line.isCourtesy ? muted : pink,
+      context,
+      maxWidth: 138,
+      minSize: 8,
+      size: 11,
+      text: lineAmountText,
+      weight: 900,
+      x: amountRightX,
+      y: conceptY + 17,
+    });
+
+    if (line.isCourtesy) {
+      drawAcademyPdfFittedRightText({
+        color: softMuted,
+        context,
+        maxWidth: 138,
+        minSize: 7,
+        size: 8,
+        text: `Base ${formatAdminCurrency(line.baseAmount, line.currency)}`,
+        weight: 800,
+        x: amountRightX,
+        y: conceptY + 32,
+      });
+    } else if (hasDiscount) {
+      drawAcademyPdfFittedRightText({
+        color: softMuted,
+        context,
+        maxWidth: 138,
+        minSize: 7,
+        size: 8,
+        text: discountDetailText,
+        weight: 800,
+        x: amountRightX,
+        y: conceptY + 32,
+      });
+    }
+
+    conceptY += lineLayout.height + 6;
+  });
 
   return rowHeight;
 }
