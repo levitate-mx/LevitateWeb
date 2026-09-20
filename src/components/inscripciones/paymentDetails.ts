@@ -14,9 +14,9 @@ export const registrationPaymentMethodSections = [
     id: "oxxo",
     title: "OXXO",
     rows: [
-      { label: "Banco", value: "Spin by Oxxo" },
-      { label: "Cuenta CLABE", value: "728969000061103602" },
       { label: "Titular", value: "Rodolfo Javier Serrano" },
+      { label: "Cuenta CLABE", value: "728969000061103602" },
+      { label: "Banco", value: "Spin by Oxxo" },
     ],
   },
 ];
