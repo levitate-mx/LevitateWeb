@@ -2630,7 +2630,7 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
   const ticketLines =
     ticketCount > 0
       ? [
-          `Tus ${ticketCount === 1 ? "boleto ya fue generado" : `${ticketCount} boletos ya fueron generados`}.`,
+          ticketCount === 1 ? "Tu boleto ya fue generado." : `Tus ${ticketCount} boletos ya fueron generados.`,
           ...(ticketDeliveryUrl ? ["", "Puedes ver y descargar tus accesos con QR aquí:", ticketDeliveryUrl] : []),
         ]
       : isShopOrder
@@ -11489,7 +11489,7 @@ function RegistrationAdminOrderDetail({
     if (
       !confirmRegistrationDelete(
         `Eliminar pago ${reference}`,
-        "Se eliminaran el pago, comprobantes y boletos QR ligados a esta orden.",
+        "Se eliminarán el pago, los comprobantes y los boletos QR asociados a esta orden.",
       )
     ) {
       return;
