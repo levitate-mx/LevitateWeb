@@ -40,6 +40,7 @@ import {
   Shirt,
   Ticket,
   Trash2,
+  Trophy,
   Upload,
   UserPlus,
   UserRoundPlus,
@@ -77,7 +78,7 @@ import {
   registrationPaymentMethodSections,
 } from "../inscripciones/paymentDetails";
 
-type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "music" | "feedback" | "payments";
+type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "releve" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
 type RegistrationAdminDashboardSection =
   | "dashboard"
@@ -269,6 +270,7 @@ type RegistrationDance = {
   genre: string;
   subgenre: string;
   subgenreDetail?: string | null;
+  isReleve?: boolean;
   category: string;
   level: string | null;
   venue: string;
@@ -653,6 +655,7 @@ const adminMenuItems: AdminNavItem[] = [
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
   { label: "Registrar participante", icon: GraduationCap, screen: "participants" },
   { label: "Registrar coreografía", icon: Music2, screen: "dance" },
+  { label: "Relevé", icon: Trophy, screen: "releve" },
   { label: "Subir música", icon: Upload, screen: "music" },
   { label: "Hojas de jueceo", icon: BadgeCheck, screen: "feedback" },
   { label: "Pagos", icon: CreditCard, screen: "payments" },
@@ -772,6 +775,12 @@ const danceLevels: FieldOption[] = [
   { value: "avanzado", label: "Avanzado" },
   { value: "elite", label: "Élite" },
 ];
+
+const relevePresaleCost = "$1,000 MXN";
+const releveRegularCost = "$1,500 MXN";
+const releveCashPrize = "$5,000 MXN";
+const releveDefaultCategory = "solo";
+const releveDefaultAerialLevel = "nudo";
 
 const venueOptions: FieldOption[] = [
   { value: "edomex", label: "Otoño 2026 - Estado de México" },
@@ -1309,6 +1318,10 @@ function getDanceProgramDivision(dance: RegistrationDance) {
 }
 
 function isReleveTeacherDance(dance: RegistrationDance) {
+  if (dance.isReleve) {
+    return true;
+  }
+
   return [...dance.choreographers, ...dance.participants].some((person) => Boolean(person.isReleveTeacher));
 }
 
@@ -1880,12 +1893,13 @@ function getRegistrationAcademyAlerts({
   const pendingMediaCount = orders.filter((order) => getOrderMediaItemCount(order) > 0 && order.status !== "paid").length;
   const incompleteParticipantCount = participants.filter((participant) => !participant.birthDate || participant.age == null || !participant.shirtSize).length;
   const missingMusicCount = choreographies.filter((dance) => !dance.musicUpload).length;
+  const hasOnlyReleveChoreographies = choreographies.length > 0 && choreographies.every(isReleveTeacherDance);
 
   if (!academy.contactName || !academy.email || !academy.phone) {
     alerts.push("Contacto incompleto");
   }
 
-  if (academy.participantCount === 0) {
+  if (academy.participantCount === 0 && !hasOnlyReleveChoreographies) {
     alerts.push("Sin participantes");
   }
 
@@ -3593,7 +3607,7 @@ function buildDashboardAlerts({
     return counts;
   }, new Map());
   const duplicateCurpCount = Array.from(curpCounts.values()).filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
-  const dancesWithoutParticipants = programDances.filter((dance) => dance.participants.length === 0);
+  const dancesWithoutParticipants = programDances.filter((dance) => !isReleveTeacherDance(dance) && dance.participants.length === 0);
   const dancesWithoutMusic = programDances.filter((dance) => !dance.musicUpload);
   const ticketIssueOrders = orders.filter(
     (order) => getOrderRequestedTicketCount(order) > 0 && (order.status === "pending_payment" || order.status === "payment_reported" || order.status === "rejected"),
@@ -5217,15 +5231,17 @@ function getProgramHeaders(includeLevel = false, includeAction = false) {
 }
 
 function getProgramRowDisplay(row: ProgramRow, includeLevel = false) {
+  const isReleveRow = normalizeProgramDivision(row.division) === "releve";
+
   return [
     row.danceTitle,
     row.academyName,
     getProgramDivisionLabel(row.division),
     getDanceSubgenreLabel(row),
-    getOptionLabel(danceCategories, row.category),
-    ...(includeLevel ? [getDanceLevelLabel(row.level)] : []),
+    isReleveRow ? "Relevé" : getOptionLabel(danceCategories, row.category),
+    ...(includeLevel ? [isReleveRow ? "No aplica" : getDanceLevelLabel(row.level)] : []),
     row.choreographers,
-    row.participants,
+    isReleveRow ? "Registro Relevé" : row.participants,
     getVenueLabel(row.venue),
   ];
 }
@@ -7103,11 +7119,19 @@ function RegistrationAcademyQuickPanel({
         {tab === "choreographies" ? (
           <RegistrationAcademyProfileList
             emptyMessage="No hay coreografías para esta academia en el programa cargado."
-            items={summary.choreographies.map((dance) => ({
-              detail: `${getVenueLabel(dance.venue)} · ${getOptionLabel(danceCategories, dance.category)} · ${getDanceLevelLabel(dance.level)}`,
-              meta: `${dance.participants.length} participante(s) · ${dance.musicUpload ? "Música cargada" : "Música pendiente"}`,
-              title: dance.title,
-            }))}
+            items={summary.choreographies.map((dance) => {
+              const isReleve = isReleveTeacherDance(dance);
+
+              return {
+                detail: isReleve
+                  ? `${getVenueLabel(dance.venue)} · Relevé · ${getOptionLabel(danceGenres, dance.genre)} · ${getDanceSubgenreLabel(dance)}`
+                  : `${getVenueLabel(dance.venue)} · ${getOptionLabel(danceCategories, dance.category)} · ${getDanceLevelLabel(dance.level)}`,
+                meta: isReleve
+                  ? `${dance.choreographers.length} coreógrafo(s) · ${dance.musicUpload ? "Música cargada" : "Música pendiente"}`
+                  : `${dance.participants.length} participante(s) · ${dance.musicUpload ? "Música cargada" : "Música pendiente"}`,
+                title: dance.title,
+              };
+            })}
           />
         ) : null}
 
@@ -7657,9 +7681,10 @@ function RegistrationAdminChoreographiesPanel({
             </div>
 
             {filteredDances.map((dance) => {
-              const categoryLabel = getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category);
+              const isReleve = isReleveTeacherDance(dance);
+              const categoryLabel = isReleve ? "Relevé" : getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category);
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
-              const levelLabel = dance.genre === "aereo" ? getDanceLevelLabel(dance.level) : "";
+              const levelLabel = !isReleve && dance.genre === "aereo" ? getDanceLevelLabel(dance.level) : "";
               const detailLabel = [categoryLabel, levelLabel, divisionLabel].filter(Boolean).join(" · ");
               const participantCount = dance.participants.length;
               const choreographerCount = dance.choreographers.length;
@@ -7679,9 +7704,9 @@ function RegistrationAdminChoreographiesPanel({
                   </span>
                   <span role="cell">{getVenueLabel(dance.venue)}</span>
                   <span role="cell">
-                    <strong className="registration-choreographies-number">{participantCount}</strong>
+                    <strong className="registration-choreographies-number">{isReleve ? choreographerCount : participantCount}</strong>
                     <small>
-                      {participantLabel} · {choreographerCount} {choreographerLabel}
+                      {isReleve ? `${choreographerCount} ${choreographerLabel} · Relevé` : `${participantLabel} · ${choreographerCount} ${choreographerLabel}`}
                     </small>
                   </span>
                   <span role="cell">
@@ -8387,18 +8412,11 @@ function ParticipantRegistrationPanel({
 
 function ChoreographerRegistrationPanel({
   academyName,
-  registeredDanceCount,
   onChoreographerCreated,
 }: {
   academyName: string;
-  registeredDanceCount: number;
   onChoreographerCreated: (choreographer: RegistrationChoreographer) => void;
 }) {
-  const releveTeacherMinimumDances = 3;
-  const canRegisterReleveTeacher = registeredDanceCount >= releveTeacherMinimumDances;
-  const releveTeacherEligibilityMessage = canRegisterReleveTeacher
-    ? `Tu academia tiene ${registeredDanceCount} coreografías inscritas. Ya puedes marcar maestros Relevé.`
-    : `Tu academia tiene ${registeredDanceCount} de ${releveTeacherMinimumDances} coreografías inscritas para activar Maestro Relevé.`;
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -8408,18 +8426,9 @@ function ChoreographerRegistrationPanel({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const isReleveTeacher = formData.get("isReleveTeacher") === "on";
     setIsSaving(true);
     setStatusMessage("");
     setErrorMessage("");
-
-    if (isReleveTeacher && !canRegisterReleveTeacher) {
-      setErrorMessage(
-        `Para registrar un Maestro Relevé, tu academia debe tener al menos ${releveTeacherMinimumDances} coreografías inscritas. Actualmente tiene ${registeredDanceCount}.`,
-      );
-      setIsSaving(false);
-      return;
-    }
 
     try {
       const response = await requestRegistrationApi<{ choreographer: RegistrationChoreographer }>(
@@ -8429,7 +8438,6 @@ function ChoreographerRegistrationPanel({
             fullName: getFormValue(formData, "fullName"),
             phone: getFormValue(formData, "phone"),
             shirtSize: getFormValue(formData, "shirtSize"),
-            isReleveTeacher,
           }),
           method: "POST",
         },
@@ -8460,19 +8468,192 @@ function ChoreographerRegistrationPanel({
         <AdminField icon={Building2} label="Nombre de la academia">
           <input readOnly required type="text" value={academyName} />
         </AdminField>
-        <label className={`levitate-admin-check-card${canRegisterReleveTeacher ? "" : " levitate-admin-check-card--disabled"}`}>
-          <input disabled={!canRegisterReleveTeacher} name="isReleveTeacher" type="checkbox" />
-          <span>
-            <strong>Es Maestro Relevé</strong>
-            <small>{releveTeacherEligibilityMessage}</small>
-          </span>
-        </label>
         <div className="levitate-admin-form__wide-block">
           <AdminStatusMessage message={statusMessage} />
           <AdminStatusMessage message={errorMessage} tone="error" />
         </div>
         <div className="levitate-admin-form__actions">
           <SaveButton disabled={isSaving} isSaving={isSaving} />
+        </div>
+      </form>
+    </AdminPanel>
+  );
+}
+
+function ReleveRegistrationPanel({
+  choreographers,
+  onDanceCreated,
+}: {
+  choreographers: RegistrationChoreographer[];
+  onDanceCreated: (dance: RegistrationDance) => void;
+}) {
+  const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState("");
+  const [selectedSubgenre, setSelectedSubgenre] = useState("");
+  const [openOtherApparatus, setOpenOtherApparatus] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const subgenreOptions = selectedGenre ? (danceSubgenresByGenre[selectedGenre] ?? []) : [];
+  const shouldShowOpenOtherApparatus = selectedGenre === "aereo" && selectedSubgenre === "open_otro";
+  const choreographerItems = choreographers.map((choreographer) => ({
+    id: choreographer.id,
+    fullName: choreographer.fullName,
+  }));
+  const choreographerSelectionMessage =
+    choreographers.length > 0 && selectedChoreographerIds.length === 0
+      ? "Selecciona al menos un coreógrafo para la inscripción Relevé."
+      : "";
+  const cannotSave = isSaving || choreographers.length === 0;
+
+  const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextGenre = event.target.value;
+
+    setSelectedGenre(nextGenre);
+    setSelectedSubgenre("");
+    setOpenOtherApparatus("");
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setHasAttemptedSubmit(true);
+    setStatusMessage("");
+    setErrorMessage("");
+
+    if (choreographerSelectionMessage) {
+      return;
+    }
+
+    if (shouldShowOpenOtherApparatus && !openOtherApparatus.trim()) {
+      setErrorMessage("Escribe qué aparato usarán en OPEN: Otro.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await requestRegistrationApi<{ dance: RegistrationDance }>("/api/registration/dances", {
+        body: JSON.stringify({
+          title: getFormValue(formData, "title"),
+          genre: getFormValue(formData, "genre"),
+          subgenre: getFormValue(formData, "subgenre"),
+          subgenreDetail: shouldShowOpenOtherApparatus ? getFormValue(formData, "subgenreDetail") : "",
+          category: releveDefaultCategory,
+          level: selectedGenre === "aereo" ? releveDefaultAerialLevel : null,
+          venue: getFormValue(formData, "venue"),
+          choreographerIds: selectedChoreographerIds,
+          participantIds: [],
+          isReleve: true,
+        }),
+        method: "POST",
+      });
+
+      onDanceCreated(response.dance);
+      form.reset();
+      setSelectedGenre("");
+      setSelectedSubgenre("");
+      setOpenOtherApparatus("");
+      setSelectedChoreographerIds([]);
+      setHasAttemptedSubmit(false);
+      setStatusMessage("Inscripción Relevé guardada. También aparecerá en Subir música.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo guardar la inscripción Relevé."));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <AdminPanel className="levitate-admin-panel--releve" title="Inscripción Relevé" eyebrow="Premio Relevé">
+      <form className="levitate-admin-form levitate-admin-form--releve" onSubmit={handleSubmit}>
+        <div className="levitate-admin-releve-intro">
+          <article>
+            <span>Qué es</span>
+            <p>Relevé es la modalidad donde los alumnos crean la pieza y el maestro la interpreta en escenario.</p>
+          </article>
+          <article>
+            <span>Costo</span>
+            <p>Preventa {relevePresaleCost}; costo normal {releveRegularCost}.</p>
+          </article>
+          <article>
+            <span>Premio</span>
+            <p>Premio en efectivo de {releveCashPrize} al maestro ganador.</p>
+          </article>
+          <article>
+            <span>Logística</span>
+            <p>Selecciona al coreógrafo o coreógrafos que participarán, registra la pieza y después sube su música.</p>
+          </article>
+        </div>
+
+        <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía Relevé">
+          <input name="title" required type="text" />
+        </AdminField>
+        <AdminField icon={MapPin} label="Sede de competencia">
+          <AdminSelect defaultValue="" id="releve-venue" name="venue" options={venueOptions} placeholder="Selecciona una sede" />
+        </AdminField>
+        <AdminField icon={Trophy} label="Modalidad">
+          <AdminSelect
+            id="releve-genre"
+            name="genre"
+            onChange={handleGenreChange}
+            options={danceGenres}
+            placeholder="Selecciona una modalidad"
+            value={selectedGenre}
+          />
+        </AdminField>
+        <AdminField icon={Music2} label="Género o subgénero">
+          <AdminSelect
+            disabled={!selectedGenre}
+            id="releve-subgenre"
+            name="subgenre"
+            onChange={(event) => {
+              setSelectedSubgenre(event.target.value);
+              if (event.target.value !== "open_otro") {
+                setOpenOtherApparatus("");
+              }
+            }}
+            options={subgenreOptions}
+            placeholder={selectedGenre ? "Selecciona género o subgénero" : "Selecciona primero modalidad"}
+            value={selectedSubgenre}
+          />
+          {shouldShowOpenOtherApparatus ? (
+            <input
+              autoComplete="off"
+              className="levitate-admin-open-subgenre-input"
+              maxLength={60}
+              name="subgenreDetail"
+              onChange={(event) => setOpenOtherApparatus(event.target.value)}
+              placeholder="Escribe el aparato que usarán"
+              required
+              type="text"
+              value={openOtherApparatus}
+            />
+          ) : null}
+        </AdminField>
+
+        <div className="levitate-admin-form__wide-block">
+          <TransferList
+            assignedTitle="Coreógrafos Relevé"
+            emptyMessage="Registra un coreógrafo primero."
+            onSelectionChange={setSelectedChoreographerIds}
+            selectedIds={selectedChoreographerIds}
+            selectionHint="Selecciona el maestro o coreógrafo que realizará la inscripción Relevé."
+            sourceItems={choreographerItems}
+            sourceTitle="Coreógrafos"
+          />
+        </div>
+
+        <div className="levitate-admin-form__wide-block">
+          <AdminStatusMessage message={statusMessage} />
+          <AdminStatusMessage message={hasAttemptedSubmit ? choreographerSelectionMessage : ""} tone="error" />
+          <AdminStatusMessage message={errorMessage} tone="error" />
+        </div>
+        <div className="levitate-admin-form__actions">
+          <SaveButton disabled={cannotSave} isSaving={isSaving} />
         </div>
       </form>
     </AdminPanel>
@@ -8874,16 +9055,19 @@ function MusicUploadPanel({
   const selectedDance = dances.find((dance) => dance.id === selectedDanceId) ?? dances[0] ?? null;
   const selectedDanceValue = selectedDance?.id ?? "";
   const currentMusicUpload = selectedDance?.musicUpload ?? null;
+  const selectedDanceIsReleve = selectedDance ? isReleveTeacherDance(selectedDance) : false;
   const selectedCategoryOptions = selectedDance ? danceCategoriesByGenre[selectedDance.genre] ?? danceCategories : danceCategories;
   const selectedDivision = selectedDance ? getDanceProgramDivision(selectedDance) : "";
   const selectedDivisionLabel = selectedDivision ? getProgramDivisionLabel(selectedDivision).split(":")[0] : "";
   const suggestedFileName = selectedDance
-    ? `${selectedDance.title} - ${academyName} - ${getOptionLabel(danceGenres, selectedDance.genre)} ${getDanceSubgenreLabel(selectedDance)} - ${getOptionLabel(selectedCategoryOptions, selectedDance.category)}${selectedDivisionLabel ? ` - ${selectedDivisionLabel}` : ""}`
+    ? selectedDanceIsReleve
+      ? `${selectedDance.title} - ${academyName} - Relevé ${getOptionLabel(danceGenres, selectedDance.genre)} ${getDanceSubgenreLabel(selectedDance)}${selectedDivisionLabel ? ` - ${selectedDivisionLabel}` : ""}`
+      : `${selectedDance.title} - ${academyName} - ${getOptionLabel(danceGenres, selectedDance.genre)} ${getDanceSubgenreLabel(selectedDance)} - ${getOptionLabel(selectedCategoryOptions, selectedDance.category)}${selectedDivisionLabel ? ` - ${selectedDivisionLabel}` : ""}`
     : "";
   const danceOptions = dances.map((dance) => ({
     value: dance.id,
-      label: dance.title,
-    }));
+    label: isReleveTeacherDance(dance) ? `${dance.title} · Relevé` : dance.title,
+  }));
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -9043,9 +9227,13 @@ function MusicUploadPanel({
 
         {selectedDance ? (
           <div className="levitate-admin-music-selected">
-            <span>{getOptionLabel(danceGenres, selectedDance.genre)}</span>
+            <span>{selectedDanceIsReleve ? `Relevé · ${getOptionLabel(danceGenres, selectedDance.genre)}` : getOptionLabel(danceGenres, selectedDance.genre)}</span>
             <strong>{selectedDance.title}</strong>
-            <p>{selectedDance.participants.map((participant) => participant.fullName).join(", ") || "Sin participantes asignados"}</p>
+            <p>
+              {selectedDanceIsReleve
+                ? selectedDance.choreographers.map((choreographer) => choreographer.fullName).join(", ") || "Sin coreógrafos seleccionados"
+                : selectedDance.participants.map((participant) => participant.fullName).join(", ") || "Sin participantes asignados"}
+            </p>
             <small>
               {currentMusicUpload
                 ? `Música actual: ${currentMusicUpload.fileName}${
@@ -10223,7 +10411,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     return {
       media: mediaOrdersForBadges.filter((order) => order.status === "pending_payment" || order.status === "payment_reported").length,
       payments: orders.filter((order) => order.status === "payment_reported").length,
-      program: programDances.filter((dance) => !dance.musicUpload || dance.participants.length === 0).length,
+      program: programDances.filter((dance) => !dance.musicUpload || (!isReleveTeacherDance(dance) && dance.participants.length === 0)).length,
       tickets: ticketTotalsForBadges.pendingTickets + ticketTotalsForBadges.rejectedTickets,
     };
   }, [orders, programDances]);
@@ -11952,6 +12140,7 @@ function AdminLookupPanel({
             <span role="columnheader">Acciones</span>
             {dances.map((dance) => {
               const categoryOptions = danceCategoriesByGenre[dance.genre] ?? danceCategories;
+              const isReleve = isReleveTeacherDance(dance);
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
               const compactDivisionLabel = divisionLabel.split(":")[0] || "Sin división";
               const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");
@@ -11961,10 +12150,10 @@ function AdminLookupPanel({
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
                   <span role="cell">{dance.title}</span>
                   <span role="cell">{getDanceSubgenreLabel(dance)}</span>
-                  <span role="cell">{getOptionLabel(categoryOptions, dance.category)}</span>
+                  <span role="cell">{isReleve ? "Relevé" : getOptionLabel(categoryOptions, dance.category)}</span>
                   <span role="cell" title={divisionLabel}>{compactDivisionLabel}</span>
-                  <span role="cell">{getDanceLevelLabel(dance.level)}</span>
-                  <span role="cell">{participantNames || "Sin participantes"}</span>
+                  <span role="cell">{isReleve ? "No aplica" : getDanceLevelLabel(dance.level)}</span>
+                  <span role="cell">{isReleve ? "Registro Relevé" : participantNames || "Sin participantes"}</span>
                   <span className="levitate-admin-lookup-table__actions" role="cell">
                     <button
                       aria-label={`Eliminar coreografía ${dance.title}`}
@@ -12053,7 +12242,6 @@ function getAdminScreen({
       <ChoreographerRegistrationPanel
         academyName={session.academy.name}
         onChoreographerCreated={onChoreographerCreated}
-        registeredDanceCount={dances.length}
       />
     );
   }
@@ -12073,6 +12261,15 @@ function getAdminScreen({
         choreographers={choreographers}
         onDanceCreated={onDanceCreated}
         participants={participants}
+      />
+    );
+  }
+
+  if (screen === "releve") {
+    return (
+      <ReleveRegistrationPanel
+        choreographers={choreographers}
+        onDanceCreated={onDanceCreated}
       />
     );
   }
@@ -12377,7 +12574,7 @@ export function LevitateParticipantRegistrationScreen() {
 export function LevitateChoreographerRegistrationScreen() {
   return (
     <RegistrationPageScaffold>
-      <ChoreographerRegistrationPanel academyName="Levitate MX" onChoreographerCreated={() => undefined} registeredDanceCount={0} />
+      <ChoreographerRegistrationPanel academyName="Levitate MX" onChoreographerCreated={() => undefined} />
     </RegistrationPageScaffold>
   );
 }

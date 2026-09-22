@@ -24946,6 +24946,45 @@ button {
   min-height: 0;
 }
 
+.levitate-admin-form--releve {
+  align-items: start;
+}
+
+.levitate-admin-releve-intro {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.levitate-admin-releve-intro article {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 126px;
+  padding: 18px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: var(--admin-soft-shadow);
+}
+
+.levitate-admin-releve-intro span {
+  color: var(--admin-pink);
+  font-size: 0.7rem;
+  font-weight: 860;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-releve-intro p {
+  margin: 0;
+  color: rgba(39, 37, 37, 0.64);
+  font-size: 0.92rem;
+  font-weight: 620;
+  line-height: 1.42;
+}
+
 .levitate-admin-field {
   gap: 9px;
 }
@@ -26407,6 +26446,7 @@ button {
 
   .levitate-admin-form,
   .levitate-admin-form--dance,
+  .levitate-admin-releve-intro,
   .levitate-admin-transfer,
   .levitate-admin-payment-card header,
   .levitate-admin-payment-card dl,
@@ -26467,6 +26507,10 @@ button {
 
   .levitate-admin-form {
     padding: 24px 18px 30px;
+  }
+
+  .levitate-admin-releve-intro article {
+    min-height: 0;
   }
 
   .levitate-admin-registered-panel__table,

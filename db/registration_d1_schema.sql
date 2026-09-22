@@ -267,6 +267,7 @@ CREATE TABLE IF NOT EXISTS registration_dances (
     )
   ),
   subgenre_detail TEXT,
+  is_releve INTEGER NOT NULL DEFAULT 0 CHECK (is_releve IN (0, 1)),
   category TEXT NOT NULL CHECK (
     category IN (
       'solo',

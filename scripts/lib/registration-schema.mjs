@@ -16,7 +16,10 @@ const additions = {
   registration_choreographers: {
     is_releve_teacher: "INTEGER NOT NULL DEFAULT 0 CHECK (is_releve_teacher IN (0, 1))",
   },
-  registration_dances: { subgenre_detail: "TEXT" },
+  registration_dances: {
+    subgenre_detail: "TEXT",
+    is_releve: "INTEGER NOT NULL DEFAULT 0 CHECK (is_releve IN (0, 1))",
+  },
   registration_inscription_orders: {
     buyer_phone_country_code: "TEXT",
     buyer_phone_number: "TEXT",

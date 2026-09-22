@@ -2121,10 +2121,6 @@ async function handleRegistrationChoreographers(request, env) {
     const isReleveTeacher = optionalBoolean(body.isReleveTeacher);
     const choreographerId = crypto.randomUUID();
 
-    if (isReleveTeacher) {
-      await assertRegistrationReleveTeacherEligibility(db, academyId);
-    }
-
     await db
       .prepare(
         `
@@ -2188,6 +2184,7 @@ async function handleRegistrationDances(request, env) {
     const category = requireRegistrationCategory(genre, body.category);
     const level = requireRegistrationLevel(genre, body.level);
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
+    const isReleve = optionalBoolean(body.isReleve);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
 
@@ -2195,13 +2192,17 @@ async function handleRegistrationDances(request, env) {
       throwHttpError("missing_choreographers", "Selecciona al menos un coreógrafo", 400);
     }
 
-    if (participantIds.length === 0) {
+    if (!isReleve && participantIds.length === 0) {
       throwHttpError("missing_participants", "Selecciona al menos un participante", 400);
+    }
+
+    if (isReleve && participantIds.length > 0) {
+      throwHttpError("invalid_releve_participants", "Relevé se registra solo con coreógrafos seleccionados", 400);
     }
 
     const participantRequirement = registrationCategoryParticipantRequirements[category] || null;
 
-    if (participantRequirement && participantIds.length !== participantRequirement) {
+    if (!isReleve && participantRequirement && participantIds.length !== participantRequirement) {
       throwHttpError(
         "invalid_participant_count",
         `Esta categoría requiere exactamente ${participantRequirement} ${participantRequirement === 1 ? "participante" : "participantes"}.`,
@@ -2236,15 +2237,16 @@ async function handleRegistrationDances(request, env) {
               genre,
               subgenre,
               subgenre_detail,
+              is_releve,
               category,
               level,
               venue,
               created_by_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
-        .bind(danceId, academyId, title, genre, subgenre, subgenreDetail, category, level, venue, session.user.id),
+        .bind(danceId, academyId, title, genre, subgenre, subgenreDetail, isReleve ? 1 : 0, category, level, venue, session.user.id),
       ...choreographerIds.map((choreographerId) =>
         db
           .prepare(
@@ -3331,6 +3333,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
           registration_dances.genre,
           registration_dances.subgenre,
           registration_dances.subgenre_detail,
+          registration_dances.is_releve,
           registration_dances.category,
           registration_dances.level,
           (
@@ -5597,6 +5600,7 @@ async function serializeRegistrationDances(db, academyId, dances) {
     genre: dance.genre,
     subgenre: dance.subgenre,
     subgenreDetail: dance.subgenre_detail || null,
+    isReleve: Boolean(Number(dance.is_releve || 0)),
     category: dance.category,
     level: dance.level,
     venue: dance.venue,
@@ -5655,6 +5659,7 @@ async function serializeRegistrationProgramDances(db, dances) {
     genre: dance.genre,
     subgenre: dance.subgenre,
     subgenreDetail: dance.subgenre_detail || null,
+    isReleve: Boolean(Number(dance.is_releve || 0)),
     category: dance.category,
     level: dance.level,
     venue: dance.venue,
@@ -6021,6 +6026,10 @@ function getRegistrationInscriptionPriceKey(dance) {
 }
 
 function isRegistrationReleveTeacherDance(dance) {
+  if (Boolean(Number(dance.is_releve || 0)) || Boolean(dance.isReleve)) {
+    return true;
+  }
+
   if (Boolean(Number(dance.selected_participant_is_releve_teacher || 0))) {
     return true;
   }

@@ -11,7 +11,7 @@ const removableColumns = {
   registration_users: ["role"],
   registration_participants: ["is_international", "is_releve_teacher"],
   registration_choreographers: ["is_releve_teacher"],
-  registration_dances: ["subgenre_detail"],
+  registration_dances: ["subgenre_detail", "is_releve"],
   registration_inscription_orders: ["buyer_phone_country_code", "buyer_phone_number", "buyer_phone"],
   registration_shop_orders: ["access_token", "buyer_name", "buyer_email"],
   registration_music_uploads: ["storage_provider", "drive_file_id", "drive_web_view_link", "drive_web_content_link"],
