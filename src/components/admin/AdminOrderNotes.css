@@ -1,0 +1,63 @@
+.registration-admin-note-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.registration-admin-note-editor__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.registration-admin-note-editor__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 120, 180, 0.48);
+  border-radius: 7px;
+  background: rgba(240, 82, 147, 0.1);
+  color: #ffb4d2;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.registration-admin-note-editor__actions button:focus-visible {
+  outline: 2px solid #ff8cbc;
+  outline-offset: 3px;
+}
+
+.registration-admin-note-editor__actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.registration-admin-note-editor__hint,
+.registration-admin-note-editor__actions small {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.registration-admin-note-editor__feedback {
+  margin: 0;
+  color: #b7f5c9;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.registration-admin-note-editor__feedback--error {
+  color: #ffb6bd;
+}
+
+.registration-admin-note-editor textarea {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}

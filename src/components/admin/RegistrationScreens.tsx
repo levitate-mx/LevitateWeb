@@ -77,6 +77,14 @@ import {
   registrationPaymentConsultationPath,
   registrationPaymentMethodSections,
 } from "../inscripciones/paymentDetails";
+import { clearAdminNoteDrafts, useAdminNoteDraft } from "./useAdminNoteDraft";
+import "./AdminOrderNotes.css";
+import { AdminPagination } from "./AdminPagination";
+import { useAdminPagination } from "./useAdminPagination";
+import { AdminMessageComposer } from "./AdminMessageComposer";
+import { buildAcademyMessageTemplates, buildOrderMessageTemplates } from "./adminMessageTemplates";
+import { AdminWorkQueue } from "./AdminWorkQueue";
+import type { AdminWorkQueueTarget } from "./adminWorkQueueData";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "releve" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
@@ -1620,7 +1628,7 @@ function getInscriptionOrderConcept(order: RegistrationInscriptionOrder) {
 
 function getAdminOrderDate(order: RegistrationInscriptionOrder) {
   const rawDate = order.updatedAt || order.createdAt;
-  const date = new Date(rawDate);
+  const date = parseAdminOrderTimestamp(rawDate);
 
   if (Number.isNaN(date.getTime())) {
     return { date: rawDate || "Sin fecha", time: "" };
@@ -1630,6 +1638,21 @@ function getAdminOrderDate(order: RegistrationInscriptionOrder) {
     date: formatMexicoCityDate(date),
     time: formatMexicoCityTime(date),
   };
+}
+
+function parseAdminOrderTimestamp(rawDate: string) {
+  // SQLite timestamps created by datetime('now') are UTC, even without a suffix.
+  const value = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawDate)
+    ? `${rawDate.replace(" ", "T")}Z`
+    : rawDate;
+  return new Date(value);
+}
+
+function getAdminOrderTimestampLabel(rawDate?: string | null, fallback = "Sin fecha registrada") {
+  if (!rawDate) return fallback;
+  const date = parseAdminOrderTimestamp(rawDate);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return `${formatMexicoCityDate(date)} ${formatMexicoCityTime(date)} (CDMX)`;
 }
 
 function getAdminStatusClass(status: RegistrationInscriptionOrderStatus) {
@@ -2597,12 +2620,13 @@ function getRegistrationOrderWhatsAppPhone(order: RegistrationInscriptionOrder) 
 }
 
 function getRegistrationOrderBuyerLabel(order: RegistrationInscriptionOrder) {
-  return order.buyerName || order.buyerPhone || order.participantName;
+  return order.buyerName?.trim() || "Nombre no registrado";
 }
 
 function getRegistrationOrderBuyerMeta(order: RegistrationInscriptionOrder) {
-  const details = [order.buyerEmail, order.buyerPhone].filter(Boolean);
-  return details.length ? details.join(" · ") : order.curp;
+  const phone = order.buyerPhone || `${order.buyerPhoneCountryCode ?? ""}${order.buyerPhoneNumber ?? ""}`;
+  const details = [order.buyerEmail, phone].filter(Boolean);
+  return details.length ? details.join(" · ") : "Sin contacto registrado";
 }
 
 function buildWhatsAppUrl(phone: string, message: string) {
@@ -2698,6 +2722,60 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     "",
     "Por favor revisa la información y, cuando tengas la corrección, responde a este chat para que podamos validar nuevamente tu caso.",
   ].join("\n");
+}
+
+function getAdminOrderMessageTemplates(order: RegistrationInscriptionOrder) {
+  let correctionUrl = buildInscriptionProofCorrectionUrl(order);
+  if (getAdminOrderType(order) === "shop" && order.accessToken && typeof window !== "undefined") {
+    const url = new URL("/taquilla", window.location.origin);
+    url.searchParams.set("accessKey", order.accessToken);
+    url.searchParams.set("orderId", order.id);
+    url.searchParams.set("upload", "proof");
+    correctionUrl = url.toString();
+  }
+  return buildOrderMessageTemplates({
+    status: order.status,
+    participantName: order.participantName,
+    academyName: order.academyName,
+    reference: getRegistrationInscriptionPaymentReference(order),
+    venueLabel: getVenueLabel(order.venue),
+    amountLabel: formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order)),
+    hasProof: Boolean(order.proof),
+    correctionUrl,
+    approvalBody: order.status === "paid" ? buildPaymentApprovalWhatsAppMessage(order) : "",
+    rejectionBody: order.status === "rejected"
+      ? buildPaymentCorrectionWhatsAppMessage(order, buildPaymentRejectionMessage(order, getDefaultPaymentRejectionReason(order)))
+      : "",
+    ticketDeliveryUrl: order.status === "paid" ? buildShopTicketDeliveryUrl(order) : "",
+    ticketLabels: Array.from(new Set((order.tickets ?? []).filter((ticket) => ticket.status !== "cancelled").map((ticket) => ticket.ticketLabel))),
+  });
+}
+
+function getAdminAcademyMessageTemplates(summary: RegistrationAcademyDirectorySummary) {
+  return buildAcademyMessageTemplates({
+    academyName: summary.academy.name,
+    contactName: summary.academy.contactName || "",
+    portalUrl: typeof window === "undefined" ? "/inscripciones" : new URL("/inscripciones", window.location.origin).toString(),
+    orders: summary.orders.map((order) => ({
+      reference: getRegistrationInscriptionPaymentReference(order),
+      participantName: order.participantName,
+      status: order.status,
+      rejectionMessage: order.rejectionMessage,
+    })),
+    dances: summary.choreographies.map((dance) => ({
+      title: dance.title,
+      venueLabel: getVenueLabel(dance.venue),
+      hasMusic: Boolean(dance.musicUpload),
+    })),
+    participants: summary.participants.map((participant) => ({
+      fullName: participant.fullName,
+      missingFields: [
+        ...(!participant.birthDate ? ["fecha de nacimiento"] : []),
+        ...(participant.age == null ? ["edad"] : []),
+        ...(!participant.shirtSize ? ["talla de playera"] : []),
+      ],
+    })),
+  });
 }
 
 function isAdminTicketLineItem(lineItem: RegistrationInscriptionLineItem) {
@@ -6387,6 +6465,7 @@ function RegistrationAdminDashboardOverview({
   onCustomStartDateChange,
   onDateRangeChange,
   onNavigate,
+  onOpenWorkItem,
   onRefresh,
   onVenueFilterChange,
   orders,
@@ -6408,6 +6487,7 @@ function RegistrationAdminDashboardOverview({
   onCustomStartDateChange: (value: string) => void;
   onDateRangeChange: (value: RegistrationDashboardDateRangeId) => void;
   onNavigate: (target: RegistrationDashboardTarget) => void;
+  onOpenWorkItem: (target: AdminWorkQueueTarget) => void;
   onRefresh: () => void;
   onVenueFilterChange: (value: string) => void;
   orders: RegistrationInscriptionOrder[];
@@ -6584,6 +6664,16 @@ function RegistrationAdminDashboardOverview({
           ))}
         </div>
       ) : null}
+
+      <AdminWorkQueue
+        orders={scopedOrders}
+        participants={scopedParticipants}
+        dances={scopedProgramDances}
+        isLoading={isDashboardLoading}
+        scopeKey={JSON.stringify([dateRange, customStartDate, customEndDate, effectiveVenueFilter])}
+        venueLabel={getVenueLabel}
+        onOpen={onOpenWorkItem}
+      />
 
       <section className="registration-dashboard-metrics" aria-label="Métricas principales">
         <RegistrationDashboardMetricCard
@@ -7023,6 +7113,7 @@ function RegistrationAcademyQuickPanel({
     new Set(summary.choreographies.flatMap((dance) => dance.choreographers.map((choreographer) => choreographer.fullName)).filter(Boolean)),
   ).sort((left, right) => left.localeCompare(right, "es"));
   const activities = getRegistrationAcademyProfileActivity(summary);
+  const messageTemplates = getAdminAcademyMessageTemplates(summary);
 
   return (
     <aside className="registration-academy-profile" aria-label={`Perfil de ${summary.academy.name}`}>
@@ -7092,6 +7183,18 @@ function RegistrationAcademyQuickPanel({
               <h3>Alertas</h3>
               <RegistrationAcademyAlerts alerts={summary.alerts} limit={6} />
             </section>
+            {messageTemplates.length > 0 ? (
+              <details className="registration-admin-message-toggle">
+                <summary>Preparar resumen para la academia</summary>
+                <AdminMessageComposer
+                  contextKey={`academy:${summary.academy.id}`}
+                  recipientName={summary.academy.contactName || summary.academy.name}
+                  phone={summary.academy.phone || ""}
+                  requireCountryPrefix
+                  templates={messageTemplates}
+                />
+              </details>
+            ) : null}
           </>
         ) : null}
 
@@ -7535,12 +7638,16 @@ function RegistrationChoreographerQuickPanel({
 function RegistrationAdminChoreographiesPanel({
   dances,
   deletingEntityKey = "",
+  focusedDanceId = "",
   isLoading,
+  onClearFocusedDance,
   onDanceDeleted,
 }: {
   dances: RegistrationAdminDance[];
   deletingEntityKey?: string;
+  focusedDanceId?: string;
   isLoading: boolean;
+  onClearFocusedDance?: () => void;
   onDanceDeleted?: (dance: RegistrationDance) => void | Promise<void>;
 }) {
   const [query, setQuery] = useState("");
@@ -7584,6 +7691,7 @@ function RegistrationAdminChoreographiesPanel({
 
     return dances
       .filter((dance) => {
+        if (focusedDanceId) return dance.id === focusedDanceId;
         const categoryLabel = getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category);
         const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
         const matchesAcademy = academyFilter === "all" || dance.academyId === academyFilter;
@@ -7615,11 +7723,17 @@ function RegistrationAdminChoreographiesPanel({
           (left.academyName ?? "").localeCompare(right.academyName ?? "", "es") ||
           left.title.localeCompare(right.title, "es"),
       );
-  }, [academyFilter, dances, genreFilter, query, venueFilter]);
+  }, [academyFilter, dances, focusedDanceId, genreFilter, query, venueFilter]);
 
   return (
     <section className="registration-choreographies-panel" aria-label="Coreografías registradas">
-      <section className="registration-admin-filters registration-admin-filters--choreographies" aria-label="Filtros de coreografías">
+      {focusedDanceId ? (
+        <div className="admin-work-queue-focus" role="status">
+          <span>Mostrando la coreografía seleccionada en Pendientes por resolver.</span>
+          <button onClick={onClearFocusedDance} type="button">Ver todas las coreografías</button>
+        </div>
+      ) : null}
+      {!focusedDanceId ? <section className="registration-admin-filters registration-admin-filters--choreographies" aria-label="Filtros de coreografías">
         <label className="registration-admin-search">
           <Search aria-hidden="true" size={17} />
           <input
@@ -7665,7 +7779,7 @@ function RegistrationAdminChoreographiesPanel({
           </select>
           <ChevronDown aria-hidden="true" size={16} />
         </label>
-      </section>
+      </section> : null}
 
       <section className="registration-admin-grid">
         <div className="registration-admin-table-card">
@@ -9883,6 +9997,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [selectedAcademyId, setSelectedAcademyId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [selectedChoreographerId, setSelectedChoreographerId] = useState("");
+  const [focusedDanceId, setFocusedDanceId] = useState("");
   const [academyProfileTab, setAcademyProfileTab] = useState<RegistrationAcademyProfileTab>("overview");
   const [adminAuthMessage, setAdminAuthMessage] = useState("");
   const [adminError, setAdminError] = useState("");
@@ -10115,7 +10230,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
     });
   }, [orders, purchaseTypeFilter, query, statusFilter, venueFilter]);
 
-  const visibleOrders = filteredOrders.slice(0, 10);
+  const paymentsPagination = useAdminPagination(filteredOrders, JSON.stringify([query, statusFilter, venueFilter, purchaseTypeFilter]));
+  const visibleOrders = paymentsPagination.visibleItems;
   const registrationAcademyOptions = useMemo(() => {
     const optionMap = new Map<string, string>();
 
@@ -10288,7 +10404,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return matchesVenue && matchesStatus && matchesQuery;
     });
   }, [ticketRows, ticketQuery, ticketVenueFilter, ticketStatusFilter]);
-  const visibleTicketRows = filteredTicketRows.slice(0, 10);
+  const ticketsPagination = useAdminPagination(filteredTicketRows, JSON.stringify([ticketQuery, ticketVenueFilter, ticketStatusFilter]));
+  const visibleTicketRows = ticketsPagination.visibleItems;
   const ticketTotals = useMemo(() => getTicketDashboardTotals(filteredTicketRows), [filteredTicketRows]);
   const mediaOrders = useMemo(
     () => orders.filter((order) => getAdminOrderType(order) === "shop" && getOrderMediaLineItems(order).length > 0),
@@ -10321,7 +10438,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return matchesVenue && matchesStatus && matchesQuery;
     });
   }, [mediaOrders, mediaQuery, mediaStatusFilter, mediaVenueFilter]);
-  const visibleMediaOrders = filteredMediaOrders.slice(0, 10);
+  const mediaPagination = useAdminPagination(filteredMediaOrders, JSON.stringify([mediaQuery, mediaVenueFilter, mediaStatusFilter]));
+  const visibleMediaOrders = mediaPagination.visibleItems;
   const mediaTotals = useMemo(() => getMediaDashboardTotals(filteredMediaOrders), [filteredMediaOrders]);
   const academySummaries = useMemo(
     () =>
@@ -10420,6 +10538,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
     setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
     setSelectedOrderId(order.id);
     void loadAdminOrders();
+  };
+
+  const handleOrderNotesUpdated = (order: RegistrationInscriptionOrder) => {
+    setOrders((current) => current.map((item) =>
+      item.id === order.id && getAdminOrderType(item) === getAdminOrderType(order) ? order : item,
+    ));
   };
 
   const reloadAdminDataAfterDelete = () => {
@@ -10555,12 +10679,26 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const handleSectionChange = (section: RegistrationAdminDashboardSection) => {
+    setFocusedDanceId("");
     setActiveSection(section);
     setSelectedOrderId("");
     setSelectedAcademyId("");
     setSelectedParticipantId("");
     setSelectedChoreographerId("");
     updateAdminSectionPath(section);
+  };
+
+  const handleOpenWorkQueueItem = (target: AdminWorkQueueTarget) => {
+    if (target.type === "order") {
+      handleSectionChange("payments");
+      setSelectedOrderId(target.id);
+    } else if (target.type === "participant") {
+      handleSectionChange("registrations");
+      setSelectedParticipantId(target.id);
+    } else {
+      handleSectionChange("choreographies");
+      setFocusedDanceId(target.id);
+    }
   };
 
   const handleDashboardNavigate = (target: RegistrationDashboardTarget) => {
@@ -10661,6 +10799,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
     try {
       await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" });
+      if (adminSession) clearAdminNoteDrafts(adminSession.user.id);
       setAdminSession(null);
       setAdminAcademies([]);
       setAdminChoreographers([]);
@@ -10870,6 +11009,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
             onCustomStartDateChange={setDashboardCustomStartDate}
             onDateRangeChange={setDashboardDateRange}
             onNavigate={handleDashboardNavigate}
+            onOpenWorkItem={handleOpenWorkQueueItem}
             onRefresh={handleDashboardRefresh}
             onVenueFilterChange={setDashboardVenueFilter}
             orders={orders}
@@ -10925,7 +11065,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
           <RegistrationAdminChoreographiesPanel
             dances={programDances}
             deletingEntityKey={deletingAdminEntityKey}
+            focusedDanceId={focusedDanceId}
             isLoading={isProgramLoading}
+            onClearFocusedDance={() => setFocusedDanceId("")}
             onDanceDeleted={handleAdminDanceDelete}
           />
         ) : isProgramSection ? (
@@ -11036,6 +11178,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                     <span role="columnheader">Alumno</span>
                     <span role="columnheader">Academia</span>
                     <span role="columnheader">Confirmados</span>
+                    <span role="columnheader">Activos / usados</span>
                     <span role="columnheader">Pendientes</span>
                     <span role="columnheader">Última orden</span>
                   </div>
@@ -11089,17 +11232,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                     <p className="registration-admin-empty">{isLoading ? "Cargando boletos..." : "No hay compras de boletos con esos filtros."}</p>
                   ) : null}
                 </div>
-                <footer className="registration-admin-table-footer">
-                  <span>
-                    Mostrando {visibleTicketRows.length > 0 ? 1 : 0} a {visibleTicketRows.length} de {filteredTicketRows.length} alumnos
-                  </span>
-                  <div>
-                    <button disabled type="button">
-                      1
-                    </button>
-                    <button type="button">10 por página</button>
-                  </div>
-                </footer>
+                <AdminPagination {...ticketsPagination} itemLabel="alumnos" label="boletos" />
               </div>
             </section>
           </>
@@ -11217,17 +11350,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                     <p className="registration-admin-empty">{isLoading ? "Cargando compras..." : "No hay compras de foto/video con esos filtros."}</p>
                   ) : null}
                 </div>
-                <footer className="registration-admin-table-footer">
-                  <span>
-                    Mostrando {visibleMediaOrders.length > 0 ? 1 : 0} a {visibleMediaOrders.length} de {filteredMediaOrders.length} compras
-                  </span>
-                  <div>
-                    <button disabled type="button">
-                      1
-                    </button>
-                    <button type="button">10 por página</button>
-                  </div>
-                </footer>
+                <AdminPagination {...mediaPagination} itemLabel="compras" label="foto y video" />
               </div>
             </section>
           </>
@@ -11352,17 +11475,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
                   {visibleOrders.length === 0 ? <p className="registration-admin-empty">{isLoading ? "Cargando órdenes..." : "No hay pagos con esos filtros."}</p> : null}
                 </div>
-                <footer className="registration-admin-table-footer">
-                  <span>
-                    Mostrando {visibleOrders.length > 0 ? 1 : 0} a {visibleOrders.length} de {filteredOrders.length} resultados
-                  </span>
-                  <div>
-                    <button disabled type="button">
-                      1
-                    </button>
-                    <button type="button">10 por página</button>
-                  </div>
-                </footer>
+                <AdminPagination {...paymentsPagination} itemLabel="resultados" label="pagos" />
               </div>
             </section>
           </>
@@ -11439,8 +11552,11 @@ export function LevitateRegistrationAdminPaymentsRoute({
           <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedOrderId("")} type="button" aria-label="Cerrar detalle" />
           <aside className="registration-admin-sidepanel">
             <RegistrationAdminOrderDetail
+              key={`${adminSession.user.id}:${getAdminOrderType(selectedOrder)}:${selectedOrder.id}`}
+              adminUserId={adminSession.user.id}
               onClose={() => setSelectedOrderId("")}
               onOrderDeleted={handleAdminOrderDeleted}
+              onOrderNotesUpdated={handleOrderNotesUpdated}
               onOrderUpdated={handleOrderUpdated}
               order={selectedOrder}
             />
@@ -11452,17 +11568,26 @@ export function LevitateRegistrationAdminPaymentsRoute({
 }
 
 function RegistrationAdminOrderDetail({
+  adminUserId,
   onClose,
   onOrderDeleted,
+  onOrderNotesUpdated,
   onOrderUpdated,
   order,
 }: {
+  adminUserId: string;
   onClose: () => void;
   onOrderDeleted: (id: string) => void;
+  onOrderNotesUpdated: (order: RegistrationInscriptionOrder) => void;
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
   order: RegistrationInscriptionOrder | null;
 }) {
-  const [notes, setNotes] = useState(order?.notes ?? "");
+  const { notes, setNotes, hasChanges: hasNoteChanges, markSaved: markNoteSaved } = useAdminNoteDraft(
+    adminUserId, order ? getAdminOrderType(order) : "registration", order?.id ?? "", order?.notes ?? "",
+  );
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteMessage, setNoteMessage] = useState("");
+  const [noteError, setNoteError] = useState("");
   const [rejectionReason, setRejectionReason] = useState<RegistrationPaymentRejectionReason>(
     order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof"),
   );
@@ -11475,13 +11600,32 @@ function RegistrationAdminOrderDetail({
   useEffect(() => {
     const nextRejectionReason = order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof");
 
-    setNotes(order?.notes ?? "");
     setRejectionReason(nextRejectionReason);
     setIsRejectionOpen(order?.status === "rejected");
-    setStatusMessage("");
-    setErrorMessage("");
-    setIsTicketPdfLoading(false);
-  }, [order]);
+  }, [order?.id, order?.status, order?.rejectionReason]);
+
+  const handleSaveNote = async () => {
+    if (!order || isSavingNote || isSaving || !hasNoteChanges) return;
+    setIsSavingNote(true);
+    setNoteMessage("");
+    setNoteError("");
+    try {
+      const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(
+        "/api/registration/admin/inscription-order/notes",
+        {
+          method: "POST",
+          body: JSON.stringify({ id: order.id, orderType: getAdminOrderType(order), notes: notes.trim() }),
+        },
+      );
+      onOrderNotesUpdated(response.order);
+      markNoteSaved();
+      setNoteMessage("Nota guardada. El estado del pago no cambió.");
+    } catch (error) {
+      setNoteError(getErrorMessage(error, "No se pudo guardar la nota. Tu borrador se conserva; vuelve a intentarlo."));
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
 
   const handleOpenProof = () => {
     if (!order?.proof) {
@@ -11534,6 +11678,9 @@ function RegistrationAdminOrderDetail({
       );
 
       onOrderUpdated(response.order);
+      markNoteSaved();
+      setNoteMessage("");
+      setNoteError("");
       setStatusMessage(status === "paid" ? "Pago aprobado. La orden quedó lista para confirmar por WhatsApp." : "Pago rechazado. El mensaje de corrección quedó guardado.");
       return response.order;
     } catch (error) {
@@ -11693,6 +11840,7 @@ function RegistrationAdminOrderDetail({
         id: order.id,
         orderType: getAdminOrderType(order),
       });
+      markNoteSaved(true);
       onOrderDeleted(order.id);
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo eliminar el pago."));
@@ -11709,8 +11857,8 @@ function RegistrationAdminOrderDetail({
     );
   }
 
-  const date = getAdminOrderDate(order);
   const whatsappPhone = getRegistrationOrderWhatsAppPhone(order);
+  const messageTemplates = getAdminOrderMessageTemplates(order);
 
   return (
     <section className="registration-admin-detail" aria-label="Detalle de pago">
@@ -11728,15 +11876,19 @@ function RegistrationAdminOrderDetail({
       <dl>
         <div>
           <dt>Comprador</dt>
-          <dd>{order.participantName}</dd>
+          <dd>{getRegistrationOrderBuyerLabel(order)}</dd>
         </div>
         <div>
-          <dt>CURP</dt>
+          <dt>CURP del participante</dt>
           <dd>{order.curp}</dd>
         </div>
         <div>
-          <dt>WhatsApp</dt>
-          <dd>{order.buyerPhone || "Sin teléfono"}</dd>
+          <dt>WhatsApp del comprador</dt>
+          <dd>{order.buyerPhone || `${order.buyerPhoneCountryCode ?? ""}${order.buyerPhoneNumber ?? ""}` || "Sin teléfono registrado"}</dd>
+        </div>
+        <div>
+          <dt>Correo del comprador</dt>
+          <dd>{order.buyerEmail || "Sin correo registrado"}</dd>
         </div>
         <div>
           <dt>Participante</dt>
@@ -11759,16 +11911,22 @@ function RegistrationAdminOrderDetail({
           <dd>{order.paidAmount > 0 ? formatAdminCurrency(order.paidAmount, getRegistrationOrderCurrency(order)) : "Sin reportar"}</dd>
         </div>
         <div>
-          <dt>Fecha transferencia</dt>
-          <dd>
-            {date.date} {date.time}
-          </dd>
+          <dt>Orden creada</dt>
+          <dd>{getAdminOrderTimestampLabel(order.createdAt)}</dd>
+        </div>
+        <div>
+          <dt>Comprobante cargado</dt>
+          <dd>{getAdminOrderTimestampLabel(order.proof?.uploadedAt, "Sin comprobante cargado")}</dd>
+        </div>
+        <div>
+          <dt>Última actualización de la orden</dt>
+          <dd>{getAdminOrderTimestampLabel(order.updatedAt)}</dd>
         </div>
         <div>
           <dt>Revisión</dt>
           <dd>
             {order.reviewedAt
-              ? `${order.reviewedBy || "Admin"} · ${getAdminOrderDate({ ...order, updatedAt: order.reviewedAt, createdAt: order.reviewedAt }).date}`
+              ? `${order.reviewedBy || "Admin"} · ${getAdminOrderTimestampLabel(order.reviewedAt)}`
               : "Sin revisar"}
           </dd>
         </div>
@@ -11835,19 +11993,46 @@ function RegistrationAdminOrderDetail({
         </section>
       ) : null}
 
-      <label className="registration-admin-note">
-        <span>Nota interna</span>
-        <textarea onChange={(event) => setNotes(event.target.value)} placeholder="Escribe una nota interna (opcional)..." value={notes} />
-      </label>
+      <section className="registration-admin-note-editor" aria-label="Nota interna del pago">
+        <label className="registration-admin-note">
+          <span>Nota interna</span>
+          <textarea
+            aria-describedby="admin-note-draft-status"
+            disabled={isSaving || isSavingNote}
+            maxLength={4000}
+            onChange={(event) => {
+              setNotes(event.target.value);
+              setNoteMessage("");
+              setNoteError("");
+            }}
+            placeholder="Escribe una nota interna (opcional)..."
+            value={notes}
+          />
+        </label>
+        <p className="registration-admin-note-editor__hint" id="admin-note-draft-status">
+          {hasNoteChanges
+            ? "Borrador sin guardar. Puedes cerrar el detalle y continuar después."
+            : "La nota es interna. Puedes guardarla sin aprobar ni rechazar el pago."}
+        </p>
+        <div className="registration-admin-note-editor__actions">
+          <button disabled={isSaving || isSavingNote || !hasNoteChanges} onClick={handleSaveNote} type="button">
+            <Save aria-hidden="true" size={16} />
+            {isSavingNote ? "Guardando nota..." : "Guardar nota"}
+          </button>
+          <small>{notes.length.toLocaleString("es-MX")} / 4,000</small>
+        </div>
+        {noteMessage ? <p className="registration-admin-note-editor__feedback" role="status">{noteMessage}</p> : null}
+        {noteError ? <p className="registration-admin-note-editor__feedback registration-admin-note-editor__feedback--error" role="alert">{noteError}</p> : null}
+      </section>
 
       <div className="registration-admin-detail-actions">
-        <button disabled={isSaving} onClick={handleApprovePayment} type="button">
+        <button disabled={isSaving || isSavingNote} onClick={handleApprovePayment} type="button">
           Aprobar pago
         </button>
-        <button aria-expanded={isRejectionOpen} disabled={isSaving} onClick={handleRejectToggle} type="button">
+        <button aria-expanded={isRejectionOpen} disabled={isSaving || isSavingNote} onClick={handleRejectToggle} type="button">
           Rechazar
         </button>
-        <button className="registration-admin-detail-actions__danger" disabled={isSaving} onClick={handleDeleteOrder} type="button">
+        <button className="registration-admin-detail-actions__danger" disabled={isSaving || isSavingNote} onClick={handleDeleteOrder} type="button">
           Eliminar pago
         </button>
       </div>
@@ -11864,7 +12049,7 @@ function RegistrationAdminOrderDetail({
               ))}
             </select>
           </label>
-          <button className="registration-admin-review-panel__submit" disabled={isSaving} onClick={handleRejectPayment} type="button">
+          <button className="registration-admin-review-panel__submit" disabled={isSaving || isSavingNote} onClick={handleRejectPayment} type="button">
             <MessageCircle aria-hidden="true" size={17} />
             Enviar rechazo por WhatsApp
           </button>
@@ -11873,6 +12058,17 @@ function RegistrationAdminOrderDetail({
 
       <AdminStatusMessage message={statusMessage} />
       <AdminStatusMessage message={errorMessage} tone="error" />
+      {messageTemplates.length > 0 ? (
+        <details className="registration-admin-message-toggle">
+          <summary>Preparar mensaje para el comprador</summary>
+          <AdminMessageComposer
+            contextKey={`order:${getAdminOrderType(order)}:${order.id}:${order.status}:${order.reviewedAt ?? ""}`}
+            recipientName={getRegistrationOrderBuyerLabel(order)}
+            phone={order.buyerPhone || `${order.buyerPhoneCountryCode ?? ""}${order.buyerPhoneNumber ?? ""}`}
+            templates={messageTemplates}
+          />
+        </details>
+      ) : null}
     </section>
   );
 }

@@ -489,6 +489,10 @@ export default {
       return handleRegistrationAdminInscriptionOrderStatus(request, env);
     }
 
+    if (url.pathname === "/api/registration/admin/inscription-order/notes") {
+      return handleRegistrationAdminInscriptionOrderNotes(request, env);
+    }
+
     if (url.pathname === "/api/registration/admin/scanner/pairing-code") {
       return handleRegistrationAdminScannerPairingCode(request, env);
     }
@@ -1614,7 +1618,7 @@ async function handleRegistrationAdminInscriptionOrders(request, env) {
         ? (await Promise.all([getAllRegistrationInscriptionOrders(db), getAllRegistrationShopOrders(db)]))
             .flat()
             .sort(compareRegistrationOrdersByUpdatedAt)
-        : await getRegistrationInscriptionOrders(db, admin.session.academy.id);
+        : await getRegistrationInscriptionOrders(db, admin.session.academy.id, { includeInternalNotes: true });
 
     return sendJson({
       orders,
@@ -1690,7 +1694,7 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
         await ensureRegistrationEventTicketsForOrder(db, order, "shop");
       }
 
-      return sendJson({ order: await serializeRegistrationShopOrderWithProof(db, order) });
+      return sendJson({ order: await serializeRegistrationShopOrderWithProof(db, order, { includeInternalNotes: true }) });
     }
 
     await updateRegistrationInscriptionOrderStatus(db, {
@@ -1713,7 +1717,45 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
       await ensureRegistrationEventTicketsForOrder(db, order, "registration");
     }
 
-    return sendJson({ order: await serializeRegistrationInscriptionOrderWithProof(db, order) });
+    return sendJson({ order: await serializeRegistrationInscriptionOrderWithProof(db, order, { includeInternalNotes: true }) });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminInscriptionOrderNotes(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+
+    const db = getDb(env);
+    await requireRegistrationAdmin(request, env, db);
+    const body = await readJsonBody(request);
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throwHttpError("validation_error", "Los datos de la nota no son válidos.", 400);
+    }
+
+    const orderId = requireString(body.id, "id");
+    const orderType = requireRegistrationChoice(body.orderType, "orderType", new Set(["registration", "shop"]));
+
+    if (typeof body.notes !== "string" || body.notes.length > 4000) {
+      throwHttpError("validation_error", "La nota debe ser texto de hasta 4000 caracteres.", 400);
+    }
+
+    const notes = body.notes.trim() || null;
+    const table = orderType === "shop" ? "registration_shop_orders" : "registration_inscription_orders";
+
+    // Notes are independent of payment review. Preserve all operational dates,
+    // approval fields, and already-issued tickets when saving or clearing one.
+    await db.prepare(`UPDATE ${table} SET notes = ? WHERE id = ?`).bind(notes, orderId).run();
+
+    const order = orderType === "shop"
+      ? await getRegistrationShopOrderRecordById(db, orderId)
+      : await getRegistrationInscriptionOrderRecordById(db, orderId);
+
+    return sendJson({ order: orderType === "shop"
+      ? await serializeRegistrationShopOrderWithProof(db, order, { includeInternalNotes: true })
+      : await serializeRegistrationInscriptionOrderWithProof(db, order, { includeInternalNotes: true }) });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -4822,7 +4864,7 @@ async function getRegistrationEventTicketsForSource(db, sourceOrderType, sourceO
   }
 }
 
-async function getRegistrationInscriptionOrders(db, academyId) {
+async function getRegistrationInscriptionOrders(db, academyId, options) {
   try {
     const { results = [] } = await db
       .prepare(
@@ -4836,7 +4878,7 @@ async function getRegistrationInscriptionOrders(db, academyId) {
       .bind(academyId)
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithProof(db, order)));
+    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithProof(db, order, options)));
   } catch (error) {
     if (isMissingRegistrationInscriptionOrdersTable(error)) {
       return [];
@@ -4874,7 +4916,7 @@ async function getAllRegistrationInscriptionOrders(db) {
       )
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithJoinedProof(db, order)));
+    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithJoinedProof(db, order, { includeInternalNotes: true })));
   } catch (error) {
     if (isMissingRegistrationInscriptionOrdersTable(error)) {
       return [];
@@ -4912,7 +4954,7 @@ async function getAllRegistrationShopOrders(db) {
       )
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationShopOrderWithJoinedProof(db, order)));
+    return Promise.all(results.map((order) => serializeRegistrationShopOrderWithJoinedProof(db, order, { includeInternalNotes: true })));
   } catch (error) {
     if (isMissingRegistrationShopOrdersTable(error)) {
       return [];
@@ -6179,7 +6221,7 @@ function normalizePhoneNumber(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 15);
 }
 
-function serializeRegistrationInscriptionOrder(order) {
+function serializeRegistrationInscriptionOrder(order, { includeInternalNotes = false } = {}) {
   const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
   const currency = getRegistrationOrderCurrency(lineItems);
   const isInternational = currency === registrationInscriptionCurrencies.international;
@@ -6210,7 +6252,7 @@ function serializeRegistrationInscriptionOrder(order) {
     buyerPhoneCountryCode: order.buyer_phone_country_code,
     buyerPhoneNumber: order.buyer_phone_number,
     buyerPhone: order.buyer_phone,
-    notes: order.notes,
+    ...(includeInternalNotes ? { notes: order.notes } : {}),
     paidAt: order.paid_at,
     reviewedBy: order.reviewed_by,
     reviewedAt: order.reviewed_at,
@@ -6221,7 +6263,7 @@ function serializeRegistrationInscriptionOrder(order) {
   };
 }
 
-function serializeRegistrationShopOrder(order) {
+function serializeRegistrationShopOrder(order, { includeInternalNotes = false } = {}) {
   const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
 
   return {
@@ -6248,7 +6290,7 @@ function serializeRegistrationShopOrder(order) {
     buyerPhone: order.buyer_phone,
     discountCode: order.discount_code,
     discountAmount: Number(order.discount_amount || 0),
-    notes: order.notes,
+    ...(includeInternalNotes ? { notes: order.notes } : {}),
     paidAt: order.paid_at,
     reviewedBy: order.reviewed_by,
     reviewedAt: order.reviewed_at,
@@ -6259,25 +6301,25 @@ function serializeRegistrationShopOrder(order) {
   };
 }
 
-async function serializeRegistrationInscriptionOrderWithProof(db, order) {
+async function serializeRegistrationInscriptionOrderWithProof(db, order, options) {
   return {
-    ...serializeRegistrationInscriptionOrder(order),
+    ...serializeRegistrationInscriptionOrder(order, options),
     proof: await getLatestRegistrationPaymentProof(db, order.id),
     tickets: await getRegistrationEventTicketsForSource(db, "registration", order.id),
   };
 }
 
-async function serializeRegistrationInscriptionOrderWithJoinedProof(db, order) {
+async function serializeRegistrationInscriptionOrderWithJoinedProof(db, order, options) {
   return {
-    ...serializeRegistrationInscriptionOrder(order),
+    ...serializeRegistrationInscriptionOrder(order, options),
     proof: serializeJoinedRegistrationPaymentProof(order),
     tickets: await getRegistrationEventTicketsForSource(db, "registration", order.id),
   };
 }
 
-async function serializeRegistrationShopOrderWithProof(db, order) {
+async function serializeRegistrationShopOrderWithProof(db, order, options) {
   return {
-    ...serializeRegistrationShopOrder(order),
+    ...serializeRegistrationShopOrder(order, options),
     proof: await getLatestRegistrationShopPaymentProof(db, order.id),
     tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
   };
@@ -6302,9 +6344,9 @@ async function serializePublicRegistrationShopOrderWithProof(db, order) {
   };
 }
 
-async function serializeRegistrationShopOrderWithJoinedProof(db, order) {
+async function serializeRegistrationShopOrderWithJoinedProof(db, order, options) {
   return {
-    ...serializeRegistrationShopOrder(order),
+    ...serializeRegistrationShopOrder(order, options),
     proof: serializeJoinedRegistrationPaymentProof(order),
     tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
   };
@@ -6447,7 +6489,7 @@ function serializePublicRegistrationInscriptionPaymentLookup(lookup) {
 }
 
 function serializePublicRegistrationInscriptionOrder(order) {
-  const { academyId, ...publicOrder } = order;
+  const { academyId, notes, ...publicOrder } = order;
   return publicOrder;
 }
 

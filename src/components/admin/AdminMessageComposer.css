@@ -1,0 +1,181 @@
+.registration-admin-message-composer {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: #15151b;
+  color: #fff;
+}
+
+.registration-admin-message-composer > .registration-admin-message-composer__header {
+  display: grid;
+  gap: 4px;
+}
+
+.registration-admin-message-composer > .registration-admin-message-composer__header h3,
+.registration-admin-message-composer > .registration-admin-message-composer__header p {
+  margin: 0;
+}
+
+.registration-admin-message-composer > .registration-admin-message-composer__header h3 {
+  font-size: 1rem;
+}
+
+.registration-admin-message-composer > .registration-admin-message-composer__header p,
+.registration-admin-message-composer__hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.registration-admin-message-composer > label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.registration-admin-message-composer select,
+.registration-admin-message-composer textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 7px;
+  padding: 10px;
+  background: #24242c;
+  color: #fff;
+  color-scheme: dark;
+  caret-color: #fff;
+  -webkit-text-fill-color: #fff;
+  font: inherit;
+}
+
+.registration-admin-message-composer textarea {
+  min-height: 180px;
+  resize: vertical;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.registration-admin-message-composer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 120, 180, 0.48);
+  border-radius: 7px;
+  background: rgba(240, 82, 147, 0.1);
+  color: #ffb4d2;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.registration-admin-message-composer button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.registration-admin-message-composer :is(button, select, textarea):focus-visible {
+  outline: 2px solid #ff8cbc;
+  outline-offset: 3px;
+}
+
+.registration-admin-message-composer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.registration-admin-message-composer__actions button {
+  flex: 1 1 135px;
+}
+
+.registration-admin-message-composer__restore {
+  justify-self: start;
+}
+
+.registration-admin-message-composer .registration-admin-message-composer__recipient {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.registration-admin-message-composer .registration-admin-message-composer__recipient > div {
+  display: grid;
+  grid-template-columns: minmax(75px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.registration-admin-message-composer__recipient dt {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.registration-admin-message-composer__recipient dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.registration-admin-message-composer__feedback {
+  margin: 0;
+  color: #fff;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.registration-admin-message-composer__review {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 196, 96, 0.4);
+  border-radius: 7px;
+  background: rgba(255, 196, 96, 0.08);
+}
+
+.registration-admin-message-composer__review p {
+  margin: 0;
+  color: #ffcf86;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.registration-admin-message-composer__review button {
+  justify-self: start;
+}
+
+.registration-admin-message-toggle {
+  min-width: 0;
+  margin-top: 16px;
+}
+
+.registration-admin-message-toggle > summary {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.registration-admin-message-toggle > summary:focus-visible {
+  outline: 2px solid #ff8cbc;
+  outline-offset: 3px;
+}
+
+.registration-admin-message-toggle[open] > summary {
+  margin-bottom: 10px;
+}
