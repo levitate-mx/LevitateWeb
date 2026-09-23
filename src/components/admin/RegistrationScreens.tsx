@@ -2596,13 +2596,13 @@ function buildPaymentRejectionMessage(order: RegistrationInscriptionOrder, reaso
   const amount = formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order));
 
   const messages: Record<RegistrationPaymentRejectionReason, string> = {
-    incomplete_amount: `El monto recibido no cubre el total de la orden. El importe correcto es ${amount}. Por favor completa la diferencia o compártenos la aclaración correspondiente para continuar con la validación.`,
+    incomplete_amount: `Vimos que el monto recibido es menor al total de ${amount}. Puedes completar la diferencia o escribirnos por aquí si necesitas aclararlo.`,
     invalid_or_unreadable_proof:
-      "El comprobante recibido no es legible o no corresponde a esta orden. Por favor envíanos un comprobante claro y relacionado con esta referencia para poder revisarlo nuevamente.",
+      "Aún no pudimos validar el comprobante. ¿Nos ayudas cargando una versión legible que corresponda a esta orden?",
     missing_proof:
-      "No tenemos comprobante cargado para esta orden. Por favor sube o envía el comprobante correspondiente para que podamos validar el pago.",
+      "Vimos que aún no aparece cargado el comprobante de pago.",
     payment_not_found:
-      "No encontramos una transferencia asociada a esta referencia. Por favor verifica los datos de transferencia y compártenos el comprobante correcto o la aclaración correspondiente.",
+      "Por el momento no hemos podido identificar la transferencia con esta referencia. ¿Nos ayudas revisando los datos y compartiendo el comprobante correspondiente?",
   };
 
   return messages[reason];
@@ -2705,22 +2705,24 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
       })()
     : buildInscriptionProofCorrectionUrl(order);
   const correctionLinkLines = correctionUrl
-    ? ["", "Puedes subir nuevamente el comprobante en esta liga:", correctionUrl]
+    ? ["", "Puedes cargarlo nuevamente aquí:", correctionUrl]
     : [];
 
   return [
-    "Hola, te escribe el equipo de administración de Levitate MX.",
+    `¡Hola! Gracias por tu ${isShopOrder ? "compra" : "registro"} en Levitate MX 💗`,
     "",
-    `Te contactamos con relación al pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName}. Por el momento no pudimos aprobarlo por el siguiente motivo:`,
+    `Estamos dando seguimiento a la ${isShopOrder ? "compra" : "inscripción"} de ${order.participantName}. ${message}`,
     "",
-    message,
-    "",
-    `Orden: ${paymentReference}`,
-    `Monto esperado: ${formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}`,
-    `Concepto para transferencia: ${paymentReference}`,
+    `📌 Orden: ${paymentReference}`,
+    `💰 Monto: ${formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}`,
+    `📝 Concepto: ${paymentReference}`,
     ...correctionLinkLines,
     "",
-    "Por favor revisa la información y, cuando tengas la corrección, responde a este chat para que podamos validar nuevamente tu caso.",
+    correctionUrl
+      ? "Cuando lo hayas cargado, escríbenos por aquí para revisarlo y continuar con la validación. 💫"
+      : "Cuando tengas el comprobante, compártelo por aquí para revisarlo y continuar con la validación. 💫",
+    "",
+    "¡Gracias por ser parte de Levitate! 🩷",
   ].join("\n");
 }
 
