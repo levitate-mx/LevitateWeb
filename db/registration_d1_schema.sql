@@ -361,6 +361,7 @@ CREATE INDEX IF NOT EXISTS idx_registration_participants_academy_id ON registrat
 CREATE INDEX IF NOT EXISTS idx_registration_participants_curp ON registration_participants(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_student_resources_curp ON registration_student_resources(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_curp ON registration_inscription_orders(curp);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_releve_order_dance ON registration_inscription_orders(curp) WHERE curp LIKE 'RELEVE:%';
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_academy_id ON registration_inscription_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_status ON registration_inscription_orders(status);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id);

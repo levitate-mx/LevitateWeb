@@ -113,7 +113,7 @@ export default function App() {
   }
 
   if (academyRegistrationMatch) {
-    return <LevitateRegistrationRoute />;
+    return <LevitateRegistrationRoute initialScreen={searchParams.get("seccion") === "releve" ? "releve" : "home"} />;
   }
 
   if (studentRegistrationMatch) {

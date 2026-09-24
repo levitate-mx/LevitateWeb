@@ -127,6 +127,7 @@ const prerequisites = {
 };
 
 const indexes = [
+  ["idx_registration_releve_order_dance", "registration_inscription_orders", "curp", "UNIQUE", "WHERE curp LIKE 'RELEVE:%'"],
   ["idx_registration_shop_orders_curp", "registration_shop_orders", "curp"],
   ["idx_registration_shop_orders_academy_id", "registration_shop_orders", "academy_id"],
   ["idx_registration_shop_orders_status", "registration_shop_orders", "status"],

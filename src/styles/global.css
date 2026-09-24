@@ -41875,3 +41875,181 @@ button {
     margin-top: 18px;
   }
 }
+
+.levitate-admin-releve-page {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.levitate-admin-releve-payments__toolbar,
+.levitate-admin-panel--releve-payments > .levitate-auth-message {
+  margin: 20px clamp(22px, 4vw, 44px) 0;
+}
+
+.levitate-admin-releve-payments__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.levitate-admin-releve-payments__intro {
+  margin: 0;
+  color: rgba(39, 37, 37, 0.68);
+  line-height: 1.5;
+}
+
+.levitate-admin-releve-payments__toolbar button {
+  flex: none;
+}
+
+.levitate-admin-releve-payments__list {
+  display: grid;
+  gap: 20px;
+  padding: 24px clamp(22px, 4vw, 44px) clamp(22px, 4vw, 44px);
+}
+
+.levitate-admin-panel--releve-payments > .levitate-admin-empty-state {
+  margin: 20px clamp(22px, 4vw, 44px);
+}
+
+.levitate-admin-releve-payment-card {
+  min-width: 0;
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: var(--admin-soft-shadow);
+}
+
+.levitate-admin-releve-payment-card header,
+.levitate-admin-releve-payment-card__summary,
+.levitate-admin-releve-payment-card__bank dl div,
+.levitate-admin-releve-payment-card__proof {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.levitate-admin-releve-payment-card header {
+  align-items: start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.levitate-admin-releve-payment-card header span,
+.levitate-admin-releve-payment-card__summary span,
+.levitate-admin-releve-payment-card__bank dt {
+  color: rgba(39, 37, 37, 0.55);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.levitate-admin-releve-payment-card h3 {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
+}
+
+.levitate-admin-releve-payment-card header > strong {
+  white-space: nowrap;
+  color: var(--admin-pink);
+  font-size: 1.3rem;
+}
+
+.levitate-admin-releve-payment-card__summary {
+  flex-wrap: wrap;
+  padding: 18px 0;
+}
+
+.levitate-admin-releve-payment-card__summary div {
+  display: grid;
+  gap: 6px;
+}
+
+.levitate-admin-releve-payment-card__summary strong {
+  font-size: 1.08rem;
+}
+
+.levitate-admin-releve-payment-card__bank {
+  padding: 18px;
+  border-radius: 8px;
+  background: rgba(240, 238, 240, 0.8);
+}
+
+.levitate-admin-releve-payment-card__bank h4 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+
+.levitate-admin-releve-payment-card__bank dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.levitate-admin-releve-payment-card__bank dl div {
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.levitate-admin-releve-payment-card__bank dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 800;
+  text-align: right;
+}
+
+.levitate-admin-releve-payment-card__note {
+  margin: 16px 0;
+  line-height: 1.45;
+}
+
+.levitate-admin-releve-payment-card__proof,
+.levitate-admin-releve-payment-card__rejection {
+  padding: 12px 14px;
+  border-radius: 7px;
+  background: rgba(230, 38, 116, 0.08);
+  overflow-wrap: anywhere;
+}
+
+.levitate-admin-releve-payment-card__proof a {
+  color: var(--admin-pink);
+  font-weight: 800;
+}
+
+.levitate-admin-releve-payment-card form {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.levitate-admin-releve-payment-card form label {
+  font-weight: 800;
+}
+
+.levitate-admin-releve-payment-card form input {
+  max-width: 100%;
+}
+
+@media (max-width: 680px) {
+  .levitate-admin-releve-payments__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .levitate-admin-releve-payment-card header,
+  .levitate-admin-releve-payment-card__bank dl div {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .levitate-admin-releve-payment-card__bank dd {
+    text-align: left;
+  }
+}

@@ -399,6 +399,8 @@ type RegistrationInscriptionOrder = {
   tickets?: RegistrationEventTicket[];
 };
 
+type RegistrationReleveOrder = RegistrationInscriptionOrder & { danceId: string };
+
 type RegistrationInscriptionLookup = {
   curp: string;
   participantName: string;
@@ -1611,7 +1613,12 @@ function getAdminOrderType(order: Pick<RegistrationInscriptionOrder, "orderType"
 }
 
 function getAdminOrderTypeLabel(order: RegistrationInscriptionOrder) {
+  if (isRelevePaymentOrder(order)) return "Relevé";
   return getAdminOrderType(order) === "shop" ? "Tienda" : "Inscripción";
+}
+
+function isRelevePaymentOrder(order: Pick<RegistrationInscriptionOrder, "curp">) {
+  return order.curp.startsWith("RELEVE:");
 }
 
 function getInscriptionOrderConcept(order: RegistrationInscriptionOrder) {
@@ -2620,6 +2627,7 @@ function getRegistrationOrderWhatsAppPhone(order: RegistrationInscriptionOrder) 
 }
 
 function getRegistrationOrderBuyerLabel(order: RegistrationInscriptionOrder) {
+  if (isRelevePaymentOrder(order)) return order.academyName;
   return order.buyerName?.trim() || "Nombre no registrado";
 }
 
@@ -2636,6 +2644,10 @@ function buildWhatsAppUrl(phone: string, message: string) {
 function buildInscriptionProofCorrectionUrl(order: RegistrationInscriptionOrder) {
   if (typeof window === "undefined" || getAdminOrderType(order) !== "registration") {
     return "";
+  }
+
+  if (isRelevePaymentOrder(order)) {
+    return new URL("/registro/academias?seccion=releve", window.location.origin).toString();
   }
 
   const url = new URL("/inscripciones/consulta-curp", window.location.origin);
@@ -2664,6 +2676,7 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const ticketCount = order.tickets?.length ?? 0;
   const isShopOrder = getAdminOrderType(order) === "shop";
+  const isReleveOrder = isRelevePaymentOrder(order);
   const ticketDeliveryUrl = buildShopTicketDeliveryUrl(order);
   const ticketLines =
     ticketCount > 0
@@ -2673,12 +2686,12 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
         ]
       : isShopOrder
         ? ["Tu compra quedó confirmada correctamente."]
-        : ["Tu inscripción quedó confirmada correctamente."];
+        : [isReleveOrder ? "Tu inscripción Relevé quedó confirmada correctamente." : "Tu inscripción quedó confirmada correctamente."];
 
   return [
     "Hola, te escribe el equipo de administración de Levitate MX.",
     "",
-    `Te contactamos con relación al pago ${isShopOrder ? "de tienda" : "de inscripción"} de ${order.participantName}. Confirmamos que fue aprobado correctamente.`,
+    `Te contactamos con relación al pago ${isShopOrder ? "de tienda" : isReleveOrder ? "de Relevé" : "de inscripción"} de ${order.participantName}. Confirmamos que fue aprobado correctamente.`,
     "",
     `Orden: ${paymentReference}`,
     `Monto confirmado: ${amount}`,
@@ -2692,6 +2705,7 @@ function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder
 
 function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrder, correctionMessage: string) {
   const isShopOrder = getAdminOrderType(order) === "shop";
+  const isReleveOrder = isRelevePaymentOrder(order);
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const message =
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
@@ -2709,9 +2723,9 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
     : [];
 
   return [
-    `¡Hola! Gracias por tu ${isShopOrder ? "compra" : "registro"} en Levitate MX 💗`,
+    `¡Hola! Gracias por tu ${isShopOrder ? "compra" : isReleveOrder ? "registro Relevé" : "registro"} en Levitate MX 💗`,
     "",
-    `Estamos dando seguimiento a la ${isShopOrder ? "compra" : "inscripción"} de ${order.participantName}. ${message}`,
+    `Estamos dando seguimiento a la ${isShopOrder ? "compra" : isReleveOrder ? "inscripción Relevé" : "inscripción"} de ${order.participantName}. ${message}`,
     "",
     `📌 Orden: ${paymentReference}`,
     `💰 Monto: ${formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}`,
@@ -3280,7 +3294,7 @@ function getDashboardRevenueBreakdown(orders: RegistrationInscriptionOrder[]) {
       const hasTickets = getOrderRequestedTicketCount(order) > 0;
       const hasMedia = getOrderMediaItemCount(order) > 0;
 
-      if (getAdminOrderType(order) === "registration") {
+      if (getAdminOrderType(order) === "registration" && !isRelevePaymentOrder(order)) {
         breakdown.registrations += amount;
       } else if (hasTickets && !hasMedia) {
         breakdown.tickets += amount;
@@ -8598,9 +8612,11 @@ function ChoreographerRegistrationPanel({
 
 function ReleveRegistrationPanel({
   choreographers,
+  dances,
   onDanceCreated,
 }: {
   choreographers: RegistrationChoreographer[];
+  dances: RegistrationDance[];
   onDanceCreated: (dance: RegistrationDance) => void;
 }) {
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
@@ -8684,95 +8700,232 @@ function ReleveRegistrationPanel({
   };
 
   return (
-    <AdminPanel className="levitate-admin-panel--releve" title="Inscripción Relevé" eyebrow="Premio Relevé">
-      <form className="levitate-admin-form levitate-admin-form--releve" onSubmit={handleSubmit}>
-        <div className="levitate-admin-releve-intro">
-          <article>
-            <span>Qué es</span>
-            <p>Relevé es la modalidad donde los alumnos crean la pieza y el maestro la interpreta en escenario.</p>
-          </article>
-          <article>
-            <span>Costo</span>
-            <p>Preventa {relevePresaleCost}; costo normal {releveRegularCost}.</p>
-          </article>
-          <article>
-            <span>Premio</span>
-            <p>Premio en efectivo de {releveCashPrize} al maestro ganador.</p>
-          </article>
-          <article>
-            <span>Logística</span>
-            <p>Selecciona al coreógrafo o coreógrafos que participarán, registra la pieza y después sube su música.</p>
-          </article>
-        </div>
+    <div className="levitate-admin-releve-page">
+      <AdminPanel className="levitate-admin-panel--releve" title="Inscripción Relevé" eyebrow="Premio Relevé">
+        <form className="levitate-admin-form levitate-admin-form--releve" onSubmit={handleSubmit}>
+          <div className="levitate-admin-releve-intro">
+            <article>
+              <span>Qué es</span>
+              <p>Relevé es la modalidad donde los alumnos crean la pieza y el maestro la interpreta en escenario.</p>
+            </article>
+            <article>
+              <span>Costo</span>
+              <p>Preventa {relevePresaleCost}; costo normal {releveRegularCost}.</p>
+            </article>
+            <article>
+              <span>Premio</span>
+              <p>Premio en efectivo de {releveCashPrize} al maestro ganador.</p>
+            </article>
+            <article>
+              <span>Logística</span>
+              <p>Selecciona al coreógrafo o coreógrafos que participarán, registra la pieza y después sube su música.</p>
+            </article>
+          </div>
 
-        <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía Relevé">
-          <input name="title" required type="text" />
-        </AdminField>
-        <AdminField icon={MapPin} label="Sede de competencia">
-          <AdminSelect defaultValue="" id="releve-venue" name="venue" options={venueOptions} placeholder="Selecciona una sede" />
-        </AdminField>
-        <AdminField icon={Trophy} label="Modalidad">
-          <AdminSelect
-            id="releve-genre"
-            name="genre"
-            onChange={handleGenreChange}
-            options={danceGenres}
-            placeholder="Selecciona una modalidad"
-            value={selectedGenre}
-          />
-        </AdminField>
-        <AdminField icon={Music2} label="Género o subgénero">
-          <AdminSelect
-            disabled={!selectedGenre}
-            id="releve-subgenre"
-            name="subgenre"
-            onChange={(event) => {
-              setSelectedSubgenre(event.target.value);
-              if (event.target.value !== "open_otro") {
-                setOpenOtherApparatus("");
-              }
-            }}
-            options={subgenreOptions}
-            placeholder={selectedGenre ? "Selecciona género o subgénero" : "Selecciona primero modalidad"}
-            value={selectedSubgenre}
-          />
-          {shouldShowOpenOtherApparatus ? (
-            <input
-              autoComplete="off"
-              className="levitate-admin-open-subgenre-input"
-              maxLength={60}
-              name="subgenreDetail"
-              onChange={(event) => setOpenOtherApparatus(event.target.value)}
-              placeholder="Escribe el aparato que usarán"
-              required
-              type="text"
-              value={openOtherApparatus}
+          <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía Relevé">
+            <input name="title" required type="text" />
+          </AdminField>
+          <AdminField icon={MapPin} label="Sede de competencia">
+            <AdminSelect defaultValue="" id="releve-venue" name="venue" options={venueOptions} placeholder="Selecciona una sede" />
+          </AdminField>
+          <AdminField icon={Trophy} label="Modalidad">
+            <AdminSelect
+              id="releve-genre"
+              name="genre"
+              onChange={handleGenreChange}
+              options={danceGenres}
+              placeholder="Selecciona una modalidad"
+              value={selectedGenre}
             />
-          ) : null}
-        </AdminField>
+          </AdminField>
+          <AdminField icon={Music2} label="Género o subgénero">
+            <AdminSelect
+              disabled={!selectedGenre}
+              id="releve-subgenre"
+              name="subgenre"
+              onChange={(event) => {
+                setSelectedSubgenre(event.target.value);
+                if (event.target.value !== "open_otro") {
+                  setOpenOtherApparatus("");
+                }
+              }}
+              options={subgenreOptions}
+              placeholder={selectedGenre ? "Selecciona género o subgénero" : "Selecciona primero modalidad"}
+              value={selectedSubgenre}
+            />
+            {shouldShowOpenOtherApparatus ? (
+              <input
+                autoComplete="off"
+                className="levitate-admin-open-subgenre-input"
+                maxLength={60}
+                name="subgenreDetail"
+                onChange={(event) => setOpenOtherApparatus(event.target.value)}
+                placeholder="Escribe el aparato que usarán"
+                required
+                type="text"
+                value={openOtherApparatus}
+              />
+            ) : null}
+          </AdminField>
 
-        <div className="levitate-admin-form__wide-block">
-          <TransferList
-            assignedTitle="Coreógrafos Relevé"
-            emptyMessage="Registra un coreógrafo primero."
-            onSelectionChange={setSelectedChoreographerIds}
-            selectedIds={selectedChoreographerIds}
-            selectionHint="Selecciona el maestro o coreógrafo que realizará la inscripción Relevé."
-            sourceItems={choreographerItems}
-            sourceTitle="Coreógrafos"
+          <div className="levitate-admin-form__wide-block">
+            <TransferList
+              assignedTitle="Coreógrafos Relevé"
+              emptyMessage="Registra un coreógrafo primero."
+              onSelectionChange={setSelectedChoreographerIds}
+              selectedIds={selectedChoreographerIds}
+              selectionHint="Selecciona el maestro o coreógrafo que realizará la inscripción Relevé."
+              sourceItems={choreographerItems}
+              sourceTitle="Coreógrafos"
+            />
+          </div>
+
+          <div className="levitate-admin-form__wide-block">
+            <AdminStatusMessage message={statusMessage} />
+            <AdminStatusMessage message={hasAttemptedSubmit ? choreographerSelectionMessage : ""} tone="error" />
+            <AdminStatusMessage message={errorMessage} tone="error" />
+          </div>
+          <div className="levitate-admin-form__actions">
+            <SaveButton disabled={cannotSave} isSaving={isSaving} />
+          </div>
+        </form>
+      </AdminPanel>
+    <RelevePaymentsPanel dances={dances} />
+    </div>
+  );
+}
+
+function RelevePaymentsPanel({ dances }: { dances: RegistrationDance[] }) {
+  const [orders, setOrders] = useState<RegistrationReleveOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const releveDanceIds = dances.filter((dance) => dance.isReleve).map((dance) => dance.id).join("|");
+
+  const loadOrders = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage("");
+    try {
+      const payload = await requestRegistrationApi<{ orders: RegistrationReleveOrder[] }>("/api/registration/releve/orders", {
+        method: "POST",
+      });
+      setOrders(payload.orders);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudieron cargar los pagos Relevé."));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (releveDanceIds) void loadOrders();
+    else setOrders([]);
+  }, [releveDanceIds, loadOrders]);
+
+  return (
+    <AdminPanel className="levitate-admin-panel--releve-payments" title="Pago de Relevé" eyebrow="Comprobantes">
+      <div className="levitate-admin-releve-payments__toolbar">
+        <p className="levitate-admin-releve-payments__intro">Cada coreografía tiene su propio concepto. Transfiere el monto exacto con ese concepto y sube aquí el comprobante.</p>
+        <button className="levitate-admin-save" disabled={isLoading || !releveDanceIds} onClick={() => void loadOrders()} type="button">
+          <RefreshCw aria-hidden="true" size={18} />
+          Actualizar estado
+        </button>
+      </div>
+      <AdminStatusMessage message={errorMessage} tone="error" />
+      {isLoading ? <p className="levitate-admin-empty-state">Cargando pagos Relevé...</p> : null}
+      {!isLoading && orders.length === 0 ? <p className="levitate-admin-empty-state">Registra una coreografía Relevé para ver sus datos de pago.</p> : null}
+      <div className="levitate-admin-releve-payments__list">
+        {orders.map((order) => (
+          <RelevePaymentCard
+            key={order.id}
+            onOrderUpdated={(updatedOrder) => setOrders((current) => current.map((item) => item.id === updatedOrder.id ? updatedOrder : item))}
+            order={order}
           />
-        </div>
-
-        <div className="levitate-admin-form__wide-block">
-          <AdminStatusMessage message={statusMessage} />
-          <AdminStatusMessage message={hasAttemptedSubmit ? choreographerSelectionMessage : ""} tone="error" />
-          <AdminStatusMessage message={errorMessage} tone="error" />
-        </div>
-        <div className="levitate-admin-form__actions">
-          <SaveButton disabled={cannotSave} isSaving={isSaving} />
-        </div>
-      </form>
+        ))}
+      </div>
     </AdminPanel>
+  );
+}
+
+function RelevePaymentCard({ order, onOrderUpdated }: {
+  order: RegistrationReleveOrder;
+  onOrderUpdated: (order: RegistrationReleveOrder) => void;
+}) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const banamex = registrationPaymentMethodSections.find((method) => method.id === "banamex");
+  const canUpload = !order.proof || order.status === "rejected";
+
+  const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedFile || !canUpload) return;
+    const form = event.currentTarget;
+    setIsUploading(true);
+    setErrorMessage("");
+    setStatusMessage("");
+    try {
+      const proof = await readPaymentProofFileAsDataUrl(selectedFile);
+      const payload = await requestRegistrationApi<{ order: RegistrationReleveOrder }>("/api/registration/releve/order/proof", {
+        body: JSON.stringify({ orderId: order.id, ...proof }),
+        method: "POST",
+      });
+      onOrderUpdated(payload.order);
+      setSelectedFile(null);
+      form.reset();
+      setStatusMessage("Comprobante recibido. Administración revisará tu pago.");
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo subir el comprobante."));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <article className="levitate-admin-releve-payment-card">
+      <header>
+        <div>
+          <span>{getVenueLabel(order.venue)} · Relevé</span>
+          <h3>{order.participantName}</h3>
+        </div>
+        <strong>{formatAdminCurrency(order.amount, "MXN")}</strong>
+      </header>
+      <div className="levitate-admin-releve-payment-card__summary">
+        <div><span>Concepto de transferencia</span><strong>{order.reference}</strong></div>
+        <div><span>Estado</span><strong>{getInscriptionOrderStatusLabel(order.status)}</strong></div>
+      </div>
+      {banamex ? (
+        <section className="levitate-admin-releve-payment-card__bank" aria-label="Datos bancarios Banamex">
+          <h4>{banamex.title}</h4>
+          <dl>{banamex.rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
+        </section>
+      ) : null}
+      <p className="levitate-admin-releve-payment-card__note">Usa exactamente <strong>{order.reference}</strong> como concepto para identificar tu pago.</p>
+      {order.proof ? (
+        <div className="levitate-admin-releve-payment-card__proof">
+          <span>{order.status === "rejected" ? "Comprobante anterior" : "Comprobante recibido"}: {order.proof.fileName}</span>
+          <a download={order.proof.fileName} href={order.proof.dataUrl}>Descargar</a>
+        </div>
+      ) : null}
+      {order.status === "rejected" && order.rejectionMessage ? <p className="levitate-admin-releve-payment-card__rejection">{order.rejectionMessage}</p> : null}
+      {canUpload ? (
+        <form onSubmit={handleUpload}>
+          <label htmlFor={`releve-proof-${order.id}`}>{order.status === "rejected" ? "Subir nuevo comprobante" : "Subir comprobante"}</label>
+          <input
+            accept={paymentProofAccept}
+            id={`releve-proof-${order.id}`}
+            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+            type="file"
+          />
+          <button className="levitate-admin-save" disabled={!selectedFile || isUploading} type="submit">
+            <Upload aria-hidden="true" size={18} />
+            {isUploading ? "Enviando..." : "Enviar comprobante"}
+          </button>
+        </form>
+      ) : null}
+      <AdminStatusMessage message={statusMessage} />
+      <AdminStatusMessage message={errorMessage} tone="error" />
+    </article>
   );
 }
 
@@ -10210,7 +10363,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
     return orders.filter((order) => {
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
       const matchesVenue = venueFilter === "all" || order.venue === venueFilter;
-      const matchesPurchaseType = purchaseTypeFilter === "all" || getAdminOrderType(order) === purchaseTypeFilter;
+      const matchesPurchaseType = purchaseTypeFilter === "all" ||
+        (purchaseTypeFilter === "releve" ? isRelevePaymentOrder(order) :
+          getAdminOrderType(order) === purchaseTypeFilter && !isRelevePaymentOrder(order));
       const matchesQuery =
         !normalizedQuery ||
         [
@@ -11425,6 +11580,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <select onChange={(event) => setPurchaseTypeFilter(event.target.value)} value={purchaseTypeFilter}>
                   <option value="all">Todas</option>
                   <option value="registration">Inscripción</option>
+                  <option value="releve">Relevé</option>
                   <option value="shop">Tienda</option>
                 </select>
                 <ChevronDown aria-hidden="true" size={16} />
@@ -11653,7 +11809,7 @@ function RegistrationAdminOrderDetail({
     }
 
     if (status === "rejected" && !review?.rejectionMessage?.trim()) {
-      setErrorMessage("Escribe qué debe corregir la familia para aprobar el pago.");
+      setErrorMessage("Escribe qué debe corregirse para aprobar el pago.");
       return null;
     }
 
@@ -11880,10 +12036,12 @@ function RegistrationAdminOrderDetail({
           <dt>Comprador</dt>
           <dd>{getRegistrationOrderBuyerLabel(order)}</dd>
         </div>
-        <div>
-          <dt>CURP del participante</dt>
-          <dd>{order.curp}</dd>
-        </div>
+        {!isRelevePaymentOrder(order) ? (
+          <div>
+            <dt>CURP del participante</dt>
+            <dd>{order.curp}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>WhatsApp del comprador</dt>
           <dd>{order.buyerPhone || `${order.buyerPhoneCountryCode ?? ""}${order.buyerPhoneNumber ?? ""}` || "Sin teléfono registrado"}</dd>
@@ -11893,7 +12051,7 @@ function RegistrationAdminOrderDetail({
           <dd>{order.buyerEmail || "Sin correo registrado"}</dd>
         </div>
         <div>
-          <dt>Participante</dt>
+          <dt>{isRelevePaymentOrder(order) ? "Coreografía" : "Participante"}</dt>
           <dd>{order.participantName}</dd>
         </div>
         <div>
@@ -12467,6 +12625,7 @@ function getAdminScreen({
     return (
       <ReleveRegistrationPanel
         choreographers={choreographers}
+        dances={dances}
         onDanceCreated={onDanceCreated}
       />
     );

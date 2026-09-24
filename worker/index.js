@@ -453,6 +453,14 @@ export default {
       return handleRegistrationInscriptionOrders(request, env);
     }
 
+    if (url.pathname === "/api/registration/releve/orders") {
+      return handleRegistrationReleveOrders(request, env);
+    }
+
+    if (url.pathname === "/api/registration/releve/order/proof") {
+      return handleRegistrationReleveOrderProof(request, env);
+    }
+
     if (url.pathname === "/api/registration/inscription/order/status") {
       return handleRegistrationInscriptionOrderStatus(request, env);
     }
@@ -1588,6 +1596,101 @@ async function handleRegistrationInscriptionOrders(request, env) {
   } catch (error) {
     return sendRegistrationError(error);
   }
+}
+
+async function handleRegistrationReleveOrders(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+    const db = getDb(env);
+    const session = await requireRegistrationAcademy(request, db);
+    const { results: dances = [] } = await db
+      .prepare("SELECT * FROM registration_dances WHERE academy_id = ? AND is_releve = 1 ORDER BY created_at DESC")
+      .bind(session.academy.id)
+      .all();
+
+    const orders = [];
+    for (const dance of dances) {
+      const order = await ensureRegistrationReleveOrder(db, dance, session.academy);
+      orders.push({
+        ...await serializeRegistrationInscriptionOrderWithProof(db, order),
+        danceId: dance.id,
+      });
+    }
+    return sendJson({ orders });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationReleveOrderProof(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+    const db = getDb(env);
+    const session = await requireRegistrationAcademy(request, db);
+    const body = await readJsonBody(request);
+    const orderId = requireString(body.orderId, "orderId");
+    const order = await db
+      .prepare("SELECT * FROM registration_inscription_orders WHERE id = ? AND academy_id = ? AND curp LIKE 'RELEVE:%' LIMIT 1")
+      .bind(orderId, session.academy.id)
+      .first();
+    if (!order) {
+      throwHttpError("registration_releve_order_not_found", "Pago Relevé no encontrado para esta academia.", 404);
+    }
+    const danceId = order.curp.slice("RELEVE:".length);
+    await assertRegistrationDanceBelongsToAcademy(db, session.academy.id, danceId);
+    const updatedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
+    return sendJson({ order: { ...updatedOrder, danceId } }, 201);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function ensureRegistrationReleveOrder(db, dance, academy) {
+  // Relevé has no participant CURP; this stable key links one payment order to one dance.
+  const curp = `RELEVE:${dance.id}`;
+  const existing = await db
+    .prepare("SELECT * FROM registration_inscription_orders WHERE curp = ? AND academy_id = ? LIMIT 1")
+    .bind(curp, academy.id)
+    .first();
+  if (existing) return existing;
+
+  const createdAtText = String(dance.created_at || "").replace(" ", "T");
+  const createdAt = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(createdAtText) ? createdAtText : `${createdAtText}Z`);
+  const isPresale = (Number.isNaN(createdAt) ? Date.now() : createdAt) < registrationInscriptionPresaleEndsAt;
+  const amount = (isPresale ? registrationInscriptionPrices.presale : registrationInscriptionPrices.normal).releve;
+  const lineItems = JSON.stringify([{
+    id: dance.id,
+    title: `Relevé · ${dance.title}`,
+    category: "releve",
+    genre: dance.genre,
+    subgenre: dance.subgenre,
+    venue: dance.venue,
+    academyName: academy.name,
+    currency: "MXN",
+    amount,
+  }]);
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const digits = crypto.getRandomValues(new Uint32Array(1))[0] % 100000;
+    const reference = `REL-${String(digits).padStart(5, "0")}`;
+    try {
+      await db.prepare(`
+        INSERT INTO registration_inscription_orders
+          (id, curp, participant_name, academy_id, academy_name, venue, reference, amount,
+           buyer_phone, line_items_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(crypto.randomUUID(), curp, dance.title, academy.id, academy.name, dance.venue,
+        reference, amount, academy.phone || null, lineItems).run();
+      return await db.prepare("SELECT * FROM registration_inscription_orders WHERE curp = ? AND academy_id = ? LIMIT 1")
+        .bind(curp, academy.id).first();
+    } catch (error) {
+      const concurrentOrder = await db.prepare("SELECT * FROM registration_inscription_orders WHERE curp = ? AND academy_id = ? LIMIT 1")
+        .bind(curp, academy.id).first();
+      if (concurrentOrder) return concurrentOrder;
+      if (!String(error?.message || error).includes("UNIQUE constraint failed")) throw error;
+    }
+  }
+  throwHttpError("registration_releve_reference_unavailable", "No se pudo generar el concepto de pago. Intenta de nuevo.", 503);
 }
 
 async function handleRegistrationInscriptionOrderStatus(request, env) {
@@ -4488,7 +4591,7 @@ async function updateRegistrationInscriptionOrderStatus(db, {
     }
 
     if (!nextRejectionMessage) {
-      throwHttpError("rejection_message_required", "Escribe qué debe corregir la familia para aprobar el pago.", 400);
+      throwHttpError("rejection_message_required", "Escribe qué debe corregirse para aprobar el pago.", 400);
     }
   }
 
@@ -4908,7 +5011,7 @@ async function getAllRegistrationInscriptionOrders(db) {
               SELECT latest_proof.id
               FROM registration_inscription_payment_proofs AS latest_proof
               WHERE latest_proof.order_id = registration_inscription_orders.id
-              ORDER BY latest_proof.uploaded_at DESC, latest_proof.created_at DESC
+              ORDER BY latest_proof.uploaded_at DESC, latest_proof.created_at DESC, latest_proof.rowid DESC
               LIMIT 1
             )
           ORDER BY updated_at DESC, created_at DESC
@@ -4946,7 +5049,7 @@ async function getAllRegistrationShopOrders(db) {
               SELECT latest_proof.id
               FROM registration_shop_payment_proofs AS latest_proof
               WHERE latest_proof.order_id = registration_shop_orders.id
-              ORDER BY latest_proof.uploaded_at DESC, latest_proof.created_at DESC
+              ORDER BY latest_proof.uploaded_at DESC, latest_proof.created_at DESC, latest_proof.rowid DESC
               LIMIT 1
             )
           ORDER BY updated_at DESC, created_at DESC
@@ -5312,6 +5415,12 @@ async function deleteRegistrationChoreographer(db, academyId, choreographerId) {
 async function deleteRegistrationDance(db, academyId, danceId) {
   await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
 
+  const releveOrder = await db.prepare("SELECT id FROM registration_inscription_orders WHERE academy_id = ? AND curp = ? LIMIT 1")
+    .bind(academyId, `RELEVE:${danceId}`).first();
+  if (releveOrder) {
+    await deleteRegistrationAdminInscriptionOrder(db, { academyId, orderId: releveOrder.id });
+  }
+
   await db.batch([
     db.prepare("DELETE FROM registration_music_uploads WHERE academy_id = ? AND dance_id = ?").bind(academyId, danceId),
     db.prepare("DELETE FROM registration_dance_choreographers WHERE dance_id = ?").bind(danceId),
@@ -5381,6 +5490,12 @@ async function deleteRegistrationAdminDance(db, { danceId }) {
 
   if (!dance) {
     throwHttpError("registration_dance_not_found", "Coreografía no encontrada", 404);
+  }
+
+  const releveOrder = await db.prepare("SELECT id FROM registration_inscription_orders WHERE curp = ? LIMIT 1")
+    .bind(`RELEVE:${danceId}`).first();
+  if (releveOrder) {
+    await deleteRegistrationAdminInscriptionOrder(db, { orderId: releveOrder.id });
   }
 
   await db.batch([
@@ -6225,6 +6340,7 @@ function serializeRegistrationInscriptionOrder(order, { includeInternalNotes = f
   const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
   const currency = getRegistrationOrderCurrency(lineItems);
   const isInternational = currency === registrationInscriptionCurrencies.international;
+  const isReleve = String(order.curp || "").startsWith("RELEVE:");
 
   return {
     orderType: "registration",
@@ -6235,7 +6351,7 @@ function serializeRegistrationInscriptionOrder(order, { includeInternalNotes = f
     academyName: order.academy_name,
     venue: order.venue,
     reference: order.reference,
-    paymentReference: buildRegistrationInscriptionPaymentReference(order.curp, {
+    paymentReference: isReleve ? order.reference : buildRegistrationInscriptionPaymentReference(order.curp, {
       academyId: order.academy_id,
       isInternational,
       orderReference: order.reference,
@@ -6389,7 +6505,7 @@ async function getLatestRegistrationPaymentProof(db, orderId) {
           SELECT *
           FROM registration_inscription_payment_proofs
           WHERE order_id = ?
-          ORDER BY uploaded_at DESC, created_at DESC
+          ORDER BY uploaded_at DESC, created_at DESC, rowid DESC
           LIMIT 1
         `,
       )
@@ -6414,7 +6530,7 @@ async function getLatestRegistrationShopPaymentProof(db, orderId) {
           SELECT *
           FROM registration_shop_payment_proofs
           WHERE order_id = ?
-          ORDER BY uploaded_at DESC, created_at DESC
+          ORDER BY uploaded_at DESC, created_at DESC, rowid DESC
           LIMIT 1
         `,
       )
