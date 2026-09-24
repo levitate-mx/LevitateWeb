@@ -2333,7 +2333,11 @@ async function handleRegistrationDances(request, env) {
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
 
-    if (choreographerIds.length === 0) {
+    if (isReleve && choreographerIds.length !== 1) {
+      throwHttpError("invalid_releve_choreographers", "Relevé requiere exactamente un maestro por coreografía.", 400);
+    }
+
+    if (!isReleve && choreographerIds.length === 0) {
       throwHttpError("missing_choreographers", "Selecciona al menos un coreógrafo", 400);
     }
 
@@ -2342,7 +2346,11 @@ async function handleRegistrationDances(request, env) {
     }
 
     if (isReleve && participantIds.length > 0) {
-      throwHttpError("invalid_releve_participants", "Relevé se registra solo con coreógrafos seleccionados", 400);
+      throwHttpError("invalid_releve_participants", "Relevé se registra con un maestro, sin participantes en escena.", 400);
+    }
+
+    if (isReleve && category !== "solo") {
+      throwHttpError("invalid_releve_category", "Relevé solo permite coreografías individuales; no admite dúos, tríos ni grupos.", 400);
     }
 
     const participantRequirement = registrationCategoryParticipantRequirements[category] || null;

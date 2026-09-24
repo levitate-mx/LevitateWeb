@@ -8634,8 +8634,8 @@ function ReleveRegistrationPanel({
     fullName: choreographer.fullName,
   }));
   const choreographerSelectionMessage =
-    choreographers.length > 0 && selectedChoreographerIds.length === 0
-      ? "Selecciona al menos un coreógrafo para la inscripción Relevé."
+    choreographers.length > 0 && selectedChoreographerIds.length !== 1
+      ? "Selecciona un solo maestro para la coreografía Relevé."
       : "";
   const cannotSave = isSaving || choreographers.length === 0;
 
@@ -8718,7 +8718,7 @@ function ReleveRegistrationPanel({
             </article>
             <article>
               <span>Logística</span>
-              <p>Selecciona al coreógrafo o coreógrafos que participarán, registra la pieza y después sube su música.</p>
+              <p>Selecciona un solo maestro para la coreografía. Relevé no admite dúos, tríos ni grupos.</p>
             </article>
           </div>
 
@@ -8770,13 +8770,14 @@ function ReleveRegistrationPanel({
 
           <div className="levitate-admin-form__wide-block">
             <TransferList
-              assignedTitle="Coreógrafos Relevé"
+              assignedTitle="Maestro Relevé"
               emptyMessage="Registra un coreógrafo primero."
+              maxSelection={1}
               onSelectionChange={setSelectedChoreographerIds}
               selectedIds={selectedChoreographerIds}
-              selectionHint="Selecciona el maestro o coreógrafo que realizará la inscripción Relevé."
+              selectionHint="Selecciona un solo maestro para esta coreografía Relevé."
               sourceItems={choreographerItems}
-              sourceTitle="Coreógrafos"
+              sourceTitle="Maestros y coreógrafos"
             />
           </div>
 

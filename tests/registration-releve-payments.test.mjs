@@ -39,6 +39,8 @@ async function fixture(t) {
   sqlite.prepare(`INSERT INTO registration_dances
     (id, academy_id, title, genre, subgenre, is_releve, category, venue, created_at)
     VALUES ('dance-one', 'academy-one', 'Pieza de prueba', 'aereo', 'tela', 1, 'solo', 'cdmx', '2026-09-23 12:00:00')`).run();
+  sqlite.prepare(`INSERT INTO registration_choreographers (id, academy_id, full_name)
+    VALUES ('teacher-one', 'academy-one', 'Maestra Uno'), ('teacher-two', 'academy-one', 'Maestro Dos')`).run();
 
   async function request(path, { cookie = cookies['academy-one'], body = {}, method = 'POST', status = 200 } = {}) {
     const response = await worker.fetch(new Request(`https://example.test${path}`, {
@@ -52,6 +54,37 @@ async function fixture(t) {
   }
   return { sqlite, cookies, request };
 }
+
+test('Relevé accepts exactly one teacher and only the solo category', async t => {
+  const f = await fixture(t);
+  const base = {
+    title: 'Relevé individual', genre: 'motion', subgenre: 'jazz', category: 'solo',
+    level: null, venue: 'cdmx', choreographerIds: ['teacher-one'], participantIds: [], isReleve: true,
+  };
+  const none = await f.request('/api/registration/dances', { body: { ...base, choreographerIds: [] }, status: 400 });
+  assert.equal(none.error.code, 'invalid_releve_choreographers');
+  const multiple = await f.request('/api/registration/dances', {
+    body: { ...base, choreographerIds: ['teacher-one', 'teacher-two'] }, status: 400,
+  });
+  assert.equal(multiple.error.code, 'invalid_releve_choreographers');
+
+  for (const category of ['duo', 'trio', 'grupo']) {
+    const result = await f.request('/api/registration/dances', { body: { ...base, category }, status: 400 });
+    assert.equal(result.error.code, 'invalid_releve_category');
+  }
+  for (const category of ['dupla_1_aparato', 'duo_2_aparatos', 'terna_1_aparato', 'trio_3_aparatos']) {
+    const result = await f.request('/api/registration/dances', {
+      body: { ...base, genre: 'aereo', subgenre: 'tela', level: 'nudo', category }, status: 400,
+    });
+    assert.equal(result.error.code, 'invalid_releve_category');
+  }
+
+  const created = await f.request('/api/registration/dances', { body: base, status: 201 });
+  assert.equal(created.dance.isReleve, true);
+  assert.equal(created.dance.category, 'solo');
+  assert.deepEqual(created.dance.choreographers.map(teacher => teacher.id), ['teacher-one']);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS count FROM registration_dances').get().count, 2);
+});
 
 test('Relevé creates one academy-owned order with Banamex concept and fixed presale amount', async t => {
   const f = await fixture(t);

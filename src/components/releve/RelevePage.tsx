@@ -22,8 +22,8 @@ const roleCards = [
 const ruleHighlights = [
   {
     icon: UsersRound,
-    title: "Sin subdivisiones",
-    copy: "No hay edades ni niveles en esta modalidad. Todos los Relevé compiten por igual.",
+    title: "Un maestro por pieza",
+    copy: "Cada coreografía Relevé la interpreta un solo maestro. No hay dúos, tríos ni grupos.",
   },
   {
     icon: Sparkles,
