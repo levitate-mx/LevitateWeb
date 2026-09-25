@@ -83,12 +83,11 @@ export function AdminWorkspaceHome({
     <div className="admin-home" aria-busy={isLoading}>
       <header className="admin-home__welcome">
         <div>
-          <span className="admin-eyebrow">TU ESPACIO DE TRABAJO</span>
+          <span className="admin-eyebrow">ADMINISTRACIÓN</span>
           <h1>
             Hola, {name.trim().split(/\s+/)[0] || "equipo"}
             <span>.</span>
           </h1>
-          <p>Una vista clara de lo que sigue.</p>
         </div>
         <span className="admin-home__season">
           <span /> Administración Levitate
@@ -122,8 +121,8 @@ export function AdminWorkspaceHome({
         >
           <header className="admin-section-heading">
             <div>
-              <span className="admin-eyebrow">POR DÓNDE EMPEZAR</span>
-              <h2 id="admin-priorities-title">Lo que necesita atención</h2>
+              <span className="admin-eyebrow">SEGUIMIENTO</span>
+              <h2 id="admin-priorities-title">Pendientes</h2>
             </div>
             <span className="admin-count">
               {isLoading ? "…" : items.length}
@@ -174,11 +173,11 @@ export function AdminWorkspaceHome({
                     ? "Cargando pendientes"
                     : hasError
                       ? "Información no disponible"
-                      : "Todo al día"}
+                      : "Sin pendientes"}
                 </strong>
                 <p>
                   {isLoading
-                    ? "En un momento verás qué necesita atención."
+                    ? "Cargando pagos, música y datos pendientes."
                     : hasError
                       ? "Intenta actualizar los datos."
                       : "No hay pagos, música o datos pendientes en los registros cargados."}
@@ -199,14 +198,9 @@ export function AdminWorkspaceHome({
             <span className="admin-home__communication-icon">
               <MessageCircle size={23} />
             </span>
-            <span className="admin-eyebrow">CERCA DE CADA ACADEMIA</span>
-            <h2>
-              Una comunicación
-              <br /> más clara.
-            </h2>
+            <h2>Mensajes a academias</h2>
             <p>
-              Consulta sus pendientes y prepara un mensaje con el contexto
-              completo.
+              Consulta los pendientes de una academia y prepara un mensaje.
             </p>
             <button onClick={() => onNavigate("communications")} type="button">
               Preparar un mensaje <ArrowUpRight size={17} />
@@ -436,11 +430,9 @@ export function AdminCommunications({
             <span>
               <MessageCircle size={34} />
             </span>
-            <span className="admin-eyebrow">CADA MENSAJE, CON CONTEXTO</span>
-            <h2>Inicia una conversación.</h2>
+            <h2>Selecciona una academia</h2>
             <p>
-              Selecciona una academia para consultar sus pendientes y preparar
-              un mensaje personalizado.
+              Consulta sus pendientes y prepara un mensaje.
             </p>
             <div>
               <span>

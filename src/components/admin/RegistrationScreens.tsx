@@ -6587,7 +6587,7 @@ function RegistrationAdminFollowup({
     <section className="registration-dashboard-overview" aria-label="Panel operativo Levitate">
       <div className="registration-dashboard-topline">
         <div>
-          <span className="admin-eyebrow">RESOLVER Y AVANZAR</span>
+          <span className="admin-eyebrow">OPERACIÓN</span>
           <h1>Seguimiento<span className="admin-title-dot">.</span></h1>
           <p>Pagos, música y datos pendientes, en orden de prioridad.</p>
         </div>
@@ -10979,7 +10979,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     headerTitle = "Seguimiento";
   } else if (isCommunicationsSection) {
     headerTitle = "Comunicación";
-    headerDescription = "Cada academia, sus pendientes y el mensaje adecuado.";
+    headerDescription = "Contactos y mensajes para las academias.";
   } else if (isAcademiesSection) {
     headerTitle = "Academias";
     headerDescription = "Gestiona todas las academias registradas en la competencia";
