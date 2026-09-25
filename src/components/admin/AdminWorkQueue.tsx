@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, ClipboardList } from "lucide-react";
+import { ArrowUpRight, ClipboardList, Search } from "lucide-react";
+import { normalizeAdminSearch } from "./adminNavigation";
 import { formatMexicoCityDateTime } from "../../utils/mexicoCityTime";
 import { AdminPagination } from "./AdminPagination";
 import { useAdminPagination } from "./useAdminPagination";
@@ -15,9 +16,10 @@ type Props = AdminWorkQueueSources & {
 
 export function AdminWorkQueue({ orders, dances, participants, isLoading, scopeKey, venueLabel, onOpen }: Props) {
   const [category, setCategory] = useState<AdminWorkQueueCategory | "all">("all");
+  const [query, setQuery] = useState("");
   const items = useMemo(() => buildAdminWorkQueue({ orders, dances, participants }), [orders, dances, participants]);
-  const filteredItems = items.filter((item) => category === "all" || item.category === category);
-  const pagination = useAdminPagination(filteredItems, JSON.stringify([scopeKey, category]));
+  const filteredItems = items.filter((item) => (category === "all" || item.category === category) && normalizeAdminSearch(`${item.subject} ${item.academyName} ${item.detail}`).includes(normalizeAdminSearch(query)));
+  const pagination = useAdminPagination(filteredItems, JSON.stringify([scopeKey, category, query]));
   const urgentCount = items.filter((item) => item.urgent).length;
   const filters = [
     { value: "all", label: "Todos" },
@@ -37,6 +39,7 @@ export function AdminWorkQueue({ orders, dances, participants, isLoading, scopeK
           {urgentCount > 0 ? `${urgentCount} ${urgentCount === 1 ? "urgente" : "urgentes"}` : `${items.length} pendientes`}
         </span>
       </header>
+      <label className="admin-search admin-queue-search"><Search size={17} aria-hidden="true" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar pendiente" placeholder="Buscar nombre, academia o referencia…" /></label>
       <div className="admin-work-queue__filters" role="group" aria-label="Tipo de pendiente">
         {filters.map((filter) => (
           <button key={filter.value} aria-pressed={category === filter.value} onClick={() => setCategory(filter.value)} type="button">

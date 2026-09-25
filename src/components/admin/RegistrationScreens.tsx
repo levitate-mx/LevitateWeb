@@ -84,20 +84,13 @@ import { useAdminPagination } from "./useAdminPagination";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import { buildAcademyMessageTemplates, buildOrderMessageTemplates } from "./adminMessageTemplates";
 import { AdminWorkQueue } from "./AdminWorkQueue";
-import type { AdminWorkQueueTarget } from "./adminWorkQueueData";
+import { buildAdminWorkQueue, type AdminWorkQueueTarget } from "./adminWorkQueueData";
+import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
+import { adminSectionPaths, getAdminSectionFromPath, type AdminSection } from "./adminNavigation";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "releve" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
-type RegistrationAdminDashboardSection =
-  | "dashboard"
-  | "academies"
-  | "choreographers"
-  | "choreographies"
-  | "payments"
-  | "program"
-  | "tickets"
-  | "media"
-  | "registrations";
+type RegistrationAdminDashboardSection = AdminSection;
 type RegistrationDashboardDateRangeId = "today" | "last_7_days" | "last_30_days" | "current_event" | "custom" | "season";
 type RegistrationDashboardVenueMetric = "participants" | "choreographies" | "confirmed_registrations" | "revenue" | "tickets";
 type RegistrationDashboardAlertSeverity = "critical" | "important" | "info";
@@ -679,15 +672,17 @@ const adminLookupTabs: Array<{ id: AdminLookupTab; label: string }> = [
 ];
 
 const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
-  { group: "Gestión", label: "Panel general", icon: LayoutDashboard, section: "dashboard" },
-  { group: "Gestión", label: "Academias", icon: Building2, section: "academies" },
-  { group: "Gestión", label: "Participantes", icon: Users, section: "registrations" },
-  { group: "Gestión", label: "Coreógrafos", icon: UserRoundPlus, section: "choreographers" },
-  { group: "Gestión", label: "Coreografías", icon: Music2, section: "choreographies" },
-  { group: "Ventas y pagos", label: "Pagos", icon: CreditCard, section: "payments", badgeKey: "payments" },
-  { group: "Ventas y pagos", label: "Boletos", icon: Ticket, section: "tickets", badgeKey: "tickets" },
-  { group: "Ventas y pagos", label: "Foto/Video", icon: Camera, section: "media", badgeKey: "media" },
-  { group: "Operación de competencia", label: "Programa", icon: ClipboardList, section: "program", badgeKey: "program" },
+  { group: "Espacio de trabajo", label: "Inicio", icon: LayoutDashboard, section: "dashboard" },
+  { group: "Espacio de trabajo", label: "Seguimiento", icon: ClipboardList, section: "followup", badgeKey: "payments" },
+  { group: "Espacio de trabajo", label: "Comunicación", icon: MessageCircle, section: "communications" },
+  { group: "Directorio", label: "Academias", icon: Building2, section: "academies" },
+  { group: "Directorio", label: "Participantes", icon: Users, section: "registrations" },
+  { group: "Directorio", label: "Coreógrafos", icon: UserRoundPlus, section: "choreographers" },
+  { group: "Directorio", label: "Coreografías", icon: Music2, section: "choreographies" },
+  { group: "Operación", label: "Pagos", icon: CreditCard, section: "payments" },
+  { group: "Operación", label: "Boletos", icon: Ticket, section: "tickets" },
+  { group: "Operación", label: "Foto y video", icon: Camera, section: "media" },
+  { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
 ];
 
 const maxMusicUploadBytes = 12000000;
@@ -5388,7 +5383,7 @@ function redirectRegistrationAdmin(session: RegistrationSession | RegistrationBo
     return false;
   }
 
-  window.location.replace("/admin/inscripciones");
+  window.location.replace("/admin/dashboard");
   return true;
 }
 
@@ -6468,7 +6463,7 @@ function RegistrationDashboardSectionHeader({
   );
 }
 
-function RegistrationAdminDashboardOverview({
+function RegistrationAdminFollowup({
   customEndDate,
   customStartDate,
   dateRange,
@@ -6487,7 +6482,6 @@ function RegistrationAdminDashboardOverview({
   orders,
   participants,
   programDances,
-  userName,
   venueFilter,
   venueMetric,
 }: {
@@ -6509,7 +6503,6 @@ function RegistrationAdminDashboardOverview({
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationAdminParticipant[];
   programDances: RegistrationDance[];
-  userName: string;
   venueFilter: string;
   venueMetric: RegistrationDashboardVenueMetric;
 }) {
@@ -6575,7 +6568,6 @@ function RegistrationAdminDashboardOverview({
   const isDashboardLoading = isLoading || isParticipantsLoading || isProgramLoading;
   const ticketProgress = ticketTotals.requestedTickets > 0 ? (ticketTotals.paidTickets / ticketTotals.requestedTickets) * 100 : 0;
   const lastUpdatedLabel = lastUpdatedAt ? getDashboardActivityTimeLabel(lastUpdatedAt) : "Sin actualizar";
-  const firstName = userName.trim().split(/\s+/)[0] || "equipo";
 
   const handleExportDashboard = () => {
     downloadRegistrationDashboardCsv({
@@ -6595,8 +6587,9 @@ function RegistrationAdminDashboardOverview({
     <section className="registration-dashboard-overview" aria-label="Panel operativo Levitate">
       <div className="registration-dashboard-topline">
         <div>
-          <h1>¡Bienvenida, {firstName}!</h1>
-          <p>Resumen operativo de Levitate MX con los datos disponibles en el periodo seleccionado.</p>
+          <span className="admin-eyebrow">RESOLVER Y AVANZAR</span>
+          <h1>Seguimiento<span className="admin-title-dot">.</span></h1>
+          <p>Pagos, música y datos pendientes, en orden de prioridad.</p>
         </div>
         <div className="registration-dashboard-controls" aria-label="Controles globales del panel">
           <label>
@@ -6691,7 +6684,9 @@ function RegistrationAdminDashboardOverview({
         onOpen={onOpenWorkItem}
       />
 
-      <section className="registration-dashboard-metrics" aria-label="Métricas principales">
+      <details className="admin-report-disclosure">
+        <summary><span><Wallet size={18} aria-hidden="true" /> Cifras del periodo</span><span>Ver resumen <ChevronDown size={16} aria-hidden="true" /></span></summary>
+        <section className="registration-dashboard-metrics" aria-label="Métricas principales">
         <RegistrationDashboardMetricCard
           accent="pink"
           detail={`${academyCount} activas con registros u órdenes`}
@@ -6739,6 +6734,7 @@ function RegistrationAdminDashboardOverview({
           value={formatAdminCurrency(confirmedRevenue)}
         />
       </section>
+      </details>
 
     </section>
   );
@@ -6828,6 +6824,7 @@ function RegistrationAcademiesDirectoryPanel({
   statusFilter: string;
   summaries: RegistrationAcademyDirectorySummary[];
 }) {
+  const pagination = useAdminPagination(filteredSummaries, JSON.stringify([query, sort, statusFilter]));
   const activeCount = summaries.filter((summary) => summary.status === "active").length;
   const withRegistrationsCount = summaries.filter((summary) => summary.registrationOrderCount > 0).length;
   const incompleteCount = summaries.filter((summary) => summary.status === "incomplete").length;
@@ -6937,12 +6934,13 @@ function RegistrationAcademiesDirectoryPanel({
           <span role="columnheader">Acciones</span>
         </div>
 
-        {filteredSummaries.map((summary) => (
+        {pagination.visibleItems.map((summary) => (
           <article
             className="registration-academies-directory__row"
             key={summary.academy.id}
             onClick={() => onOpenAcademy(summary.academy.id)}
             onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 onOpenAcademy(summary.academy.id);
@@ -7031,12 +7029,7 @@ function RegistrationAcademiesDirectoryPanel({
           </p>
         ) : null}
 
-        <footer className="registration-academies-directory__footer">
-          <span>
-            Mostrando {filteredSummaries.length} de {summaries.length} academias
-          </span>
-          <small>10 por página</small>
-        </footer>
+        <AdminPagination {...pagination} itemLabel="academias" label="directorio de academias" />
       </section>
     </section>
   );
@@ -7351,6 +7344,8 @@ function RegistrationAdminChoreographersPanel({
   const withoutContactCount = choreographers.filter((choreographer) => !choreographer.email && !choreographer.phone).length;
   const releveTeacherCount = choreographers.filter((choreographer) => choreographer.isReleveTeacher).length;
 
+  const pagination = useAdminPagination(filteredChoreographers, JSON.stringify([query, academyFilter, activityFilter, shirtFilter, sort]));
+
   return (
     <section className="registration-choreographers-panel" aria-label="Directorio de coreógrafos">
       <section className="registration-academies-summary registration-choreographers-summary" aria-label="Resumen de coreógrafos">
@@ -7467,7 +7462,7 @@ function RegistrationAdminChoreographersPanel({
               <span role="columnheader">Acciones</span>
             </div>
 
-            {filteredChoreographers.map((choreographer) => {
+            {pagination.visibleItems.map((choreographer) => {
               const latestActivityDate = choreographer.latestDanceAt ?? choreographer.createdAt;
               const openRow = () => onOpenChoreographer(choreographer.id);
               const handleRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -7554,11 +7549,7 @@ function RegistrationAdminChoreographersPanel({
               </p>
             ) : null}
           </div>
-          <footer className="registration-admin-table-footer">
-            <span>
-              Mostrando {filteredChoreographers.length} de {choreographers.length} coreógrafos
-            </span>
-          </footer>
+          <AdminPagination {...pagination} itemLabel="coreógrafos" label="coreógrafos" />
         </div>
       </section>
     </section>
@@ -7741,6 +7732,8 @@ function RegistrationAdminChoreographiesPanel({
       );
   }, [academyFilter, dances, focusedDanceId, genreFilter, query, venueFilter]);
 
+  const pagination = useAdminPagination(filteredDances, JSON.stringify([query, academyFilter, genreFilter, venueFilter, focusedDanceId]));
+
   return (
     <section className="registration-choreographies-panel" aria-label="Coreografías registradas">
       {focusedDanceId ? (
@@ -7810,7 +7803,7 @@ function RegistrationAdminChoreographiesPanel({
               <span role="columnheader">Eliminar</span>
             </div>
 
-            {filteredDances.map((dance) => {
+            {pagination.visibleItems.map((dance) => {
               const isReleve = isReleveTeacherDance(dance);
               const categoryLabel = isReleve ? "Relevé" : getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category);
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
@@ -7862,11 +7855,7 @@ function RegistrationAdminChoreographiesPanel({
               <p className="registration-admin-empty">{isLoading ? "Cargando coreografías..." : "No hay coreografías registradas con esos filtros."}</p>
             ) : null}
           </div>
-          <footer className="registration-admin-table-footer">
-            <span>
-              Mostrando {filteredDances.length} de {dances.length} coreografías
-            </span>
-          </footer>
+          <AdminPagination {...pagination} itemLabel="coreografías" label="coreografías" />
         </div>
       </section>
     </section>
@@ -7926,6 +7915,7 @@ function RegistrationParticipantsOperationalPanel({
   ticketFilter: string;
   divisionFilter: string;
 }) {
+  const activeAdvancedFilters = [paymentFilter, ticketFilter, academyFilter, divisionFilter, disciplineFilter].filter((value) => value !== "all").length;
   const quickFilters = [
     { label: "Registrados", value: "registered" },
     { label: "Falta pago", value: "requires_payment" },
@@ -7948,6 +7938,8 @@ function RegistrationParticipantsOperationalPanel({
 
       return row.paymentPercent < PARTICIPANT_REGISTRATION_PAYMENT_MINIMUM_PERCENT && row.confirmedTicketCount < TICKET_BLOCK_MINIMUM;
     }).length;
+
+  const pagination = useAdminPagination(filteredRows, JSON.stringify([query, academyFilter, disciplineFilter, divisionFilter, paymentFilter, statusFilter, ticketFilter]));
 
   return (
     <section className="registration-participants-panel" aria-label="Participantes registrados">
@@ -7989,6 +7981,9 @@ function RegistrationParticipantsOperationalPanel({
           </select>
           <ChevronDown aria-hidden="true" size={16} />
         </label>
+        <details className="admin-advanced-filters">
+          <summary><ListFilter size={16} aria-hidden="true" /><span>Más filtros{activeAdvancedFilters ? ` · ${activeAdvancedFilters} activos` : ""}</span><ChevronDown size={15} aria-hidden="true" /></summary>
+          <div className="admin-advanced-filters__fields">
         <label>
           <span>% inscripción</span>
           <select onChange={(event) => onPaymentFilterChange(event.target.value)} value={paymentFilter}>
@@ -8046,6 +8041,9 @@ function RegistrationParticipantsOperationalPanel({
           </select>
           <ChevronDown aria-hidden="true" size={16} />
         </label>
+          </div>
+        </details>
+        {query || statusFilter !== "all" || activeAdvancedFilters > 0 ? <button className="admin-clear-filters" type="button" onClick={() => { onQueryChange(""); onStatusFilterChange("all"); onPaymentFilterChange("all"); onTicketFilterChange("all"); onAcademyFilterChange("all"); onDivisionFilterChange("all"); onDisciplineFilterChange("all"); }}>Limpiar filtros</button> : null}
       </section>
 
       <section className="registration-admin-grid">
@@ -8063,11 +8061,12 @@ function RegistrationParticipantsOperationalPanel({
               <span role="columnheader">Acciones</span>
             </div>
 
-            {filteredRows.map((row) => {
+            {pagination.visibleItems.map((row) => {
               const registrationOrder = row.registrationOrders.find((order) => order.status !== "paid") ?? row.registrationOrders[0] ?? null;
               const ticketOrder = row.ticketOrders.find((order) => order.status !== "paid") ?? row.ticketOrders[0] ?? null;
               const openRow = () => onOpenParticipant(row.participant.id);
               const handleRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+                if (event.target !== event.currentTarget) return;
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   openRow();
@@ -8199,11 +8198,7 @@ function RegistrationParticipantsOperationalPanel({
               </p>
             ) : null}
           </div>
-          <footer className="registration-admin-table-footer">
-            <span>
-              Mostrando {filteredRows.length} de {rows.length} participantes
-            </span>
-          </footer>
+          <AdminPagination {...pagination} itemLabel="participantes" label="participantes" />
         </div>
       </section>
     </section>
@@ -10112,6 +10107,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
 } = {}) {
   const [adminSession, setAdminSession] = useState<RegistrationSession | null>(null);
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
+  const adminMenuToggleRef = useRef<HTMLButtonElement>(null);
+  const adminSidebarRef = useRef<HTMLElement>(null);
   const [orders, setOrders] = useState<RegistrationInscriptionOrder[]>([]);
   const [adminAcademies, setAdminAcademies] = useState<RegistrationAdminAcademy[]>([]);
   const [adminChoreographers, setAdminChoreographers] = useState<RegistrationAdminChoreographer[]>([]);
@@ -10157,38 +10155,58 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [academyProfileTab, setAcademyProfileTab] = useState<RegistrationAcademyProfileTab>("overview");
   const [adminAuthMessage, setAdminAuthMessage] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [adminLoadErrors, setAdminLoadErrors] = useState({ orders: "", participants: "", program: "" });
+  const adminDataError = Object.values(adminLoadErrors).filter(Boolean).join(" ");
   const [isCheckingAdminSession, setIsCheckingAdminSession] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deletingAdminEntityKey, setDeletingAdminEntityKey] = useState("");
-  const activeAdminNavItemRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const onPopState = () => {
+      const section = getAdminSectionFromPath(window.location.pathname);
+      if (!section) return;
+      setActiveSection(section);
+      setIsAdminMenuOpen(false);
+      setSelectedOrderId("");
+      setSelectedAcademyId("");
+      setSelectedParticipantId("");
+      setSelectedChoreographerId("");
+      setFocusedDanceId("");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || window.innerWidth > 680 || !adminSession) {
-      return;
-    }
+    const desktop = window.matchMedia("(min-width: 981px)");
+    const closeOnDesktop = () => { if (desktop.matches) setIsAdminMenuOpen(false); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
 
-    const activeButton = activeAdminNavItemRef.current;
-    const nav = activeButton?.parentElement;
-
-    if (!activeButton || !nav) {
-      return;
-    }
-
-    const navRect = nav.getBoundingClientRect();
-    const activeButtonRect = activeButton.getBoundingClientRect();
-
-    nav.scrollTo({
-      left:
-        nav.scrollLeft +
-        activeButtonRect.left -
-        navRect.left -
-        (navRect.width - activeButtonRect.width) / 2,
-      behavior: "auto",
-    });
-  }, [activeSection, adminSession]);
+  useEffect(() => {
+    if (!isAdminMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    adminSidebarRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsAdminMenuOpen(false);
+      if (event.key !== "Tab") return;
+      const buttons = Array.from(adminSidebarRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
+      const first = buttons[0];
+      const last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      adminMenuToggleRef.current?.focus();
+    };
+  }, [isAdminMenuOpen]);
 
   const handleAdminAuthenticated = useCallback((nextSession: RegistrationSession | RegistrationBootstrap) => {
     if (nextSession.user.role !== "admin") {
@@ -10230,7 +10248,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     }
 
     setIsLoading(true);
-    setAdminError("");
+    setAdminLoadErrors((current) => ({ ...current, orders: "" }));
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders");
@@ -10239,7 +10257,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       setSelectedOrderId((current) => (payload.orders.some((order) => order.id === current) ? current : ""));
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
-      setAdminError(getErrorMessage(error, "No se pudo cargar el panel de inscripciones."));
+      setAdminLoadErrors((current) => ({ ...current, orders: getErrorMessage(error, "No se pudo cargar el panel de inscripciones.") }));
     } finally {
       setIsLoading(false);
     }
@@ -10251,7 +10269,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     }
 
     setIsParticipantsLoading(true);
-    setAdminError("");
+    setAdminLoadErrors((current) => ({ ...current, participants: "" }));
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminParticipantsPayload>("/api/registration/admin/participants");
@@ -10260,7 +10278,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       setAdminParticipants(payload.participants);
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
-      setAdminError(getErrorMessage(error, "No se pudieron cargar los participantes."));
+      setAdminLoadErrors((current) => ({ ...current, participants: getErrorMessage(error, "No se pudieron cargar los participantes.") }));
     } finally {
       setIsParticipantsLoading(false);
     }
@@ -10272,14 +10290,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
     }
 
     setIsProgramLoading(true);
-    setAdminError("");
+    setAdminLoadErrors((current) => ({ ...current, program: "" }));
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminProgramPayload>("/api/registration/admin/program");
       setProgramDances(payload.dances);
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
-      setAdminError(getErrorMessage(error, "No se pudo cargar el programa."));
+      setAdminLoadErrors((current) => ({ ...current, program: getErrorMessage(error, "No se pudo cargar el programa.") }));
     } finally {
       setIsProgramLoading(false);
     }
@@ -10296,23 +10314,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [adminSession?.user.role, loadAdminOrders]);
 
   useEffect(() => {
-    if (
-      adminSession?.user.role === "admin" &&
-      (activeSection === "program" ||
-        activeSection === "choreographies" ||
-        activeSection === "dashboard" ||
-        activeSection === "academies" ||
-        activeSection === "registrations")
-    ) {
-      void loadAdminProgram();
-    }
-  }, [activeSection, adminSession?.user.role, loadAdminProgram]);
-
-  useEffect(() => {
-    if (adminSession?.user.role === "admin" && (activeSection === "registrations" || activeSection === "dashboard" || activeSection === "academies" || activeSection === "choreographers")) {
-      void loadAdminParticipants();
-    }
-  }, [activeSection, adminSession?.user.role, loadAdminParticipants]);
+    if (adminSession?.user.role !== "admin") return;
+    void loadAdminProgram();
+    void loadAdminParticipants();
+  }, [adminSession?.user.role, loadAdminProgram, loadAdminParticipants]);
 
   useEffect(() => {
     if (typeof window === "undefined" || adminSession?.user.role !== "admin") {
@@ -10327,7 +10332,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return () => window.clearInterval(intervalId);
     }
 
-    if (activeSection !== "dashboard" && activeSection !== "academies" && activeSection !== "choreographies") {
+    if (!["dashboard", "followup", "communications", "academies", "choreographies"].includes(activeSection)) {
       return;
     }
 
@@ -10672,6 +10677,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
     [dashboardCustomEndDate, dashboardCustomStartDate, dashboardDateRange],
   );
   const isDashboardSection = activeSection === "dashboard";
+  const isFollowupSection = activeSection === "followup";
+  const isCommunicationsSection = activeSection === "communications";
+  const workQueueItems = useMemo(() => buildAdminWorkQueue({ orders, participants: adminParticipants, dances: programDances }), [orders, adminParticipants, programDances]);
+  const communicationContacts = useMemo(() => academySummaries.map((summary) => ({
+    id: summary.academy.id, name: summary.academy.name, contactName: summary.academy.contactName,
+    phone: summary.academy.phone || "", email: summary.academy.email, initials: summary.initials,
+    alerts: summary.alerts, templates: getAdminAcademyMessageTemplates(summary), international: summary.academy.originType === "international",
+  })), [academySummaries]);
   const isAcademiesSection = activeSection === "academies";
   const isChoreographersSection = activeSection === "choreographers";
   const isChoreographiesSection = activeSection === "choreographies";
@@ -10811,29 +10824,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const updateAdminSectionPath = (section: RegistrationAdminDashboardSection) => {
-    if (typeof window !== "undefined") {
-      let nextPath = "/admin/inscripciones";
-
-      if (section === "dashboard") {
-        nextPath = "/admin/dashboard";
-      } else if (section === "academies") {
-        nextPath = "/admin/academias";
-      } else if (section === "choreographers") {
-        nextPath = "/admin/coreografos";
-      } else if (section === "choreographies") {
-        nextPath = "/admin/coreografias";
-      } else if (section === "tickets") {
-        nextPath = "/admin/boletos";
-      } else if (section === "program") {
-        nextPath = "/admin/programa";
-      } else if (section === "media") {
-        nextPath = "/admin/foto-video";
-      } else if (section === "registrations") {
-        nextPath = "/admin/inscripciones/participantes";
-      }
-
-      window.history.replaceState(null, "", nextPath);
-    }
+    const nextPath = adminSectionPaths[section];
+    if (window.location.pathname !== nextPath) window.history.pushState(null, "", nextPath);
+    setIsAdminMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
 
   const handleSectionChange = (section: RegistrationAdminDashboardSection) => {
@@ -10979,8 +10973,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
   let headerDescription = "Revisión y confirmación de comprobantes";
 
   if (isDashboardSection) {
-    headerTitle = "Panel general";
+    headerTitle = "Inicio";
     headerDescription = "Control operativo del periodo seleccionado";
+  } else if (isFollowupSection) {
+    headerTitle = "Seguimiento";
+  } else if (isCommunicationsSection) {
+    headerTitle = "Comunicación";
+    headerDescription = "Cada academia, sus pendientes y el mensaje adecuado.";
   } else if (isAcademiesSection) {
     headerTitle = "Academias";
     headerDescription = "Gestiona todas las academias registradas en la competencia";
@@ -11019,9 +11018,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }
 
   return (
-    <main className="registration-admin-dashboard">
-      <aside className="registration-admin-sidebar" aria-label="Navegación admin">
-        <div className="registration-admin-brand">Levitate</div>
+    <main className={`registration-admin-dashboard admin-studio${isAdminMenuOpen ? " is-menu-open" : ""}`}>
+      {isAdminMenuOpen ? <button className="admin-menu-backdrop" aria-label="Cerrar menú" onClick={() => setIsAdminMenuOpen(false)} type="button" tabIndex={-1} /> : null}
+      <aside className="registration-admin-sidebar" id="admin-navigation" ref={adminSidebarRef} role={isAdminMenuOpen ? "dialog" : undefined} aria-modal={isAdminMenuOpen || undefined} aria-label="Navegación admin">
+        <div className="admin-brand-lockup"><div className="registration-admin-brand">Levitate<span>.</span></div><span>ADMINISTRACIÓN</span><button className="admin-menu-close" onClick={() => setIsAdminMenuOpen(false)} aria-label="Cerrar navegación" type="button"><X size={20} /></button></div>
         <nav>
           {Array.from(new Set(registrationAdminDashboardNavItems.map((item) => item.group))).map((group) => (
             <div className="registration-admin-nav-group" key={group}>
@@ -11044,7 +11044,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
                           handleSectionChange(item.section);
                         }
                       }}
-                      ref={isActive ? activeAdminNavItemRef : undefined}
                       type="button"
                     >
                       <Icon aria-hidden="true" size={17} />
@@ -11057,6 +11056,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           ))}
         </nav>
         <div className="registration-admin-sidebar__footer">
+          <div className="admin-session"><span className="admin-avatar">{getRegistrationAcademyInitials(adminSession.user.name)}</span><div><strong>{adminSession.user.name}</strong><small>Equipo Levitate</small></div></div>
           <button
             aria-label={isLoggingOut ? "Cerrando sesión" : "Cerrar sesión"}
             className="registration-admin-logout"
@@ -11070,14 +11070,19 @@ export function LevitateRegistrationAdminPaymentsRoute({
         </div>
       </aside>
 
-      <section className={`registration-admin-workspace${isDashboardSection || isAcademiesSection ? " registration-admin-workspace--dashboard" : ""}`}>
-        {!isDashboardSection ? (
+      <section className={`registration-admin-workspace${isDashboardSection || isAcademiesSection ? " registration-admin-workspace--dashboard" : ""}`} inert={isAdminMenuOpen}>
+        <div className="admin-topbar">
+          <div><button className="admin-menu-toggle" ref={adminMenuToggleRef} type="button" aria-label="Abrir navegación" aria-expanded={isAdminMenuOpen} aria-controls="admin-navigation" onClick={() => setIsAdminMenuOpen(true)}><Menu size={22} /></button><span>Administración</span><ChevronDown className="admin-breadcrumb-chevron" size={13} /><strong>{headerTitle}</strong></div>
+          <div><span className="admin-sync-status" role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : adminDataError ? "Error de actualización" : adminLastUpdatedAt ? `Actualizado ${formatMexicoCityTime(adminLastUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>
+        </div>
+        {!isDashboardSection && !isFollowupSection ? (
           <header className="registration-admin-header">
             <div>
-              <h1>{headerTitle}</h1>
+              <span className="admin-eyebrow">{registrationAdminDashboardNavItems.find((item) => item.section === activeSection)?.group}</span>
+              <h1>{headerTitle}<span className="admin-title-dot">.</span></h1>
               <p>{headerDescription}</p>
             </div>
-            {!isProgramSection ? (
+            {!isProgramSection && !isCommunicationsSection ? (
               <div className="registration-admin-header__actions">
                 {isAcademiesSection ? (
                   <button className="registration-admin-new-action" onClick={handleNewAcademy} type="button">
@@ -11151,10 +11156,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </header>
         ) : null}
 
-        {adminError ? <p className="registration-admin-alert">{adminError}</p> : null}
+        {adminError || adminDataError ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError}</p> : null}
 
         {isDashboardSection ? (
-          <RegistrationAdminDashboardOverview
+          <AdminWorkspaceHome name={adminSession.user.name} isLoading={isLoading || isParticipantsLoading || isProgramLoading} hasError={Boolean(adminDataError)} academyCount={adminAcademies.length} participantCount={getDashboardUniqueParticipantCount(adminParticipants)} danceCount={programDances.length} reviewCount={adminNavBadges.payments} items={workQueueItems} onNavigate={(section) => section === "payments" ? handleDashboardNavigate({ section, statusFilter: "payment_reported" }) : handleSectionChange(section)} onOpen={handleOpenWorkQueueItem} />
+        ) : isCommunicationsSection ? (
+          <AdminCommunications contacts={communicationContacts} isLoading={isParticipantsLoading || isLoading || isProgramLoading} onOpenAcademy={handleOpenAcademyProfile} />
+        ) : isFollowupSection ? (
+          <RegistrationAdminFollowup
             customEndDate={dashboardCustomEndDate}
             customStartDate={dashboardCustomStartDate}
             dateRange={dashboardDateRange}
@@ -11173,7 +11182,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
             orders={orders}
             participants={adminParticipants}
             programDances={programDances}
-            userName={adminSession.user.name}
             venueFilter={dashboardVenueFilter}
             venueMetric={dashboardVenueMetric}
           />
@@ -11521,12 +11529,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
                 <Clock aria-hidden="true" size={24} />
               </article>
               <article>
-                <span>Pend. confirmación</span>
+                <span>Por revisar</span>
                 <strong>{totals?.reported ?? "—"}</strong>
                 <CircleAlert aria-hidden="true" size={24} />
               </article>
               <article>
-                <span>Aprobados hoy</span>
+                <span>Pagos aprobados</span>
                 <strong>{totals?.paid ?? "—"}</strong>
                 <CheckCircle2 aria-hidden="true" size={24} />
               </article>
@@ -11741,6 +11749,7 @@ function RegistrationAdminOrderDetail({
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
   order: RegistrationInscriptionOrder | null;
 }) {
+  const [detailView, setDetailView] = useState("review");
   const { notes, setNotes, hasChanges: hasNoteChanges, markSaved: markNoteSaved } = useAdminNoteDraft(
     adminUserId, order ? getAdminOrderType(order) : "registration", order?.id ?? "", order?.notes ?? "",
   );
@@ -12032,6 +12041,104 @@ function RegistrationAdminOrderDetail({
         </button>
       </header>
 
+      <div className="admin-order-summary">
+        <div><strong>{order.participantName}</strong><span>{order.academyName}</span></div>
+        <div><strong>{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</strong><em className={getAdminStatusClass(order.status)}>{getAdminPaymentStatusLabel(order.status)}</em></div>
+      </div>
+      <div className="admin-order-views" role="group" aria-label="Vista del pago">
+        {[{ id: "review", label: "Revisión" }, { id: "data", label: "Datos" }, { id: "notes", label: `Notas${hasNoteChanges ? " •" : ""}` }, { id: "message", label: "Mensaje" }].map((view) => (
+          <button key={view.id} type="button" aria-pressed={detailView === view.id} aria-controls={`admin-order-${view.id}`} onClick={() => setDetailView(view.id)}>{view.label}</button>
+        ))}
+      </div>
+      <AdminStatusMessage message={statusMessage} />
+      <AdminStatusMessage message={errorMessage} tone="error" />
+      <div className="admin-order-view" id="admin-order-review" hidden={detailView !== "review"}>
+      <section className="registration-admin-proof-preview">
+        <span>Comprobante</span>
+        {order.proof ? (
+          <>
+            {order.proof.contentType.startsWith("image/") ? (
+              <img alt={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`} src={order.proof.dataUrl} />
+            ) : (
+              <div className="registration-admin-proof-file">
+                <FileText aria-hidden="true" size={38} />
+                <strong>{order.proof.fileName}</strong>
+              </div>
+            )}
+            <div className="registration-admin-proof-preview__actions">
+              <button onClick={handleOpenProof} type="button">
+                Ver comprobante
+              </button>
+              <a download={order.proof.fileName} href={order.proof.dataUrl}>
+                Descargar
+              </a>
+            </div>
+          </>
+        ) : (
+          <p>Sin comprobante cargado.</p>
+        )}
+      </section>
+
+      {order.tickets?.length ? (
+        <section className="registration-admin-ticket-pack" aria-label="Boletos QR">
+          <header>
+            <div>
+              <span>Boletos QR</span>
+              <strong>
+                {order.tickets.length} {order.tickets.length === 1 ? "boleto generado" : "boletos generados"}
+              </strong>
+            </div>
+            <button disabled={isTicketPdfLoading} onClick={handleDownloadTicketsPdf} type="button">
+              {isTicketPdfLoading ? "Generando..." : "Descargar PDF"}
+            </button>
+          </header>
+          <div>
+            {order.tickets.map((ticket) => (
+              <article key={ticket.id}>
+                <Ticket aria-hidden="true" size={18} />
+                <span>
+                  <strong>{ticket.ticketCode}</strong>
+                  <small>
+                    {ticket.ticketLabel} · {getTicketStatusLabel(ticket.status)}
+                  </small>
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="registration-admin-detail-actions">
+        <button disabled={isSaving || isSavingNote} onClick={handleApprovePayment} type="button">
+          Aprobar pago
+        </button>
+        <button aria-expanded={isRejectionOpen} disabled={isSaving || isSavingNote} onClick={handleRejectToggle} type="button">
+          Rechazar
+        </button>
+
+      </div>
+
+      {isRejectionOpen ? (
+        <section className="registration-admin-review-panel" aria-label="Datos de rechazo">
+          <label>
+            <span>Motivo de rechazo</span>
+            <select onChange={handleRejectionReasonChange} value={rejectionReason}>
+              {paymentRejectionReasonOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="registration-admin-review-panel__submit" disabled={isSaving || isSavingNote} onClick={handleRejectPayment} type="button">
+            <MessageCircle aria-hidden="true" size={17} />
+            Enviar rechazo por WhatsApp
+          </button>
+        </section>
+      ) : null}
+
+      </div>
+      <div className="admin-order-view" id="admin-order-data" hidden={detailView !== "data"}>
       <dl>
         <div>
           <dt>Comprador</dt>
@@ -12098,62 +12205,13 @@ function RegistrationAdminOrderDetail({
           </div>
         ) : null}
       </dl>
-
-      <section className="registration-admin-proof-preview">
-        <span>Comprobante</span>
-        {order.proof ? (
-          <>
-            {order.proof.contentType.startsWith("image/") ? (
-              <img alt={`Comprobante ${getRegistrationInscriptionPaymentReference(order)}`} src={order.proof.dataUrl} />
-            ) : (
-              <div className="registration-admin-proof-file">
-                <FileText aria-hidden="true" size={38} />
-                <strong>{order.proof.fileName}</strong>
-              </div>
-            )}
-            <div className="registration-admin-proof-preview__actions">
-              <button onClick={handleOpenProof} type="button">
-                Ver comprobante
-              </button>
-              <a download={order.proof.fileName} href={order.proof.dataUrl}>
-                Descargar
-              </a>
-            </div>
-          </>
-        ) : (
-          <p>Sin comprobante cargado.</p>
-        )}
-      </section>
-
-      {order.tickets?.length ? (
-        <section className="registration-admin-ticket-pack" aria-label="Boletos QR">
-          <header>
-            <div>
-              <span>Boletos QR</span>
-              <strong>
-                {order.tickets.length} {order.tickets.length === 1 ? "boleto generado" : "boletos generados"}
-              </strong>
-            </div>
-            <button disabled={isTicketPdfLoading} onClick={handleDownloadTicketsPdf} type="button">
-              {isTicketPdfLoading ? "Generando..." : "Descargar PDF"}
-            </button>
-          </header>
-          <div>
-            {order.tickets.map((ticket) => (
-              <article key={ticket.id}>
-                <Ticket aria-hidden="true" size={18} />
-                <span>
-                  <strong>{ticket.ticketCode}</strong>
-                  <small>
-                    {ticket.ticketLabel} · {getTicketStatusLabel(ticket.status)}
-                  </small>
-                </span>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
+        <div className="admin-order-delete"><p>Eliminar una orden es permanente.</p>
+        <button className="registration-admin-detail-actions__danger" disabled={isSaving || isSavingNote} onClick={handleDeleteOrder} type="button">
+          Eliminar pago
+        </button>
+        </div>
+      </div>
+      <div className="admin-order-view" id="admin-order-notes" hidden={detailView !== "notes"}>
       <section className="registration-admin-note-editor" aria-label="Nota interna del pago">
         <label className="registration-admin-note">
           <span>Nota interna</span>
@@ -12186,50 +12244,17 @@ function RegistrationAdminOrderDetail({
         {noteError ? <p className="registration-admin-note-editor__feedback registration-admin-note-editor__feedback--error" role="alert">{noteError}</p> : null}
       </section>
 
-      <div className="registration-admin-detail-actions">
-        <button disabled={isSaving || isSavingNote} onClick={handleApprovePayment} type="button">
-          Aprobar pago
-        </button>
-        <button aria-expanded={isRejectionOpen} disabled={isSaving || isSavingNote} onClick={handleRejectToggle} type="button">
-          Rechazar
-        </button>
-        <button className="registration-admin-detail-actions__danger" disabled={isSaving || isSavingNote} onClick={handleDeleteOrder} type="button">
-          Eliminar pago
-        </button>
       </div>
-
-      {isRejectionOpen ? (
-        <section className="registration-admin-review-panel" aria-label="Datos de rechazo">
-          <label>
-            <span>Motivo de rechazo</span>
-            <select onChange={handleRejectionReasonChange} value={rejectionReason}>
-              {paymentRejectionReasonOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="registration-admin-review-panel__submit" disabled={isSaving || isSavingNote} onClick={handleRejectPayment} type="button">
-            <MessageCircle aria-hidden="true" size={17} />
-            Enviar rechazo por WhatsApp
-          </button>
-        </section>
-      ) : null}
-
-      <AdminStatusMessage message={statusMessage} />
-      <AdminStatusMessage message={errorMessage} tone="error" />
+      <div className="admin-order-view" id="admin-order-message" hidden={detailView !== "message"}>
       {messageTemplates.length > 0 ? (
-        <details className="registration-admin-message-toggle">
-          <summary>Preparar mensaje para el comprador</summary>
           <AdminMessageComposer
             contextKey={`order:${getAdminOrderType(order)}:${order.id}:${order.status}:${order.reviewedAt ?? ""}`}
             recipientName={getRegistrationOrderBuyerLabel(order)}
             phone={order.buyerPhone || `${order.buyerPhoneCountryCode ?? ""}${order.buyerPhoneNumber ?? ""}`}
             templates={messageTemplates}
           />
-        </details>
       ) : null}
+      </div>
     </section>
   );
 }
@@ -12914,7 +12939,7 @@ export function LevitateStudentRegistrationRoute() {
 export function LevitateAuthRoute() {
   const handleAuthenticated = (session: RegistrationSession | RegistrationBootstrap) => {
     if (typeof window !== "undefined") {
-      window.location.replace(session.user.role === "admin" ? "/admin/inscripciones" : "/registro/academias");
+      window.location.replace(session.user.role === "admin" ? "/admin/dashboard" : "/registro/academias");
     }
   };
 

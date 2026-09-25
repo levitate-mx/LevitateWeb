@@ -20021,13 +20021,13 @@ button {
 }
 
 .registration-admin-dashboard {
-  color-scheme: dark;
+  color-scheme: light;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 206px minmax(0, 1fr);
   align-items: start;
-  background: #07080a;
-  color: #fff;
+  background: #f6f5f8;
+  color: #2a2431;
 }
 
 .registration-admin-sidebar {
@@ -20038,12 +20038,12 @@ button {
   min-height: 100vh;
   padding: 30px 14px 22px;
   background: linear-gradient(180deg, #060606, #101010);
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-brand {
   margin: 0 8px 48px;
-  color: #fff;
+  color: #2a2431;
   font-family: var(--font-brand);
   font-size: 2.05rem;
   line-height: 1;
@@ -20063,9 +20063,9 @@ button {
 .registration-admin-nav-group > span {
   display: block;
   padding: 0 14px 3px;
-  color: rgba(255, 255, 255, 0.36);
+  color: rgba(42, 36, 49, 0.36);
   font-size: 0.66rem;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0.08em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -20080,11 +20080,11 @@ button {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(42, 36, 49, 0.68);
   cursor: pointer;
   font: inherit;
   font-size: 0.92rem;
-  font-weight: 760;
+  font-weight: 650;
   text-align: left;
 }
 
@@ -20109,18 +20109,18 @@ button {
   padding: 0 6px;
   border-radius: 999px;
   background: rgba(226, 67, 140, 0.18);
-  color: #ff8cbc;
+  color: #ad3267;
   font-size: 0.68rem;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-admin-sidebar nav button.is-active,
 .registration-admin-sidebar nav button:hover,
 .registration-admin-sidebar nav button:focus-visible {
-  background: rgba(255, 255, 255, 0.11);
-  color: #fff;
+  background: rgba(42, 36, 49, 0.11);
+  color: #2a2431;
 }
 
 .registration-admin-sidebar nav button:disabled {
@@ -20131,7 +20131,7 @@ button {
 .registration-admin-sidebar nav button:disabled:hover,
 .registration-admin-sidebar nav button:disabled:focus-visible {
   background: transparent;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(42, 36, 49, 0.68);
 }
 
 .registration-admin-collapse {
@@ -20139,7 +20139,7 @@ button {
   justify-content: center;
   justify-self: center;
   width: 44px;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(42, 36, 49, 0.78);
 }
 
 .registration-admin-sidebar__footer {
@@ -20154,14 +20154,14 @@ button {
   gap: 12px;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(42, 36, 49, 0.14);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.82);
+  background: rgba(42, 36, 49, 0.06);
+  color: rgba(42, 36, 49, 0.82);
   cursor: pointer;
   font: inherit;
   font-size: 0.9rem;
-  font-weight: 760;
+  font-weight: 650;
   text-align: left;
 }
 
@@ -20169,7 +20169,7 @@ button {
 .registration-admin-logout:focus-visible {
   border-color: rgba(226, 67, 140, 0.7);
   background: rgba(226, 67, 140, 0.16);
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-logout:disabled {
@@ -20185,18 +20185,18 @@ button {
   min-width: 0;
   padding: 28px 30px 34px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 210px),
-    #090a0c;
-  color: #fff;
+    linear-gradient(180deg, rgba(42, 36, 49, 0.045), rgba(42, 36, 49, 0) 210px),
+    #f6f5f8;
+  color: #2a2431;
 }
 
 .registration-admin-workspace--dashboard {
   min-height: 100vh;
   gap: 18px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 210px),
-    #090a0c;
-  color: #fff;
+    linear-gradient(180deg, rgba(42, 36, 49, 0.045), rgba(42, 36, 49, 0) 210px),
+    #f6f5f8;
+  color: #2a2431;
 }
 
 .registration-admin-header {
@@ -20207,25 +20207,25 @@ button {
 }
 
 .registration-admin-workspace--dashboard .registration-admin-header h1 {
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-workspace--dashboard .registration-admin-header p {
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(42, 36, 49, 0.62);
 }
 
 .registration-admin-header h1 {
   margin: 0;
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.8rem, 3vw, 2.55rem);
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
 }
 
 .registration-admin-header p {
   margin: 8px 0 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(42, 36, 49, 0.62);
   font-size: 0.96rem;
   font-weight: 680;
 }
@@ -20236,14 +20236,14 @@ button {
   justify-content: center;
   gap: 8px;
   min-height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(42, 36, 49, 0.18);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: rgba(42, 36, 49, 0.04);
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 840;
+  font-weight: 650;
 }
 
 .registration-admin-export {
@@ -20265,14 +20265,14 @@ button {
   gap: 8px;
   min-height: 40px;
   padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(42, 36, 49, 0.92);
   border-radius: 6px;
   background: #fff;
   color: #0d0e11;
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-admin-new-action:hover,
@@ -20289,13 +20289,13 @@ button {
 }
 
 .registration-admin-workspace--dashboard .registration-admin-export {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  border-color: rgba(42, 36, 49, 0.18);
+  background: rgba(42, 36, 49, 0.04);
+  color: #2a2431;
 }
 
 .registration-admin-workspace--dashboard .registration-admin-new-action {
-  border-color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(42, 36, 49, 0.92);
   background: #fff;
   color: #0d0e11;
 }
@@ -20307,25 +20307,25 @@ button {
   border-radius: 6px;
   background: rgba(195, 50, 88, 0.08);
   color: #a9234d;
-  font-weight: 780;
+  font-weight: 650;
 }
 
 .registration-admin-workspace--dashboard .registration-admin-alert {
   border-color: rgba(255, 124, 169, 0.28);
   background: rgba(255, 74, 142, 0.12);
-  color: #ff9cc4;
+  color: #ad3267;
 }
 
 .registration-academies-panel {
-  --academies-panel: rgba(255, 255, 255, 0.055);
-  --academies-panel-strong: rgba(255, 255, 255, 0.08);
-  --academies-line: rgba(255, 255, 255, 0.12);
-  --academies-muted: rgba(255, 255, 255, 0.62);
-  --academies-soft: rgba(255, 255, 255, 0.8);
+  --academies-panel: rgba(42, 36, 49, 0.055);
+  --academies-panel-strong: rgba(42, 36, 49, 0.08);
+  --academies-line: rgba(42, 36, 49, 0.12);
+  --academies-muted: rgba(42, 36, 49, 0.62);
+  --academies-soft: rgba(42, 36, 49, 0.8);
   display: grid;
   gap: 18px;
   min-width: 0;
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-academies-summary {
@@ -20350,7 +20350,7 @@ button {
   border: 1px solid var(--academies-line);
   border-radius: 8px;
   background: var(--academies-panel);
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -20358,7 +20358,7 @@ button {
 
 .registration-academies-summary-card:hover,
 .registration-academies-summary-card:focus-visible {
-  border-color: rgba(255, 255, 255, 0.26);
+  border-color: rgba(42, 36, 49, 0.26);
   background: var(--academies-panel-strong);
 }
 
@@ -20376,9 +20376,9 @@ button {
 .registration-academies-summary-card strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.38rem, 2.1vw, 1.9rem);
-  font-weight: 920;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
 }
@@ -20386,7 +20386,7 @@ button {
 .registration-academies-summary-card small {
   color: var(--academies-soft);
   font-size: 0.82rem;
-  font-weight: 780;
+  font-weight: 650;
   line-height: 1.25;
 }
 
@@ -20394,7 +20394,7 @@ button {
   color: var(--academy-accent);
   font-size: 0.78rem;
   font-style: normal;
-  font-weight: 820;
+  font-weight: 650;
   line-height: 1.25;
 }
 
@@ -20427,8 +20427,8 @@ button {
   min-height: 54px;
   border: 1px solid var(--academies-line);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: rgba(42, 36, 49, 0.04);
+  color: #2a2431;
 }
 
 .registration-academies-toolbar label {
@@ -20442,7 +20442,7 @@ button {
 .registration-academies-toolbar span {
   color: var(--academies-muted);
   font-size: 0.72rem;
-  font-weight: 840;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -20454,11 +20454,11 @@ button {
   outline: 0;
   appearance: none;
   background: transparent;
-  color: #fff;
-  color-scheme: dark;
+  color: #2a2431;
+  color-scheme: light;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 820;
+  font-weight: 650;
   line-height: 1.15;
   text-overflow: ellipsis;
 }
@@ -20496,14 +20496,14 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.84rem;
-  font-weight: 840;
+  font-weight: 650;
   white-space: nowrap;
 }
 
 .registration-academies-toolbar button:hover,
 .registration-academies-toolbar button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(42, 36, 49, 0.25);
+  background: rgba(42, 36, 49, 0.08);
 }
 
 .registration-academies-new-mobile {
@@ -20539,16 +20539,16 @@ button {
 .registration-academies-directory__head {
   min-height: 56px;
   border-bottom: 1px solid var(--academies-line);
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(42, 36, 49, 0.72);
   font-size: 0.76rem;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .registration-academies-directory__row {
   width: 100%;
   min-height: 92px;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(42, 36, 49, 0.08);
   background: transparent;
   color: var(--academies-soft);
   cursor: pointer;
@@ -20562,7 +20562,7 @@ button {
 
 .registration-academies-directory__row:hover,
 .registration-academies-directory__row:focus-visible {
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(42, 36, 49, 0.055);
   outline: 0;
 }
 
@@ -20581,9 +20581,9 @@ button {
 }
 
 .registration-academies-directory__row strong {
-  color: #fff;
+  color: #2a2431;
   font-size: 0.88rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-academies-directory__row small {
@@ -20610,10 +20610,10 @@ button {
   width: 52px;
   height: 52px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(42, 36, 49, 0.1);
   border-radius: 999px;
-  background: #050506;
-  color: #fff;
+  background: #fff;
+  color: #2a2431;
   font-size: 0.88rem;
   font-weight: 910;
   letter-spacing: 0;
@@ -20630,28 +20630,28 @@ button {
   border-radius: 7px;
   font-size: 0.72rem;
   font-style: normal;
-  font-weight: 880;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-academies-status--active {
   background: rgba(100, 202, 98, 0.22);
-  color: #9cf384;
+  color: #2b7542;
 }
 
 .registration-academies-status--incomplete {
   background: rgba(240, 180, 76, 0.2);
-  color: #ffc866;
+  color: #966014;
 }
 
 .registration-academies-status--inactive {
   background: rgba(255, 111, 141, 0.18);
-  color: #ff7e9b;
+  color: #b02b50;
 }
 
 .registration-academies-status--archived {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.72);
+  background: rgba(42, 36, 49, 0.12);
+  color: rgba(42, 36, 49, 0.72);
 }
 
 .registration-academies-directory__metric {
@@ -20661,22 +20661,22 @@ button {
   padding: 7px 0;
   border: 0;
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
 }
 
 .registration-academies-directory__metric strong {
-  color: #fff;
+  color: #2a2431;
   font-size: 1.1rem;
-  font-weight: 920;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-academies-directory__metric:hover strong,
 .registration-academies-directory__metric:focus-visible strong {
-  color: #ff78b4;
+  color: #bc376f;
 }
 
 .registration-academies-directory__metric:focus-visible {
@@ -20701,10 +20701,10 @@ button {
   padding: 0 8px;
   border-radius: 7px;
   background: rgba(240, 180, 76, 0.16);
-  color: #ffd078;
+  color: #966014;
   font-size: 0.68rem;
   font-style: normal;
-  font-weight: 820;
+  font-weight: 650;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -20712,7 +20712,7 @@ button {
 
 .registration-academies-alerts--clear {
   background: rgba(105, 210, 143, 0.14);
-  color: #93e9ab;
+  color: #2b7542;
 }
 
 .registration-academies-directory__action {
@@ -20724,7 +20724,7 @@ button {
   border: 1px solid var(--academies-line);
   border-radius: 7px;
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
 }
 
@@ -20737,13 +20737,13 @@ button {
 .registration-academies-directory__actions .levitate-admin-delete-action {
   border-color: rgba(255, 126, 155, 0.36);
   background: rgba(255, 126, 155, 0.08);
-  color: #ff9aae;
+  color: #b02b50;
 }
 
 .registration-academies-directory__action:hover,
 .registration-academies-directory__action:focus-visible {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(42, 36, 49, 0.28);
+  background: rgba(42, 36, 49, 0.08);
 }
 
 .registration-academies-empty {
@@ -20751,7 +20751,7 @@ button {
   padding: 30px 18px;
   color: var(--academies-muted);
   font-size: 0.88rem;
-  font-weight: 760;
+  font-weight: 650;
 }
 
 .registration-academies-directory__footer {
@@ -20765,7 +20765,7 @@ button {
   border-top: 1px solid var(--academies-line);
   color: var(--academies-muted);
   font-size: 0.8rem;
-  font-weight: 760;
+  font-weight: 650;
 }
 
 .registration-academies-directory__footer small {
@@ -20775,17 +20775,17 @@ button {
   padding: 0 12px;
   border: 1px solid var(--academies-line);
   border-radius: 7px;
-  color: #fff;
+  color: #2a2431;
   font-size: 0.78rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-dashboard-overview {
-  --dashboard-panel: rgba(255, 255, 255, 0.055);
-  --dashboard-panel-strong: rgba(255, 255, 255, 0.08);
-  --dashboard-line: rgba(255, 255, 255, 0.12);
-  --dashboard-muted: rgba(255, 255, 255, 0.62);
-  --dashboard-soft: rgba(255, 255, 255, 0.78);
+  --dashboard-panel: rgba(42, 36, 49, 0.055);
+  --dashboard-panel-strong: rgba(42, 36, 49, 0.08);
+  --dashboard-line: rgba(42, 36, 49, 0.12);
+  --dashboard-muted: rgba(42, 36, 49, 0.62);
+  --dashboard-soft: rgba(42, 36, 49, 0.78);
   display: grid;
   gap: 18px;
   min-width: 0;
@@ -20800,9 +20800,9 @@ button {
 
 .registration-dashboard-topline h1 {
   margin: 0;
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.55rem, 2.5vw, 2.1rem);
-  font-weight: 920;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1.05;
 }
@@ -20829,8 +20829,8 @@ button {
   min-height: 42px;
   border: 1px solid var(--dashboard-line);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.045);
-  color: #fff;
+  background: rgba(42, 36, 49, 0.045);
+  color: #2a2431;
 }
 
 .registration-dashboard-controls label {
@@ -20851,7 +20851,7 @@ button {
 .registration-dashboard-controls span {
   color: var(--dashboard-muted);
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -20861,11 +20861,11 @@ button {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
-  color-scheme: dark;
+  color: #2a2431;
+  color-scheme: light;
   font: inherit;
   font-size: 0.82rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-dashboard-controls select {
@@ -20883,7 +20883,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.84rem;
-  font-weight: 840;
+  font-weight: 650;
 }
 
 .registration-dashboard-export {
@@ -20905,7 +20905,7 @@ button {
   padding: 8px 11px;
   border: 1px solid var(--dashboard-line);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(42, 36, 49, 0.035);
 }
 
 .registration-dashboard-filterbar span,
@@ -20916,7 +20916,7 @@ button {
   gap: 7px;
   color: var(--dashboard-soft);
   font-size: 0.8rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-dashboard-filterbar small {
@@ -20927,7 +20927,7 @@ button {
   min-height: 28px;
   margin-left: auto;
   padding: 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(42, 36, 49, 0.16);
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
@@ -20964,7 +20964,7 @@ button {
   border: 1px solid var(--dashboard-line);
   border-radius: 8px;
   background: var(--dashboard-panel);
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -20974,8 +20974,8 @@ button {
 .registration-dashboard-metric:focus-visible,
 .registration-dashboard-panel button:hover,
 .registration-dashboard-panel button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.085);
+  border-color: rgba(42, 36, 49, 0.26);
+  background: rgba(42, 36, 49, 0.085);
 }
 
 .registration-dashboard-metric--pink {
@@ -21017,15 +21017,15 @@ button {
 .registration-dashboard-metric__body > span {
   color: var(--dashboard-muted);
   font-size: 0.8rem;
-  font-weight: 780;
+  font-weight: 650;
   line-height: 1.2;
 }
 
 .registration-dashboard-metric strong {
   overflow-wrap: anywhere;
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.45rem, 2.1vw, 1.95rem);
-  font-weight: 920;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
 }
@@ -21043,10 +21043,10 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #78d994;
+  color: #2b7542;
   font-size: 0.78rem;
   font-style: normal;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-dashboard-metric__progress {
@@ -21055,7 +21055,7 @@ button {
   height: 7px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(42, 36, 49, 0.08);
 }
 
 .registration-dashboard-metric__progress::before {
@@ -21098,9 +21098,9 @@ button {
 
 .registration-dashboard-panel__header h2 {
   margin: 0;
-  color: #fff;
+  color: #2a2431;
   font-size: 1rem;
-  font-weight: 880;
+  font-weight: 650;
   letter-spacing: 0;
 }
 
@@ -21110,11 +21110,11 @@ button {
   border: 1px solid var(--dashboard-line);
   border-radius: 6px;
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   font-size: 0.76rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-dashboard-panel__header button {
@@ -21137,11 +21137,11 @@ button {
   outline: 0;
   appearance: none;
   background: transparent;
-  color: #fff;
-  color-scheme: dark;
+  color: #2a2431;
+  color-scheme: light;
   font: inherit;
   font-size: 0.74rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-dashboard-activity__list,
@@ -21159,7 +21159,7 @@ button {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -21185,27 +21185,27 @@ button {
   width: 38px;
   height: 38px;
   background: rgba(240, 82, 147, 0.15);
-  color: #ff78b4;
+  color: #bc376f;
 }
 
 .registration-dashboard-activity__icon--purple {
   background: rgba(139, 95, 216, 0.18);
-  color: #c39aff;
+  color: #7540ab;
 }
 
 .registration-dashboard-activity__icon--green {
   background: rgba(105, 210, 143, 0.14);
-  color: #8beaab;
+  color: #2b7542;
 }
 
 .registration-dashboard-activity__icon--cyan {
   background: rgba(86, 196, 213, 0.14);
-  color: #83e2ee;
+  color: #286e79;
 }
 
 .registration-dashboard-activity__icon--amber {
   background: rgba(240, 180, 76, 0.15);
-  color: #f8ca73;
+  color: #966014;
 }
 
 .registration-dashboard-activity__list strong,
@@ -21213,7 +21213,7 @@ button {
 .registration-dashboard-alerts__list strong {
   display: block;
   overflow: hidden;
-  color: #fff;
+  color: #2a2431;
   font-size: 0.84rem;
   font-weight: 830;
   line-height: 1.25;
@@ -21238,7 +21238,7 @@ button {
 .registration-dashboard-activity__list time {
   color: var(--dashboard-muted);
   font-size: 0.74rem;
-  font-weight: 760;
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -21260,7 +21260,7 @@ button {
   border: 0;
   border-radius: 999px;
   background: var(--dashboard-pie);
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
 }
 
@@ -21272,7 +21272,7 @@ button {
   position: absolute;
   inset: 26%;
   border-radius: inherit;
-  background: #101114;
+  background: #fff;
   box-shadow: inset 0 0 0 1px var(--dashboard-line);
   content: "";
 }
@@ -21288,9 +21288,9 @@ button {
 .registration-dashboard-donut strong {
   max-width: 110px;
   overflow: hidden;
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.15rem, 2vw, 1.6rem);
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -21299,7 +21299,7 @@ button {
 .registration-dashboard-donut small {
   color: var(--dashboard-muted);
   font-size: 0.78rem;
-  font-weight: 760;
+  font-weight: 650;
 }
 
 .registration-dashboard-venue__legend {
@@ -21316,7 +21316,7 @@ button {
   padding: 6px 4px;
   border: 0;
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -21336,9 +21336,9 @@ button {
 
 .registration-dashboard-venue__legend strong {
   overflow: hidden;
-  color: #fff;
+  color: #2a2431;
   font-size: 0.82rem;
-  font-weight: 820;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -21366,7 +21366,7 @@ button {
   place-items: center;
   border: 1px solid var(--dashboard-line);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(42, 36, 49, 0.035);
 }
 
 .registration-dashboard-events__list time strong {
@@ -21377,7 +21377,7 @@ button {
 .registration-dashboard-events__list time span {
   color: var(--dashboard-muted);
   font-size: 0.62rem;
-  font-weight: 840;
+  font-weight: 650;
   text-transform: uppercase;
 }
 
@@ -21388,10 +21388,10 @@ button {
   padding: 5px 8px;
   border-radius: 6px;
   background: rgba(240, 82, 147, 0.13);
-  color: #ff92c1;
+  color: #ad3267;
   font-size: 0.68rem;
   font-style: normal;
-  font-weight: 850;
+  font-weight: 650;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -21413,7 +21413,7 @@ button {
   border: 0;
   border-right: 1px solid var(--dashboard-line);
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -21424,34 +21424,34 @@ button {
 }
 
 .registration-dashboard-status__grid svg {
-  color: #8beaab;
+  color: #2b7542;
 }
 
 .registration-dashboard-status__grid button:nth-child(3) svg {
-  color: #ff78b4;
+  color: #bc376f;
 }
 
 .registration-dashboard-status__grid button:nth-child(4) svg {
-  color: #c39aff;
+  color: #7540ab;
 }
 
 .registration-dashboard-status__grid span {
   color: var(--dashboard-muted);
   font-size: 0.78rem;
-  font-weight: 780;
+  font-weight: 650;
 }
 
 .registration-dashboard-status__grid strong {
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.12rem, 1.8vw, 1.55rem);
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-dashboard-status__grid small {
   color: #f5b653;
   font-size: 0.78rem;
-  font-weight: 780;
+  font-weight: 650;
   line-height: 1.3;
 }
 
@@ -21471,17 +21471,17 @@ button {
 
 .registration-dashboard-alerts__icon--critical {
   background: rgba(240, 180, 76, 0.18);
-  color: #ffd07d;
+  color: #966014;
 }
 
 .registration-dashboard-alerts__icon--important {
   background: rgba(240, 82, 147, 0.15);
-  color: #ff88bb;
+  color: #ad3267;
 }
 
 .registration-dashboard-alerts__icon--info {
   background: rgba(86, 168, 232, 0.16);
-  color: #8ecaff;
+  color: #326ea5;
 }
 
 .registration-dashboard-empty {
@@ -21528,14 +21528,14 @@ button {
 .registration-admin-filters span {
   color: rgba(17, 17, 17, 0.58);
   font-size: 0.82rem;
-  font-weight: 780;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-admin-summary strong {
   color: #111;
   font-size: clamp(1.45rem, 2.4vw, 2.1rem);
-  font-weight: 920;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -21608,7 +21608,7 @@ button {
   color: #171717;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 820;
+  font-weight: 650;
   line-height: 1.1;
   text-overflow: ellipsis;
 }
@@ -21710,7 +21710,7 @@ button {
   border-bottom: 1px solid #dedede;
   color: rgba(17, 17, 17, 0.72);
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .registration-admin-table__row {
@@ -21855,7 +21855,7 @@ button {
 .registration-admin-academies-table .registration-admin-table__row span:nth-child(n + 6) {
   color: #171717;
   font-size: 0.96rem;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .registration-choreographers-panel,
@@ -21889,7 +21889,7 @@ button {
 .registration-choreographers-number {
   color: #171717;
   font-size: 0.96rem;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .registration-choreographers-table__row {
@@ -21932,7 +21932,7 @@ button {
 .registration-choreographies-number {
   color: #171717;
   font-size: 0.96rem;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .registration-choreographers-link {
@@ -21947,7 +21947,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.76rem;
-  font-weight: 860;
+  font-weight: 650;
   text-align: left;
 }
 
@@ -21981,7 +21981,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 840;
+  font-weight: 650;
 }
 
 .registration-participants-quick-filters button:hover,
@@ -22001,7 +22001,7 @@ button {
   background: rgba(17, 17, 17, 0.08);
   color: #171717;
   font-size: 0.74rem;
-  font-weight: 920;
+  font-weight: 650;
 }
 
 .registration-admin-participant-group {
@@ -22035,7 +22035,7 @@ button {
   gap: 14px;
   padding: 18px 18px 14px 22px;
   border-bottom: 1px solid var(--registration-admin-group-border);
-  background: linear-gradient(90deg, var(--registration-admin-group-header), rgba(255, 255, 255, 0.95));
+  background: linear-gradient(90deg, var(--registration-admin-group-header), rgba(42, 36, 49, 0.95));
   box-shadow: inset 5px 0 0 var(--registration-admin-group-accent);
 }
 
@@ -22043,7 +22043,7 @@ button {
   display: block;
   color: #171717;
   font-size: 1rem;
-  font-weight: 900;
+  font-weight: 650;
 }
 
 .registration-admin-participant-group > header span {
@@ -22051,7 +22051,7 @@ button {
   margin-top: 3px;
   color: rgba(17, 17, 17, 0.56);
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 650;
 }
 
 .registration-admin-participants-table {
@@ -22113,7 +22113,7 @@ button {
   overflow: hidden;
   color: #171717;
   font-size: 0.9rem;
-  font-weight: 920;
+  font-weight: 650;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -22179,7 +22179,7 @@ button {
   border-radius: 5px;
   font-size: 0.72rem;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -22260,7 +22260,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 820;
+  font-weight: 650;
   text-align: left;
 }
 
@@ -22281,7 +22281,7 @@ button {
 .registration-admin-ticket-number {
   color: #111;
   font-size: 1.02rem;
-  font-weight: 920;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -22301,7 +22301,7 @@ button {
   background: rgba(17, 17, 17, 0.06);
   color: rgba(17, 17, 17, 0.64);
   font-size: 0.66rem;
-  font-weight: 900;
+  font-weight: 650;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -22321,7 +22321,7 @@ button {
   border-radius: 5px;
   font-size: 0.74rem;
   font-style: normal;
-  font-weight: 820;
+  font-weight: 650;
   line-height: 1;
 }
 
@@ -22391,7 +22391,7 @@ button {
   background: #fff;
   color: #111;
   font: inherit;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-admin-pagination {
@@ -22433,9 +22433,9 @@ button {
 }
 
 .registration-admin-dashboard .registration-admin-pagination select {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(42, 36, 49, 0.14);
   background: #242127;
-  color: #fff;
+  color: #2a2431;
 }
 
 @media (max-width: 680px) {
@@ -22489,9 +22489,9 @@ button {
 
 .registration-admin-sidepanel--academy {
   width: min(720px, calc(100vw - 32px));
-  border-color: rgba(255, 255, 255, 0.14);
-  background: #0c0d10;
-  color: #fff;
+  border-color: rgba(42, 36, 49, 0.14);
+  background: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-sidepanel--participant {
@@ -22521,7 +22521,7 @@ button {
 .registration-participant-profile__header span {
   color: rgba(17, 17, 17, 0.58);
   font-size: 0.76rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-participant-profile__header h2 {
@@ -22529,7 +22529,7 @@ button {
   overflow-wrap: anywhere;
   color: #111;
   font-size: clamp(1.28rem, 2vw, 1.72rem);
-  font-weight: 920;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1.05;
 }
@@ -22538,7 +22538,7 @@ button {
   margin: 0;
   color: rgba(17, 17, 17, 0.62);
   font-size: 0.84rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-participant-profile__header button,
@@ -22585,7 +22585,7 @@ button {
   background: #fafafa;
   color: rgba(17, 17, 17, 0.72);
   font-size: 0.74rem;
-  font-weight: 820;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -22624,20 +22624,20 @@ button {
 .registration-participant-profile__stats span {
   color: rgba(17, 17, 17, 0.56);
   font-size: 0.74rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-participant-profile__stats strong {
   color: #111;
   font-size: 1.45rem;
-  font-weight: 920;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-participant-profile__stats small {
   color: rgba(17, 17, 17, 0.58);
   font-size: 0.76rem;
-  font-weight: 760;
+  font-weight: 650;
   line-height: 1.25;
 }
 
@@ -22655,7 +22655,7 @@ button {
   margin: 0;
   color: #111;
   font-size: 0.92rem;
-  font-weight: 900;
+  font-weight: 650;
   letter-spacing: 0;
 }
 
@@ -22663,7 +22663,7 @@ button {
   margin: 0;
   color: rgba(17, 17, 17, 0.6);
   font-size: 0.82rem;
-  font-weight: 760;
+  font-weight: 650;
 }
 
 .registration-participant-profile__block dl {
@@ -22692,12 +22692,12 @@ button {
 
 .registration-participant-profile__block dt {
   color: rgba(17, 17, 17, 0.56);
-  font-weight: 760;
+  font-weight: 650;
 }
 
 .registration-participant-profile__block dd {
   color: #171717;
-  font-weight: 860;
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 
@@ -22760,7 +22760,7 @@ button {
 .registration-participant-profile__list strong {
   color: #111;
   font-size: 0.84rem;
-  font-weight: 880;
+  font-weight: 650;
 }
 
 .registration-participant-profile__list span,
@@ -22778,7 +22778,7 @@ button {
   gap: 8px;
   border-radius: 7px;
   font-size: 0.84rem;
-  font-weight: 880;
+  font-weight: 650;
 }
 
 .registration-academy-profile {
@@ -22808,17 +22808,17 @@ button {
 }
 
 .registration-academy-profile__header span {
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(42, 36, 49, 0.58);
   font-size: 0.76rem;
-  font-weight: 840;
+  font-weight: 650;
 }
 
 .registration-academy-profile__header h2 {
   margin: 0;
   overflow-wrap: anywhere;
-  color: #fff;
+  color: #2a2431;
   font-size: clamp(1.28rem, 2vw, 1.72rem);
-  font-weight: 920;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1.05;
 }
@@ -22826,7 +22826,7 @@ button {
 .registration-academy-profile__header p {
   margin: 0;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.66);
+  color: rgba(42, 36, 49, 0.66);
   font-size: 0.84rem;
   font-weight: 740;
   text-overflow: ellipsis;
@@ -22838,17 +22838,17 @@ button {
   width: 38px;
   height: 38px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(42, 36, 49, 0.14);
   border-radius: 999px;
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
 }
 
 .registration-academy-profile__header button:hover,
 .registration-academy-profile__header button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(42, 36, 49, 0.3);
+  background: rgba(42, 36, 49, 0.08);
 }
 
 .registration-academy-profile__meta {
@@ -22866,11 +22866,11 @@ button {
   align-items: center;
   overflow: hidden;
   padding: 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(42, 36, 49, 0.1);
   border-radius: 7px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(42, 36, 49, 0.72);
   font-size: 0.74rem;
-  font-weight: 780;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -22888,14 +22888,14 @@ button {
   flex: 0 0 auto;
   min-height: 36px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(42, 36, 49, 0.12);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.72);
+  background: rgba(42, 36, 49, 0.04);
+  color: rgba(42, 36, 49, 0.72);
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-academy-profile__tabs button:hover,
@@ -22903,7 +22903,7 @@ button {
 .registration-academy-profile__tabs button.is-active {
   border-color: rgba(255, 120, 180, 0.48);
   background: rgba(240, 82, 147, 0.14);
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-academy-profile__body {
@@ -22916,7 +22916,7 @@ button {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(42, 36, 49, 0.12);
   border-radius: 8px;
 }
 
@@ -22927,9 +22927,9 @@ button {
   min-height: 112px;
   padding: 14px;
   border: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(42, 36, 49, 0.1);
   background: transparent;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -22941,24 +22941,24 @@ button {
 
 .registration-academy-profile__stats button:hover,
 .registration-academy-profile__stats button:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(42, 36, 49, 0.06);
 }
 
 .registration-academy-profile__stats span {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(42, 36, 49, 0.6);
   font-size: 0.72rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-academy-profile__stats strong {
-  color: #fff;
+  color: #2a2431;
   font-size: 1.45rem;
-  font-weight: 920;
+  font-weight: 650;
   line-height: 1;
 }
 
 .registration-academy-profile__stats small {
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(42, 36, 49, 0.58);
   font-size: 0.74rem;
   font-weight: 720;
   line-height: 1.25;
@@ -22967,9 +22967,9 @@ button {
 .registration-academy-profile__block,
 .registration-academy-profile__list article {
   min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(42, 36, 49, 0.1);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(42, 36, 49, 0.045);
 }
 
 .registration-academy-profile__block {
@@ -22980,9 +22980,9 @@ button {
 
 .registration-academy-profile__block h3 {
   margin: 0;
-  color: #fff;
+  color: #2a2431;
   font-size: 0.92rem;
-  font-weight: 880;
+  font-weight: 650;
   letter-spacing: 0;
 }
 
@@ -22996,9 +22996,9 @@ button {
 .registration-academy-profile__list article strong {
   min-width: 0;
   overflow: hidden;
-  color: #fff;
+  color: #2a2431;
   font-size: 0.88rem;
-  font-weight: 850;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -23007,7 +23007,7 @@ button {
 .registration-academy-profile__list article span,
 .registration-academy-profile__list article small,
 .registration-academy-profile__empty {
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(42, 36, 49, 0.62);
   font-size: 0.78rem;
   font-weight: 720;
   line-height: 1.35;
@@ -23069,14 +23069,14 @@ button {
 .registration-admin-review-panel span {
   color: rgba(17, 17, 17, 0.62);
   font-size: 0.78rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-admin-detail h2 {
   margin: 5px 0 0;
   color: #111;
   font-size: clamp(1.35rem, 2vw, 1.72rem);
-  font-weight: 920;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
 }
@@ -23085,7 +23085,7 @@ button {
   margin: 7px 0 0;
   color: rgba(17, 17, 17, 0.58);
   font-size: 0.82rem;
-  font-weight: 820;
+  font-weight: 650;
 }
 
 .registration-admin-detail dl {
@@ -23110,12 +23110,12 @@ button {
 
 .registration-admin-detail dt {
   color: rgba(17, 17, 17, 0.56);
-  font-weight: 760;
+  font-weight: 650;
 }
 
 .registration-admin-detail dd {
   color: #171717;
-  font-weight: 840;
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 
@@ -23161,7 +23161,7 @@ button {
   color: #171717;
   cursor: pointer;
   font-size: 0.82rem;
-  font-weight: 840;
+  font-weight: 650;
 }
 
 .registration-admin-ticket-pack {
@@ -23188,7 +23188,7 @@ button {
 .registration-admin-ticket-pack header strong {
   color: #111;
   font-size: 0.98rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-admin-ticket-pack header button {
@@ -23200,7 +23200,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 840;
+  font-weight: 650;
   padding: 0 12px;
   white-space: nowrap;
 }
@@ -23223,7 +23223,7 @@ button {
   padding: 10px;
   border: 1px solid rgba(17, 17, 17, 0.08);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(42, 36, 49, 0.72);
 }
 
 .registration-admin-ticket-pack article > svg {
@@ -23246,7 +23246,7 @@ button {
 .registration-admin-ticket-pack article strong {
   color: #111;
   font-size: 0.86rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-admin-ticket-pack article small {
@@ -23328,11 +23328,11 @@ button {
   border: 1px solid #16843c;
   border-radius: 6px;
   background: #16843c;
-  color: #fff;
+  color: #2a2431;
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
-  font-weight: 860;
+  font-weight: 650;
   text-align: center;
 }
 
@@ -23357,12 +23357,12 @@ button {
   cursor: pointer;
   font: inherit;
   font-size: 0.88rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-admin-detail-actions button:first-child {
-  background: #050505;
-  color: #fff;
+  background: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-detail-actions button:last-child {
@@ -23387,9 +23387,9 @@ button {
   border: 1px solid #1f7a45;
   border-radius: 6px;
   background: #1f7a45;
-  color: #fff;
+  color: #2a2431;
   font-size: 0.86rem;
-  font-weight: 860;
+  font-weight: 650;
 }
 
 .registration-admin-whatsapp-action:hover,
@@ -23404,13 +23404,13 @@ button {
 .registration-admin-dashboard .registration-participant-profile__block,
 .registration-admin-dashboard .registration-participant-profile__stats,
 .registration-admin-dashboard .registration-admin-sidepanel {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.055);
-  color: #fff;
+  border-color: rgba(42, 36, 49, 0.12);
+  background: rgba(42, 36, 49, 0.055);
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-admin-summary article {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(42, 36, 49, 0.1);
 }
 
 .registration-admin-dashboard .registration-admin-summary span,
@@ -23436,7 +23436,7 @@ button {
 .registration-admin-dashboard .registration-admin-detail dt,
 .registration-admin-dashboard .registration-admin-proof-file,
 .registration-admin-dashboard .registration-admin-ticket-pack article small {
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(42, 36, 49, 0.62);
 }
 
 .registration-admin-dashboard .registration-admin-summary strong,
@@ -23457,25 +23457,25 @@ button {
 .registration-admin-dashboard .registration-participant-profile__block h3,
 .registration-admin-dashboard .registration-participant-profile__block dd,
 .registration-admin-dashboard .registration-participant-profile__list strong {
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-admin-summary svg {
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(42, 36, 49, 0.58);
 }
 
 .registration-admin-dashboard .registration-admin-filters input,
 .registration-admin-dashboard .registration-admin-filters select,
 .registration-admin-dashboard .registration-admin-note textarea,
 .registration-admin-dashboard .registration-admin-review-panel select {
-  color-scheme: dark;
-  color: #fff;
-  caret-color: #fff;
-  -webkit-text-fill-color: #fff;
+  color-scheme: light;
+  color: #2a2431;
+  caret-color: #2a2431;
+  -webkit-text-fill-color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-admin-filters label > svg {
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(42, 36, 49, 0.62);
 }
 
 .registration-admin-dashboard .registration-admin-table-card {
@@ -23483,40 +23483,40 @@ button {
 }
 
 .registration-admin-dashboard .registration-admin-table__head {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.035);
+  border-bottom-color: rgba(42, 36, 49, 0.1);
+  background: rgba(42, 36, 49, 0.035);
 }
 
 .registration-admin-dashboard .registration-admin-table__row {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.035);
+  border-bottom-color: rgba(42, 36, 49, 0.08);
+  background: rgba(42, 36, 49, 0.035);
 }
 
 .registration-admin-dashboard .registration-admin-table__row:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(42, 36, 49, 0.055);
 }
 
 .registration-admin-dashboard .registration-admin-table__row:hover,
 .registration-admin-dashboard .registration-admin-table__row.is-selected {
-  background: rgba(255, 255, 255, 0.095);
+  background: rgba(42, 36, 49, 0.095);
 }
 
 .registration-admin-dashboard .registration-admin-participants-card,
 .registration-admin-dashboard .registration-admin-participant-group {
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(42, 36, 49, 0.045);
 }
 
 .registration-admin-dashboard .registration-admin-participant-group > header {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
-  background: linear-gradient(90deg, rgba(217, 76, 140, 0.16), rgba(255, 255, 255, 0.035));
+  border-bottom-color: rgba(42, 36, 49, 0.1);
+  background: linear-gradient(90deg, rgba(217, 76, 140, 0.16), rgba(42, 36, 49, 0.035));
 }
 
 .registration-admin-dashboard .registration-admin-participant-group > header strong {
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-admin-participant-group > header span {
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(42, 36, 49, 0.58);
 }
 
 .registration-admin-dashboard .registration-participants-quick-filters button:hover,
@@ -23524,16 +23524,16 @@ button {
 .registration-admin-dashboard .registration-participants-quick-filters button.is-active {
   border-color: rgba(255, 120, 180, 0.48);
   background: rgba(240, 82, 147, 0.14);
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-participants-quick-filters strong {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(42, 36, 49, 0.1);
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-participants-progress {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(42, 36, 49, 0.12);
 }
 
 .registration-admin-dashboard .registration-participants-actions summary,
@@ -23547,14 +23547,14 @@ button {
 .registration-admin-dashboard .registration-admin-detail-actions button,
 .registration-admin-dashboard .registration-participant-profile__header button,
 .registration-admin-dashboard .registration-participant-profile__primary {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.055);
-  color: #fff;
+  border-color: rgba(42, 36, 49, 0.14);
+  background: rgba(42, 36, 49, 0.055);
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-participants-actions button,
 .registration-admin-dashboard .registration-participants-actions button:last-child {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(42, 36, 49, 0.08);
 }
 
 .registration-admin-dashboard .registration-participants-actions button:hover,
@@ -23578,9 +23578,9 @@ button {
 }
 
 .registration-admin-dashboard .registration-admin-sidepanel {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: #0c0d10;
-  color: #fff;
+  border-color: rgba(42, 36, 49, 0.14);
+  background: #fff;
+  color: #2a2431;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
 }
 
@@ -23597,19 +23597,19 @@ button {
 .registration-admin-dashboard .registration-admin-proof-file,
 .registration-admin-dashboard .registration-admin-note textarea,
 .registration-admin-dashboard .registration-admin-review-panel select {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(42, 36, 49, 0.1);
+  background: rgba(42, 36, 49, 0.045);
 }
 
 .registration-admin-dashboard .registration-participant-profile__stats button {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(42, 36, 49, 0.1);
   background: transparent;
-  color: #fff;
+  color: #2a2431;
 }
 
 .registration-admin-dashboard .registration-participant-profile__block dl div,
 .registration-admin-dashboard .registration-admin-detail dl div {
-  border-top-color: rgba(255, 255, 255, 0.1);
+  border-top-color: rgba(42, 36, 49, 0.1);
 }
 
 .registration-admin-dashboard .registration-admin-note textarea:focus,
@@ -23626,13 +23626,13 @@ button {
 .registration-admin-dashboard .registration-admin-review-panel__submit {
   border-color: rgba(91, 198, 130, 0.62);
   background: rgba(91, 198, 130, 0.18);
-  color: #b7f5c9;
+  color: #2b7542;
 }
 
 .registration-admin-dashboard .registration-admin-review-panel__submit:disabled {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(255, 255, 255, 0.38);
+  border-color: rgba(42, 36, 49, 0.1);
+  background: rgba(42, 36, 49, 0.055);
+  color: rgba(42, 36, 49, 0.38);
 }
 
 .registration-admin-dashboard .registration-admin-detail-actions button:first-child {
@@ -23643,19 +23643,19 @@ button {
 
 .registration-admin-dashboard .registration-admin-detail-actions button:last-child {
   border-color: rgba(255, 120, 180, 0.48);
-  color: #ff8cbc;
+  color: #ad3267;
 }
 
 .registration-admin-dashboard .registration-admin-status--no-order {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(255, 255, 255, 0.58);
+  border-color: rgba(42, 36, 49, 0.12);
+  background: rgba(42, 36, 49, 0.055);
+  color: rgba(42, 36, 49, 0.58);
 }
 
 .registration-admin-dashboard .registration-admin-status--pending-payment {
   border-color: rgba(255, 120, 180, 0.32);
   background: rgba(255, 120, 180, 0.1);
-  color: #ff8cbc;
+  color: #ad3267;
 }
 
 .registration-admin-dashboard .registration-admin-status--payment-reported,
@@ -23663,46 +23663,46 @@ button {
 .registration-admin-dashboard .registration-participant-status--pending-tickets {
   border-color: rgba(255, 196, 96, 0.34);
   background: rgba(255, 196, 96, 0.1);
-  color: #ffc970;
+  color: #966014;
 }
 
 .registration-admin-dashboard .registration-admin-status--paid,
 .registration-admin-dashboard .registration-participant-status--registered {
   border-color: rgba(112, 232, 154, 0.34);
   background: rgba(112, 232, 154, 0.1);
-  color: #8beaab;
+  color: #2b7542;
 }
 
 .registration-admin-dashboard .registration-admin-status--rejected,
 .registration-admin-dashboard .registration-participant-status--incomplete {
   border-color: rgba(255, 120, 150, 0.34);
   background: rgba(255, 120, 150, 0.1);
-  color: #ff8aa4;
+  color: #b02b50;
 }
 
 .registration-admin-dashboard .registration-participants-ticket-button.is-complete strong,
 .registration-admin-dashboard .registration-admin-table__row small.registration-admin-ticket-readiness--ready {
   border-color: rgba(112, 232, 154, 0.34);
   background: rgba(112, 232, 154, 0.1);
-  color: #8beaab;
+  color: #2b7542;
 }
 
 .registration-admin-dashboard .registration-participants-ticket-button.is-partial strong {
   border-color: rgba(255, 196, 96, 0.34);
   background: rgba(255, 196, 96, 0.1);
-  color: #ffc970;
+  color: #966014;
 }
 
 .registration-admin-dashboard .registration-participants-ticket-button.is-empty strong {
   border-color: rgba(255, 120, 150, 0.3);
   background: rgba(255, 120, 150, 0.1);
-  color: #ff8aa4;
+  color: #b02b50;
 }
 
 .registration-admin-dashboard .registration-admin-table__row small.registration-admin-ticket-readiness {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(255, 255, 255, 0.62);
+  border-color: rgba(42, 36, 49, 0.12);
+  background: rgba(42, 36, 49, 0.055);
+  color: rgba(42, 36, 49, 0.62);
 }
 
 @media (max-width: 1320px) {
@@ -23839,7 +23839,7 @@ button {
   }
 
   .registration-academy-profile__stats button:nth-child(-n + 2) {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(42, 36, 49, 0.1);
   }
 
   .registration-admin-search {
@@ -24064,7 +24064,7 @@ button {
   .registration-academy-profile__stats button:nth-child(2n),
   .registration-academy-profile__stats button:nth-child(-n + 2) {
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(42, 36, 49, 0.1);
   }
 
   .registration-academy-profile__stats button:last-child {
