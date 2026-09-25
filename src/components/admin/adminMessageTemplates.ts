@@ -23,7 +23,7 @@ export function buildOrderMessageTemplates(context: OrderMessageContext): Messag
     `Orden: ${context.reference}`,
     `Total de la orden: ${context.amountLabel}`,
   ];
-  const greeting = "Hola, te escribe el equipo de Levitate MX.";
+  const greeting = "¡Hola! Somos el equipo de Levitate MX 💗";
 
   if (context.status === "paid") {
     const templates = [{ id: "payment-approved", label: "Pago aprobado", body: context.approvalBody }];
@@ -31,10 +31,11 @@ export function buildOrderMessageTemplates(context: OrderMessageContext): Messag
       templates.push({
         id: "tickets-ready",
         label: "Compartir boletos disponibles",
-        body: [greeting, "", "Puedes consultar y descargar tus boletos aquí:", context.ticketDeliveryUrl,
+        body: [greeting, "", "Tus boletos ya están disponibles. Te compartimos el enlace para consultarlos y descargarlos:", context.ticketDeliveryUrl,
           "", ...details, "", "Accesos de esta orden:", ...context.ticketLabels.map((label) => `• ${label}`), "",
           "Cada QR es de un solo uso. Para Day pass y Full pass, recibirás un brazalete en el evento.",
           "Si ya utilizaste un QR, descargarlo nuevamente no lo reactiva.",
+          "", "Si necesitas ayuda para descargar tus boletos, escríbenos. ¡Con gusto te ayudamos!",
         ].join("\n"),
       });
     }
@@ -50,9 +51,9 @@ export function buildOrderMessageTemplates(context: OrderMessageContext): Messag
       id: "payment-in-review",
       label: "Pago pendiente de revisión",
       body: [greeting, "", context.hasProof
-        ? "Recibimos el comprobante de tu orden. Nuestro equipo aún tiene pendiente revisarlo."
-        : "Tu orden aparece pendiente de revisión por nuestro equipo.",
-      "", ...details, "", "Te avisaremos cuando termine la revisión.",
+        ? "Recibimos el comprobante de tu orden, ¡gracias por enviarlo! Nuestro equipo tiene pendiente revisarlo."
+        : "¡Gracias por avisarnos de tu pago! Tu orden está pendiente de revisión por nuestro equipo.",
+      "", ...details, "", "Te avisaremos cuando terminemos la revisión. Si tienes alguna duda mientras tanto, estamos por aquí.",
       ].join("\n"),
     }];
   }
@@ -61,10 +62,10 @@ export function buildOrderMessageTemplates(context: OrderMessageContext): Messag
   return [{
     id: "proof-reminder",
     label: "Solicitar comprobante",
-    body: [greeting, "", "Tu orden aún no tiene un comprobante cargado. Si ya realizaste el pago, compártenos el comprobante para que podamos revisarlo.",
+    body: [greeting, "", "Aún no vemos un comprobante en tu orden. Si ya realizaste el pago, ¿nos ayudas a compartirlo para revisarlo?",
       "", ...details,
       ...(context.correctionUrl ? ["", "Puedes cargar el comprobante aquí:", context.correctionUrl] : []),
-      "", "Si necesitas aclarar algún dato de la orden, responde a este mensaje.",
+      "", "Si necesitas ayuda para cargarlo o quieres revisar algún dato de tu orden, escríbenos. ¡Con gusto te ayudamos!",
     ].join("\n"),
   }];
 }
@@ -85,7 +86,7 @@ export function buildAcademyMessageTemplates(context: AcademyMessageContext): Me
     const label = `${order.reference} · ${order.participantName}`;
     if (order.status === "pending_payment") required.push(`${label}: completar el pago o cargar el comprobante si ya se realizó.`);
     if (order.status === "rejected") required.push(`${label}: ${order.rejectionMessage || "revisar la corrección solicitada en la orden."}`);
-    if (order.status === "payment_reported") reviewing.push(`${label}: nuestro equipo tiene pendiente revisar el pago.`);
+    if (order.status === "payment_reported") reviewing.push(`${label}: pago pendiente de revisión.`);
   }
   for (const dance of context.dances) {
     if (!dance.hasMusic) required.push(`${dance.title} · ${dance.venueLabel}: cargar la música.`);
@@ -98,12 +99,15 @@ export function buildAcademyMessageTemplates(context: AcademyMessageContext): Me
     id: "academy-pending",
     label: "Resumen de pendientes de la academia",
     body: [
-      `Hola${context.contactName ? `, ${context.contactName}` : ""}. Te escribe el equipo de Levitate MX.`,
-      "", `Este es el resumen actual de ${context.academyName}:`,
-      ...(required.length ? ["", "Para completar:", ...required.map((line) => `• ${line}`)] : []),
+      `¡Hola${context.contactName.trim() ? `, ${context.contactName.trim()}` : ""}! Somos el equipo de Levitate MX 💗`,
+      "", `Te compartimos cómo van los registros de ${context.academyName}.`,
+      ...(required.length ? ["", "¿Nos ayudas a completar estos puntos?", ...required.map((line) => `• ${line}`)] : []),
       ...(reviewing.length ? ["", "En revisión por nuestro equipo:", ...reviewing.map((line) => `• ${line}`)] : []),
-      "", "Puedes consultar los registros ingresando a tu cuenta:", context.portalUrl,
-      "", "Si ya resolviste alguno de estos puntos, compártenos la actualización para revisarla.",
+      "", "Puedes entrar a tu cuenta desde aquí:", context.portalUrl,
+      "", required.length
+        ? "Si ya completaste alguno de estos puntos, avísanos para revisarlo. ¡Gracias por tu apoyo!"
+        : "Por ahora no necesitas hacer nada más con estos pagos. Gracias por tu paciencia.",
+      "", "Si tienes alguna duda, escríbenos. Con gusto te ayudamos.",
     ].join("\n"),
   }];
 }
