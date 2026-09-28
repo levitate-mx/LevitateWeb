@@ -4,7 +4,7 @@ import { normalizeAdminSearch } from "./adminNavigation";
 import { formatMexicoCityDateTime } from "../../utils/mexicoCityTime";
 import { AdminPagination } from "./AdminPagination";
 import { useAdminPagination } from "./useAdminPagination";
-import { buildAdminWorkQueue, getAdminWorkQueueAge, getAdminWorkQueueTimestamp, type AdminWorkQueueCategory, type AdminWorkQueueSources, type AdminWorkQueueTarget } from "./adminWorkQueueData";
+import { buildAdminWorkQueue, getAdminWorkQueueAge, getAdminWorkQueueTimestamp, sortAdminWorkQueue, type AdminWorkQueueCategory, type AdminWorkQueueSort, type AdminWorkQueueSources, type AdminWorkQueueTarget } from "./adminWorkQueueData";
 import "./AdminWorkQueue.css";
 
 type Props = AdminWorkQueueSources & {
@@ -17,9 +17,10 @@ type Props = AdminWorkQueueSources & {
 export function AdminWorkQueue({ orders, dances, participants, isLoading, scopeKey, venueLabel, onOpen }: Props) {
   const [category, setCategory] = useState<AdminWorkQueueCategory | "all">("all");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<AdminWorkQueueSort>("newest");
   const items = useMemo(() => buildAdminWorkQueue({ orders, dances, participants }), [orders, dances, participants]);
-  const filteredItems = items.filter((item) => (category === "all" || item.category === category) && normalizeAdminSearch(`${item.subject} ${item.academyName} ${item.detail}`).includes(normalizeAdminSearch(query)));
-  const pagination = useAdminPagination(filteredItems, JSON.stringify([scopeKey, category, query]));
+  const filteredItems = useMemo(() => sortAdminWorkQueue(items.filter((item) => (category === "all" || item.category === category) && normalizeAdminSearch(`${item.subject} ${item.academyName} ${item.detail}`).includes(normalizeAdminSearch(query))), sort), [items, category, query, sort]);
+  const pagination = useAdminPagination(filteredItems, JSON.stringify([scopeKey, category, query, sort]));
   const urgentCount = items.filter((item) => item.urgent).length;
   const filters = [
     { value: "all", label: "Todos" },
@@ -33,13 +34,25 @@ export function AdminWorkQueue({ orders, dances, participants, isLoading, scopeK
       <header className="admin-work-queue__heading">
         <div>
           <h2 id="admin-work-queue-title">Pendientes por resolver</h2>
-          <p>Del periodo y sede seleccionados. Primero los comprobantes con más de 48 h; después los demás pagos por revisar y corregir.</p>
+          <p>{sort === "priority"
+            ? "Primero los comprobantes con más de 48 h; después los demás pagos por revisar y corregir."
+            : "Ordenados por la fecha indicada en cada pendiente."}</p>
         </div>
         <span className={urgentCount > 0 ? "admin-work-queue__urgent" : "admin-work-queue__count"}>
           {urgentCount > 0 ? `${urgentCount} ${urgentCount === 1 ? "urgente" : "urgentes"}` : `${items.length} pendientes`}
         </span>
       </header>
-      <label className="admin-search admin-queue-search"><Search size={17} aria-hidden="true" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar pendiente" placeholder="Buscar nombre, academia o referencia…" /></label>
+      <div className="admin-work-queue__toolbar">
+        <label className="admin-search admin-queue-search"><Search size={17} aria-hidden="true" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar pendiente" placeholder="Buscar nombre, academia o referencia…" /></label>
+        <label className="admin-work-queue__sort">
+          <span>Ordenar</span>
+          <select value={sort} onChange={(event) => setSort(event.target.value as AdminWorkQueueSort)}>
+            <option value="newest">Más recientes primero</option>
+            <option value="oldest">Más antiguos primero</option>
+            <option value="priority">Por prioridad</option>
+          </select>
+        </label>
+      </div>
       <div className="admin-work-queue__filters" role="group" aria-label="Tipo de pendiente">
         {filters.map((filter) => (
           <button key={filter.value} aria-pressed={category === filter.value} onClick={() => setCategory(filter.value)} type="button">

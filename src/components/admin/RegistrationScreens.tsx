@@ -6591,7 +6591,7 @@ function RegistrationAdminFollowup({
         <div>
           <span className="admin-eyebrow">OPERACIÓN</span>
           <h1>Seguimiento<span className="admin-title-dot">.</span></h1>
-          <p>Pagos, música y datos pendientes, en orden de prioridad.</p>
+          <p>Pagos, música y datos pendientes.</p>
         </div>
         <div className="registration-dashboard-controls" aria-label="Controles globales del panel">
           <label>

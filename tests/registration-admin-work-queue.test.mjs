@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAdminWorkQueue, getAdminWorkQueueAge, getAdminWorkQueueTimestamp } from "../src/components/admin/adminWorkQueueData.ts";
+import { buildAdminWorkQueue, getAdminWorkQueueAge, getAdminWorkQueueTimestamp, sortAdminWorkQueue } from "../src/components/admin/adminWorkQueueData.ts";
 
 const now = Date.parse("2026-09-23T12:00:00Z");
 const order = (overrides = {}) => ({ id: "order-1", status: "pending_payment", participantName: "Participante", academyName: "Academia", venue: "edomex", reference: "REF-1", createdAt: "2026-09-20T12:00:00Z", updatedAt: "2026-09-21T12:00:00Z", ...overrides });
@@ -69,4 +69,31 @@ test("all supplied scoped cases remain reachable and no unprovided case is fabri
   assert.equal(queue.length, 37);
   assert.equal(new Set(queue.map((item) => item.id)).size, 37);
   assert.deepEqual(buildAdminWorkQueue({ orders: [], dances: [], participants: [] }, now), []);
+});
+
+test("date sorting spans all categories and uses the displayed pending date regardless of urgency", () => {
+  const queue = buildAdminWorkQueue({
+    orders: [
+      order({ id: "urgent", status: "payment_reported", proof: { uploadedAt: "2026-09-19T12:00:00Z" } }),
+      order({ id: "recent-proof", status: "payment_reported", createdAt: "2026-08-01T12:00:00Z", proof: { uploadedAt: "2026-09-23T11:00:00Z" } }),
+    ],
+    dances: [dance({ createdAt: "2026-09-22 12:00:00" })],
+    participants: [participant({ shirtSize: "", createdAt: "2026-09-23T08:00:00-06:00" })],
+  }, now);
+  const before = structuredClone(queue);
+  const newestIds = ["participant:person-1", "order:recent-proof", "dance:dance-1", "order:urgent"];
+  assert.deepEqual(sortAdminWorkQueue(queue, "newest").map((item) => item.id), newestIds);
+  assert.deepEqual(sortAdminWorkQueue(queue, "oldest").map((item) => item.id), [...newestIds].reverse());
+  assert.deepEqual(sortAdminWorkQueue(sortAdminWorkQueue(queue, "newest"), "priority"), before);
+  assert.deepEqual(queue, before);
+});
+
+test("both date directions put undated cases last and break equal-date ties consistently", () => {
+  const queue = buildAdminWorkQueue({
+    orders: [order({ id: "b" }), order({ id: "a" }), order({ id: "unknown", createdAt: "" }), order({ id: "invalid", createdAt: "invalid" })],
+    dances: [], participants: [],
+  }, now);
+  for (const sort of ["newest", "oldest"]) {
+    assert.deepEqual(sortAdminWorkQueue(queue, sort).map((item) => item.id), ["order:a", "order:b", "order:invalid", "order:unknown"]);
+  }
 });

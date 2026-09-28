@@ -1,4 +1,5 @@
 export type AdminWorkQueueCategory = "payments" | "music" | "participants";
+export type AdminWorkQueueSort = "newest" | "oldest" | "priority";
 export type AdminWorkQueueTarget =
   | { type: "order"; id: string }
   | { type: "dance"; id: string }
@@ -79,6 +80,21 @@ export function getAdminWorkQueueAge(value: string, now = Date.now()) {
   return `Hace ${days} ${days === 1 ? "día" : "días"}`;
 }
 
+export function sortAdminWorkQueue(items: AdminWorkQueueItem[], sort: AdminWorkQueueSort): AdminWorkQueueItem[] {
+  return [...items].sort((left, right) => {
+    if (sort === "priority" && left.priority !== right.priority) return left.priority - right.priority;
+    const leftDate = getAdminWorkQueueTimestamp(left.date);
+    const rightDate = getAdminWorkQueueTimestamp(right.date);
+    const leftHasDate = Number.isFinite(leftDate);
+    const rightHasDate = Number.isFinite(rightDate);
+    if (leftHasDate !== rightHasDate) return leftHasDate ? -1 : 1;
+    if (leftHasDate && rightHasDate && leftDate !== rightDate) {
+      return sort === "newest" ? rightDate - leftDate : leftDate - rightDate;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}
+
 export function buildAdminWorkQueue({ orders, dances, participants }: AdminWorkQueueSources, now = Date.now()): AdminWorkQueueItem[] {
   const items: AdminWorkQueueItem[] = [];
   for (const order of orders) {
@@ -129,11 +145,5 @@ export function buildAdminWorkQueue({ orders, dances, participants }: AdminWorkQ
       urgent: false, priority: 3, actionLabel: "Ver participante", target: { type: "participant", id: participant.id },
     });
   }
-  return items.sort((left, right) => {
-    const leftDate = getAdminWorkQueueTimestamp(left.date);
-    const rightDate = getAdminWorkQueueTimestamp(right.date);
-    return left.priority - right.priority ||
-      (Number.isFinite(leftDate) ? leftDate : Infinity) - (Number.isFinite(rightDate) ? rightDate : Infinity) ||
-      left.id.localeCompare(right.id);
-  });
+  return sortAdminWorkQueue(items, "priority");
 }

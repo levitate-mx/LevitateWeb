@@ -1068,9 +1068,38 @@
   border-color: #e7c6d8;
   color: #985073;
 }
-.admin-queue-search {
-  margin: 0 24px 16px;
+.admin-work-queue__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 0 24px 16px;
+}
+.admin-work-queue__toolbar .admin-queue-search {
+  flex: 1 1 280px;
   max-width: 450px;
+  margin: 0;
+}
+.admin-work-queue__sort {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--studio-muted);
+  font-size: 12px;
+}
+.admin-work-queue__sort select {
+  min-height: 42px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--studio-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--studio-ink);
+  color-scheme: light;
+  font: inherit;
+  cursor: pointer;
 }
 .admin-studio .registration-admin-message-composer {
   background: #fff;
@@ -1709,9 +1738,15 @@
     font-size: 0;
     gap: 0;
   }
-  .admin-queue-search {
-    margin-left: 16px;
-    margin-right: 16px;
+  .admin-work-queue__toolbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .admin-work-queue__sort {
+    width: 100%;
+  }
+  .admin-work-queue__sort select {
+    flex: 1;
   }
   .admin-studio .registration-dashboard-controls {
     display: grid;
