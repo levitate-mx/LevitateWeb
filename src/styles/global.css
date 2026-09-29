@@ -15942,8 +15942,7 @@ button {
   line-height: 1.3;
 }
 
-.ticket-shop-accesses > header button,
-.ticket-shop-access-card > a {
+.ticket-shop-accesses > header button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -16052,11 +16051,6 @@ button {
   border-color: rgba(220, 66, 132, 0.25);
   background: rgba(220, 66, 132, 0.08);
   color: var(--ticket-shop-pink);
-}
-
-.ticket-shop-access-card > a {
-  grid-column: 1 / -1;
-  min-height: 42px;
 }
 
 .ticket-shop-proof > button:not(.ticket-shop-proof__change) {

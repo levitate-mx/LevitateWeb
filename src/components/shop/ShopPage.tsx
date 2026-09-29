@@ -1017,12 +1017,6 @@ function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
           {ticket.status === "used" ? "Utilizado" : ticket.status === "cancelled" ? "Cancelado" : "Listo para ingresar"}
         </small>
       </div>
-      {qrDataUrl ? (
-        <a download={`boleto-${ticket.ticketCode.toLowerCase()}.png`} href={qrDataUrl}>
-          <Download aria-hidden="true" size={17} />
-          Descargar QR
-        </a>
-      ) : null}
     </article>
   );
 }
