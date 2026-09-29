@@ -10109,6 +10109,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 } = {}) {
   const [adminSession, setAdminSession] = useState<RegistrationSession | null>(null);
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
+  const previousAdminSection = useRef(activeSection);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const adminMenuToggleRef = useRef<HTMLButtonElement>(null);
   const adminSidebarRef = useRef<HTMLElement>(null);
@@ -10163,6 +10164,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [isLoading, setIsLoading] = useState(false);
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
+  const adminLoadRequestIds = useRef({ orders: 0, participants: 0, program: 0 });
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deletingAdminEntityKey, setDeletingAdminEntityKey] = useState("");
   useEffect(() => {
@@ -10249,19 +10251,22 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return;
     }
 
+    const requestId = ++adminLoadRequestIds.current.orders;
     setIsLoading(true);
     setAdminLoadErrors((current) => ({ ...current, orders: "" }));
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders");
+      if (requestId !== adminLoadRequestIds.current.orders) return;
       setOrders(payload.orders);
       setTotals(payload.totals);
       setSelectedOrderId((current) => (payload.orders.some((order) => order.id === current) ? current : ""));
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
+      if (requestId !== adminLoadRequestIds.current.orders) return;
       setAdminLoadErrors((current) => ({ ...current, orders: getErrorMessage(error, "No se pudo cargar el panel de inscripciones.") }));
     } finally {
-      setIsLoading(false);
+      if (requestId === adminLoadRequestIds.current.orders) setIsLoading(false);
     }
   }, [adminSession?.user.role]);
 
@@ -10270,19 +10275,22 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return;
     }
 
+    const requestId = ++adminLoadRequestIds.current.participants;
     setIsParticipantsLoading(true);
     setAdminLoadErrors((current) => ({ ...current, participants: "" }));
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminParticipantsPayload>("/api/registration/admin/participants");
+      if (requestId !== adminLoadRequestIds.current.participants) return;
       setAdminAcademies(payload.academies ?? []);
       setAdminChoreographers(payload.choreographers ?? []);
       setAdminParticipants(payload.participants);
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
+      if (requestId !== adminLoadRequestIds.current.participants) return;
       setAdminLoadErrors((current) => ({ ...current, participants: getErrorMessage(error, "No se pudieron cargar los participantes.") }));
     } finally {
-      setIsParticipantsLoading(false);
+      if (requestId === adminLoadRequestIds.current.participants) setIsParticipantsLoading(false);
     }
   }, [adminSession?.user.role]);
 
@@ -10291,17 +10299,20 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return;
     }
 
+    const requestId = ++adminLoadRequestIds.current.program;
     setIsProgramLoading(true);
     setAdminLoadErrors((current) => ({ ...current, program: "" }));
 
     try {
       const payload = await requestRegistrationApi<RegistrationAdminProgramPayload>("/api/registration/admin/program");
+      if (requestId !== adminLoadRequestIds.current.program) return;
       setProgramDances(payload.dances);
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
+      if (requestId !== adminLoadRequestIds.current.program) return;
       setAdminLoadErrors((current) => ({ ...current, program: getErrorMessage(error, "No se pudo cargar el programa.") }));
     } finally {
-      setIsProgramLoading(false);
+      if (requestId === adminLoadRequestIds.current.program) setIsProgramLoading(false);
     }
   }, [adminSession?.user.role]);
 
@@ -10322,6 +10333,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [adminSession?.user.role, loadAdminProgram, loadAdminParticipants]);
 
   useEffect(() => {
+    const sectionChanged = previousAdminSection.current !== activeSection;
+    previousAdminSection.current = activeSection;
+    // The session effects already load every dataset on the initial visit.
+    if (!sectionChanged || adminSession?.user.role !== "admin") return;
+
+    if (activeSection === "program" || activeSection === "registrations") {
+      void loadAdminProgram();
+    }
+    if (activeSection === "registrations") {
+      void loadAdminParticipants();
+      void loadAdminOrders();
+    }
+  }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || adminSession?.user.role !== "admin") {
       return;
     }
@@ -10334,7 +10360,15 @@ export function LevitateRegistrationAdminPaymentsRoute({
       return () => window.clearInterval(intervalId);
     }
 
-    if (!["dashboard", "followup", "communications", "academies", "choreographies"].includes(activeSection)) {
+    if (activeSection === "program") {
+      const intervalId = window.setInterval(() => {
+        void loadAdminProgram();
+      }, 60000);
+
+      return () => window.clearInterval(intervalId);
+    }
+
+    if (!["dashboard", "followup", "communications", "academies", "choreographies", "registrations"].includes(activeSection)) {
       return;
     }
 
@@ -11075,7 +11109,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       <section className={`registration-admin-workspace${isDashboardSection || isAcademiesSection ? " registration-admin-workspace--dashboard" : ""}`} inert={isAdminMenuOpen}>
         <div className="admin-topbar">
           <div><button className="admin-menu-toggle" ref={adminMenuToggleRef} type="button" aria-label="Abrir navegación" aria-expanded={isAdminMenuOpen} aria-controls="admin-navigation" onClick={() => setIsAdminMenuOpen(true)}><Menu size={22} /></button><span>Administración</span><ChevronDown className="admin-breadcrumb-chevron" size={13} /><strong>{headerTitle}</strong></div>
-          <div><span className="admin-sync-status" role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : adminDataError ? "Error de actualización" : adminLastUpdatedAt ? `Actualizado ${formatMexicoCityTime(adminLastUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>
+          <div><span className={`admin-sync-status${isLoading || isParticipantsLoading || isProgramLoading ? " is-updating" : ""}`} role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : adminDataError ? "Error de actualización" : adminLastUpdatedAt ? `Actualizado ${formatMexicoCityTime(adminLastUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>
         </div>
         {!isDashboardSection && !isFollowupSection ? (
           <header className="registration-admin-header">

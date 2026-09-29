@@ -1613,6 +1613,11 @@
   .admin-sync-status {
     display: none;
   }
+  .admin-sync-status.is-updating {
+    display: inline;
+    font-size: 10px;
+    white-space: nowrap;
+  }
   .admin-topbar strong {
     font-size: 12px;
   }
