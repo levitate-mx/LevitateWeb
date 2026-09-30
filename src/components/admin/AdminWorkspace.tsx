@@ -14,10 +14,8 @@ import {
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  AdminMessageComposer,
-  type AdminMessageTemplate,
-} from "./AdminMessageComposer";
+import { AcademyPendingPanel } from "./AcademyPendingPanel";
+import type { AcademyPendingSources } from "./academyPendingReport";
 import { AdminPagination } from "./AdminPagination";
 import { useAdminPagination } from "./useAdminPagination";
 import { normalizeAdminSearch, type AdminSection } from "./adminNavigation";
@@ -242,16 +240,17 @@ export type AdminCommunicationContact = {
   email: string;
   initials: string;
   alerts: string[];
-  templates: AdminMessageTemplate[];
-  international: boolean;
+  pendingSource: AcademyPendingSources;
 };
 
 export function AdminCommunications({
+  unavailableReason,
   contacts,
   isLoading,
   onOpenAcademy,
 }: {
   contacts: AdminCommunicationContact[];
+  unavailableReason: string;
   isLoading: boolean;
   onOpenAcademy: (id: string) => void;
 }) {
@@ -413,13 +412,7 @@ export function AdminCommunications({
                 </ul>
               </div>
             ) : null}
-            <AdminMessageComposer
-              recipientName={selected.contactName || selected.name}
-              phone={selected.phone}
-              requireCountryPrefix={selected.international}
-              templates={selected.templates}
-              contextKey={`communications:${selected.id}`}
-            />
+            <AcademyPendingPanel key={selected.id} source={selected.pendingSource} unavailableReason={unavailableReason} />
             <p className="admin-communications__notice">
               El envío se completa en WhatsApp. Las respuestas y el historial se
               consultan allí.

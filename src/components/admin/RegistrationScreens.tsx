@@ -51,6 +51,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import QRCode from "qrcode";
+import { createMultiImagePdfBlob } from "./adminPdf";
 import {
   useCallback,
   useEffect,
@@ -82,7 +83,9 @@ import "./AdminOrderNotes.css";
 import { AdminPagination } from "./AdminPagination";
 import { useAdminPagination } from "./useAdminPagination";
 import { AdminMessageComposer } from "./AdminMessageComposer";
-import { buildAcademyMessageTemplates, buildOrderMessageTemplates } from "./adminMessageTemplates";
+import { AcademyPendingPanel } from "./AcademyPendingPanel";
+import { buildAcademyPendingReport, pendingCategories, type AcademyPendingSources } from "./academyPendingReport";
+import { buildOrderMessageTemplates } from "./adminMessageTemplates";
 import { AdminWorkQueue } from "./AdminWorkQueue";
 import { buildAdminWorkQueue, type AdminWorkQueueTarget } from "./adminWorkQueueData";
 import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
@@ -100,6 +103,7 @@ type RegistrationChoreographerDirectorySort = "recent" | "name" | "academy" | "d
 type RegistrationDeleteEntityType = "academy" | "choreographer" | "dance" | "music" | "order" | "participant";
 type RegistrationParticipantOperationalStatus = "registered" | "pending_payment" | "pending_tickets" | "incomplete";
 type RegistrationAcademyProfileTab =
+  | "pending"
   | "overview"
   | "participants"
   | "choreographers"
@@ -846,6 +850,7 @@ const registrationAcademySortOptions: Array<{ label: string; value: Registration
 
 const registrationAcademyProfileTabs: Array<{ label: string; value: RegistrationAcademyProfileTab }> = [
   { value: "overview", label: "Resumen" },
+  { value: "pending", label: "Pendientes y PDF" },
   { value: "participants", label: "Participantes" },
   { value: "choreographers", label: "Coreógrafos" },
   { value: "choreographies", label: "Coreografías" },
@@ -2764,31 +2769,28 @@ function getAdminOrderMessageTemplates(order: RegistrationInscriptionOrder) {
   });
 }
 
-function getAdminAcademyMessageTemplates(summary: RegistrationAcademyDirectorySummary) {
-  return buildAcademyMessageTemplates({
-    academyName: summary.academy.name,
-    contactName: summary.academy.contactName || "",
-    portalUrl: typeof window === "undefined" ? "/inscripciones" : new URL("/inscripciones", window.location.origin).toString(),
-    orders: summary.orders.map((order) => ({
-      reference: getRegistrationInscriptionPaymentReference(order),
-      participantName: order.participantName,
-      status: order.status,
-      rejectionMessage: order.rejectionMessage,
-    })),
+function getAcademyPendingSources(summary: RegistrationAcademyDirectorySummary): AcademyPendingSources {
+  return {
+    academy: summary.academy,
+    participants: summary.participants,
     dances: summary.choreographies.map((dance) => ({
-      title: dance.title,
-      venueLabel: getVenueLabel(dance.venue),
-      hasMusic: Boolean(dance.musicUpload),
+      id: dance.id, academyId: summary.academy.id, title: dance.title,
+      venue: dance.venue, venueLabel: getVenueLabel(dance.venue),
+      categoryLabel: isReleveTeacherDance(dance) ? "Relevé" : getOptionLabel(danceCategories, dance.category),
+      isReleve: isReleveTeacherDance(dance), hasMusic: Boolean(dance.musicUpload),
+      participantIds: dance.participants.map((person) => person.id), choreographerCount: dance.choreographers.length,
     })),
-    participants: summary.participants.map((participant) => ({
-      fullName: participant.fullName,
-      missingFields: [
-        ...(!participant.birthDate ? ["fecha de nacimiento"] : []),
-        ...(participant.age == null ? ["edad"] : []),
-        ...(!participant.shirtSize ? ["talla de playera"] : []),
-      ],
+    orders: summary.orders.map((order) => ({
+      id: order.id, academyId: order.academyId, curp: order.curp, participantName: order.participantName,
+      venue: order.venue, venueLabel: getVenueLabel(order.venue), reference: getRegistrationInscriptionPaymentReference(order),
+      status: order.status, kind: getAdminOrderType(order), amount: order.amount, paidAmount: order.paidAmount,
+      currency: getRegistrationOrderCurrency(order), hasProof: Boolean(order.proof), rejectionMessage: order.rejectionMessage,
+      ticketCount: getOrderRequestedTicketCount(order), cancelledTicketCount: (order.tickets ?? []).filter((ticket) => ticket.status === "cancelled").length,
+      danceIds: (order.lineItems ?? []).map((line) => line.id), concept: getInscriptionOrderConcept(order),
     })),
-  });
+    ticketMinimum: TICKET_BLOCK_MINIMUM,
+    portalUrl: typeof window === "undefined" ? "/inscripciones" : new URL("/inscripciones", window.location.origin).toString(),
+  };
 }
 
 function isAdminTicketLineItem(lineItem: RegistrationInscriptionLineItem) {
@@ -4026,89 +4028,6 @@ async function createTicketArtwork(order: RegistrationTicketPdfOrder, ticket: Re
   drawText("QR individual. Válido para una sola entrada. No compartir captura.", padding, height - 60, 18, muted, 720);
 
   return { canvas, height, width };
-}
-
-async function createMultiImagePdfBlob(pages: Array<{ canvas: HTMLCanvasElement; height: number; width: number }>) {
-  const encodedPages = await Promise.all(
-    pages.map(async (page) => {
-      const imageBlob = await canvasToBlob(page.canvas, "image/jpeg", 0.94);
-
-      if (!imageBlob) {
-        throw new Error("No pudimos preparar una página del PDF.");
-      }
-
-      return {
-        bytes: new Uint8Array(await imageBlob.arrayBuffer()),
-        canvasHeight: page.canvas.height,
-        canvasWidth: page.canvas.width,
-        height: page.height,
-        width: page.width,
-      };
-    }),
-  );
-  const encoder = new TextEncoder();
-  const chunks: BlobPart[] = [];
-  const offsets = [0];
-  let offset = 0;
-
-  const toBlobPart = (bytes: Uint8Array) =>
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-
-  const writeText = (text: string) => {
-    const bytes = encoder.encode(text);
-    chunks.push(toBlobPart(bytes));
-    offset += bytes.length;
-  };
-
-  const writeBytes = (bytes: Uint8Array) => {
-    chunks.push(toBlobPart(bytes));
-    offset += bytes.length;
-  };
-
-  const startObject = (objectNumber: number) => {
-    offsets[objectNumber] = offset;
-    writeText(`${objectNumber} 0 obj\n`);
-  };
-
-  writeText("%PDF-1.4\n");
-  startObject(1);
-  writeText("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-  startObject(2);
-  const kids = encodedPages.map((_, index) => `${3 + index * 3} 0 R`).join(" ");
-  writeText(`<< /Type /Pages /Kids [${kids}] /Count ${encodedPages.length} >>\nendobj\n`);
-
-  encodedPages.forEach((page, index) => {
-    const pageObject = 3 + index * 3;
-    const imageObject = pageObject + 1;
-    const contentObject = pageObject + 2;
-    const imageName = `Ticket${index + 1}`;
-    const contentStream = `q\n${page.width} 0 0 ${page.height} 0 0 cm\n/${imageName} Do\nQ\n`;
-
-    startObject(pageObject);
-    writeText(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /XObject << /${imageName} ${imageObject} 0 R >> >> /Contents ${contentObject} 0 R >>\nendobj\n`,
-    );
-    startObject(imageObject);
-    writeText(
-      `<< /Type /XObject /Subtype /Image /Width ${page.canvasWidth} /Height ${page.canvasHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.bytes.length} >>\nstream\n`,
-    );
-    writeBytes(page.bytes);
-    writeText("\nendstream\nendobj\n");
-    startObject(contentObject);
-    writeText(`<< /Length ${encoder.encode(contentStream).length} >>\nstream\n${contentStream}endstream\nendobj\n`);
-  });
-
-  const totalObjects = 2 + encodedPages.length * 3;
-  const xrefOffset = offset;
-  writeText(`xref\n0 ${totalObjects + 1}\n0000000000 65535 f \n`);
-
-  for (let objectNumber = 1; objectNumber <= totalObjects; objectNumber += 1) {
-    writeText(`${String(offsets[objectNumber]).padStart(10, "0")} 00000 n \n`);
-  }
-
-  writeText(`trailer\n<< /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
-
-  return new Blob(chunks, { type: "application/pdf" });
 }
 
 async function createPaymentProofImagePdfBlob(proof: RegistrationPaymentProof) {
@@ -7111,7 +7030,9 @@ function RegistrationAcademyQuickPanel({
   onTabChange,
   summary,
   tab,
+  reportUnavailableReason,
 }: {
+  reportUnavailableReason: string;
   onClose: () => void;
   onNavigate: (target: RegistrationDashboardTarget) => void;
   onTabChange: (value: RegistrationAcademyProfileTab) => void;
@@ -7124,7 +7045,7 @@ function RegistrationAcademyQuickPanel({
     new Set(summary.choreographies.flatMap((dance) => dance.choreographers.map((choreographer) => choreographer.fullName)).filter(Boolean)),
   ).sort((left, right) => left.localeCompare(right, "es"));
   const activities = getRegistrationAcademyProfileActivity(summary);
-  const messageTemplates = getAdminAcademyMessageTemplates(summary);
+  const pendingReport = buildAcademyPendingReport(getAcademyPendingSources(summary));
 
   return (
     <aside className="registration-academy-profile" aria-label={`Perfil de ${summary.academy.name}`}>
@@ -7177,10 +7098,10 @@ function RegistrationAcademyQuickPanel({
                 <strong>{summary.academy.danceCount}</strong>
                 <small>{summary.choreographies.length} en programa</small>
               </button>
-              <button onClick={() => onTabChange("activity")} type="button">
+              <button onClick={() => onTabChange("pending")} type="button">
                 <span>Pendientes</span>
-                <strong>{summary.pendingOrderCount}</strong>
-                <small>{summary.alerts.length} alerta(s)</small>
+                <strong>{pendingReport.items.length}</strong>
+                <small>Ver detalle por categoría</small>
               </button>
             </section>
             <section className="registration-academy-profile__block">
@@ -7194,20 +7115,13 @@ function RegistrationAcademyQuickPanel({
               <h3>Alertas</h3>
               <RegistrationAcademyAlerts alerts={summary.alerts} limit={6} />
             </section>
-            {messageTemplates.length > 0 ? (
-              <details className="registration-admin-message-toggle">
-                <summary>Preparar resumen para la academia</summary>
-                <AdminMessageComposer
-                  contextKey={`academy:${summary.academy.id}`}
-                  recipientName={summary.academy.contactName || summary.academy.name}
-                  phone={summary.academy.phone || ""}
-                  requireCountryPrefix
-                  templates={messageTemplates}
-                />
-              </details>
-            ) : null}
+            <button className="academy-pending__download" onClick={() => onTabChange("pending")} type="button">
+              <FileText aria-hidden="true" size={17} /> Ver pendientes, PDF y WhatsApp
+            </button>
           </>
         ) : null}
+
+        {tab === "pending" ? <AcademyPendingPanel key={summary.academy.id} source={getAcademyPendingSources(summary)} unavailableReason={reportUnavailableReason} /> : null}
 
         {tab === "participants" ? (
           <RegistrationAcademyProfileList
@@ -10716,11 +10630,24 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const isFollowupSection = activeSection === "followup";
   const isCommunicationsSection = activeSection === "communications";
   const workQueueItems = useMemo(() => buildAdminWorkQueue({ orders, participants: adminParticipants, dances: programDances }), [orders, adminParticipants, programDances]);
-  const communicationContacts = useMemo(() => academySummaries.map((summary) => ({
-    id: summary.academy.id, name: summary.academy.name, contactName: summary.academy.contactName,
-    phone: summary.academy.phone || "", email: summary.academy.email, initials: summary.initials,
-    alerts: summary.alerts, templates: getAdminAcademyMessageTemplates(summary), international: summary.academy.originType === "international",
-  })), [academySummaries]);
+  const reportUnavailableReason = isLoading || isParticipantsLoading || isProgramLoading
+    ? "Actualizando órdenes, participantes y coreografías. El reporte estará disponible al terminar."
+    : Object.values(adminLoadErrors).some(Boolean)
+      ? "No pudimos cargar todos los datos. Usa Actualizar antes de generar o compartir el reporte."
+      : "";
+  const communicationContacts = useMemo(() => academySummaries.map((summary) => {
+    const pendingSource = getAcademyPendingSources(summary);
+    const report = buildAcademyPendingReport(pendingSource);
+    return {
+      id: summary.academy.id, name: summary.academy.name, contactName: summary.academy.contactName,
+      phone: summary.academy.phone || "", email: summary.academy.email, initials: summary.initials,
+      alerts: pendingCategories.flatMap((category) => {
+        const count = report.items.filter((item) => item.category === category.id).length;
+        return count ? [`${category.label}: ${count}`] : [];
+      }),
+      pendingSource,
+    };
+  }), [academySummaries]);
   const isAcademiesSection = activeSection === "academies";
   const isChoreographersSection = activeSection === "choreographers";
   const isChoreographiesSection = activeSection === "choreographies";
@@ -11197,7 +11124,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
         {isDashboardSection ? (
           <AdminWorkspaceHome name={adminSession.user.name} isLoading={isLoading || isParticipantsLoading || isProgramLoading} hasError={Boolean(adminDataError)} academyCount={adminAcademies.length} participantCount={getDashboardUniqueParticipantCount(adminParticipants)} danceCount={programDances.length} reviewCount={adminNavBadges.payments} items={workQueueItems} onNavigate={(section) => section === "payments" ? handleDashboardNavigate({ section, statusFilter: "payment_reported" }) : handleSectionChange(section)} onOpen={handleOpenWorkQueueItem} />
         ) : isCommunicationsSection ? (
-          <AdminCommunications contacts={communicationContacts} isLoading={isParticipantsLoading || isLoading || isProgramLoading} onOpenAcademy={handleOpenAcademyProfile} />
+          <AdminCommunications unavailableReason={reportUnavailableReason} contacts={communicationContacts} isLoading={isParticipantsLoading || isLoading || isProgramLoading} onOpenAcademy={handleOpenAcademyProfile} />
         ) : isFollowupSection ? (
           <RegistrationAdminFollowup
             customEndDate={dashboardCustomEndDate}
@@ -11695,6 +11622,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           <button className="registration-admin-drawer__backdrop" onClick={() => setSelectedAcademyId("")} type="button" aria-label="Cerrar perfil" />
           <aside className="registration-admin-sidepanel registration-admin-sidepanel--academy">
             <RegistrationAcademyQuickPanel
+              reportUnavailableReason={reportUnavailableReason}
               onClose={() => setSelectedAcademyId("")}
               onNavigate={handleDashboardNavigate}
               onTabChange={setAcademyProfileTab}
