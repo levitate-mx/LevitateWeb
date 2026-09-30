@@ -11,6 +11,13 @@ export async function createAcademyPendingPdf(
   generatedAt = new Date(),
 ) {
   await document.fonts.ready;
+  const logo = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () =>
+      reject(new Error("No se pudo cargar el logo del reporte."));
+    image.src = "/assets/levitate-logo-mx.png";
+  });
   const width = 595;
   const height = 842;
   const margin = 42;
@@ -66,14 +73,19 @@ export async function createAcademyPendingPdf(
     context.fillRect(0, 0, width, height);
     context.fillStyle = "#df1977";
     context.fillRect(0, 0, width, 7);
-    font(12, true);
-    context.fillStyle = "#df1977";
-    context.fillText("LEVITATE MX", margin, 35);
+    const logoWidth = 118;
+    context.drawImage(
+      logo,
+      margin,
+      22,
+      logoWidth,
+      (logoWidth * logo.naturalHeight) / logo.naturalWidth,
+    );
     font(9);
     context.fillStyle = "#65616d";
-    context.fillText("SEGUIMIENTO DE ACADEMIA", width - 202, 35);
+    context.fillText("ACOMPAÑANDO A SU ACADEMIA", width - 213, 40);
     pages.push({ canvas, width, height });
-    y = 68;
+    y = 88;
     if (pages.length > 1 && activeCategory) {
       font(11, true);
       context.fillStyle = "#c01867";
@@ -96,34 +108,26 @@ export async function createAcademyPendingPdf(
     if (y + space > bottom) newPage();
   };
   newPage();
-  text("Pendientes por academia", 23, true);
+  text("Pendientes de su academia", 23, true);
   y += 5;
   text(report.academyName, 16, true);
-  text(`Titular: ${report.contactName.trim() || "Sin nombre registrado"}`);
-  text(report.scopeLabel, 10, false, "#65616d");
+  if (report.scopeLabel) text(report.scopeLabel, 10, false, "#65616d");
   const date = new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "America/Mexico_City",
   }).format(generatedAt);
-  text(`Corte: ${date} (Ciudad de México)`, 9, false, "#65616d");
+  text(`Actualizado el ${date} (Ciudad de México)`, 9, false, "#65616d");
   y += 12;
   text(
-    "Gracias por acompañar a sus participantes. Este reporte reúne los puntos registrados que necesitan atención para preparar sus coreografías.",
+    `Hola${report.contactName.trim() ? `, ${report.contactName.trim()}` : ""}:`,
+    11,
+    true,
   );
   text(
-    "Los pagos en revisión esperan validación de Levitate; no deben pagarse de nuevo.",
+    "Gracias por ser parte de Levitate. Les compartimos los detalles que aún necesitamos completar para la participación de sus coreografías. Agradecemos su apoyo para revisarlos con su equipo y las familias.",
   );
   y += 8;
-  text(
-    `Categorías incluidas: ${pendingCategories
-      .filter((category) => categories.includes(category.id))
-      .map((category) => category.label)
-      .join(", ")}.`,
-    9,
-    false,
-    "#65616d",
-  );
   for (const category of pendingCategories.filter((category) =>
     categories.includes(category.id),
   )) {
@@ -136,12 +140,7 @@ export async function createAcademyPendingPdf(
     activeCategory = category.label;
     y += 6;
     if (!items.length)
-      text(
-        "Sin pendientes registrados en esta categoría.",
-        10,
-        false,
-        "#65616d",
-      );
+      text("Todo al día en esta categoría. ¡Gracias!", 10, false, "#65616d");
     for (const item of items) {
       ensureSpace(70);
       text(item.subject, 11, true);
@@ -151,16 +150,19 @@ export async function createAcademyPendingPdf(
     }
   }
   activeCategory = "";
-  ensureSpace(85);
+  ensureSpace(110);
   y += 8;
-  text("¿Necesitan ayuda? Estamos para acompañarles.", 11, true);
-  text(report.portalUrl, 9, false, "#c01867");
+  text("Gracias por ayudarnos a preparar cada detalle.", 11, true);
   text(
-    "Este reporte refleja los datos registrados al momento del corte; no constituye una autorización de participación.",
+    "Si alguno de estos puntos ya fue atendido o tienen alguna duda, pueden escribirnos para revisarlo juntos.",
+  );
+  text(
+    "Pueden consultar y completar sus registros desde su cuenta:",
     9,
     false,
     "#65616d",
   );
+  text(report.portalUrl, 9, false, "#c01867");
   for (const [index, page] of pages.entries()) {
     const ctx = page.canvas.getContext("2d")!;
     ctx.strokeStyle = "#e8e4e9";
@@ -170,7 +172,7 @@ export async function createAcademyPendingPdf(
     ctx.stroke();
     ctx.fillStyle = "#65616d";
     ctx.font = "9px Arial, sans-serif";
-    ctx.fillText("Levitate MX · Pendientes por academia", margin, height - 23);
+    ctx.fillText("Su equipo Levitate", margin, height - 23);
     ctx.textAlign = "right";
     ctx.fillText(`${index + 1} / ${pages.length}`, width - margin, height - 23);
   }

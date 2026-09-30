@@ -8,33 +8,35 @@ export const pendingCategories: Array<{
   {
     id: "music",
     label: "Música",
-    description: "Archivos por cargar para cada coreografía.",
+    description: "Estas coreografías aún necesitan su pista musical.",
   },
   {
     id: "registrations",
     label: "Pagos de inscripciones",
-    description: "Órdenes, comprobantes y registros por completar.",
+    description:
+      "Inscripciones que requieren completar el pago o compartir el comprobante.",
   },
   {
     id: "tickets",
     label: "Boletos",
-    description: "Confirmados y faltantes por participante y evento.",
+    description: "Así van los boletos de cada participante.",
   },
   {
     id: "details",
     label: "Datos y coreografías",
-    description: "Información pendiente de la academia y sus registros.",
+    description: "Datos que nos ayudarán a completar sus registros.",
   },
   {
     id: "review",
     label: "En revisión por Levitate",
-    description: "Nuestro equipo debe validar estos pagos. No volver a pagar.",
+    description:
+      "Gracias por avisarnos de estos pagos. Nosotros nos encargamos de su revisión.",
   },
   {
     id: "extras",
     label: "Compras adicionales",
     description:
-      "Foto, video y otras compras; no son requisitos de participación.",
+      "Seguimiento a los servicios opcionales de foto, video y otras compras solicitadas.",
   },
 ];
 
@@ -124,16 +126,16 @@ function describeOrder(order: ReportOrder) {
     order.status === "payment_reported" ||
     (order.hasProof && order.status === "pending_payment")
   ) {
-    return `Orden ${order.reference} · Total ${total}. ${order.hasProof ? "Comprobante recibido" : "Pago reportado"}; pendiente de validación por Levitate. No realizar otro pago por esta orden.`;
+    return `Orden ${order.reference} · Total ${total}. ${order.hasProof ? "Gracias, recibimos su comprobante." : "Gracias por avisarnos de su pago."} Nuestro equipo lo está revisando; por ahora no necesitan hacer nada más con esta orden.`;
   }
   const recorded =
     order.paidAmount > 0
-      ? ` Importe registrado: ${money(order.paidAmount, order.currency)}; diferencia contra el total: ${money(Math.max(0, order.amount - order.paidAmount), order.currency)}. Su validación sigue pendiente.`
+      ? ` La orden tiene un importe registrado de ${money(order.paidAmount, order.currency)}; la diferencia con el total es de ${money(Math.max(0, order.amount - order.paidAmount), order.currency)}.`
       : "";
   return `Orden ${order.reference} · Total ${total}.${recorded} ${
     order.status === "rejected"
-      ? `Corrección solicitada: ${order.rejectionMessage?.trim() || "revisar el comprobante con administración."}`
-      : "Completar el pago o cargar el comprobante si ya se realizó."
+      ? `Nos ayudaría que revisaran este detalle: ${order.rejectionMessage?.trim() || "necesitamos aclarar el comprobante; pueden escribirnos para revisarlo juntos."}`
+      : "Les pedimos completar el pago. Si ya lo realizaron, basta con compartirnos el comprobante."
   }`;
 }
 
@@ -192,7 +194,7 @@ export function buildAcademyPendingReport(
         "music",
         dance.title,
         danceContext(dance),
-        "Cargar el archivo de música MP3 desde el portal de la academia.",
+        "Nos falta la pista musical. Por favor, suban el archivo MP3 desde el portal de la academia.",
       );
     if (!dance.isReleve && dance.participantIds.length === 0)
       add(
@@ -200,7 +202,7 @@ export function buildAcademyPendingReport(
         "details",
         dance.title,
         danceContext(dance),
-        "Agregar los participantes de esta coreografía.",
+        "Para completar el registro, les pedimos agregar a los participantes de esta coreografía.",
       );
     if (dance.choreographerCount === 0)
       add(
@@ -208,7 +210,7 @@ export function buildAcademyPendingReport(
         "details",
         dance.title,
         danceContext(dance),
-        "Vincular al coreógrafo o maestro responsable.",
+        "Nos falta saber quién es el coreógrafo o maestro responsable. Pueden agregarlo desde su cuenta.",
       );
     if (
       dance.isReleve &&
@@ -224,7 +226,7 @@ export function buildAcademyPendingReport(
         "registrations",
         dance.title,
         danceContext(dance),
-        "No hay una orden de inscripción Relevé vinculada. Consultar el pago desde el portal de la academia.",
+        "Aún no vemos una orden de inscripción Relevé para esta coreografía. Pueden consultar el pago desde el portal de la academia.",
       );
     }
   }
@@ -248,7 +250,7 @@ export function buildAcademyPendingReport(
         "details",
         person.fullName,
         context,
-        `Completar: ${missingFields.join(", ")}.`,
+        `Les pedimos completar los siguientes datos en el portal: ${missingFields.join(", ")}.`,
       );
     if (!personDances.length) {
       if (!allDances.some((dance) => dance.participantIds.includes(person.id)))
@@ -257,7 +259,7 @@ export function buildAcademyPendingReport(
           "details",
           person.fullName,
           "",
-          "Vincular a una coreografía si participará en esta edición.",
+          "Si participará en esta edición, les pedimos agregarle a la coreografía correspondiente.",
         );
       continue;
     }
@@ -282,8 +284,8 @@ export function buildAcademyPendingReport(
           .map((dance) => `${dance.title} (${dance.venueLabel})`)
           .join("; "),
         registrationOrders.some((order) => !order.danceIds.length)
-          ? "La orden existente no detalla estas coreografías. Solicitar a Levitate que confirme la cobertura antes de realizar otro pago."
-          : "No hay una orden de inscripción vinculada a estas coreografías. Consultar el importe actualizado en el portal de inscripciones.",
+          ? "Queremos confirmar que la orden incluya estas coreografías. Por favor, escríbannos para revisarlo juntos antes de realizar otro pago."
+          : "Aún no vemos una orden de inscripción para estas coreografías. Pueden consultar el importe y completar el registro en el portal de inscripciones.",
       );
 
     for (const event of new Set(personDances.map((dance) => dance.venue))) {
@@ -316,13 +318,13 @@ export function buildAcademyPendingReport(
         `${eventDances[0].venueLabel} · ${eventDances.map((dance) => dance.title).join(", ")}`,
         `${confirmed} de ${source.ticketMinimum} boletos confirmados; falta${missing === 1 ? "" : "n"} ${missing} por confirmar.` +
           (reviewing
-            ? ` ${reviewing} en revisión por Levitate; no volver a pagarlos.`
+            ? ` ${reviewing} ${reviewing === 1 ? "está" : "están"} en revisión con nuestro equipo.`
             : "") +
           (toComplete
-            ? ` Completar ${toComplete} boleto${toComplete === 1 ? "" : "s"} o enviar el comprobante si ya se pagaron.`
-            : " Esperar la validación de nuestro equipo.") +
+            ? ` Les pedimos completar ${toComplete} boleto${toComplete === 1 ? "" : "s"}. Si ya se pagaron, pueden compartirnos el comprobante.`
+            : " Por ahora no necesitan hacer nada más; nosotros nos encargamos del siguiente paso.") +
           (ticketOrders.some((order) => order.cancelledTicketCount > 0)
-            ? " Los boletos cancelados no se cuentan como confirmados."
+            ? " Este conteo no incluye los boletos cancelados."
             : ""),
       );
     }
@@ -347,7 +349,7 @@ export function buildAcademyPendingReport(
       order.kind === "registration"
         ? "Inscripción"
         : order.ticketCount > 0
-          ? `${order.ticketCount} boleto(s)`
+          ? `${order.ticketCount} boleto${order.ticketCount === 1 ? "" : "s"}`
           : "Compra adicional";
     add(
       `order:${order.kind}:${order.id}`,
@@ -369,7 +371,7 @@ export function buildAcademyPendingReport(
       "details",
       source.academy.name,
       "Contacto de la academia",
-      `Completar: ${missingContact.join(", ")}.`,
+      `Para mantenernos en contacto, les pedimos completar: ${missingContact.join(", ")}.`,
     );
   if (venue === "all" && !allDances.length)
     add(
@@ -377,7 +379,7 @@ export function buildAcademyPendingReport(
       "details",
       source.academy.name,
       "",
-      "Registrar las coreografías que participarán.",
+      "Esperamos conocer sus propuestas. Pueden registrar las coreografías que participarán desde su cuenta.",
     );
 
   return {
@@ -388,7 +390,7 @@ export function buildAcademyPendingReport(
     venues,
     scopeLabel:
       venue === "all"
-        ? "Todos los eventos"
+        ? ""
         : venues.find((event) => event.id === venue)?.label || venue,
     items,
   };
@@ -405,8 +407,8 @@ export function buildAcademyPendingMessage(
   return [
     `¡Hola${report.contactName.trim() ? `, ${report.contactName.trim()}` : ""}! Somos el equipo de Levitate MX 💗`,
     "",
-    `Nos da mucho gusto contar con ${report.academyName}. Te compartimos los pendientes registrados para acompañarles en la preparación de sus coreografías.`,
-    `Evento: ${report.scopeLabel}.`,
+    `Nos da mucho gusto contar con ${report.academyName}. Te compartimos los detalles que nos faltan para completar la participación de sus coreografías.`,
+    ...(report.scopeLabel ? [`Evento: ${report.scopeLabel}.`] : []),
     ...(hasActions
       ? ["", "¿Nos ayudas a revisarlos con tu equipo y las familias?"]
       : []),
@@ -432,7 +434,7 @@ export function buildAcademyPendingMessage(
     "Puedes consultar y completar los registros aquí:",
     report.portalUrl,
     "",
-    "Si ya resolvieron alguno de estos puntos, avísanos para revisarlo. Los pagos en revisión no necesitan realizarse de nuevo.",
+    "Si alguno de estos puntos ya fue atendido o necesitan apoyo, escríbenos para revisarlo juntos.",
     "",
     "¡Muchas gracias por tu apoyo! Si necesitan ayuda, estamos por aquí. Nos emociona verles en el escenario 💗",
   ].join("\n");

@@ -82,7 +82,7 @@ test("two paid tickets leave one missing; report and warm message agree", () => 
   assert.match(message, /¡Hola, María!/);
   assert.match(message, /Ana Pérez/);
   assert.match(message, /Luz/);
-  assert.match(message, /Completar 1 boleto/);
+  assert.match(message, /completar 1 boleto/i);
 });
 
 test("reported and proof-bearing payments are in review and do not request a second payment", () => {
@@ -99,8 +99,8 @@ test("reported and proof-bearing payments are in review and do not request a sec
     const progress = report.items.find((item) =>
       item.id.startsWith("tickets:"),
     );
-    assert.match(progress.detail, /1 en revisión/);
-    assert.doesNotMatch(progress.detail, /Completar 1 boleto/);
+    assert.match(progress.detail, /1 está en revisión/);
+    assert.doesNotMatch(progress.detail, /completar 1 boleto/i);
     assert.equal(
       report.items.filter((item) => item.category === "review").length,
       1,
@@ -167,7 +167,7 @@ test("missing orders and new dances absent from an existing paid order stay visi
   const noOrder = buildAcademyPendingReport(source({ orders: [] }));
   assert.match(
     noOrder.items.find((item) => item.category === "registrations").detail,
-    /No hay una orden/,
+    /Aún no vemos una orden/,
   );
 });
 
@@ -232,8 +232,8 @@ test("rejected partial amounts are described as recorded, preserve currency and 
     }),
   );
   const item = report.items.find((item) => item.id === "order:registration:r1");
-  assert.match(item.detail, /Importe registrado:.*600/);
-  assert.match(item.detail, /diferencia contra el total:.*400/);
+  assert.match(item.detail, /importe registrado de.*600/);
+  assert.match(item.detail, /diferencia con el total es de.*400/);
   assert.match(item.detail, /USD/);
   assert.match(item.detail, /Completar diferencia/);
   const message = buildAcademyPendingMessage(
@@ -275,6 +275,6 @@ test("paid legacy orders with no lines ask to verify coverage instead of chargin
   );
   assert.match(
     report.items[0].detail,
-    /confirme la cobertura antes de realizar otro pago/,
+    /revisarlo juntos antes de realizar otro pago/,
   );
 });
