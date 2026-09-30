@@ -171,6 +171,8 @@
   border-radius: 9px;
   color: var(--studio-pink, #b92e6c);
   background: var(--studio-soft, #fbf0f5);
+  font: inherit;
   font-size: 13px;
   font-weight: 700;
+  cursor: pointer;
 }

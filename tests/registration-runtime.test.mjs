@@ -705,3 +705,68 @@ test('prepared fixtures return identical JSON with the previous Worker', {
   }
   t.diagnostic(queryCounts.join('; '));
 });
+
+
+function pendingPdfRequest(cookie, { fileName = 'levitate-pendientes-Academia.pdf',
+  pdf = Buffer.from('%PDF-1.4\nBinary bytes: \x00\xff\x80\n%%EOF\n', 'latin1').toString('base64'),
+  origin = 'http://localhost', headers = {}, body, method = 'POST' } = {}) {
+  return new Request('http://localhost/api/registration/admin/pending-report.pdf', {
+    method,
+    headers: { ...(cookie ? { cookie } : {}), origin,
+      'content-type': 'application/x-www-form-urlencoded', ...headers },
+    ...(method === 'POST' ? { body: body ?? new URLSearchParams({ fileName, pdf }) } : {}),
+  });
+}
+
+test('pending PDF downloads require an admin session before reading the document', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'pdf-academy');
+  for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403]]) {
+    const request = pendingPdfRequest(cookie);
+    const response = await worker.fetch(request, f.env);
+    assert.equal(response.status, status);
+    assert.equal(request.bodyUsed, false);
+    assert.equal(response.headers.get('content-disposition'), null);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  }
+});
+
+test('pending PDF downloads return identical binary bytes as a private HTTP attachment', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'pdf-admin', { role: 'admin' });
+  const request = pendingPdfRequest(admin.cookie);
+  const expected = new URLSearchParams(await request.clone().text()).get('pdf');
+  const response = await worker.fetch(request, f.env);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/pdf');
+  assert.equal(response.headers.get('content-disposition'), 'attachment; filename="levitate-pendientes-Academia.pdf"');
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(expected, 'base64'));
+});
+
+test('pending PDF downloads reject cross-origin posts, invalid files, and oversized payloads', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'pdf-validation', { role: 'admin' });
+  for (const [options, status] of [
+    [{ origin: 'https://untrusted.example' }, 403],
+    [{ origin: '' }, 403],
+    [{ method: 'GET' }, 405],
+    [{ headers: { 'content-type': 'text/plain' } }, 400],
+    [{ fileName: '../unsafe.pdf' }, 400],
+    [{ fileName: 'report.pdf"\r\nx-header: injected' }, 400],
+    [{ pdf: 'not base64!' }, 400],
+    [{ pdf: Buffer.from('<html>not a pdf</html>').toString('base64') }, 400],
+    [{ pdf: Buffer.from('%PDF-1.4\ntruncated').toString('base64') }, 400],
+    [{ headers: { 'content-length': String(13 * 1024 * 1024) } }, 413],
+    // The streaming limit also applies when Content-Length is absent or false.
+    [{ body: 'x'.repeat(13 * 1024 * 1024) }, 413],
+    [{ body: 'x'.repeat(13 * 1024 * 1024), headers: { 'content-length': '1' } }, 413],
+  ]) {
+    const request = pendingPdfRequest(admin.cookie, options);
+    const response = await worker.fetch(request, f.env);
+    assert.equal(response.status, status, JSON.stringify({ ...options, body: options.body ? '(oversized)' : undefined }));
+    assert.equal(response.headers.get('content-disposition'), null);
+    assert.ok((await response.json()).error.message);
+  }
+});

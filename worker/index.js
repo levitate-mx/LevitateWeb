@@ -477,6 +477,10 @@ export default {
       return handleRegistrationShopOrderProof(request, env);
     }
 
+    if (url.pathname === "/api/registration/admin/pending-report.pdf") {
+      return handleRegistrationAdminPdfDownload(request, env);
+    }
+
     if (url.pathname === "/api/registration/admin/inscription-orders") {
       return handleRegistrationAdminInscriptionOrders(request, env);
     }
@@ -1706,6 +1710,86 @@ async function handleRegistrationInscriptionOrderStatus(request, env) {
     );
   } catch (error) {
     return sendRegistrationError(error);
+  }
+}
+
+const registrationMaxPdfBytes = 8 * 1024 * 1024;
+const registrationMaxPdfFormBytes = 12 * 1024 * 1024;
+
+function rejectPdfDownload(code, message, statusCode = 400) {
+  throw Object.assign(new Error(message), { code, statusCode });
+}
+
+// Called only after the registration admin session has been verified. Relay the
+// generated file directly back as an HTTP attachment; never store report data.
+async function createAdminPdfDownloadResponse(request) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) {
+    rejectPdfDownload("pdf_download_origin", "Vuelve al panel para descargar el PDF.", 403);
+  }
+  if (request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") {
+    rejectPdfDownload("pdf_download_format", "No pudimos recibir el PDF. Intenta generarlo de nuevo.");
+  }
+  const tooLarge = () => rejectPdfDownload("pdf_download_too_large", "El PDF es muy grande. Descarga las categorías por separado.", 413);
+  if (Number(request.headers.get("content-length")) > registrationMaxPdfFormBytes) tooLarge();
+  const reader = request.body?.getReader();
+  if (!reader) rejectPdfDownload("pdf_download_empty", "Genera el PDF antes de descargarlo.");
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > registrationMaxPdfFormBytes) {
+      await reader.cancel();
+      tooLarge();
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const fields = new URLSearchParams(new TextDecoder().decode(body));
+  const fileName = fields.get("fileName") || "";
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}\.pdf$/.test(fileName)) {
+    rejectPdfDownload("pdf_download_filename", "El nombre del PDF no es válido. Intenta generarlo de nuevo.");
+  }
+  const encoded = fields.get("pdf") || "";
+  if (encoded.length > Math.ceil(registrationMaxPdfBytes / 3) * 4) tooLarge();
+  let binary;
+  try {
+    binary = atob(encoded);
+  } catch {
+    rejectPdfDownload("pdf_download_invalid", "No pudimos leer el PDF. Intenta generarlo de nuevo.");
+  }
+  if (binary.length > registrationMaxPdfBytes) tooLarge();
+  if (!binary.startsWith("%PDF-") || !binary.trimEnd().endsWith("%%EOF")) {
+    rejectPdfDownload("pdf_download_invalid", "No pudimos leer el PDF. Intenta generarlo de nuevo.");
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return new Response(bytes, {
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${fileName}"`,
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox; default-src 'none'",
+    },
+  });
+}
+
+async function handleRegistrationAdminPdfDownload(request, env) {
+  try {
+    assertMethod(request, ["POST"]);
+    await requireRegistrationAdmin(request, env, getDb(env));
+    return await createAdminPdfDownloadResponse(request);
+  } catch (error) {
+    const response = sendRegistrationError(error);
+    response.headers.set("cache-control", "private, no-store");
+    return response;
   }
 }
 

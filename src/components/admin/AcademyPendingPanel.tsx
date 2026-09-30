@@ -1,10 +1,5 @@
 import { Download } from "lucide-react";
-import { useMemo, useState } from "react";
-import {
-  prepareBrowserDownload,
-  startBrowserDownload,
-  type BrowserDownload,
-} from "../../utils/browserDownload";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import {
   buildAcademyPendingMessage,
@@ -14,6 +9,17 @@ import {
   type PendingCategory,
 } from "./academyPendingReport";
 import "./AcademyPendingPanel.css";
+
+type PendingPdfDownload = { pdf: string; fileName: string; reportKey: string };
+
+function encodePdf(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
 
 export function AcademyPendingPanel({
   source,
@@ -28,9 +34,10 @@ export function AcademyPendingPanel({
   );
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [preparedDownload, setPreparedDownload] = useState<
-    (BrowserDownload & { reportKey: string }) | null
-  >(null);
+  const [preparedDownload, setPreparedDownload] = useState<PendingPdfDownload | null>(null);
+  const downloadForm = useRef<HTMLFormElement>(null);
+  const lastSubmitted = useRef<PendingPdfDownload | null>(null);
+  const downloadTarget = `pending-pdf-${useId()}`;
   const report = useMemo(
     () => buildAcademyPendingReport(source, venue),
     [source, venue],
@@ -48,22 +55,27 @@ export function AcademyPendingPanel({
   const reportKey = JSON.stringify([report, categories]);
   const currentDownload =
     preparedDownload?.reportKey === reportKey ? preparedDownload : null;
-  const savePreparedDownload = (download: BrowserDownload) => {
+  const savePreparedDownload = () => {
     try {
-      startBrowserDownload(download);
+      // A native POST receives an HTTPS attachment, avoiding Safari's blob URL
+      // viewer entirely. The visible submit button also works without popups.
+      downloadForm.current?.requestSubmit();
     } catch {
-      // The native link below remains available if automatic downloading is blocked.
+      setFeedback("Tu PDF está listo. Pulsa Guardar PDF para descargarlo.");
     }
-    setFeedback(
-      "PDF listo. Si la descarga no comenzó, usa el enlace Guardar PDF.",
-    );
   };
+  useEffect(() => {
+    if (currentDownload && currentDownload !== lastSubmitted.current) {
+      lastSubmitted.current = currentDownload;
+      savePreparedDownload();
+    }
+  }, [currentDownload]);
   const exportPdf = async () => {
     setIsExporting(true);
     setFeedback("");
     try {
       if (currentDownload) {
-        savePreparedDownload(currentDownload);
+        savePreparedDownload();
         return;
       }
       const { createAcademyPendingPdf } = await import("./academyPendingPdf");
@@ -75,12 +87,11 @@ export function AcademyPendingPanel({
           .replace(/[^a-zA-Z0-9]+/g, "-")
           .replace(/^-|-$/g, "")
           .slice(0, 70) || "academia";
-      const download = prepareBrowserDownload(
-        blob,
-        `levitate-pendientes-${name}.pdf`,
-      );
-      setPreparedDownload({ ...download, reportKey });
-      savePreparedDownload(download);
+      setPreparedDownload({
+        pdf: await encodePdf(blob),
+        fileName: `levitate-pendientes-${name}.pdf`,
+        reportKey,
+      });
     } catch {
       setFeedback("No se pudo generar el PDF. Intenta descargarlo de nuevo.");
     } finally {
@@ -164,16 +175,37 @@ export function AcademyPendingPanel({
         </p>
         {feedback ? <p role="status">{feedback}</p> : null}
         {currentDownload && !unavailableReason ? (
-          <a
-            className="academy-pending__save"
-            href={currentDownload.url}
-            download={currentDownload.fileName}
-            target="_blank"
-            rel="noopener"
+          <form
+            ref={downloadForm}
+            action="/api/registration/admin/pending-report.pdf"
+            method="post"
+            target={downloadTarget}
+            onSubmit={() => setFeedback("Tu PDF está listo. Si la descarga no comenzó, pulsa Guardar PDF.")}
           >
-            <Download aria-hidden="true" size={16} /> Guardar PDF
-          </a>
+            <input type="hidden" name="pdf" value={currentDownload.pdf} />
+            <input type="hidden" name="fileName" value={currentDownload.fileName} />
+            <button className="academy-pending__save" type="submit">
+              <Download aria-hidden="true" size={16} /> Guardar PDF
+            </button>
+          </form>
         ) : null}
+        <iframe
+          name={downloadTarget}
+          title="Descarga del PDF de pendientes"
+          hidden
+          onLoad={(event) => {
+            const text = event.currentTarget.contentDocument?.body?.textContent;
+            if (!text) return;
+            try {
+              const result = JSON.parse(text);
+              if (result.error) {
+                setFeedback(result.error.message || "No pudimos descargar el PDF. Inténtalo de nuevo.");
+              }
+            } catch {
+              setFeedback("No pudimos descargar el PDF. Inténtalo de nuevo.");
+            }
+          }}
+        />
         {!categories.length ? (
           <p role="status">Selecciona al menos una categoría.</p>
         ) : (
