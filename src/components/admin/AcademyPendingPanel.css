@@ -160,3 +160,17 @@
 .academy-pending__content:disabled {
   opacity: 0.55;
 }
+
+.academy-pending__save {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--studio-line, #e8e5eb);
+  border-radius: 9px;
+  color: var(--studio-pink, #b92e6c);
+  background: var(--studio-soft, #fbf0f5);
+  font-size: 13px;
+  font-weight: 700;
+}

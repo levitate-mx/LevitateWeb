@@ -51,6 +51,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import QRCode from "qrcode";
+import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
 import { createMultiImagePdfBlob } from "./adminPdf";
 import {
   useCallback,
@@ -3863,15 +3864,7 @@ function getTicketStatusLabel(status: RegistrationEventTicketStatus) {
 }
 
 export function downloadBlob(blob: Blob, fileName: string) {
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = objectUrl;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 700);
+  startBrowserDownload(prepareBrowserDownload(blob, fileName));
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {

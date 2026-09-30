@@ -1,5 +1,10 @@
 import { Download } from "lucide-react";
 import { useMemo, useState } from "react";
+import {
+  prepareBrowserDownload,
+  startBrowserDownload,
+  type BrowserDownload,
+} from "../../utils/browserDownload";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import {
   buildAcademyPendingMessage,
@@ -23,6 +28,9 @@ export function AcademyPendingPanel({
   );
   const [isExporting, setIsExporting] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [preparedDownload, setPreparedDownload] = useState<
+    (BrowserDownload & { reportKey: string }) | null
+  >(null);
   const report = useMemo(
     () => buildAcademyPendingReport(source, venue),
     [source, venue],
@@ -37,14 +45,29 @@ export function AcademyPendingPanel({
       body: buildAcademyPendingMessage(report, categories),
     },
   ];
+  const reportKey = JSON.stringify([report, categories]);
+  const currentDownload =
+    preparedDownload?.reportKey === reportKey ? preparedDownload : null;
+  const savePreparedDownload = (download: BrowserDownload) => {
+    try {
+      startBrowserDownload(download);
+    } catch {
+      // The native link below remains available if automatic downloading is blocked.
+    }
+    setFeedback(
+      "PDF listo. Si la descarga no comenzó, usa el enlace Guardar PDF.",
+    );
+  };
   const exportPdf = async () => {
     setIsExporting(true);
     setFeedback("");
     try {
+      if (currentDownload) {
+        savePreparedDownload(currentDownload);
+        return;
+      }
       const { createAcademyPendingPdf } = await import("./academyPendingPdf");
       const blob = await createAcademyPendingPdf(report, categories);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
       const name =
         report.academyName
           .normalize("NFD")
@@ -52,15 +75,12 @@ export function AcademyPendingPanel({
           .replace(/[^a-zA-Z0-9]+/g, "-")
           .replace(/^-|-$/g, "")
           .slice(0, 70) || "academia";
-      link.href = url;
-      link.download = `levitate-pendientes-${name}.pdf`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setFeedback(
-        "PDF descargado. Adjúntalo al chat de WhatsApp junto con el mensaje.",
+      const download = prepareBrowserDownload(
+        blob,
+        `levitate-pendientes-${name}.pdf`,
       );
+      setPreparedDownload({ ...download, reportKey });
+      savePreparedDownload(download);
     } catch {
       setFeedback("No se pudo generar el PDF. Intenta descargarlo de nuevo.");
     } finally {
@@ -143,6 +163,17 @@ export function AcademyPendingPanel({
           WhatsApp; el mensaje se abre listo para revisar y enviar.
         </p>
         {feedback ? <p role="status">{feedback}</p> : null}
+        {currentDownload && !unavailableReason ? (
+          <a
+            className="academy-pending__save"
+            href={currentDownload.url}
+            download={currentDownload.fileName}
+            target="_blank"
+            rel="noopener"
+          >
+            <Download aria-hidden="true" size={16} /> Guardar PDF
+          </a>
+        ) : null}
         {!categories.length ? (
           <p role="status">Selecciona al menos una categoría.</p>
         ) : (
