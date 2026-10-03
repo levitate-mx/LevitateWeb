@@ -12,9 +12,11 @@ import {
   Users,
 } from "lucide-react";
 import { assets } from "../../data/homeContent";
+import { edoMexConfirmedWorkshops, edoMexWorkshops, formatWorkshopTime } from "../../data/workshopsContent";
 import { useDeferredDecorativeVideo } from "../../hooks/useDeferredDecorativeVideo";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
+import { WorkshopSchedule } from "./WorkshopSchedule";
 
 const workshopIconBase = "/assets/icons/workshops";
 
@@ -55,15 +57,6 @@ const includedCards = [
     title: "Cupo sujeto a disponibilidad",
     copy: "Los talleres y grupos tienen cupo limitado. Asegura tu lugar o sé parte de cada sede.",
   },
-];
-
-const edoMexConfirmedWorkshops = [
-  { discipline: "Flex", coach: "Ana Karen Rojas" },
-  { discipline: "Contemporary Jazz", coach: "Daniel Montalvo" },
-  { discipline: "Urban", coach: "Pablo Emmanuel" },
-  { discipline: "Comedia musical", coach: "Jorge Díaz" },
-  { discipline: "Aro y trapecio", coach: "Vladimir Garza" },
-  { discipline: "Tela y Cuna", coach: "Daniel Herrera" },
 ];
 
 const cdmxConfirmedWorkshops = [
@@ -269,35 +262,31 @@ export function WorkshopsPage() {
                 alt="Participantes en un workshop de Motion en Estado de México."
                 loading="lazy"
               />
-              <a className="workshops-venue-card__image-cta" href="/sedes/estado-de-mexico">
+              <a className="workshops-venue-card__image-cta" href="#horarios-edomex">
                 Ver horarios <ArrowUpRight aria-hidden="true" size={17} />
               </a>
             </div>
             <div className="workshops-venue-card__content">
               <h2>EDO MEX</h2>
               <p>
-                <CalendarDays aria-hidden="true" size={17} /> Viernes 13 de noviembre
+                <CalendarDays aria-hidden="true" size={17} /> {edoMexWorkshops.dateLabel}
               </p>
-              <p className="workshops-venue-card__location">
-                <MapPin aria-hidden="true" size={17} />
-                <span>
-                  <strong>Aerial</strong>
-                  <small>Por confirmar lugar</small>
-                </span>
-              </p>
-              <p className="workshops-venue-card__location">
-                <MapPin aria-hidden="true" size={17} />
-                <span>
-                  <strong>Motion</strong>
-                  <small>City Express Plus by Marriott Mundo E</small>
-                </span>
-              </p>
+              {edoMexWorkshops.tracks.map((track) => (
+                <p className="workshops-venue-card__location" key={track.id}>
+                  <MapPin aria-hidden="true" size={17} />
+                  <span>
+                    <strong>{track.title}</strong>
+                    <small>{track.venue}</small>
+                    <small className="workshops-venue-card__hours">{formatWorkshopTime(track.slots[0].start)} - {formatWorkshopTime(track.slots[track.slots.length - 1].end)}</small>
+                  </span>
+                </p>
+              ))}
               <h3>Workshops confirmados</h3>
               <ul>
                 {edoMexConfirmedWorkshops.map((workshop) => (
-                  <li key={workshop.discipline}>
+                  <li key={workshop.title}>
                     <span aria-hidden="true" />
-                    <strong>{workshop.discipline}</strong>
+                    <strong>{workshop.title}</strong>
                     <small>{workshop.coach}</small>
                   </li>
                 ))}
@@ -306,6 +295,8 @@ export function WorkshopsPage() {
           </article>
         </div>
       </section>
+
+      <WorkshopSchedule title="Horarios Edo. Méx" />
 
       <section
         className={[

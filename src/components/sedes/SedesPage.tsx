@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { assets } from "../../data/homeContent";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
+import { WorkshopSchedule } from "../workshops/WorkshopSchedule";
 
 type CompetitionBlockDay = {
   date: string;
@@ -13,16 +14,6 @@ type CompetitionBlockLegendItem = {
   range: string;
   label: string;
   tone: "motion" | "aerial";
-};
-
-type WorkshopPresenter = {
-  name: string;
-  classes: string[];
-};
-
-type WorkshopTrack = {
-  title: string;
-  presenters: WorkshopPresenter[];
 };
 
 type JuryMember = {
@@ -53,13 +44,7 @@ type SedeContent = {
   aerialGenres: string[];
   competitionBlocks?: CompetitionBlockDay[];
   competitionBlockLegend?: CompetitionBlockLegendItem[];
-  workshops?: {
-    title: string;
-    location: string;
-    groups: Array<{ label: string; text: string }>;
-    footnote: string;
-    tracks: WorkshopTrack[];
-  };
+  hasWorkshops?: boolean;
   hotel?: HotelFeature;
   jury?: JuryMember[];
 };
@@ -117,40 +102,7 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
       { range: "Bloques 1-3", label: "Motion", tone: "motion" },
       { range: "Bloques 4-7", label: "Aerial", tone: "aerial" },
     ],
-    workshops: {
-      title: "Viernes 13 de noviembre",
-      location: "Motion: City Express Plus Mundo E by Marriott\nAerial: sede por confirmar",
-      groups: [
-        { label: "Grupo A", text: "Aerial\nHasta 12 años" },
-        { label: "Grupo B", text: "Aerial\nMayores de 12 años" },
-        { label: "Grupo C", text: "Motion\nHasta 12 años" },
-        { label: "Grupo D", text: "Motion\nMayores de 12 años" },
-      ],
-      footnote: "*La inscripción incluye acceso a 3 workshops de la elección del participante.",
-      tracks: [
-        {
-          title: "Aerial",
-          presenters: [
-            { name: "Renata Pinal", classes: ["Aro", "Trapecio"] },
-            { name: "Daniel Herrera", classes: ["Tela", "Cuna"] },
-          ],
-        },
-        {
-          title: "Motion",
-          presenters: [
-            { name: "Daniel Montalvo", classes: ["Contemporary Jazz"] },
-            { name: "Jorge Díaz", classes: ["Comedia musical"] },
-            { name: "Pablo Díaz", classes: ["Urbanos"] },
-          ],
-        },
-        {
-          title: "Flex",
-          presenters: [
-            { name: "Ana Karen Rojas", classes: ["Flex"] },
-          ],
-        },
-      ],
-    },
+    hasWorkshops: true,
     hotel: {
       name: "City Express Plus Mundo E by Marriott",
       image: "/assets/hotel-city-express-mundo-e.png",
@@ -164,7 +116,7 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
       { name: "Ana Karen Rojas", specialty: "Artista Circense", image: "/assets/ana-karen-rojas.jpg" },
       { name: "Daniel Montalvo", specialty: "Creador escénico", image: "/assets/daniel-montalvo.jpg" },
       { name: "Ivonne Robles", specialty: "Maestra de danza clásica y neoclásica", image: "/assets/ivonne-robles.jpg" },
-      { name: "Pablo Emmanuel", specialty: "Performance urbano", image: "/assets/pablo-emmanuel.jpg" },
+      { name: "Jorge Díaz de León", specialty: "Jurado invitado", image: "/assets/jorge-diaz-de-leon.png" },
     ],
   },
   veracruz: {
@@ -456,58 +408,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
         ) : null}
       </div>
 
-      {venue.workshops ? (
-        <section className="sedes-workshops">
-          <div className="sedes-workshops__intro">
-            <h2>Workshops.</h2>
-            <div className="sedes-workshops__meta">
-              <span><CalendarDays aria-hidden="true" size={17} /> {venue.workshops.title}</span>
-              <span><MapPin aria-hidden="true" size={17} /> {venue.workshops.location}</span>
-            </div>
-
-            <div className="sedes-workshop-groups">
-              {venue.workshops.groups.map((group) => {
-                const [modality, ...details] = group.text.split("\n");
-
-                return (
-                  <article key={group.label}>
-                    <span className="sedes-workshop-groups__label">{group.label}</span>
-                    <p>
-                      <span className="sedes-workshop-groups__modality">{modality}</span>
-                      {details.length ? (
-                        <>
-                          <br />
-                          {details.join(" ")}
-                        </>
-                      ) : null}
-                    </p>
-                  </article>
-                );
-              })}
-            </div>
-            <small>{venue.workshops.footnote}</small>
-          </div>
-
-          <div className="sedes-workshop-agenda">
-            {venue.workshops.tracks.map((track) => (
-              <article className="sedes-workshop-slot" key={track.title}>
-                <h3 className="sedes-workshop-slot__title">{track.title}</h3>
-                <div className="sedes-workshop-slot__sessions">
-                  {track.presenters.map((presenter) => (
-                    <div
-                      className="sedes-workshop-slot__session"
-                      key={`${track.title}-${presenter.name}`}
-                    >
-                      <span className="sedes-workshop-slot__class" data-label="Clase">{presenter.classes.join(" · ")}</span>
-                      <span className="sedes-workshop-slot__speaker" data-label="Ponente">{presenter.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {venue.hasWorkshops ? <WorkshopSchedule /> : null}
 
       {juryLineup.length ? (
         <section className="sedes-light-section sedes-jury">
