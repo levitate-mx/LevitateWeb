@@ -1,81 +1,116 @@
 import { ArrowUpRight, CalendarDays, Clock3, MapPin } from "lucide-react";
 import { edoMexWorkshops, formatWorkshopTime } from "../../data/workshopsContent";
 
+function WorkshopTimeRange({ start, end }: { start: string; end: string }) {
+  return (
+    <>
+      <time dateTime={`${edoMexWorkshops.date}T${start}`}>{formatWorkshopTime(start)}</time>
+      {" - "}
+      <time dateTime={`${edoMexWorkshops.date}T${end}`}>{formatWorkshopTime(end)}</time>
+    </>
+  );
+}
+
 export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
   return (
     <section className="workshop-schedule" id="horarios-edomex" aria-labelledby="workshop-schedule-title">
       <div className="workshop-schedule__inner">
-        <header className="workshop-schedule__header">
-          <div>
+        <div className="workshop-schedule__intro">
+          <header className="workshop-schedule__header">
             <p className="workshop-schedule__eyebrow">Otoño 2026 · Estado de México</p>
-            <h2 id="workshop-schedule-title"><span>{title}</span>.</h2>
-          </div>
-          <div className="workshop-schedule__date">
-            <CalendarDays aria-hidden="true" size={20} />
-            <time dateTime={edoMexWorkshops.date}>{edoMexWorkshops.dateLabel}</time>
-          </div>
-        </header>
-        <p className="workshop-schedule__notice">Aerial y Motion se realizan en sedes distintas.</p>
-
-        {edoMexWorkshops.tracks.map((track) => (
-          <section className={`workshop-schedule__track workshop-schedule__track--${track.id}`} key={track.id} aria-labelledby={`workshop-${track.id}-title`}>
-            <header className="workshop-schedule__track-header">
-              <div>
-                <h3 id={`workshop-${track.id}-title`}>{track.title}</h3>
-                <p className="workshop-schedule__venue"><MapPin aria-hidden="true" size={19} />{track.venue}</p>
-                <a className="workshop-schedule__map" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(track.venue)}`} target="_blank" rel="noreferrer" aria-label={`Ver mapa de ${track.venue}`}>
-                  Ver mapa <ArrowUpRight aria-hidden="true" size={16} />
-                </a>
+            <h2 id="workshop-schedule-title">{title}.</h2>
+          </header>
+          <div className="workshop-schedule__meta">
+            <div className="workshop-schedule__date">
+              <CalendarDays aria-hidden="true" size={20} />
+              <time dateTime={edoMexWorkshops.date}>{edoMexWorkshops.dateLabel}</time>
+            </div>
+            {edoMexWorkshops.tracks.map((track) => (
+              <div className="workshop-schedule__venue" key={track.id}>
+                <MapPin aria-hidden="true" size={20} />
+                <div>
+                  <strong>{track.title}</strong>
+                  <a className="workshop-schedule__map" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(track.venue)}`} target="_blank" rel="noreferrer" aria-label={`Ver mapa de ${track.venue}`}>
+                    {track.venue} <ArrowUpRight aria-hidden="true" size={15} />
+                  </a>
+                </div>
               </div>
-              <p className="workshop-schedule__hours">
-                <Clock3 aria-hidden="true" size={18} />
-                {formatWorkshopTime(track.slots[0].start)} - {formatWorkshopTime(track.slots[track.slots.length - 1].end)}
-              </p>
-            </header>
+            ))}
+          </div>
 
-            <table className="workshop-schedule__table" aria-label={`Horarios de ${track.title}`}>
-              <thead>
-                <tr>
-                  <th scope="col">Horario</th>
-                  {track.groups.map((group) => (
-                    <th scope="col" key={group.label}>
-                      <strong>{group.label}</strong>
-                      <span>{group.ages}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {track.slots.map((slot) => (
-                  <tr key={slot.start}>
-                    <th scope="row">
-                      <time dateTime={`${edoMexWorkshops.date}T${slot.start}`}>{formatWorkshopTime(slot.start)}</time>
-                      {" - "}
-                      <time dateTime={`${edoMexWorkshops.date}T${slot.end}`}>{formatWorkshopTime(slot.end)}</time>
-                    </th>
-                    {slot.shared ? (
-                      <td colSpan={2} className="workshop-schedule__shared">
-                        <span className="workshop-schedule__shared-label">{track.groups.map((group) => group.label).join(" + ")}</span>
-                        <strong>{slot.shared.title}</strong>
-                        <span className="workshop-schedule__coach">{slot.shared.coach}</span>
-                      </td>
-                    ) : slot.classes.map((workshop, index) => (
-                      <td key={track.groups[index].label}>
-                        <span className="workshop-schedule__mobile-group" aria-hidden="true">
-                          <b>{track.groups[index].label}</b>
-                          {track.groups[index].ages}
-                        </span>
-                        <strong>{workshop.title}</strong>
-                        <span className="workshop-schedule__coach">{workshop.coach}</span>
-                      </td>
+          <div className="workshop-schedule__groups">
+            {edoMexWorkshops.tracks.flatMap((track) => track.groups.map((group) => (
+              <article className="workshop-schedule__group" key={group.label}>
+                <h3>{group.label}</h3>
+                <span>{track.title}</span>
+                <p>{group.ages}</p>
+              </article>
+            )))}
+          </div>
+          <p className="workshop-schedule__notice">Aerial y Motion se realizan en sedes distintas.</p>
+          <p className="workshop-schedule__footnote">{edoMexWorkshops.footnote}</p>
+        </div>
+
+        <div className="workshop-schedule__agenda">
+          {edoMexWorkshops.tracks.map((track) => (
+            <section className={`workshop-schedule__track workshop-schedule__track--${track.id}`} key={track.id} aria-labelledby={`workshop-${track.id}-title`}>
+              <header className="workshop-schedule__track-header">
+                <h3 id={`workshop-${track.id}-title`}>{track.title}</h3>
+                <p>{track.venue}</p>
+              </header>
+
+              <table className="workshop-schedule__table" aria-label={`Horarios de ${track.title}`}>
+                <thead>
+                  <tr>
+                    <th scope="col">Horario</th>
+                    {track.groups.map((group) => (
+                      <th scope="col" key={group.label}>
+                        <strong>{group.label}</strong>
+                        <span>{group.ages}</span>
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {track.slots.filter((slot) => !slot.shared).map((slot) => (
+                    <tr key={slot.start}>
+                      <th scope="row"><WorkshopTimeRange start={slot.start} end={slot.end} /></th>
+                      {slot.classes.map((workshop, index) => (
+                        <td key={track.groups[index].label}>
+                          <span className="workshop-schedule__mobile-group" aria-hidden="true">
+                            <b>{track.groups[index].label}</b>
+                            {track.groups[index].ages}
+                          </span>
+                          <strong>{workshop.title}</strong>
+                          <span className="workshop-schedule__coach">{workshop.coach}</span>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ))}
+
+          <section className="workshop-schedule__track workshop-schedule__track--flex" aria-labelledby="workshop-flex-title">
+            <header className="workshop-schedule__track-header">
+              <h3 id="workshop-flex-title">Flex</h3>
+            </header>
+            {edoMexWorkshops.tracks.flatMap((track) => track.slots.filter((slot) => slot.shared).map((slot) => (
+              <div className="workshop-schedule__flex-row" key={`${track.id}-${slot.start}`}>
+                <div>
+                  <strong>{track.title} · {track.groups.map((group) => group.label).join(" + ")}</strong>
+                  <p className="workshop-schedule__flex-time">
+                    <Clock3 aria-hidden="true" size={16} />
+                    <span><WorkshopTimeRange start={slot.start} end={slot.end} /></span>
+                  </p>
+                  <span className="workshop-schedule__flex-venue">{track.venue}</span>
+                </div>
+                <span className="workshop-schedule__coach">{slot.shared?.coach}</span>
+              </div>
+            )))}
           </section>
-        ))}
-        <p className="workshop-schedule__footnote">{edoMexWorkshops.footnote}</p>
+        </div>
       </div>
     </section>
   );
