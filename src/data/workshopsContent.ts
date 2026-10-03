@@ -69,8 +69,8 @@ export const edoMexWorkshops: {
       ],
       slots: [
         { start: "15:00", end: "16:00", shared: flex },
-        { start: "16:00", end: "17:30", classes: [jazz, musical] },
-        { start: "17:45", end: "19:15", classes: [musical, jazz] },
+        { start: "16:15", end: "17:45", classes: [jazz, musical] },
+        { start: "18:00", end: "19:30", classes: [musical, jazz] },
       ],
     },
   ],
