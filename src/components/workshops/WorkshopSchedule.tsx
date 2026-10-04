@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarDays, Clock3, MapPin } from "lucide-react";
+import { ArrowUpRight, CalendarDays, MapPin } from "lucide-react";
 import { edoMexWorkshops, formatWorkshopTime } from "../../data/workshopsContent";
 
 function WorkshopTimeRange({ start, end }: { start: string; end: string }) {
@@ -72,10 +72,19 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {track.slots.filter((slot) => !slot.shared).map((slot) => (
+                  {track.slots.map((slot) => (
                     <tr key={slot.start}>
                       <th scope="row"><WorkshopTimeRange start={slot.start} end={slot.end} /></th>
-                      {slot.classes.map((workshop, index) => (
+                      {slot.shared ? (
+                        <td className="workshop-schedule__shared" colSpan={track.groups.length}>
+                          <span className="workshop-schedule__mobile-group" aria-hidden="true">
+                            <b>{track.groups.map((group) => group.label).join(" + ")}</b>
+                            Ambos grupos
+                          </span>
+                          <strong>{slot.shared.title}</strong>
+                          <span className="workshop-schedule__coach">{slot.shared.coach}</span>
+                        </td>
+                      ) : slot.classes.map((workshop, index) => (
                         <td key={track.groups[index].label}>
                           <span className="workshop-schedule__mobile-group" aria-hidden="true">
                             <b>{track.groups[index].label}</b>
@@ -91,25 +100,6 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
               </table>
             </section>
           ))}
-
-          <section className="workshop-schedule__track workshop-schedule__track--flex" aria-labelledby="workshop-flex-title">
-            <header className="workshop-schedule__track-header">
-              <h3 id="workshop-flex-title">Flex</h3>
-            </header>
-            {edoMexWorkshops.tracks.flatMap((track) => track.slots.filter((slot) => slot.shared).map((slot) => (
-              <div className="workshop-schedule__flex-row" key={`${track.id}-${slot.start}`}>
-                <div>
-                  <strong>{track.title} · {track.groups.map((group) => group.label).join(" + ")}</strong>
-                  <p className="workshop-schedule__flex-time">
-                    <Clock3 aria-hidden="true" size={16} />
-                    <span><WorkshopTimeRange start={slot.start} end={slot.end} /></span>
-                  </p>
-                  <span className="workshop-schedule__flex-venue">{track.venue}</span>
-                </div>
-                <span className="workshop-schedule__coach">{slot.shared?.coach}</span>
-              </div>
-            )))}
-          </section>
         </div>
       </div>
     </section>

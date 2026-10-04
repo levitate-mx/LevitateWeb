@@ -12699,36 +12699,8 @@ button {
   font-weight: 600;
 }
 
-.workshop-schedule__flex-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 20px;
-  padding: 18px 24px;
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-
-.workshop-schedule__flex-row + .workshop-schedule__flex-row {
-  border-top: 1px solid rgba(42, 41, 40, 0.1);
-}
-
-.workshop-schedule__flex-time {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 7px 0 4px;
-  font-size: 0.88rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.workshop-schedule__flex-time svg {
-  color: #51b9cf;
-}
-
-.workshop-schedule__flex-venue {
-  color: #64646c;
-  font-size: 0.78rem;
+.workshop-schedule__table td.workshop-schedule__shared {
+  background: rgba(231, 70, 151, 0.035);
 }
 
 .workshop-schedule__mobile-group {
@@ -12812,6 +12784,11 @@ button {
     border-left: 1px solid rgba(42, 41, 40, 0.1);
   }
 
+  .workshop-schedule__table td.workshop-schedule__shared {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+
   .workshop-schedule__mobile-group {
     display: block;
     min-height: 48px;
@@ -12827,11 +12804,6 @@ button {
     font-size: 0.86rem;
   }
 
-  .workshop-schedule__flex-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    padding: 18px;
-  }
 }
 
 .sedes-workshops {
