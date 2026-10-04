@@ -5256,42 +5256,43 @@ async function getAllRegistrationAdminChoreographers(db) {
   const { results = [] } = await db
     .prepare(
       `
+        WITH ranked_dances AS (
+          SELECT
+            dance_choreographers.choreographer_id,
+            dance_choreographers.dance_id,
+            dances.venue,
+            dances.title,
+            dances.created_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY dance_choreographers.choreographer_id
+              ORDER BY dances.created_at DESC, dances.id DESC
+            ) AS latest_rank
+          FROM registration_dance_choreographers AS dance_choreographers
+          LEFT JOIN registration_dances AS dances
+            ON dances.id = dance_choreographers.dance_id
+        ),
+        dance_summary AS (
+          SELECT
+            choreographer_id,
+            COUNT(DISTINCT dance_id) AS dance_count,
+            GROUP_CONCAT(DISTINCT venue) AS event_venues,
+            MAX(CASE WHEN latest_rank = 1 THEN title END) AS latest_dance_title,
+            MAX(CASE WHEN latest_rank = 1 THEN created_at END) AS latest_dance_at
+          FROM ranked_dances
+          GROUP BY choreographer_id
+        )
         SELECT
           registration_choreographers.*,
           registration_academies.name AS academy_name,
-          (
-            SELECT COUNT(DISTINCT registration_dance_choreographers.dance_id)
-            FROM registration_dance_choreographers
-            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
-          ) AS dance_count,
-          (
-            SELECT GROUP_CONCAT(DISTINCT registration_dances.venue)
-            FROM registration_dance_choreographers
-            INNER JOIN registration_dances
-              ON registration_dances.id = registration_dance_choreographers.dance_id
-            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
-          ) AS event_venues,
-          (
-            SELECT registration_dances.title
-            FROM registration_dance_choreographers
-            INNER JOIN registration_dances
-              ON registration_dances.id = registration_dance_choreographers.dance_id
-            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
-            ORDER BY registration_dances.created_at DESC
-            LIMIT 1
-          ) AS latest_dance_title,
-          (
-            SELECT registration_dances.created_at
-            FROM registration_dance_choreographers
-            INNER JOIN registration_dances
-              ON registration_dances.id = registration_dance_choreographers.dance_id
-            WHERE registration_dance_choreographers.choreographer_id = registration_choreographers.id
-            ORDER BY registration_dances.created_at DESC
-            LIMIT 1
-          ) AS latest_dance_at
+          COALESCE(dance_summary.dance_count, 0) AS dance_count,
+          dance_summary.event_venues,
+          dance_summary.latest_dance_title,
+          dance_summary.latest_dance_at
         FROM registration_choreographers
         INNER JOIN registration_academies
           ON registration_academies.id = registration_choreographers.academy_id
+        LEFT JOIN dance_summary
+          ON dance_summary.choreographer_id = registration_choreographers.id
         ORDER BY registration_academies.name ASC, registration_choreographers.full_name ASC
       `,
     )

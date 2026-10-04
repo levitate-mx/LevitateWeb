@@ -381,6 +381,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   WHERE email IS NOT NULL AND email <> '';
 CREATE INDEX IF NOT EXISTS idx_registration_dances_academy_id ON registration_dances(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_dances_venue ON registration_dances(venue);
+CREATE INDEX IF NOT EXISTS idx_registration_dance_participants_participant_dance ON registration_dance_participants(participant_id, dance_id);
+CREATE INDEX IF NOT EXISTS idx_registration_dance_choreographers_choreographer_dance ON registration_dance_choreographers(choreographer_id, dance_id);
 CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_academy_id ON registration_recognition_documents(academy_id);

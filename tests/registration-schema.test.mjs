@@ -93,6 +93,51 @@ test("fresh canonical schema is already prepared and rechecking does not write",
   assert.equal(sqlite.prepare("SELECT role FROM registration_users").get().role, "academy");
 });
 
+test("preparation adds reverse dance indexes without changing links and remains idempotent", async (t) => {
+  const reverseIndexes = [
+    ["idx_registration_dance_participants_participant_dance", ["participant_id", "dance_id"]],
+    ["idx_registration_dance_choreographers_choreographer_dance", ["choreographer_id", "dance_id"]],
+  ];
+  let schema = baseSchema;
+  for (const [name] of reverseIndexes) schema = schema.replace(new RegExp(`^CREATE INDEX IF NOT EXISTS ${name}.*\\n`, "m"), "");
+  const { db, sqlite, writes } = fixture(t, schema);
+  seed(sqlite);
+  sqlite.exec(`
+    INSERT INTO registration_dance_participants(dance_id, participant_id) VALUES ('dance-1', 'participant-1');
+    INSERT INTO registration_dance_choreographers(dance_id, choreographer_id) VALUES ('dance-1', 'teacher-1');
+  `);
+  const linksBefore = ["registration_dance_participants", "registration_dance_choreographers"]
+    .map((table) => sqlite.prepare(`SELECT * FROM ${table}`).all());
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 2);
+  assert.ok(plan.steps.every((step) => step.sql.startsWith("CREATE INDEX")));
+  assert.deepEqual(writes, [], "checking the deployed schema must remain read-only");
+
+  const result = await prepareRegistrationSchema(db, { apply: true });
+  assert.equal(result.applied, 2);
+  for (const [name, columns] of reverseIndexes) {
+    assert.deepEqual(sqlite.prepare(`PRAGMA index_info(${name})`).all().map((column) => column.name), columns);
+  }
+  assert.deepEqual(["registration_dance_participants", "registration_dance_choreographers"]
+    .map((table) => sqlite.prepare(`SELECT * FROM ${table}`).all()), linksBefore);
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, 2);
+});
+
+test("missing dance link tables or columns fail preflight before any additions", async (t) => {
+  for (const [table, personColumn] of [
+    ["registration_dance_participants", "participant_id"],
+    ["registration_dance_choreographers", "choreographer_id"],
+  ]) {
+    const { db, sqlite, writes } = fixture(t, legacySchema());
+    sqlite.exec(`DROP TABLE ${table}`);
+    await assert.rejects(prepareRegistrationSchema(db, { apply: true }), new RegExp(`Missing prerequisite table ${table}`));
+    sqlite.exec(`CREATE TABLE ${table}(dance_id TEXT)`);
+    await assert.rejects(prepareRegistrationSchema(db, { apply: true }), new RegExp(`Missing prerequisite column ${table}\\.${personColumn}`));
+    assert.deepEqual(writes, []);
+  }
+});
+
 test("deployed inscription schema without an unused access_token column remains compatible", async (t) => {
   const { db, sqlite, writes } = fixture(t, removeColumns(baseSchema, "registration_inscription_orders", ["access_token"]));
   assert.deepEqual((await prepareRegistrationSchema(db, { apply: true })).steps, []);

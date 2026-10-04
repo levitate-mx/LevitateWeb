@@ -288,6 +288,67 @@ test('same-name academies stay isolated across bootstrap, participants, dances, 
   assert.equal(remaining.dances[0].id, other.dance.id);
 });
 
+test('admin people summaries preserve distinct venues, empty people and latest dance ties', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'summary-admin', { role: 'admin' });
+  const other = await seedAcademy(f, 'summary-other');
+  f.db.sqlite.prepare("UPDATE registration_academies SET name = 'Alpha Academy' WHERE id = ?").run(admin.academyId);
+  f.db.sqlite.prepare("UPDATE registration_academies SET name = 'Beta Academy' WHERE id = ?").run(other.academyId);
+  const addChoreographer = f.db.sqlite.prepare('INSERT INTO registration_choreographers(id, academy_id, full_name) VALUES (?, ?, ?)');
+  addChoreographer.run('summary-empty', admin.academyId, 'Ana');
+  addChoreographer.run('summary-many', admin.academyId, 'Zoe');
+  addChoreographer.run('summary-other', other.academyId, 'Ana');
+  const addParticipant = f.db.sqlite.prepare(`INSERT INTO registration_participants
+    (id, academy_id, full_name, curp, division, shirt_size) VALUES (?, ?, ?, ?, 'adulto', 'm')`);
+  addParticipant.run('summary-participant', admin.academyId, 'Bailarina', 'SUMMARY-PARTICIPANT');
+  addParticipant.run('summary-participant-empty', admin.academyId, 'Sin danzas', 'SUMMARY-EMPTY');
+  const addDance = f.db.sqlite.prepare(`INSERT INTO registration_dances
+    (id, academy_id, title, genre, subgenre, category, venue, created_at)
+    VALUES (?, ?, ?, 'motion', 'ballet', 'solo', ?, ?)`);
+  // Insert the tied winner first: recency must not depend on insertion order or title.
+  addDance.run('summary-dance-z', admin.academyId, 'Alpha latest', 'puebla', '2026-10-01 12:00:00');
+  addDance.run('summary-dance-a', admin.academyId, 'Zebra tied', 'cdmx', '2026-10-01 12:00:00');
+  addDance.run('summary-dance-old', admin.academyId, 'Zebra oldest', 'cdmx', '2026-09-01 12:00:00');
+  addDance.run('summary-dance-other', other.academyId, 'Other academy latest', 'edomex', '2026-10-02 12:00:00');
+  const linkChoreographer = f.db.sqlite.prepare('INSERT INTO registration_dance_choreographers(dance_id, choreographer_id) VALUES (?, ?)');
+  const linkParticipant = f.db.sqlite.prepare('INSERT INTO registration_dance_participants(dance_id, participant_id) VALUES (?, ?)');
+  for (const id of ['summary-dance-z', 'summary-dance-a', 'summary-dance-old']) {
+    linkChoreographer.run(id, 'summary-many');
+    linkParticipant.run(id, 'summary-participant');
+  }
+  linkChoreographer.run('summary-dance-other', 'summary-other');
+
+  const { json } = await f.request('/admin/participants', { cookie: admin.cookie });
+  const summaries = json.choreographers.map(({ id, academyName, danceCount, eventVenues, latestDanceTitle, latestDanceAt }) => ({
+    id, academyName, danceCount, eventVenues: [...eventVenues].sort(), latestDanceTitle, latestDanceAt,
+  }));
+  assert.deepEqual(summaries, [
+    { id: 'summary-empty', academyName: 'Alpha Academy', danceCount: 0, eventVenues: [], latestDanceTitle: null, latestDanceAt: null },
+    { id: 'summary-many', academyName: 'Alpha Academy', danceCount: 3, eventVenues: ['cdmx', 'puebla'], latestDanceTitle: 'Alpha latest', latestDanceAt: '2026-10-01 12:00:00' },
+    { id: 'summary-other', academyName: 'Beta Academy', danceCount: 1, eventVenues: ['edomex'], latestDanceTitle: 'Other academy latest', latestDanceAt: '2026-10-02 12:00:00' },
+  ]);
+  assert.deepEqual(json.participants.map(({ id, eventVenues }) => ({ id, eventVenues: [...eventVenues].sort() })), [
+    { id: 'summary-participant', eventVenues: ['cdmx', 'puebla'] },
+    { id: 'summary-participant-empty', eventVenues: [] },
+  ]);
+});
+
+test('admin choreographer summaries retain legacy link counts when a linked dance is missing', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'summary-orphan-admin', { role: 'admin' });
+  f.db.sqlite.prepare('INSERT INTO registration_choreographers(id, academy_id, full_name) VALUES (?, ?, ?)')
+    .run('summary-orphan', admin.academyId, 'Legacy choreographer');
+  f.db.sqlite.exec('PRAGMA foreign_keys = OFF');
+  f.db.sqlite.exec("INSERT INTO registration_dance_choreographers(dance_id, choreographer_id) VALUES ('missing-dance', 'summary-orphan')");
+  f.db.sqlite.exec('PRAGMA foreign_keys = ON');
+  const { json } = await f.request('/admin/participants', { cookie: admin.cookie });
+  const [choreographer] = json.choreographers;
+  assert.equal(choreographer.danceCount, 1);
+  assert.deepEqual(choreographer.eventVenues, []);
+  assert.equal(choreographer.latestDanceTitle, null);
+  assert.equal(choreographer.latestDanceAt, null);
+});
+
 test('inscription and shop payments keep proof, approval, ticket creation and token validation', async t => {
   const f = await fixture(t);
   const academy = await seedAcademy(f, 'payer');

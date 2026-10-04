@@ -10255,40 +10255,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || adminSession?.user.role !== "admin") {
-      return;
-    }
-
-    if (activeSection === "choreographers") {
-      const intervalId = window.setInterval(() => {
-        void loadAdminParticipants();
-      }, 60000);
-
-      return () => window.clearInterval(intervalId);
-    }
-
-    if (activeSection === "program") {
-      const intervalId = window.setInterval(() => {
-        void loadAdminProgram();
-      }, 60000);
-
-      return () => window.clearInterval(intervalId);
-    }
-
-    if (!["dashboard", "followup", "communications", "academies", "choreographies", "registrations"].includes(activeSection)) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void loadAdminOrders();
-      void loadAdminParticipants();
-      void loadAdminProgram();
-    }, 60000);
-
-    return () => window.clearInterval(intervalId);
-  }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
-
-  useEffect(() => {
     if (!selectedOrderId && !selectedAcademyId && !selectedParticipantId && !selectedChoreographerId) {
       return;
     }

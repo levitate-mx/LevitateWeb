@@ -123,10 +123,14 @@ const prerequisites = {
   registration_participants: ["id", "academy_id", "full_name", "curp", "birth_date", "age", "division", "shirt_size", "created_by_user_id", "created_at", "updated_at"],
   registration_choreographers: ["id", "academy_id", "full_name", "email", "phone", "shirt_size", "created_by_user_id", "created_at", "updated_at"],
   registration_dances: ["id", "academy_id", "title", "genre", "subgenre", "category", "level", "venue", "created_by_user_id", "created_at", "updated_at"],
+  registration_dance_participants: ["participant_id", "dance_id"],
+  registration_dance_choreographers: ["choreographer_id", "dance_id"],
   registration_inscription_orders: ["id", "curp", "participant_name", "academy_id", "academy_name", "venue", "reference", "amount", "paid_amount", "status", "payment_method", "line_items_json", "notes", "paid_at", "reviewed_by", "reviewed_at", "rejection_reason", "rejection_message", "created_at", "updated_at"],
 };
 
 const indexes = [
+  ["idx_registration_dance_participants_participant_dance", "registration_dance_participants", "participant_id, dance_id"],
+  ["idx_registration_dance_choreographers_choreographer_dance", "registration_dance_choreographers", "choreographer_id, dance_id"],
   ["idx_registration_releve_order_dance", "registration_inscription_orders", "curp", "UNIQUE", "WHERE curp LIKE 'RELEVE:%'"],
   ["idx_registration_shop_orders_curp", "registration_shop_orders", "curp"],
   ["idx_registration_shop_orders_academy_id", "registration_shop_orders", "academy_id"],
