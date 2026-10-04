@@ -3,10 +3,6 @@ import { ArrowLeft, Clock3 } from "lucide-react";
 export function AcademyMaintenancePage() {
   return (
     <main className="academy-maintenance-page">
-      <div className="academy-maintenance-page__backdrop" aria-hidden="true">
-        <img src="/assets/levitate-home-hero-poster.jpg" alt="" />
-      </div>
-
       <header className="academy-maintenance-page__header">
         <a className="academy-maintenance-page__back" href="/">
           <ArrowLeft aria-hidden="true" size={17} />
