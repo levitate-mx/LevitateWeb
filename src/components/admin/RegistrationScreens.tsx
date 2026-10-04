@@ -83,6 +83,8 @@ import { clearAdminNoteDrafts, useAdminNoteDraft } from "./useAdminNoteDraft";
 import "./AdminOrderNotes.css";
 import { AdminPagination } from "./AdminPagination";
 import { useAdminPagination } from "./useAdminPagination";
+import { useAdminOrderPage } from "./useAdminOrderPage";
+import { adminOrderKey, adjustAdminOrderTotals } from "./adminOrderState";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import { AcademyPendingPanel } from "./AcademyPendingPanel";
 import { buildAcademyPendingReport, pendingCategories, type AcademyPendingSources } from "./academyPendingReport";
@@ -395,6 +397,7 @@ type RegistrationInscriptionOrder = {
   updatedAt: string;
   proof?: RegistrationPaymentProof | null;
   tickets?: RegistrationEventTicket[];
+  ticketCount?: number;
 };
 
 type RegistrationReleveOrder = RegistrationInscriptionOrder & { danceId: string };
@@ -4939,7 +4942,7 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     order.paidAmount,
     getInscriptionOrderStatusLabel(order.status),
     order.proof?.fileName ?? "",
-    order.tickets?.length ?? 0,
+    order.ticketCount ?? order.tickets?.length ?? 0,
     order.reviewedBy ?? "",
     order.reviewedAt ?? "",
     getPaymentRejectionReasonLabel(order.rejectionReason),
@@ -10016,7 +10019,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
 } = {}) {
   const [adminSession, setAdminSession] = useState<RegistrationSession | null>(null);
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
-  const previousAdminSection = useRef(activeSection);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const adminMenuToggleRef = useRef<HTMLButtonElement>(null);
   const adminSidebarRef = useRef<HTMLElement>(null);
@@ -10068,12 +10070,27 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [adminLoadErrors, setAdminLoadErrors] = useState({ orders: "", participants: "", program: "" });
   const adminDataError = Object.values(adminLoadErrors).filter(Boolean).join(" ");
   const [isCheckingAdminSession, setIsCheckingAdminSession] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isOrdersLoading, setIsLoading] = useState(false);
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
   const adminLoadRequestIds = useRef({ orders: 0, participants: 0, program: 0 });
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deletingAdminEntityKey, setDeletingAdminEntityKey] = useState("");
+  const lastLoaded = useRef({ orders: 0, participants: 0, program: 0 });
+  const inFlight = useRef({ orders: false, participants: false, program: false });
+  const [paymentDetail, setPaymentDetail] = useState<RegistrationInscriptionOrder | null>(null);
+  const [isPaymentDetailLoading, setIsPaymentDetailLoading] = useState(false);
+  const paymentDetailRequest = useRef(0);
+  const [isExportingPayments, setIsExportingPayments] = useState(false);
+  const paymentPage = useAdminOrderPage<RegistrationInscriptionOrder>({
+    enabled: adminSession?.user.role === "admin" && activeSection === "payments",
+    filters: { query, status: statusFilter, venue: venueFilter, purchaseType: purchaseTypeFilter },
+    request: requestRegistrationApi,
+    onTotals: setTotals,
+  });
+  const isLoading = isOrdersLoading || paymentPage.isLoading;
+  const visibleUpdatedAt = activeSection === "payments" ? paymentPage.updatedAt : adminLastUpdatedAt;
+
   useEffect(() => {
     const onPopState = () => {
       const section = getAdminSectionFromPath(window.location.pathname);
@@ -10153,11 +10170,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
     }
   }, [handleAdminAuthenticated]);
 
-  const loadAdminOrders = useCallback(async () => {
+  const loadAdminOrders = useCallback(async (force = false) => {
     if (adminSession?.user.role !== "admin") {
       return;
     }
 
+    if (inFlight.current.orders || (!force && Date.now() - lastLoaded.current.orders < 60000)) return;
+    inFlight.current.orders = true;
     const requestId = ++adminLoadRequestIds.current.orders;
     setIsLoading(true);
     setAdminLoadErrors((current) => ({ ...current, orders: "" }));
@@ -10165,23 +10184,26 @@ export function LevitateRegistrationAdminPaymentsRoute({
     try {
       const payload = await requestRegistrationApi<RegistrationAdminOrdersPayload>("/api/registration/admin/inscription-orders");
       if (requestId !== adminLoadRequestIds.current.orders) return;
+      lastLoaded.current.orders = Date.now();
       setOrders(payload.orders);
       setTotals(payload.totals);
-      setSelectedOrderId((current) => (payload.orders.some((order) => order.id === current) ? current : ""));
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       if (requestId !== adminLoadRequestIds.current.orders) return;
       setAdminLoadErrors((current) => ({ ...current, orders: getErrorMessage(error, "No se pudo cargar el panel de inscripciones.") }));
     } finally {
+      inFlight.current.orders = false;
       if (requestId === adminLoadRequestIds.current.orders) setIsLoading(false);
     }
   }, [adminSession?.user.role]);
 
-  const loadAdminParticipants = useCallback(async () => {
+  const loadAdminParticipants = useCallback(async (force = false) => {
     if (adminSession?.user.role !== "admin") {
       return;
     }
 
+    if (inFlight.current.participants || (!force && Date.now() - lastLoaded.current.participants < 60000)) return;
+    inFlight.current.participants = true;
     const requestId = ++adminLoadRequestIds.current.participants;
     setIsParticipantsLoading(true);
     setAdminLoadErrors((current) => ({ ...current, participants: "" }));
@@ -10189,6 +10211,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     try {
       const payload = await requestRegistrationApi<RegistrationAdminParticipantsPayload>("/api/registration/admin/participants");
       if (requestId !== adminLoadRequestIds.current.participants) return;
+      lastLoaded.current.participants = Date.now();
       setAdminAcademies(payload.academies ?? []);
       setAdminChoreographers(payload.choreographers ?? []);
       setAdminParticipants(payload.participants);
@@ -10197,15 +10220,18 @@ export function LevitateRegistrationAdminPaymentsRoute({
       if (requestId !== adminLoadRequestIds.current.participants) return;
       setAdminLoadErrors((current) => ({ ...current, participants: getErrorMessage(error, "No se pudieron cargar los participantes.") }));
     } finally {
+      inFlight.current.participants = false;
       if (requestId === adminLoadRequestIds.current.participants) setIsParticipantsLoading(false);
     }
   }, [adminSession?.user.role]);
 
-  const loadAdminProgram = useCallback(async () => {
+  const loadAdminProgram = useCallback(async (force = false) => {
     if (adminSession?.user.role !== "admin") {
       return;
     }
 
+    if (inFlight.current.program || (!force && Date.now() - lastLoaded.current.program < 60000)) return;
+    inFlight.current.program = true;
     const requestId = ++adminLoadRequestIds.current.program;
     setIsProgramLoading(true);
     setAdminLoadErrors((current) => ({ ...current, program: "" }));
@@ -10213,12 +10239,14 @@ export function LevitateRegistrationAdminPaymentsRoute({
     try {
       const payload = await requestRegistrationApi<RegistrationAdminProgramPayload>("/api/registration/admin/program");
       if (requestId !== adminLoadRequestIds.current.program) return;
+      lastLoaded.current.program = Date.now();
       setProgramDances(payload.dances);
       setAdminLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       if (requestId !== adminLoadRequestIds.current.program) return;
       setAdminLoadErrors((current) => ({ ...current, program: getErrorMessage(error, "No se pudo cargar el programa.") }));
     } finally {
+      inFlight.current.program = false;
       if (requestId === adminLoadRequestIds.current.program) setIsProgramLoading(false);
     }
   }, [adminSession?.user.role]);
@@ -10228,30 +10256,18 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [loadAdminSession]);
 
   useEffect(() => {
-    if (adminSession?.user.role === "admin") {
+    if (adminSession?.user.role !== "admin" || activeSection === "payments") return;
+    if (activeSection === "program") {
+      void loadAdminProgram();
+    } else if (activeSection === "tickets" || activeSection === "media") {
       void loadAdminOrders();
-    }
-  }, [adminSession?.user.role, loadAdminOrders]);
-
-  useEffect(() => {
-    if (adminSession?.user.role !== "admin") return;
-    void loadAdminProgram();
-    void loadAdminParticipants();
-  }, [adminSession?.user.role, loadAdminProgram, loadAdminParticipants]);
-
-  useEffect(() => {
-    const sectionChanged = previousAdminSection.current !== activeSection;
-    previousAdminSection.current = activeSection;
-    // The session effects already load every dataset on the initial visit.
-    if (!sectionChanged || adminSession?.user.role !== "admin") return;
-
-    if (activeSection === "program" || activeSection === "registrations") {
+    } else {
+      void loadAdminOrders();
+      void loadAdminParticipants();
       void loadAdminProgram();
     }
-    if (activeSection === "registrations") {
-      void loadAdminParticipants();
-      void loadAdminOrders();
-    }
+    // Fetch when entering a view. The visible Refresh action is the only
+    // repeated refresh; idle/background tabs do not read the database.
   }, [activeSection, adminSession?.user.role, loadAdminOrders, loadAdminParticipants, loadAdminProgram]);
 
   useEffect(() => {
@@ -10272,38 +10288,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedAcademyId, selectedChoreographerId, selectedOrderId, selectedParticipantId]);
 
-  const filteredOrders = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const paymentsPagination = paymentPage.pagination;
+  const visibleOrders = paymentPage.orders;
 
-    return orders.filter((order) => {
-      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-      const matchesVenue = venueFilter === "all" || order.venue === venueFilter;
-      const matchesPurchaseType = purchaseTypeFilter === "all" ||
-        (purchaseTypeFilter === "releve" ? isRelevePaymentOrder(order) :
-          getAdminOrderType(order) === purchaseTypeFilter && !isRelevePaymentOrder(order));
-      const matchesQuery =
-        !normalizedQuery ||
-        [
-          getRegistrationInscriptionPaymentReference(order),
-          order.reference,
-          order.curp,
-          order.participantName,
-          order.buyerName ?? "",
-          order.buyerEmail ?? "",
-          order.buyerPhone ?? "",
-          order.academyName,
-          order.venue,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery);
-
-      return matchesStatus && matchesVenue && matchesPurchaseType && matchesQuery;
-    });
-  }, [orders, purchaseTypeFilter, query, statusFilter, venueFilter]);
-
-  const paymentsPagination = useAdminPagination(filteredOrders, JSON.stringify([query, statusFilter, venueFilter, purchaseTypeFilter]));
-  const visibleOrders = paymentsPagination.visibleItems;
   const registrationAcademyOptions = useMemo(() => {
     const optionMap = new Map<string, string>();
 
@@ -10577,7 +10564,27 @@ export function LevitateRegistrationAdminPaymentsRoute({
         return Date.parse(right.latestActivity.date) - Date.parse(left.latestActivity.date);
       });
   }, [academyQuery, academySort, academyStatusFilter, academySummaries]);
-  const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
+  const selectedOrder = paymentDetail && selectedOrderId === adminOrderKey(paymentDetail)
+    ? paymentDetail
+    : selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
+
+  const openPaymentOrder = async (order: RegistrationInscriptionOrder) => {
+    const requestId = ++paymentDetailRequest.current;
+    setSelectedOrderId(adminOrderKey(order));
+    setPaymentDetail(null);
+    setIsPaymentDetailLoading(true);
+    setAdminError("");
+    try {
+      const params = new URLSearchParams({ id: order.id, orderType: getAdminOrderType(order) });
+      const payload = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(`/api/registration/admin/payment-order?${params}`);
+      if (requestId === paymentDetailRequest.current) setPaymentDetail(payload.order);
+    } catch (error) {
+      if (requestId === paymentDetailRequest.current) setAdminError(getErrorMessage(error, "No se pudo abrir el pago."));
+    } finally {
+      if (requestId === paymentDetailRequest.current) setIsPaymentDetailLoading(false);
+    }
+  };
+
   const selectedAcademySummary = selectedAcademyId ? academySummaries.find((summary) => summary.academy.id === selectedAcademyId) || null : null;
   const selectedParticipantRow = selectedParticipantId ? participantOperationalRows.find((row) => row.participant.id === selectedParticipantId) || null : null;
   const selectedChoreographer = selectedChoreographerId ? adminChoreographers.find((choreographer) => choreographer.id === selectedChoreographerId) || null : null;
@@ -10621,28 +10628,44 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
     return {
       media: mediaOrdersForBadges.filter((order) => order.status === "pending_payment" || order.status === "payment_reported").length,
-      payments: orders.filter((order) => order.status === "payment_reported").length,
+      payments: totals?.reported ?? 0,
       program: programDances.filter((dance) => !dance.musicUpload || (!isReleveTeacherDance(dance) && dance.participants.length === 0)).length,
       tickets: ticketTotalsForBadges.pendingTickets + ticketTotalsForBadges.rejectedTickets,
     };
-  }, [orders, programDances]);
+  }, [orders, programDances, totals]);
 
   const handleOrderUpdated = (order: RegistrationInscriptionOrder) => {
-    setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)]);
-    setSelectedOrderId(order.id);
-    void loadAdminOrders();
+    const snapshot = (activeSection === "payments" ? paymentPage.orders : orders)
+      .find((item) => adminOrderKey(item) === adminOrderKey(order));
+    // Totals describe the loaded list snapshot. A fresher detail response may
+    // already include another administrator's review of the same payment.
+    const before = snapshot ? { ...snapshot, proof: selectedOrder?.proof } : selectedOrder;
+    if (before) {
+      setTotals((current) => current ? adjustAdminOrderTotals(current, before, order) : current);
+      paymentPage.replaceOrder(before, order);
+    }
+    // The mutation already returns the complete updated order and its tickets.
+    adminLoadRequestIds.current.orders += 1;
+    setIsLoading(false);
+    setOrders((current) => current.map((item) => adminOrderKey(item) === adminOrderKey(order) ? order : item));
+    setPaymentDetail(order);
+    setSelectedOrderId(adminOrderKey(order));
+    setAdminLastUpdatedAt(new Date().toISOString());
   };
 
   const handleOrderNotesUpdated = (order: RegistrationInscriptionOrder) => {
-    setOrders((current) => current.map((item) =>
-      item.id === order.id && getAdminOrderType(item) === getAdminOrderType(order) ? order : item,
-    ));
+    handleOrderUpdated(order);
   };
 
   const reloadAdminDataAfterDelete = () => {
-    void loadAdminOrders();
-    void loadAdminParticipants();
-    void loadAdminProgram();
+    lastLoaded.current = { orders: 0, participants: 0, program: 0 };
+    if (activeSection === "payments") {
+      paymentPage.refresh();
+    } else {
+      void loadAdminOrders(true);
+      void loadAdminParticipants(true);
+      void loadAdminProgram(true);
+    }
   };
 
   const deleteAdminEntity = async ({
@@ -10685,6 +10708,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const handleAdminOrderDeleted = (orderId: string) => {
     setOrders((current) => current.filter((order) => order.id !== orderId));
     setSelectedOrderId("");
+    setPaymentDetail(null);
     reloadAdminDataAfterDelete();
   };
 
@@ -10862,9 +10886,28 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const handleDashboardRefresh = () => {
-    void loadAdminOrders();
-    void loadAdminParticipants();
-    void loadAdminProgram();
+    if (activeSection === "payments") paymentPage.refresh();
+    else if (activeSection === "program") void loadAdminProgram(true);
+    else if (activeSection === "tickets" || activeSection === "media") void loadAdminOrders(true);
+    else {
+      void loadAdminOrders(true);
+      void loadAdminParticipants(true);
+      void loadAdminProgram(true);
+    }
+  };
+
+  const exportPayments = async () => {
+    setIsExportingPayments(true);
+    setAdminError("");
+    try {
+      const params = new URLSearchParams({ export: "1", q: query, status: statusFilter, venue: venueFilter, purchaseType: purchaseTypeFilter });
+      const payload = await requestRegistrationApi<{ orders: RegistrationInscriptionOrder[] }>(`/api/registration/admin/payment-orders?${params}`);
+      downloadRegistrationOrdersCsv(payload.orders);
+    } catch (error) {
+      setAdminError(getErrorMessage(error, "No se pudo exportar la lista de pagos."));
+    } finally {
+      setIsExportingPayments(false);
+    }
   };
 
   const handleAdminLogout = async () => {
@@ -10995,7 +11038,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       <section className={`registration-admin-workspace${isDashboardSection || isAcademiesSection ? " registration-admin-workspace--dashboard" : ""}`} inert={isAdminMenuOpen}>
         <div className="admin-topbar">
           <div><button className="admin-menu-toggle" ref={adminMenuToggleRef} type="button" aria-label="Abrir navegación" aria-expanded={isAdminMenuOpen} aria-controls="admin-navigation" onClick={() => setIsAdminMenuOpen(true)}><Menu size={22} /></button><span>Administración</span><ChevronDown className="admin-breadcrumb-chevron" size={13} /><strong>{headerTitle}</strong></div>
-          <div><span className={`admin-sync-status${isLoading || isParticipantsLoading || isProgramLoading ? " is-updating" : ""}`} role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : adminDataError ? "Error de actualización" : adminLastUpdatedAt ? `Actualizado ${formatMexicoCityTime(adminLastUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>
+          <div><span className={`admin-sync-status${isLoading || isParticipantsLoading || isProgramLoading ? " is-updating" : ""}`} role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : (adminDataError || paymentPage.error) ? "Error de actualización" : visibleUpdatedAt ? `Actualizado ${formatMexicoCityTime(visibleUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>
         </div>
         {!isDashboardSection && !isFollowupSection ? (
           <header className="registration-admin-header">
@@ -11033,7 +11076,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                               ? filteredMediaOrders.length === 0
                               : isRegistrationsSection
                                 ? filteredAdminParticipantRows.length === 0
-                                : filteredOrders.length === 0
+                                : paymentsPagination.totalItems === 0 || isExportingPayments || paymentPage.isLoading
                   }
                   onClick={() => {
                     if (isAcademiesSection) {
@@ -11066,7 +11109,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
                       return;
                     }
 
-                    downloadRegistrationOrdersCsv(filteredOrders);
+                    void exportPayments();
                   }}
                   type="button"
                 >
@@ -11078,7 +11121,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </header>
         ) : null}
 
-        {adminError || adminDataError ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError}</p> : null}
+        {adminError || adminDataError || paymentPage.error ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError || paymentPage.error}</p> : null}
 
         {isDashboardSection ? (
           <AdminWorkspaceHome name={adminSession.user.name} isLoading={isLoading || isParticipantsLoading || isProgramLoading} hasError={Boolean(adminDataError)} academyCount={adminAcademies.length} participantCount={getDashboardUniqueParticipantCount(adminParticipants)} danceCount={programDances.length} reviewCount={adminNavBadges.payments} items={workQueueItems} onNavigate={(section) => section === "payments" ? handleDashboardNavigate({ section, statusFilter: "payment_reported" }) : handleSectionChange(section)} onOpen={handleOpenWorkQueueItem} />
@@ -11404,9 +11447,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
                   {visibleMediaOrders.map((order) => (
                       <button
-                        className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
-                        key={order.id}
-                        onClick={() => setSelectedOrderId(order.id)}
+                        className={`registration-admin-table__row${selectedOrder && adminOrderKey(selectedOrder) === adminOrderKey(order) ? " is-selected" : ""}`}
+                        key={adminOrderKey(order)}
+                        onClick={() => { void openPaymentOrder(order); }}
                         role="row"
                         type="button"
                       >
@@ -11532,9 +11575,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
                   {visibleOrders.map((order) => (
                       <button
-                        className={`registration-admin-table__row${selectedOrder?.id === order.id ? " is-selected" : ""}`}
-                        key={order.id}
-                        onClick={() => setSelectedOrderId(order.id)}
+                        className={`registration-admin-table__row${selectedOrder && adminOrderKey(selectedOrder) === adminOrderKey(order) ? " is-selected" : ""}`}
+                        key={adminOrderKey(order)}
+                        onClick={() => { void openPaymentOrder(order); }}
                         role="row"
                         type="button"
                       >
@@ -11631,6 +11674,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </aside>
         </div>
       ) : null}
+
+      {isPaymentDetailLoading ? <p className="registration-admin-alert" role="status">Cargando detalle del pago…</p> : null}
 
       {selectedOrder ? (
         <div

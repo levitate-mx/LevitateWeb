@@ -270,3 +270,19 @@ test("CLI requires explicit target and mode before invoking any database", async
   }
   await assert.rejects(main(["--remote", "--check", "--persist-to", "/tmp/unused"]), /only with --local/);
 });
+
+test("existing databases receive the six ordered payment indexes once without changing orders", async t => {
+  const { db, sqlite } = fixture(t);
+  seed(sqlite);
+  shopOrder(sqlite, "page-index-order", "preserved-access-token");
+  const original = rows(sqlite, "registration_shop_orders");
+  const indexes = sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'idx_registration_%_orders_%recent'").all();
+  assert.equal(indexes.length, 6);
+  for (const { name } of indexes) sqlite.exec(`DROP INDEX ${name}`);
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 6);
+  assert.ok(plan.steps.every(step => step.sql.startsWith("CREATE INDEX IF NOT EXISTS")));
+  await prepareRegistrationSchema(db, { apply: true });
+  assert.deepEqual(rows(sqlite, "registration_shop_orders"), original);
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+});

@@ -1,3 +1,5 @@
+import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
+
 const passportSessionCookieName = "levitate_passport_session";
 const registrationSessionCookieName = "levitate_registration_session";
 const registrationStudentSessionCookieName = "levitate_registration_student_session";
@@ -479,6 +481,14 @@ export default {
 
     if (url.pathname === "/api/registration/admin/pending-report.pdf") {
       return handleRegistrationAdminPdfDownload(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/payment-orders") {
+      return handleRegistrationAdminPaymentOrders(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/payment-order") {
+      return handleRegistrationAdminPaymentOrder(request, env);
     }
 
     if (url.pathname === "/api/registration/admin/inscription-orders") {
@@ -1790,6 +1800,46 @@ async function handleRegistrationAdminPdfDownload(request, env) {
     const response = sendRegistrationError(error);
     response.headers.set("cache-control", "private, no-store");
     return response;
+  }
+}
+
+function serializeAdminOrderSummary(type, row) {
+  const order = type === "shop"
+    ? serializeRegistrationShopOrder(row, { includeInternalNotes: true })
+    : serializeRegistrationInscriptionOrder(row, { includeInternalNotes: true });
+  const { accessToken, ...summary } = order;
+  return summary;
+}
+
+async function handleRegistrationAdminPaymentOrders(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+    const db = getDb(env);
+    await requireRegistrationAdmin(request, env, db);
+    const params = new URL(request.url).searchParams;
+    return sendJson(await (params.get("export") === "1"
+      ? getAdminOrderExport(db, params, serializeAdminOrderSummary)
+      : getAdminOrderPage(db, params, serializeAdminOrderSummary)));
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminPaymentOrder(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+    const db = getDb(env);
+    await requireRegistrationAdmin(request, env, db);
+    const params = new URL(request.url).searchParams;
+    const id = requireString(params.get("id"), "id");
+    const type = requireRegistrationChoice(params.get("orderType"), "orderType", new Set(["registration", "shop"]));
+    const row = type === "shop" ? await getRegistrationShopOrderRecordById(db, id) : await getRegistrationInscriptionOrderRecordById(db, id);
+    const order = type === "shop"
+      ? await serializeRegistrationShopOrderWithProof(db, row, { includeInternalNotes: true })
+      : await serializeRegistrationInscriptionOrderWithProof(db, row, { includeInternalNotes: true });
+    return sendJson({ order });
+  } catch (error) {
+    return sendRegistrationError(error);
   }
 }
 

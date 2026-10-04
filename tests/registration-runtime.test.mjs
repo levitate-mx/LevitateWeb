@@ -831,3 +831,132 @@ test('pending PDF downloads reject cross-origin posts, invalid files, and oversi
     assert.ok((await response.json()).error.message);
   }
 });
+
+function seedAdminPaymentPages(f, count = 63) {
+  for (let i = 0; i < count; i += 1) {
+    const table = i % 2 ? 'registration_shop_orders' : 'registration_inscription_orders';
+    f.db.sqlite.prepare(`INSERT INTO ${table}
+      (id, curp, participant_name, academy_name, venue, reference, amount, paid_amount, status, created_at, updated_at)
+      VALUES (?, ?, ?, 'Academia paginación', ?, ?, 1000, ?, ?, '2026-09-01 00:00:00', '2026-09-01 00:00:00')`)
+      .run(`page-${String(Math.floor(i / 2)).padStart(3, '0')}`, i === 0 ? 'RELEVE:dance-test' : `ABCD100101MDFXX${String(i).padStart(4, '0')}`,
+        `Persona ${i}`, i % 3 ? 'edomex' : 'puebla', `TEST-${i}`,
+        i % 4 === 2 ? 1000 : 0, ['pending_payment', 'payment_reported', 'paid', 'rejected'][i % 4]);
+  }
+}
+
+test('admin payments use bounded SQL pages with stable identities and no proof or ticket hydration', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'page-admin', { role: 'admin' });
+  seedAdminPaymentPages(f);
+  const visited = [];
+  for (let page = 1; page <= 3; page += 1) {
+    const start = f.db.runtimeQueries.length;
+    const { json } = await f.request(`/admin/payment-orders?page=${page}&pageSize=25`, { cookie: admin.cookie });
+    assert.equal(json.pagination.totalItems, 63);
+    assert.equal(json.pagination.page, page);
+    assert.equal(json.orders.length, page === 3 ? 13 : 25);
+    for (const order of json.orders) {
+      assert.equal('proof' in order, false);
+      assert.equal('tickets' in order, false);
+      assert.equal('accessToken' in order, false);
+      visited.push(`${order.orderType}:${order.id}`);
+    }
+    const queries = f.db.runtimeQueries.slice(start);
+    assert.ok(queries.some(sql => /LIMIT \? OFFSET \?/.test(sql)));
+    assert.ok(queries.every(sql => !/payment_proofs|event_tickets/.test(sql)));
+    const pageSql = queries.find(sql => /LIMIT \? OFFSET \?/.test(sql));
+    const plan = f.db.sqlite.prepare(`EXPLAIN QUERY PLAN ${pageSql}`).all(25, (page - 1) * 25).map(row => row.detail).join('\n');
+    assert.match(plan, /idx_registration_inscription_orders_recent/);
+    assert.match(plan, /idx_registration_shop_orders_recent/);
+    // SQLite may sort the constant order_type tie-breaker within each unique ID.
+    // It must not sort the entire dataset to produce an ordered page.
+    assert.doesNotMatch(plan, /USE TEMP B-TREE FOR ORDER BY/);
+  }
+  assert.equal(new Set(visited).size, 63, 'same IDs in the two order tables remain distinct');
+  const { json: empty } = await f.request('/admin/payment-orders?status=paid&venue=cdmx', { cookie: admin.cookie });
+  assert.equal(empty.pagination.totalItems, 0);
+  assert.equal(empty.pagination.page, 1);
+  const { json: clamped } = await f.request('/admin/payment-orders?page=99&pageSize=50', { cookie: admin.cookie });
+  assert.equal(clamped.pagination.page, 2);
+  assert.equal(clamped.orders.length, 13);
+});
+
+test('payment filters, reference search, optional global totals and exports span all pages', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'filter-admin', { role: 'admin' });
+  seedAdminPaymentPages(f);
+  const { json } = await f.request('/admin/payment-orders?status=paid&venue=puebla&purchaseType=registration&includeTotals=1', { cookie: admin.cookie });
+  assert.ok(json.orders.length > 0);
+  assert.ok(json.orders.every(order => order.status === 'paid' && order.venue === 'puebla' && order.orderType === 'registration'));
+  assert.equal(json.totals.count, 63, 'summary cards describe the entire dataset, not the page');
+  assert.equal(json.totals.amount, 63000);
+  const reference = json.orders[0].paymentReference;
+  const { json: searched } = await f.request(`/admin/payment-orders?q=${encodeURIComponent(reference)}`, { cookie: admin.cookie });
+  assert.ok(searched.orders.some(order => order.paymentReference === reference));
+  assert.equal('totals' in searched, false, 'subsequent pages do not recompute global totals');
+  const { json: releve } = await f.request('/admin/payment-orders?purchaseType=releve', { cookie: admin.cookie });
+  assert.equal(releve.orders.length, 1);
+  assert.match(releve.orders[0].curp, /^RELEVE:/);
+  const { json: exported } = await f.request('/admin/payment-orders?export=1', { cookie: admin.cookie });
+  assert.equal(exported.orders.length, 63);
+  const { json: filteredExport } = await f.request('/admin/payment-orders?export=1&status=paid&venue=puebla&purchaseType=registration', { cookie: admin.cookie });
+  assert.deepEqual(filteredExport.orders.map(order => order.id), json.orders.map(order => order.id));
+  const { json: literalSearch } = await f.request('/admin/payment-orders?q=%25', { cookie: admin.cookie });
+  assert.equal(literalSearch.orders.length, 0, 'SQL wildcard characters are literal searches');
+});
+
+test('payment details and exports preserve proofs and ticket counts without leaking private access tokens', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'detail-admin', { role: 'admin' });
+  const paid = await createPaidTicketOrder(f, admin, [{ productId: 'ticket-full-pass', quantity: 3 }]);
+  const { json: detail } = await f.request(`/admin/payment-order?id=${paid.id}&orderType=shop`, { cookie: admin.cookie });
+  assert.equal(detail.order.proof.dataUrl, proof.dataUrl);
+  assert.equal(detail.order.tickets.length, 3);
+  const { json: exported } = await f.request('/admin/payment-orders?export=1', { cookie: admin.cookie });
+  assert.equal(exported.orders[0].proof.fileName, proof.fileName);
+  assert.equal(exported.orders[0].proof.dataUrl, '', 'CSV exports do not download the proof binary');
+  assert.equal(exported.orders[0].ticketCount, 3);
+  assert.equal('accessToken' in exported.orders[0], false);
+  await f.request('/admin/payment-order?id=missing&orderType=shop', { cookie: admin.cookie, status: 404 });
+});
+
+test('payment pages, details and exports require a real admin session before reading order data', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'non-admin');
+  for (const path of ['/admin/payment-orders', '/admin/payment-orders?export=1', '/admin/payment-order?id=test&orderType=shop']) {
+    for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403]]) {
+      const start = f.db.runtimeQueries.length;
+      await f.request(path, { cookie, status });
+      assert.ok(f.db.runtimeQueries.slice(start).every(sql => !/FROM registration_(?:shop|inscription)_orders/.test(sql)));
+    }
+  }
+  const admin = await seedAcademy(f, 'validation-admin', { role: 'admin' });
+  for (const query of ['page=-1', 'page=1.5', 'page=Infinity', 'pageSize=10000', 'status=unknown', 'venue=unknown', 'purchaseType=unknown']) {
+    await f.request(`/admin/payment-orders?${query}`, { cookie: admin.cookie, status: 400 });
+  }
+  await f.request('/admin/payment-order?id=test&orderType=unknown', { cookie: admin.cookie, status: 400 });
+});
+
+test('subsequent payment pages can skip counts and global totals, while filtered pages use ordered indexes', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'read-budget-admin', { role: 'admin' });
+  seedAdminPaymentPages(f, 501);
+  const start = f.db.runtimeQueries.length;
+  const { json } = await f.request('/admin/payment-orders?page=2&pageSize=25&includeCount=0', { cookie: admin.cookie });
+  assert.equal(json.orders.length, 25);
+  assert.equal(json.pagination.totalItems, undefined);
+  assert.equal(json.totals, undefined);
+  const queries = f.db.runtimeQueries.slice(start);
+  assert.ok(queries.every(sql => !/COUNT\(|SUM\(|payment_proofs|event_tickets/.test(sql)));
+  const selectQueries = queries.filter(sql => /SELECT \* FROM registration_(?:shop|inscription)_orders/.test(sql));
+  assert.ok(selectQueries.length <= 2);
+  assert.ok(selectQueries.every(sql => /WHERE id IN/.test(sql)), 'only the selected page is hydrated');
+  for (const [filter, value, expectedIndex] of [['status', 'paid', 'status_recent'], ['venue', 'puebla', 'venue_recent']]) {
+    const filterStart = f.db.runtimeQueries.length;
+    await f.request(`/admin/payment-orders?${filter}=${value}&includeCount=0`, { cookie: admin.cookie });
+    const sql = f.db.runtimeQueries.slice(filterStart).find(query => /LIMIT \? OFFSET \?/.test(query));
+    const plan = f.db.sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value, value, 25, 0).map(row => row.detail).join('\n');
+    assert.match(plan, new RegExp(`idx_registration_inscription_orders_${expectedIndex}`));
+    assert.match(plan, new RegExp(`idx_registration_shop_orders_${expectedIndex}`));
+  }
+});

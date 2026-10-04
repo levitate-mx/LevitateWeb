@@ -131,6 +131,13 @@ const prerequisites = {
 const indexes = [
   ["idx_registration_dance_participants_participant_dance", "registration_dance_participants", "participant_id, dance_id"],
   ["idx_registration_dance_choreographers_choreographer_dance", "registration_dance_choreographers", "choreographer_id, dance_id"],
+  ["idx_registration_inscription_orders_recent", "registration_inscription_orders", "updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_inscription_orders_status_recent", "registration_inscription_orders", "status, updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_inscription_orders_venue_recent", "registration_inscription_orders", "venue, updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_shop_orders_recent", "registration_shop_orders", "updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_shop_orders_status_recent", "registration_shop_orders", "status, updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_shop_orders_venue_recent", "registration_shop_orders", "venue, updated_at DESC, created_at DESC, id DESC"],
+
   ["idx_registration_releve_order_dance", "registration_inscription_orders", "curp", "UNIQUE", "WHERE curp LIKE 'RELEVE:%'"],
   ["idx_registration_shop_orders_curp", "registration_shop_orders", "curp"],
   ["idx_registration_shop_orders_academy_id", "registration_shop_orders", "academy_id"],

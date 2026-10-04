@@ -71,3 +71,34 @@ Si falla la preparación, conservar el Worker desplegado y corregir el error
 indicado antes de volver a ejecutar `npm run deploy`. Si una ejecución quedó a
 medias, el siguiente chequeo informa únicamente lo pendiente; no hace falta
 deshacer las adiciones compatibles con la versión anterior.
+
+## Admin payment read usage
+
+The payment list uses `/api/registration/admin/payment-orders` with 10, 25, or 50
+orders per page. Status, venue, and purchase type are filtered before SQL
+pagination. Proofs and QR tickets are fetched only when an order is opened via
+the authenticated `/api/registration/admin/payment-order` endpoint. Approval and
+note responses update that order and the displayed totals without reloading the
+complete order list. If an update changes filter membership or moves an order
+between pages, only the current page is refilled to keep navigation accurate.
+
+Page navigation reuses the filtered count and global totals already loaded by
+the screen. Changing filters recounts matching orders; the Refresh button also
+refreshes global totals. If another administrator removes the final page, the
+client recounts and returns to a valid page. Changes from other sessions become
+visible on Refresh. Other admin views load their required datasets on entry,
+reuse them for up to one minute when navigating, and no longer poll every minute.
+
+Full CSV exports are explicit reads of all matching orders, including proof
+filenames and ticket counts. Text search still scans candidate order records to
+preserve computed domestic/international payment-reference matching, without
+loading proof files or tickets. Reports and other views requiring complete
+registration data retain their complete datasets; pagination here applies to
+the payment review list.
+
+`db/registration_admin_order_indexes.sql` documents the ordered payment indexes.
+They are also included in the canonical schema and in the existing deployment
+preflight (`npm run db:prepare:registration`), so existing databases receive them
+before deployment. Index creation is a one-time operation and does not run on
+user requests. Use local sample data for development (`--local` database commands)
+and compare D1 `rows_read` metrics before and after production rollout.
