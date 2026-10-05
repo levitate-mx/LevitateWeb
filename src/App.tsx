@@ -1,5 +1,4 @@
 import { getAdminSectionFromPath } from "./components/admin/adminNavigation";
-import { AcademyMaintenancePage } from "./components/admin/AcademyMaintenancePage";
 import {
   LevitateAuthRoute,
   LevitateRegistrationAdminPaymentsRoute,
@@ -75,7 +74,7 @@ export default function App() {
   }
 
   if (academyRegistrationMatch) {
-    return <AcademyMaintenancePage />;
+    return <LevitateRegistrationRoute initialScreen={searchParams.get("seccion") === "releve" ? "releve" : "home"} />;
   }
 
   if (studentRegistrationMatch) {
@@ -88,7 +87,7 @@ export default function App() {
     }
 
     if (loginType === "academia") {
-      return <AcademyMaintenancePage />;
+      return <LevitateRegistrationRoute />;
     }
 
     return <LevitateAuthRoute />;
