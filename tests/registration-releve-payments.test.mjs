@@ -86,29 +86,46 @@ test('Relevé accepts exactly one teacher and only the solo category', async t =
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS count FROM registration_dances').get().count, 2);
 });
 
-test('Relevé creates one academy-owned order with Banamex concept and fixed presale amount', async t => {
+test('Relevé applies Hot Presale only inside the CDMX campaign window and keeps the discounted order', async t => {
   const f = await fixture(t);
+  let now = Date.parse('2026-10-05T18:00:00Z');
+  t.mock.method(Date, 'now', () => now);
   const first = await f.request('/api/registration/releve/orders');
   assert.equal(first.orders.length, 1);
   assert.match(first.orders[0].reference, /^REL-\d{5}$/);
   assert.equal(first.orders[0].paymentReference, first.orders[0].reference);
   assert.equal(first.orders[0].amount, 1000);
   assert.equal(first.orders[0].danceId, 'dance-one');
+
+  now = Date.parse('2026-10-06T06:00:00Z');
   const second = await f.request('/api/registration/releve/orders');
   assert.equal(second.orders[0].id, first.orders[0].id);
+  assert.equal(second.orders[0].amount, 700);
+  assert.equal(second.orders[0].lineItems[0].amount, 700);
   assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS count FROM registration_inscription_orders").get().count, 1);
+
+  f.sqlite.prepare(`INSERT INTO registration_dances
+    (id, academy_id, title, genre, subgenre, is_releve, category, venue, created_at)
+    VALUES ('dance-at-hot-presale-end', 'academy-one', 'Pieza al cierre de Hot Presale', 'aereo', 'aro', 1, 'solo', 'puebla', '2026-10-08 15:00:00')`).run();
+  now = Date.parse('2026-10-08T16:00:00Z');
+  const afterHotPresale = await f.request('/api/registration/releve/orders');
+  assert.equal(afterHotPresale.orders.find(order => order.danceId === 'dance-one').amount, 700);
+  assert.equal(afterHotPresale.orders.find(order => order.danceId === 'dance-at-hot-presale-end').amount, 1000);
+
   f.sqlite.prepare(`INSERT INTO registration_dances
     (id, academy_id, title, genre, subgenre, is_releve, category, venue, created_at)
     VALUES ('dance-after-presale', 'academy-one', 'Pieza posterior', 'aereo', 'aro', 1, 'solo', 'puebla', '2026-10-14 12:00:00')`).run();
+  now = Date.parse('2026-10-14T18:00:00Z');
   const later = await f.request('/api/registration/releve/orders');
   assert.equal(later.orders.find(order => order.danceId === 'dance-after-presale').amount, 1500);
-  assert.notEqual(later.orders[0].reference, later.orders[1].reference);
+  assert.equal(new Set(later.orders.map(order => order.reference)).size, 3);
   assert.deepEqual((await f.request('/api/registration/releve/orders', { cookie: f.cookies['academy-two'] })).orders, []);
   await f.request('/api/registration/releve/orders', { cookie: '', status: 401 });
 });
 
 test('Relevé proof stays academy-scoped and enters the admin review flow', async t => {
   const f = await fixture(t);
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-05T18:00:00Z'));
   const order = (await f.request('/api/registration/releve/orders')).orders[0];
   const proof = { orderId: order.id, fileName: 'comprobante.png', contentType: 'image/png', fileSize: 3, dataUrl: 'data:image/png;base64,AQID' };
   await f.request('/api/registration/releve/order/proof', { cookie: f.cookies['academy-two'], body: proof, status: 404 });

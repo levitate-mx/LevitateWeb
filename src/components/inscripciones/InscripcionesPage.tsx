@@ -13,6 +13,11 @@ import {
   X,
 } from "lucide-react";
 import { formatMexicoCityDate } from "../../utils/mexicoCityTime";
+import {
+  isReleveHotPresaleActive,
+  releveHotPresalePrice,
+  relevePresalePrice,
+} from "../../utils/releveHotPresale";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 import {
@@ -175,7 +180,12 @@ const inscriptionCosts: InscriptionCost[] = [
   { category: "Dúo", presale: "$1,300 MXN", normal: "$1,400 MXN" },
   { category: "Trío", presale: "$950 MXN", normal: "$1,200 MXN" },
   { category: "Grupo", presale: "$800 MXN", normal: "$1,000 MXN" },
-  { category: "Maestros Relevé", categoryLines: ["Maestros", "Relevé"], presale: "$1,000 MXN", normal: "$1,500 MXN" },
+  {
+    category: "Maestros Relevé",
+    categoryLines: ["Maestros", "Relevé"],
+    presale: isReleveHotPresaleActive() ? releveHotPresalePrice : relevePresalePrice,
+    normal: "$1,500 MXN",
+  },
 ];
 
 const inscriptionIncludes = [
@@ -471,6 +481,12 @@ export function InscripcionesPage() {
           <p>
             <CircleAlert aria-hidden="true" size={20} />
             <span className="inscripciones-presale-note__copy">
+              {isReleveHotPresaleActive() ? (
+                <span>
+                  <strong>Hot Presale Relevé: 30% de descuento</strong>, del 6 de octubre hasta el 8 de octubre de 2026
+                  a las 10:00 a. m. (hora de CDMX). Precio promocional: <strong>{releveHotPresalePrice}</strong>.
+                </span>
+              ) : null}
               <span>
                 El precio preventa es aplicable hasta el <strong>12 de octubre de 2026.</strong> A partir del 13 de
                 octubre de 2026 se aplica el precio real.

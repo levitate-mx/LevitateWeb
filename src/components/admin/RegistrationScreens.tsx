@@ -50,6 +50,11 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
+import {
+  isReleveHotPresaleActive,
+  releveHotPresalePrice,
+  relevePresalePrice,
+} from "../../utils/releveHotPresale";
 import QRCode from "qrcode";
 import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
 import { createMultiImagePdfBlob } from "./adminPdf";
@@ -789,7 +794,7 @@ const danceLevels: FieldOption[] = [
   { value: "elite", label: "Élite" },
 ];
 
-const relevePresaleCost = "$1,000 MXN";
+const relevePresaleCost = relevePresalePrice;
 const releveRegularCost = "$1,500 MXN";
 const releveCashPrize = "$5,000 MXN";
 const releveDefaultCategory = "solo";
@@ -8617,7 +8622,11 @@ function ReleveRegistrationPanel({
             </article>
             <article>
               <span>Costo</span>
-              <p>Preventa {relevePresaleCost}; costo normal {releveRegularCost}.</p>
+              <p>
+                {isReleveHotPresaleActive()
+                  ? `Hot Presale 30%: ${releveHotPresalePrice} hasta el 8 de octubre a las 10:00 a. m. (CDMX).`
+                  : `Preventa ${relevePresaleCost}; costo normal ${releveRegularCost}.`}
+              </p>
             </article>
             <article>
               <span>Premio</span>

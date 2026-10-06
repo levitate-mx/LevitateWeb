@@ -145,6 +145,10 @@ const registrationMusicDurationLimitsByDivision = {
 const registrationGoogleDriveScope = "https://www.googleapis.com/auth/drive.file";
 const registrationGmailSendScope = "https://www.googleapis.com/auth/gmail.send";
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
+// Hot Presale runs in Mexico City (UTC-6 in October 2026): Oct 6 at 00:00 through Oct 8 at 10:00.
+const registrationReleveHotPresaleStartsAt = Date.parse("2026-10-06T06:00:00.000Z");
+const registrationReleveHotPresaleEndsAt = Date.parse("2026-10-08T16:00:00.000Z");
+const registrationReleveHotPresaleDiscountRate = 0.3;
 const registrationReleveTeacherMinimumDances = 3;
 const registrationInscriptionPrices = {
   normal: {
@@ -1666,12 +1670,36 @@ async function ensureRegistrationReleveOrder(db, dance, academy) {
     .prepare("SELECT * FROM registration_inscription_orders WHERE curp = ? AND academy_id = ? LIMIT 1")
     .bind(curp, academy.id)
     .first();
-  if (existing) return existing;
+  if (existing) {
+    const hotPresaleAmount = getRegistrationReleveHotPresaleAmount();
+    const canApplyHotPresale = ["pending_payment", "rejected"].includes(existing.status)
+      && isRegistrationReleveHotPresaleActive()
+      && Number(existing.amount || 0) > hotPresaleAmount;
+
+    if (!canApplyHotPresale) return existing;
+
+    const discountedLineItems = parseRegistrationOrderLineItems(existing.line_items_json).map((line) => ({
+      ...line,
+      amount: hotPresaleAmount,
+    }));
+    await db.prepare(`
+      UPDATE registration_inscription_orders
+      SET amount = ?, line_items_json = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(hotPresaleAmount, JSON.stringify(discountedLineItems), existing.id).run();
+
+    return await db
+      .prepare("SELECT * FROM registration_inscription_orders WHERE id = ? LIMIT 1")
+      .bind(existing.id)
+      .first();
+  }
 
   const createdAtText = String(dance.created_at || "").replace(" ", "T");
   const createdAt = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(createdAtText) ? createdAtText : `${createdAtText}Z`);
   const isPresale = (Number.isNaN(createdAt) ? Date.now() : createdAt) < registrationInscriptionPresaleEndsAt;
-  const amount = (isPresale ? registrationInscriptionPrices.presale : registrationInscriptionPrices.normal).releve;
+  const amount = isRegistrationReleveHotPresaleActive()
+    ? getRegistrationReleveHotPresaleAmount()
+    : (isPresale ? registrationInscriptionPrices.presale : registrationInscriptionPrices.normal).releve;
   const lineItems = JSON.stringify([{
     id: dance.id,
     title: `Relevé · ${dance.title}`,
@@ -6294,12 +6322,26 @@ function buildRegistrationInscriptionLines(dances, { isInternational = false } =
 
 function getRegistrationInscriptionAmount(dance, { isInternational = false } = {}) {
   const priceTable = isInternational ? registrationInternationalInscriptionPrices : registrationInscriptionPrices;
+  const priceKey = getRegistrationInscriptionPriceKey(dance);
+
+  if (priceKey === "releve" && isRegistrationReleveHotPresaleActive()) {
+    return getRegistrationReleveHotPresaleAmount(isInternational);
+  }
+
   const prices = Date.now() < registrationInscriptionPresaleEndsAt
     ? priceTable.presale
     : priceTable.normal;
-  const priceKey = getRegistrationInscriptionPriceKey(dance);
 
   return prices[priceKey] ?? prices.grupo;
+}
+
+function isRegistrationReleveHotPresaleActive(now = Date.now()) {
+  return now >= registrationReleveHotPresaleStartsAt && now < registrationReleveHotPresaleEndsAt;
+}
+
+function getRegistrationReleveHotPresaleAmount(isInternational = false) {
+  const priceTable = isInternational ? registrationInternationalInscriptionPrices : registrationInscriptionPrices;
+  return Math.round(priceTable.presale.releve * (1 - registrationReleveHotPresaleDiscountRate));
 }
 
 function getRegistrationInscriptionCurrency(isInternational = false) {

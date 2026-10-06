@@ -189,6 +189,29 @@ test('domestic Aerial prices match each category in presale and normal periods w
   }
 });
 
+test('Hot Presale discounts only Relevé registration lines by 30 percent during the CDMX window', async t => {
+  const f = await fixture(t);
+  const releveAcademy = await seedAcademy(f, 'hot-releve');
+  const releveRecord = await createDance(f, releveAcademy, curpA);
+  f.db.sqlite.prepare('UPDATE registration_participants SET is_releve_teacher = 1 WHERE id = ?')
+    .run(releveRecord.participant.id);
+
+  const standardAcademy = await seedAcademy(f, 'hot-standard');
+  await createDance(f, standardAcademy, curpB);
+
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-07T18:00:00Z'));
+  const { json: releveLookup } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: releveAcademy.cookie, body: { curp: curpA },
+  });
+  const { json: standardLookup } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: standardAcademy.cookie, body: { curp: curpB },
+  });
+
+  assert.equal(releveLookup.lines[0].baseAmount, 700);
+  assert.equal(releveLookup.lines[0].amount, 700);
+  assert.equal(standardLookup.lines[0].baseAmount, 1500);
+});
+
 test('two solos, a dupla and a trio total 4025 in presale for lookup and the generated payment order', async t => {
   const f = await fixture(t);
   const academy = await seedAcademy(f, 'aerial-total');

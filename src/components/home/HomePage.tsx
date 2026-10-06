@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { useDeferredDecorativeVideo } from "../../hooks/useDeferredDecorativeVideo";
 import { LevitateFooter } from "./LevitateFooter";
 import { LevitateHeader } from "./LevitateHeader";
+import { ReleveHotPresalePopup } from "./ReleveHotPresalePopup";
 
 const venues = [
   {
@@ -149,6 +150,7 @@ export function HomePage() {
 
   return (
     <main className="levitate-page levitate-home-redesign">
+      <ReleveHotPresalePopup />
       <section id="inicio" className="levitate-home-hero">
         <div className="levitate-home-hero__backdrop" aria-hidden="true" ref={heroVideoRef}>
           {shouldRenderHeroVideo ? (
