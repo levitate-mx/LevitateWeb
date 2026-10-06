@@ -3,6 +3,7 @@ import {
   BedDouble,
   ClipboardList,
   FileCheck2,
+  FilePenLine,
   ListChecks,
   Search,
 } from "lucide-react";
@@ -11,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 
-type DocumentCategory = "Convocatoria" | "Reglamentos" | "Hospedaje";
+type DocumentCategory = "Convocatoria" | "Formatos" | "Reglamentos" | "Hospedaje";
 
 type LevitateDocument = {
   title: string;
@@ -22,7 +23,7 @@ type LevitateDocument = {
   icon: LucideIcon;
 };
 
-const documentFilters = ["Todos", "Convocatoria", "Reglamentos", "Hospedaje"] as const;
+const documentFilters = ["Todos", "Convocatoria", "Formatos", "Reglamentos", "Hospedaje"] as const;
 
 const levitateDocuments: LevitateDocument[] = [
   {
@@ -32,6 +33,14 @@ const levitateDocuments: LevitateDocument[] = [
     category: "Convocatoria",
     context: "Próxima edición",
     icon: ClipboardList,
+  },
+  {
+    title: "Autorización de Uso de Imágenes y Declaración de Responsabilidad Otoño 2026",
+    href: "/assets/autorizacion-uso-imagenes-responsabilidad-otono-2026.pdf",
+    fileName: "autorizacion-uso-imagenes-responsabilidad-otono-2026.pdf",
+    category: "Formatos",
+    context: "Otoño 2026",
+    icon: FilePenLine,
   },
   {
     title: "Reglamento Levitate Motion Primavera 2026",

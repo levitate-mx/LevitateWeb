@@ -16,7 +16,6 @@ import {
   ReceiptText,
   ShieldCheck,
   ShoppingCart,
-  Sparkles,
   Ticket,
   Trash2,
   UploadCloud,
@@ -232,7 +231,6 @@ const admissionRules = [
 const mediaDeliverables = [
   { amount: "10", icon: Camera, label: "Fotos de acción" },
   { amount: "1", icon: Video, label: "Video de presentación" },
-  { amount: "2", icon: Sparkles, label: "Fotos estudio" },
 ];
 
 const mediaFeatureSlides = [
