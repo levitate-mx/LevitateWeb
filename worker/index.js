@@ -1385,6 +1385,15 @@ async function handleRegistrationShopOrder(request, env) {
 
     const db = getDb(env);
     const body = await readJsonBody(request);
+
+    if (env.TICKET_SALES_PAUSED === "true" && hasRegistrationTicketItems(body.items)) {
+      throwHttpError(
+        "ticket_sales_paused",
+        "La venta de boletos está temporalmente pausada mientras actualizamos la logística del evento.",
+        503,
+      );
+    }
+
     const curp = normalizeCurp(requireString(body.curp, "curp"));
     const buyerContact = getRegistrationShopBuyerContact(body);
     const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
@@ -1405,6 +1414,13 @@ async function handleRegistrationShopOrder(request, env) {
   } catch (error) {
     return sendRegistrationError(error);
   }
+}
+
+function hasRegistrationTicketItems(items) {
+  return Array.isArray(items) && items.some((item) => {
+    const productId = optionalString(item?.productId ?? item?.id);
+    return registrationShopProducts.get(productId)?.itemType === "ticket";
+  });
 }
 
 async function handleRegistrationShopOrderLookup(request, env) {

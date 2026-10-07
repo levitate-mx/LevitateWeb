@@ -179,6 +179,8 @@ type ApiErrorResponse = {
 
 type ShopMode = "tickets" | "media";
 
+const ticketSalesPaused = true;
+
 const blockOptions: TicketOption[] = [
   { id: "bloque-1", label: "Bloque 1", detail: "14 noviembre · Baby + Petite" },
   { id: "bloque-2", label: "Bloque 2", detail: "14 noviembre · Junior + Teen" },
@@ -977,7 +979,45 @@ function useShopMode(initialMode?: ShopMode) {
 export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
   const shopMode = useShopMode(initialMode);
 
-  return shopMode === "media" ? <PhotoVideoShopPage /> : <TicketShopPage />;
+  if (shopMode === "media") {
+    return <PhotoVideoShopPage />;
+  }
+
+  return ticketSalesPaused ? <TicketSalesPausedPage /> : <TicketShopPage />;
+}
+
+function TicketSalesPausedPage() {
+  return (
+    <main className="ticket-shop-page ticket-shop-page--paused levitate-home-redesign">
+      <section className="ticket-shop-pause" id="boletos" aria-labelledby="ticket-shop-pause-title">
+        <LevitateHeader activeLabel="Tienda" useRootLinks variant="pill" />
+
+        <div className="ticket-shop-pause__content">
+          <p className="ticket-shop-pause__eyebrow">
+            <Info aria-hidden="true" size={18} />
+            Aviso de taquilla
+          </p>
+          <h1 id="ticket-shop-pause-title">
+            <span className="ticket-shop-pause__title-main">La compra de boletos está</span>
+            <strong>temporalmente en pausa.</strong>
+          </h1>
+          <p className="ticket-shop-pause__lead">
+            Estamos afinando algunos detalles de la logística del evento para brindarte la mejor experiencia posible.
+            Muy pronto compartiremos la información actualizada y la reapertura de la taquilla.
+          </p>
+          <div className="ticket-shop-pause__note" role="status">
+            <CalendarDays aria-hidden="true" size={22} />
+            <p>
+              Gracias por tu paciencia, tu comprensión y por acompañarnos en Levitate. Estaremos felices de recibirte
+              nuevamente muy pronto.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <LevitateFooter useRootLinks />
+    </main>
+  );
 }
 
 function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
