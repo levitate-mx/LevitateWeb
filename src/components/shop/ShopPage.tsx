@@ -179,7 +179,7 @@ type ApiErrorResponse = {
 
 type ShopMode = "tickets" | "media";
 
-const ticketSalesPaused = true;
+const ticketSalesPaused = false;
 
 const blockOptions: TicketOption[] = [
   { id: "bloque-1", label: "Bloque 1", detail: "14 noviembre · Baby + Petite" },

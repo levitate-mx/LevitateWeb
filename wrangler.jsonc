@@ -14,7 +14,7 @@
     "not_found_handling": "single-page-application"
   },
   "vars": {
-    "TICKET_SALES_PAUSED": "true"
+    "TICKET_SALES_PAUSED": "false"
   },
   "d1_databases": [
     {
