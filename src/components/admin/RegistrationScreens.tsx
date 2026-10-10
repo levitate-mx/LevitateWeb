@@ -482,6 +482,13 @@ type RegistrationAdminParticipantsPayload = {
   participants: RegistrationAdminParticipant[];
 };
 
+type TicketDashboardOrder = {
+  id: string;
+  reference: string;
+  status: RegistrationInscriptionOrderStatus;
+  updatedAt: string;
+};
+
 type TicketDashboardRow = {
   activeTickets: number;
   academyName: string;
@@ -492,6 +499,7 @@ type TicketDashboardRow = {
   latestReference: string;
   latestStatus: RegistrationInscriptionOrderStatus;
   orderCount: number;
+  orders: TicketDashboardOrder[];
   paidTickets: number;
   participantName: string;
   pendingTickets: number;
@@ -2912,6 +2920,8 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
 
     const normalizedCurp = order.curp.trim().toUpperCase();
     const rowKey = normalizedCurp || order.participantName.trim().toLowerCase() || order.id;
+    const reference = getRegistrationInscriptionPaymentReference(order);
+    const updatedAt = order.updatedAt || order.createdAt;
     const existingRow =
       rowMap.get(rowKey) ??
       ({
@@ -2921,20 +2931,22 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
         curp: normalizedCurp,
         generatedTickets: 0,
         latestOrderId: order.id,
-        latestReference: getRegistrationInscriptionPaymentReference(order),
+        latestReference: reference,
         latestStatus: order.status,
         orderCount: 0,
+        orders: [],
         paidTickets: 0,
         participantName: order.participantName,
         pendingTickets: 0,
         rejectedTickets: 0,
         requestedTickets: 0,
-        updatedAt: order.updatedAt || order.createdAt,
+        updatedAt,
         usedTickets: 0,
         venue: order.venue,
       } satisfies TicketDashboardRow);
 
     existingRow.orderCount += 1;
+    existingRow.orders.push({ id: order.id, reference, status: order.status, updatedAt });
     existingRow.requestedTickets += requestedTickets;
 
     if (order.status === "paid") {
@@ -2958,13 +2970,13 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
     }
 
     const currentDate = Date.parse(existingRow.updatedAt);
-    const orderDate = Date.parse(order.updatedAt || order.createdAt);
+    const orderDate = Date.parse(updatedAt);
 
     if (!Number.isFinite(currentDate) || (Number.isFinite(orderDate) && orderDate >= currentDate)) {
       existingRow.latestOrderId = order.id;
-      existingRow.latestReference = getRegistrationInscriptionPaymentReference(order);
+      existingRow.latestReference = reference;
       existingRow.latestStatus = order.status;
-      existingRow.updatedAt = order.updatedAt || order.createdAt;
+      existingRow.updatedAt = updatedAt;
     }
 
     rowMap.set(rowKey, existingRow);
@@ -2985,6 +2997,18 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
 
     return left.participantName.localeCompare(right.participantName, "es");
   });
+}
+
+function getTicketDashboardOrderMatch(row: TicketDashboardRow, query: string) {
+  if (!query) {
+    return null;
+  }
+
+  const exactMatch = row.orders.find(
+    (order) => order.reference.toLowerCase() === query || order.id.toLowerCase() === query,
+  );
+
+  return exactMatch ?? row.orders.find((order) => `${order.reference} ${order.id}`.toLowerCase().includes(query)) ?? null;
 }
 
 function getTicketDashboardTotals(rows: TicketDashboardRow[]) {
@@ -10453,9 +10477,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
     choreographerSort,
   ]);
   const ticketRows = useMemo(() => getTicketDashboardRows(orders), [orders]);
+  const normalizedTicketQuery = ticketQuery.trim().toLowerCase();
   const filteredTicketRows = useMemo(() => {
-    const normalizedQuery = ticketQuery.trim().toLowerCase();
-
     return ticketRows.filter((row) => {
       const matchesVenue = ticketVenueFilter === "all" || row.venue === ticketVenueFilter;
       const matchesStatus =
@@ -10466,12 +10489,21 @@ export function LevitateRegistrationAdminPaymentsRoute({
         (ticketStatusFilter === "rejected" && row.rejectedTickets > 0) ||
         (ticketStatusFilter === "used" && row.usedTickets > 0);
       const matchesQuery =
-        !normalizedQuery ||
-        [row.participantName, row.curp, row.academyName, row.latestReference, row.venue].join(" ").toLowerCase().includes(normalizedQuery);
+        !normalizedTicketQuery ||
+        [
+          row.participantName,
+          row.curp,
+          row.academyName,
+          row.venue,
+          ...row.orders.flatMap((order) => [order.reference, order.id]),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedTicketQuery);
 
       return matchesVenue && matchesStatus && matchesQuery;
     });
-  }, [ticketRows, ticketQuery, ticketVenueFilter, ticketStatusFilter]);
+  }, [ticketRows, normalizedTicketQuery, ticketVenueFilter, ticketStatusFilter]);
   const ticketsPagination = useAdminPagination(filteredTicketRows, JSON.stringify([ticketQuery, ticketVenueFilter, ticketStatusFilter]));
   const visibleTicketRows = ticketsPagination.visibleItems;
   const ticketTotals = useMemo(() => getTicketDashboardTotals(filteredTicketRows), [filteredTicketRows]);
@@ -11324,14 +11356,26 @@ export function LevitateRegistrationAdminPaymentsRoute({
                   </div>
 
                   {visibleTicketRows.map((row) => {
-                    const date = getAdminOrderDate({ createdAt: row.updatedAt, updatedAt: row.updatedAt } as RegistrationInscriptionOrder);
+                    const matchingOrder = getTicketDashboardOrderMatch(row, normalizedTicketQuery);
+                    const displayedOrder =
+                      matchingOrder ??
+                      ({
+                        id: row.latestOrderId,
+                        reference: row.latestReference,
+                        status: row.latestStatus,
+                        updatedAt: row.updatedAt,
+                      } satisfies TicketDashboardOrder);
+                    const date = getAdminOrderDate({
+                      createdAt: displayedOrder.updatedAt,
+                      updatedAt: displayedOrder.updatedAt,
+                    } as RegistrationInscriptionOrder);
                     const isBlockReady = isTicketBlockReady(row);
 
                     return (
                       <button
-                        className={`registration-admin-table__row${selectedOrder?.id === row.latestOrderId ? " is-selected" : ""}`}
+                        className={`registration-admin-table__row${selectedOrder?.id === displayedOrder.id ? " is-selected" : ""}`}
                         key={row.curp || row.latestOrderId}
-                        onClick={() => setSelectedOrderId(row.latestOrderId)}
+                        onClick={() => setSelectedOrderId(displayedOrder.id)}
                         role="row"
                         type="button"
                       >
@@ -11359,9 +11403,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
                         </span>
                         <span role="cell">{row.pendingTickets}</span>
                         <span role="cell">
-                          {row.latestReference}
+                          {displayedOrder.reference}
                           <small>
-                            {getAdminPaymentStatusLabel(row.latestStatus)} · {date.date}
+                            {getAdminPaymentStatusLabel(displayedOrder.status)} · {date.date}
                           </small>
                         </span>
                       </button>
