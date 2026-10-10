@@ -9,6 +9,8 @@ data class ScannerDevice(
 data class ScannerBlock(
     val id: String,
     val label: String,
+    val dayId: String? = null,
+    val date: String? = null,
 )
 
 data class TicketScanAttempt(
@@ -29,6 +31,7 @@ data class ScanDecision(
     val reason: String,
     val message: String,
     val ticket: TicketInfo?,
+    val attendance: AttendanceSnapshot? = null,
 )
 
 sealed interface SessionState {
@@ -50,8 +53,10 @@ data class ScannerUiState(
     val activationInProgress: Boolean = false,
     val activationError: String? = null,
     val selectedBlockId: String? = null,
-    val acceptedCount: Int = 0,
-    val rejectedCount: Int = 0,
+    val attendance: AttendanceState = AttendanceState(),
+    val historyAttendance: AttendanceState = AttendanceState(),
+    val historyEventId: String? = null,
+    val historyVisible: Boolean = false,
 ) {
     val availableBlocks: List<ScannerBlock>
         get() = (sessionState as? SessionState.SignedIn)?.device?.blocks.orEmpty()
@@ -68,6 +73,18 @@ data class ScannerUiState(
         if (scanState !is ScanState.Ready) return null
         val block = selectedBlock ?: return null
         return TicketScanAttempt(payload, block.id)
+    }
+
+    fun receiveScanAttendance(snapshot: AttendanceSnapshot, checkedAt: Long): ScannerUiState {
+        val currentEventId = attendance.snapshot?.eventId
+        return copy(
+            attendance = if (currentEventId == null || currentEventId == snapshot.eventId) {
+                attendance.receive(snapshot, checkedAt, currentEventId)
+            } else attendance,
+            historyAttendance = if (historyVisible && historyEventId == snapshot.eventId) {
+                historyAttendance.receive(snapshot, checkedAt, historyEventId)
+            } else historyAttendance,
+        )
     }
 }
 

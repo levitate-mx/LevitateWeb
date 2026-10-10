@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import worker from '../worker/index.js';
 import { prepareRegistrationSchema } from '../scripts/lib/registration-schema.mjs';
+import ticketEvent from '../shared/ticket-event.json' with { type: 'json' };
 
 // A real SQLite database catches missing columns, constraints, joins, and writes;
 // this adapter only supplies D1's async result shape. No network/database service
 // is contacted by these tests.
 class LocalD1 {
-  constructor() {
-    this.sqlite = new DatabaseSync(':memory:');
+  constructor(databasePath = ':memory:') {
+    this.sqlite = new DatabaseSync(databasePath);
+    this.batchQueue = Promise.resolve();
     this.runtimeQueries = [];
     this.allowAcademyVenueProbe = false;
     this.allowLegacySchemaPreparation = false;
@@ -19,6 +23,10 @@ class LocalD1 {
 
   prepare(sql) {
     this.runtimeQueries.push(sql);
+    if (this.failQuery?.test(sql)) {
+      this.failQuery = null;
+      throw new Error('Injected query failure');
+    }
     if (!this.allowLegacySchemaPreparation) {
       assert.doesNotMatch(sql, /^\s*(?:CREATE|ALTER|DROP)\b/i, 'request attempted schema preparation');
     }
@@ -35,30 +43,42 @@ class LocalD1 {
         return row ? (column ? row[column] : { ...row }) : null;
       },
       async all() { return { success: true, results: statement.all(...values).map(row => ({ ...row })) }; },
-      async run() {
+      runSync() {
         const result = statement.run(...values);
         return { success: true, results: [], meta: { changes: result.changes, last_row_id: result.lastInsertRowid } };
       },
+      async run() { return execute.runSync(); },
     };
     return execute;
   }
 
-  async batch(statements) {
-    this.sqlite.exec('BEGIN');
-    try {
-      const results = [];
-      for (const statement of statements) results.push(await statement.run());
-      this.sqlite.exec('COMMIT');
-      return results;
-    } catch (error) {
-      this.sqlite.exec('ROLLBACK');
-      throw error;
-    }
+  batch(statements) {
+    const result = this.batchQueue.then(async () => {
+      this.beforeBatch?.();
+      this.sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const [index, statement] of statements.entries()) {
+          if (this.failBatchAt === index) {
+            this.failBatchAt = null;
+            throw new Error('Injected atomic batch failure');
+          }
+          results.push(statement.runSync());
+        }
+        this.sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        this.sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    });
+    this.batchQueue = result.catch(() => {});
+    return result;
   }
 }
 
-async function fixture(t, { includeStudentSchema = false, workerUnderTest = worker } = {}) {
-  const db = new LocalD1();
+async function fixture(t, { includeStudentSchema = false, workerUnderTest = worker, databasePath } = {}) {
+  const db = new LocalD1(databasePath);
   t.after(() => db.sqlite.close());
   const schemaPath = !includeStudentSchema && process.env.REGISTRATION_TEST_SCHEMA_PATH
     ? process.env.REGISTRATION_TEST_SCHEMA_PATH
@@ -416,7 +436,7 @@ test('inscription and shop payments keep proof, approval, ticket creation and to
   await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie,
     body: { id: shop.id, orderType: 'shop', status: 'paid', paidAmount: shop.amount } });
   assert.equal(f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_event_tickets WHERE source_order_id = ?').get(shop.id).total, 2);
-  const scanned = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie, body: { ticketCode: tickets[0].ticket_code } });
+  const scanned = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie, body: { ticketCode: tickets[0].ticket_code, blockId: 'bloque-1' } });
   assert.equal(scanned.json.admitted, true);
   const rescanned = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie, body: { ticketCode: tickets[0].ticket_code } });
   assert.equal(rescanned.json.reason, 'already_used');
@@ -428,7 +448,7 @@ test('ticket scanner block catalog is available only to activated devices and ac
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'scanner-catalog-admin', { role: 'admin' });
   const scanner = await activateTicketScanner(f, admin);
-  const expectedBlocks = Array.from({ length: 7 }, (_, index) => ({ id: `bloque-${index + 1}`, label: `Bloque ${index + 1}` }));
+  const expectedBlocks = ticketEvent.blocks;
   assert.deepEqual(scanner.blocks, expectedBlocks);
   const { json: current } = await f.request('/scanner/me', { headers: scanner.headers });
   assert.deepEqual(current.blocks, expectedBlocks);
@@ -436,6 +456,260 @@ test('ticket scanner block catalog is available only to activated devices and ac
   await f.request('/scanner/me', { status: 401 });
   await f.request('/scanner/ticket/scan', { method: 'POST', body: { qrPayload: 'LEVITATE:TICKET:LV-AAAA-BBBB', blockId: 'bloque-1' }, status: 401 });
   await f.request('/admin/ticket/scan', { method: 'POST', body: { qrPayload: 'LEVITATE:TICKET:LV-AAAA-BBBB', blockId: 'bloque-1' }, status: 401 });
+});
+
+test('attendance summaries authenticate before reads and return seven zero counters without writes', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-admin', { role: 'admin' });
+  const academy = await seedAcademy(f, 'attendance-academy');
+  const scanner = await activateTicketScanner(f, admin);
+  const start = f.db.runtimeQueries.length;
+  await f.request('/scanner/attendance', { status: 401 });
+  await f.request('/admin/attendance', { status: 401 });
+  await f.request('/admin/attendance', { cookie: academy.cookie, status: 403 });
+  assert.ok(f.db.runtimeQueries.slice(start).every(sql => !sql.includes('registration_attendance')));
+  const readsStart = f.db.runtimeQueries.length;
+  for (const [path, options] of [['/scanner/attendance', { headers: scanner.headers }], ['/admin/attendance', { cookie: admin.cookie }]]) {
+    const { json: { attendance } } = await f.request(path, options);
+    assert.equal(attendance.eventId, 'edomex-2026-otono');
+    assert.equal(attendance.uniqueAdmissions, 0);
+    assert.equal(attendance.blocks.length, 7);
+    assert.ok(attendance.blocks.every(block => block.total === 0 && block.single === 0 && block.day === 0 && block.full === 0));
+    assert.match(attendance.updatedAt, /^\d{4}-\d\d-\d\dT.*Z$/);
+    assert.deepEqual(attendance.blocks.slice(0, 4).map(block => block.dayId), Array(4).fill('sabado-14'));
+    assert.deepEqual(attendance.blocks.slice(4).map(block => block.dayId), Array(3).fill('domingo-15'));
+  }
+  assert.ok(f.db.runtimeQueries.slice(readsStart).every(sql => /^\s*SELECT/.test(sql)), 'polling must not write last_seen_at or counters');
+  await f.request('/scanner/attendance?eventId=missing-event', { headers: scanner.headers, status: 404 });
+  f.db.sqlite.prepare("UPDATE registration_scanner_devices SET status = 'revoked' WHERE id = ?").run(scanner.device.id);
+  await f.request('/scanner/attendance', { headers: scanner.headers, status: 401 });
+});
+
+test('Day purchases require a canonical day and discard forged labels and event IDs', async t => {
+  const f = await fixture(t);
+  const buyer = { curp: curpA, buyerName: 'Titular', buyerEmail: 'day@example.test', ...phone };
+  for (const productId of ['day', 'ticket-day-pass']) {
+    for (const [optionId, code] of [[undefined, 'shop_ticket_day_required'], ['lunes-16', 'shop_ticket_day_invalid']]) {
+      const { json } = await f.request('/shop/order', { method: 'POST', status: 400, body: { ...buyer, items: [{ productId, optionId }] } });
+      assert.equal(json.error.code, code);
+    }
+  }
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201,
+    body: { ...buyer, items: [{ productId: 'day', optionId: 'domingo-15', optionLabel: 'Todos los días', eventId: 'forged-event' }] } });
+  assert.equal(order.lineItems[0].optionLabel, ticketEvent.days.find(day => day.id === 'domingo-15').label);
+  assert.equal(order.lineItems[0].eventId, ticketEvent.eventId);
+});
+
+test('first admissions credit Single one block, Day its purchased day and Full all seven exactly once', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-types', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin, 'Puerta Norte');
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-1', quantity: 1 },
+    { productId: 'day', optionId: 'sabado-14', quantity: 1 },
+    { productId: 'day', optionId: 'domingo-15', quantity: 1 },
+    { productId: 'full', quantity: 1 },
+  ]);
+  const blocks = ['bloque-1', 'bloque-3', 'bloque-6', 'bloque-7'];
+  let latest;
+  for (const [index, ticket] of order.tickets.entries()) {
+    if (index === 1) {
+      const { json: wrong } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+        body: { qrPayload: ticket.qrPayload, blockId: 'bloque-5' } });
+      assert.equal(wrong.reason, 'wrong_day');
+      assert.equal(wrong.attendance.uniqueAdmissions, 1);
+    }
+    const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, blockId: blocks[index], eventId: ticketEvent.eventId } });
+    assert.equal(json.admitted, true);
+    assert.equal(json.attendance.uniqueAdmissions, index + 1);
+    latest = json.attendance;
+    const { json: duplicate } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+      body: { qrPayload: ticket.qrPayload, blockId: blocks[index] } });
+    assert.equal(duplicate.reason, 'already_used');
+    assert.equal(duplicate.attendance.uniqueAdmissions, index + 1);
+  }
+  assert.deepEqual(latest.blocks.map(({ total, single, day, full }) => [total, single, day, full]), [
+    [3, 1, 1, 1], [2, 0, 1, 1], [2, 0, 1, 1], [2, 0, 1, 1], [2, 0, 1, 1], [2, 0, 1, 1], [2, 0, 1, 1],
+  ]);
+  const admissions = f.db.sqlite.prepare('SELECT * FROM registration_ticket_admissions ORDER BY rowid').all();
+  assert.equal(admissions.length, 4);
+  assert.deepEqual(admissions.map(row => JSON.parse(row.coverage_json).length), [1, 4, 3, 7]);
+  assert.deepEqual(admissions.map(row => row.day_id), ['sabado-14', 'sabado-14', 'domingo-15', null]);
+  assert.ok(admissions.every(row => row.device_id === scanner.device.id && row.device_name === 'Puerta Norte' && row.admitted_at));
+  assert.ok(!JSON.stringify(admissions).includes('Titular de boletos'));
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_attendance_blocks').get().total, 7);
+});
+
+test('invalid block, event and legacy Day metadata never consume tickets or create attendance', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-invalid', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'full', quantity: 1 }, { productId: 'day', optionId: 'sabado-14', quantity: 1 },
+  ]);
+  const [full, day] = order.tickets;
+  for (const [body, reason] of [
+    [{ qrPayload: full.qrPayload }, 'block_required'],
+    [{ qrPayload: full.qrPayload, blockId: 'bloque-99' }, 'invalid_block'],
+    [{ qrPayload: full.qrPayload, blockId: 'bloque-1', eventId: 'another-event' }, 'wrong_event'],
+  ]) {
+    const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie, body });
+    assert.equal(json.reason, reason);
+    assert.equal(json.attendance.uniqueAdmissions, 0);
+  }
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET event_id = 'other-event' WHERE id = ?").run(full.id);
+  const { json: wrongEvent } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: full.qrPayload, blockId: 'bloque-1' } });
+  assert.equal(wrongEvent.reason, 'wrong_event');
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET event_id = ? WHERE id = ?").run(ticketEvent.eventId, full.id);
+  const legacyLines = order.lineItems.map(line => ({ ...line, optionId: undefined }));
+  f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?').run(JSON.stringify(legacyLines), order.id);
+  const { json: legacyDay } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: day.qrPayload, blockId: 'bloque-1' } });
+  assert.equal(legacyDay.reason, 'ticket_day_unknown');
+  assert.match(legacyDay.message, /día válido/);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_event_tickets WHERE status = \'active\'').get().total, 2);
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET status = 'used' WHERE id = ?").run(day.id);
+  const { json: legacyUsed } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: day.qrPayload, blockId: 'bloque-1' } });
+  assert.equal(legacyUsed.reason, 'already_used');
+  assert.equal(legacyUsed.attendance.uniqueAdmissions, 0);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_ticket_admissions').get().total, 0);
+});
+
+test('atomic admission rolls back all counters and ticket usage on failure, then a retry succeeds', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-rollback', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
+  const ticket = order.tickets[0];
+  f.db.failBatchAt = 4; // Fail after snapshot and totals, immediately before marking used.
+  await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie, status: 500,
+    body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(ticket.id).status, 'active');
+  for (const table of ['registration_ticket_admissions', 'registration_attendance_blocks', 'registration_attendance_events']) {
+    assert.equal(f.db.sqlite.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get().total, 0);
+  }
+  const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
+  assert.equal(json.admitted, true);
+  assert.equal(json.attendance.uniqueAdmissions, 1);
+  assert.ok(json.attendance.blocks.every(block => block.total === 1));
+});
+
+test('accepted admissions remain accepted if the subsequent summary or device telemetry fails', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-accessory-failure', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 2 }]);
+  for (const [index, failure] of [/FROM registration_attendance_events AS event/, /SET last_scan_at/].entries()) {
+    f.db.failQuery = failure;
+    const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: order.tickets[index].qrPayload, blockId: 'bloque-1' } });
+    assert.equal(json.admitted, true);
+    assert.equal(json.ticket.status, 'used');
+    if (index === 0) {
+      assert.equal(json.attendance, null);
+      assert.equal(json.attendanceUnavailable, true);
+    }
+  }
+  const { json } = await f.request('/scanner/attendance', { headers: scanner.headers });
+  assert.equal(json.attendance.uniqueAdmissions, 2);
+});
+
+test('successful admission returns its committed timestamp without reading the ticket again', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-no-reread', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
+  f.db.beforeBatch = () => {
+    f.db.beforeBatch = null;
+    f.db.failQuery = /FROM registration_event_tickets/;
+  };
+  const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-1' } });
+  assert.equal(json.admitted, true);
+  assert.ok(f.db.failQuery, 'no ticket query should run after the atomic admission succeeds');
+  const stored = f.db.sqlite.prepare('SELECT used_at, used_by, updated_at FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id);
+  assert.equal(json.ticket.usedAt, stored.used_at);
+  assert.equal(json.ticket.updatedAt, stored.updated_at);
+  assert.equal(json.ticket.usedBy, stored.used_by);
+  assert.equal(f.db.sqlite.prepare('SELECT admitted_at FROM registration_ticket_admissions').get().admitted_at, stored.used_at);
+});
+
+test('ticket event remains authoritative when a participant buys from another venue or changes dances', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-event-owner', { role: 'admin' });
+  const academy = await seedAcademy(f, 'attendance-other-venue');
+  const { dance, participant, choreographer } = await createDance(f, academy);
+  // Venue follows the latest dance; make the first one unambiguously older
+  // even when both HTTP requests finish within SQLite's one-second precision.
+  f.db.sqlite.prepare("UPDATE registration_dances SET venue = 'cdmx', created_at = datetime('now', '-1 day') WHERE id = ?").run(dance.id);
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
+  assert.equal(order.venue, 'cdmx');
+  await f.request('/dances', { method: 'POST', cookie: academy.cookie, status: 201, body: {
+    title: 'Nueva sede', genre: 'motion', subgenre: 'ballet', category: 'solo', venue: 'puebla',
+    choreographerIds: [choreographer.id], participantIds: [participant.id],
+  } });
+  assert.equal(f.db.sqlite.prepare('SELECT venue FROM registration_shop_orders WHERE id = ?').get(order.id).venue, 'puebla');
+  const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-1' } });
+  assert.equal(json.admitted, true);
+  assert.equal(json.attendance.eventId, 'edomex-2026-otono');
+});
+
+test('an order edit between entitlement read and atomic admission requires a new scan', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'attendance-race-edit', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-1', quantity: 1 }]);
+  f.db.beforeBatch = () => {
+    f.db.beforeBatch = null;
+    const edited = order.lineItems.map(line => ({ ...line, optionId: 'bloque-2' }));
+    f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?').run(JSON.stringify(edited), order.id);
+  };
+  const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-1' } });
+  assert.equal(json.reason, 'ticket_changed');
+  assert.equal(json.attendance.uniqueAdmissions, 0);
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id).status, 'active');
+});
+
+test('attendance history survives corrected order lines, order deletion and reopening the database', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'levitate-attendance-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const databasePath = join(directory, 'history.sqlite');
+  const f = await fixture(t, { databasePath });
+  const admin = await seedAcademy(f, 'attendance-history', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin, 'Puerta histórica');
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'day', optionId: 'domingo-15', quantity: 1 }]);
+  const ticket = order.tickets[0];
+  const { json: first } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+    body: { qrPayload: ticket.qrPayload, blockId: 'bloque-6' } });
+  const ledgerBefore = f.db.sqlite.prepare('SELECT * FROM registration_ticket_admissions').all();
+  f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?')
+    .run(JSON.stringify([{ productId: 'full', itemType: 'ticket', quantity: 1 }]), order.id);
+  const { json: duplicate } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+    body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
+  assert.equal(duplicate.reason, 'already_used');
+  assert.match(duplicate.message, /Day pass/);
+  assert.deepEqual(duplicate.attendance.blocks, first.attendance.blocks);
+  await f.request('/admin/delete', { method: 'DELETE', cookie: admin.cookie,
+    body: { entityType: 'order', orderType: 'shop', id: order.id } });
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_event_tickets WHERE id = ?').get(ticket.id).total, 0);
+  f.db.sqlite.close();
+  f.db.sqlite = new DatabaseSync(databasePath);
+  f.db.sqlite.exec('PRAGMA foreign_keys = ON');
+  const { json: { attendance } } = await f.request('/admin/attendance', { cookie: admin.cookie });
+  assert.equal(attendance.uniqueAdmissions, 1);
+  assert.deepEqual(attendance.blocks, first.attendance.blocks);
+  assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_ticket_admissions').all(), ledgerBefore);
+  const oldMetadata = { eventId: 'historic-event', eventName: 'Evento histórico', venue: 'puebla',
+    blocks: [{ id: 'old-block', label: 'Bloque histórico', dayId: 'old-day', date: '2025-01-01' }] };
+  f.db.sqlite.prepare('INSERT INTO registration_attendance_events(id,name,venue,metadata_json,unique_admissions) VALUES (?,?,?,?,1)')
+    .run(oldMetadata.eventId, oldMetadata.eventName, oldMetadata.venue, JSON.stringify(oldMetadata));
+  f.db.sqlite.exec("INSERT INTO registration_attendance_blocks(event_id,block_id,total,full_count) VALUES ('historic-event','old-block',1,1)");
+  const { json: historical } = await f.request('/admin/attendance?eventId=historic-event', { cookie: admin.cookie });
+  assert.equal(historical.attendance.eventName, 'Evento histórico');
+  assert.deepEqual(historical.attendance.blocks, [{ ...oldMetadata.blocks[0], total: 1, single: 0, day: 0, full: 1 }]);
+  assert.equal(historical.attendance.events.length, 2);
 });
 
 test('ticket cart requires a canonical block and replaces client supplied block labels', async t => {
@@ -495,16 +769,16 @@ test('ticket scanner and admin reject missing or wrong blocks without consuming 
   }
 });
 
-test('ticket scanner exchanges Day and Full passes once for a wristband regardless of selected block', async t => {
+test('ticket scanner exchanges Day and Full passes once at a valid purchased-day block', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'scanner-wristband-admin', { role: 'admin' });
   const scanner = await activateTicketScanner(f, admin);
   const order = await createPaidTicketOrder(f, admin,
-    ['day', 'ticket-day-pass', 'full', 'ticket-full-pass'].map(productId => ({ productId, quantity: 1 })));
+    ['day', 'ticket-day-pass', 'full', 'ticket-full-pass'].map(productId => ({ productId, quantity: 1, optionId: productId.includes('day') ? 'sabado-14' : undefined })));
   assert.equal(order.tickets.length, 4);
   for (const [index, ticket] of order.tickets.entries()) {
     const { json: accepted } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
-      body: { qrPayload: ticket.qrPayload, ...(index % 2 === 0 ? { blockId: 'bloque-1' } : {}) } });
+      body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
     assert.equal(accepted.admitted, true);
     assert.match(accepted.message, /brazalete/i);
     const { json: duplicate } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
@@ -522,7 +796,7 @@ test('ticket scanner maps existing QR numbers to original cart quantities instea
   const admin = await seedAcademy(f, 'scanner-legacy-admin', { role: 'admin' });
   const order = await createPaidTicketOrder(f, admin, [
     { productId: 'block', optionId: 'bloque-1', quantity: 2 },
-    { productId: 'ticket-day-pass', quantity: 1 },
+    { productId: 'ticket-day-pass', quantity: 1, optionId: 'sabado-14' },
     { productId: 'ticket-block', optionId: 'bloque-5', quantity: 2 },
   ]);
   // Simulate already issued mixed orders. Non-ticket products do not take a
@@ -541,7 +815,7 @@ test('ticket scanner maps existing QR numbers to original cart quantities instea
       assert.equal(wrong.admitted, false);
     }
     const { json: accepted } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
-      body: { qrPayload: ticket.qrPayload, ...(expectedBlocks[index] ? { blockId: expectedBlocks[index] } : {}) } });
+      body: { qrPayload: ticket.qrPayload, blockId: expectedBlocks[index] || 'bloque-1' } });
     assert.equal(accepted.admitted, true);
     assert.equal(accepted.ticket.ticketCode, ticket.ticketCode);
     assert.equal(accepted.ticket.qrPayload, ticket.qrPayload, 'previously distributed QR payloads remain usable without reissuance');
@@ -600,6 +874,10 @@ test('ticket scanner allows exactly one admission when two devices scan the same
   assert.match(duplicate.message, /Boleto por bloque/);
   assert.match(duplicate.message, /Bloque 4/);
   assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id).status, 'used');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_ticket_admissions').get().total, 1);
+  const { json: { attendance } } = await f.request('/scanner/attendance', { headers: secondScanner.headers });
+  assert.equal(attendance.uniqueAdmissions, 1);
+  assert.deepEqual(attendance.blocks.map(block => block.total), [0, 0, 0, 1, 0, 0, 0]);
 });
 
 test('ticket scanner still rejects used QR codes when original ticket details or source order are missing', async t => {
@@ -618,8 +896,8 @@ test('ticket scanner still rejects used QR codes when original ticket details or
     const { json } = await scan();
     assert.equal(json.admitted, false);
     assert.equal(json.reason, 'already_used');
-    assert.match(json.message, /QR ya fue utilizado/);
-    assert.doesNotMatch(json.message, /Full pass|Day pass|Boleto por bloque/, 'missing authoritative data must not be guessed from the printed ticket label');
+    assert.match(json.message, /Full pass ya utilizado/);
+    assert.doesNotMatch(json.message, /Day pass|Boleto por bloque/, 'the original admission snapshot remains authoritative after order changes');
     assert.equal(json.ticket.status, 'used');
   }
 });
@@ -631,7 +909,7 @@ test('ticket shop orders can be created before participant registration and link
 
   const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201,
     body: { curp: curpB, buyerName: 'Compradora anticipada', buyerEmail: 'anticipada@example.test', ...phone,
-      items: [{ productId: 'ticket-day-pass', quantity: 2 }] } });
+      items: [{ productId: 'ticket-day-pass', quantity: 2, optionId: 'domingo-15' }] } });
 
   assert.equal(order.amount, 900);
   assert.equal(order.academyId, null);

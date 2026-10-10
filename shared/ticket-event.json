@@ -1,0 +1,30 @@
+{
+  "eventId": "edomex-2026-otono",
+  "eventName": "Estado de México · Otoño 2026",
+  "venue": "edomex",
+  "days": [
+    {
+      "id": "sabado-14",
+      "label": "Sábado 14 de noviembre",
+      "date": "2026-11-14",
+      "detail": "Acceso a bloques 1, 2, 3 y 4",
+      "blockIds": ["bloque-1", "bloque-2", "bloque-3", "bloque-4"]
+    },
+    {
+      "id": "domingo-15",
+      "label": "Domingo 15 de noviembre",
+      "date": "2026-11-15",
+      "detail": "Acceso a bloques 5, 6 y 7",
+      "blockIds": ["bloque-5", "bloque-6", "bloque-7"]
+    }
+  ],
+  "blocks": [
+    { "id": "bloque-1", "label": "Bloque 1", "dayId": "sabado-14", "date": "2026-11-14", "detail": "14 noviembre · Baby + Petite" },
+    { "id": "bloque-2", "label": "Bloque 2", "dayId": "sabado-14", "date": "2026-11-14", "detail": "14 noviembre · Junior + Teen" },
+    { "id": "bloque-3", "label": "Bloque 3", "dayId": "sabado-14", "date": "2026-11-14", "detail": "14 noviembre · Senior + Legacy + Relevé" },
+    { "id": "bloque-4", "label": "Bloque 4", "dayId": "sabado-14", "date": "2026-11-14", "detail": "14 noviembre · Baby + Petite" },
+    { "id": "bloque-5", "label": "Bloque 5", "dayId": "domingo-15", "date": "2026-11-15", "detail": "15 noviembre · Junior" },
+    { "id": "bloque-6", "label": "Bloque 6", "dayId": "domingo-15", "date": "2026-11-15", "detail": "15 noviembre · Teen + Legacy" },
+    { "id": "bloque-7", "label": "Bloque 7", "dayId": "domingo-15", "date": "2026-11-15", "detail": "15 noviembre · Seniors + Relevé" }
+  ]
+}

@@ -103,6 +103,11 @@ fun LevitateScannerApp(viewModel: ScannerViewModel) {
             onRetry = viewModel::retryLastScan,
             onContinue = viewModel::continueScanning,
             onSelectBlock = viewModel::selectBlock,
+            onRefreshAttendance = viewModel::refreshAttendance,
+            onOpenHistory = viewModel::openHistory,
+            onCloseHistory = viewModel::closeHistory,
+            onSelectHistoryEvent = viewModel::selectHistoryEvent,
+            onRefreshHistory = viewModel::refreshHistory,
         )
     }
 }
@@ -185,13 +190,18 @@ private fun ScannerScreen(
     onRetry: () -> Unit,
     onContinue: () -> Unit,
     onSelectBlock: (String) -> Unit,
+    onRefreshAttendance: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onCloseHistory: () -> Unit,
+    onSelectHistoryEvent: (String) -> Unit,
+    onRefreshHistory: () -> Unit,
 ) {
     var torchEnabled by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
     var showBlockSelection by remember { mutableStateOf(false) }
     val selectedBlock = state.selectedBlock
     val isReady = state.scanState is ScanState.Ready
-    val scanEnabled = isReady && selectedBlock != null && !showBlockSelection && !showManualEntry
+    val scanEnabled = isReady && selectedBlock != null && !showBlockSelection && !showManualEntry && !state.historyVisible
 
     Box(
         modifier = Modifier
@@ -211,39 +221,7 @@ private fun ScannerScreen(
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.16f)),
         )
-        if (selectedBlock != null) {
-            ScanFrame(modifier = Modifier.fillMaxSize())
-        } else {
-            Column(
-                modifier = Modifier.align(Alignment.Center).padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
-                Text(
-                    "SELECCIONA EL BLOQUE ACTUAL",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    if (device.blocks.isEmpty()) "No hay bloques disponibles. Vuelve a abrir la app cuando administración haya habilitado el catálogo."
-                    else "Los boletos por bloque se validan contra esta selección. Los pases Día y Full se canjean una sola vez por pulsera.",
-                    color = Color(0xFFBDBDBD),
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                )
-                Button(onClick = { showBlockSelection = true }, enabled = device.blocks.isNotEmpty()) {
-                    Text("SELECCIONAR BLOQUE")
-                }
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth(),
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             ScannerHeader(device = device)
             if (selectedBlock != null) {
                 Row(
@@ -258,20 +236,49 @@ private fun ScannerScreen(
                         Text("CAMBIAR", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
+                AttendancePanel(
+                    state = state.attendance,
+                    blockId = selectedBlock.id,
+                    canOpenHistory = isReady,
+                    onRefresh = onRefreshAttendance,
+                    onHistory = onOpenHistory,
+                )
+            } else {
+                TextButton(onClick = onOpenHistory, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text("VER BLOQUES / HISTORIAL", color = Color.White)
+                }
             }
-        }
 
-        ScannerControls(
-            acceptedCount = state.acceptedCount,
-            rejectedCount = state.rejectedCount,
-            torchEnabled = torchEnabled,
-            onToggleTorch = { torchEnabled = !torchEnabled },
-            onManualEntry = { showManualEntry = true },
-            scanEnabled = scanEnabled,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-        )
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (selectedBlock != null) {
+                    ScanFrame(modifier = Modifier.fillMaxSize())
+                } else {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()).padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
+                        Text("SELECCIONA EL BLOQUE ACTUAL", color = Color.White, fontSize = 24.sp,
+                            fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+                        Text(
+                            if (device.blocks.isEmpty()) "No hay bloques disponibles. Vuelve a abrir la app cuando administración haya habilitado el catálogo."
+                            else "Los boletos por bloque se validan contra esta selección. Los pases Día y Full se canjean una sola vez por pulsera.",
+                            color = Color(0xFFBDBDBD), fontSize = 16.sp, textAlign = TextAlign.Center,
+                        )
+                        Button(onClick = { showBlockSelection = true }, enabled = device.blocks.isNotEmpty()) {
+                            Text("SELECCIONAR BLOQUE")
+                        }
+                    }
+                }
+            }
+            ScannerControls(
+                torchEnabled = torchEnabled,
+                onToggleTorch = { torchEnabled = !torchEnabled },
+                onManualEntry = { showManualEntry = true },
+                scanEnabled = scanEnabled,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         when (val scanState = state.scanState) {
             is ScanState.Checking -> CheckingOverlay()
@@ -288,6 +295,17 @@ private fun ScannerScreen(
 
             ScanState.Ready -> Unit
         }
+    }
+
+    if (state.historyVisible) {
+        AttendanceHistoryDialog(
+            state = state.historyAttendance,
+            selectedEventId = state.historyEventId,
+            availableEvents = state.attendance.snapshot?.events.orEmpty(),
+            onSelectEvent = onSelectHistoryEvent,
+            onRefresh = onRefreshHistory,
+            onDismiss = onCloseHistory,
+        )
     }
 
     if (showManualEntry) {
@@ -375,10 +393,10 @@ private fun ScannerHeader(
 @Composable
 private fun ScanFrame(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
-        val frameWidth = size.width * 0.72f
+        val frameWidth = minOf(size.width * 0.72f, size.height * 0.78f)
         val frameHeight = frameWidth
         val left = (size.width - frameWidth) / 2f
-        val top = (size.height - frameHeight) / 2f - size.height * 0.04f
+        val top = (size.height - frameHeight) / 2f
         val right = left + frameWidth
         val bottom = top + frameHeight
         val corner = frameWidth * 0.18f
@@ -407,8 +425,6 @@ private fun ScanFrame(modifier: Modifier = Modifier) {
 
 @Composable
 private fun ScannerControls(
-    acceptedCount: Int,
-    rejectedCount: Int,
     torchEnabled: Boolean,
     onToggleTorch: () -> Unit,
     onManualEntry: () -> Unit,
@@ -431,14 +447,6 @@ private fun ScannerControls(
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            SessionCounter("ADMITIDOS", acceptedCount, AccessGreen, Modifier.weight(1f))
-            SessionCounter("RECHAZADOS", rejectedCount, RejectRed, Modifier.weight(1f))
-        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -471,25 +479,6 @@ private fun ScannerControls(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SessionCounter(
-    label: String,
-    count: Int,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .border(1.dp, color.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, color = Color(0xFFBDBDBD), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        Text(count.toString(), color = color, fontSize = 19.sp, fontWeight = FontWeight.Bold)
     }
 }
 

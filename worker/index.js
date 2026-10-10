@@ -1,4 +1,5 @@
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
+import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 
 const passportSessionCookieName = "levitate_passport_session";
 const registrationSessionCookieName = "levitate_registration_session";
@@ -190,10 +191,7 @@ const registrationShopDiscountCode = "COLIBRI26";
 const registrationShopDiscountRate = 0.1;
 const registrationMediaGroupBaseParticipantCount = 4;
 const registrationMediaGroupExtraParticipantPrice = 300;
-const registrationTicketBlocks = Array.from({ length: 7 }, (_, index) => ({
-  id: `bloque-${index + 1}`,
-  label: `Bloque ${index + 1}`,
-}));
+const registrationTicketBlocks = ticketEvent.blocks;
 const registrationShopProducts = new Map([
   [
     "ticket-block",
@@ -525,6 +523,14 @@ export default {
 
     if (url.pathname === "/api/registration/admin/ticket/scan") {
       return handleRegistrationAdminTicketScan(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/attendance") {
+      return handleRegistrationAttendance(request, env, "admin");
+    }
+
+    if (url.pathname === "/api/registration/scanner/attendance") {
+      return handleRegistrationAttendance(request, env, "scanner");
     }
 
     if (url.pathname === "/api/registration/scanner/activate") {
@@ -2091,15 +2097,39 @@ async function handleRegistrationAdminTicketScan(request, env) {
     const body = await readJsonBody(request);
     const ticketCode = parseRegistrationTicketScanValue(body.qrPayload ?? body.ticketCode ?? body.code);
 
-    return sendJson(
-      await scanRegistrationEventTicket(db, {
-        blockId: body.blockId,
-        ticketCode,
-        usedBy: admin.session.user.email || admin.session.user.id,
-      }),
-    );
+    const result = await scanRegistrationEventTicket(db, {
+      blockId: body.blockId,
+      eventId: body.eventId,
+      ticketCode,
+      actorId: admin.session.user.id,
+      usedBy: "Administración",
+    });
+    return sendJson(await attachRegistrationTicketAttendance(db, result));
   } catch (error) {
     return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAttendance(request, env, audience) {
+  try {
+    assertMethod(request, ["GET"]);
+    const db = getDb(env);
+    if (audience === "scanner") await requireRegistrationScannerDevice(request, db, { touchLastSeen: false });
+    else await requireRegistrationAdmin(request, env, db, { touchLastSeen: false });
+    const eventId = optionalString(new URL(request.url).searchParams.get("eventId")) || ticketEvent.eventId;
+    return sendJson({ attendance: await getTicketAttendance(db, eventId) });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function attachRegistrationTicketAttendance(db, result) {
+  try {
+    return { ...result, attendance: await getTicketAttendance(db) };
+  } catch {
+    // A committed admission remains accepted even if refreshing the optional
+    // summary fails; the scanner can refresh it separately without retrying QR.
+    return { ...result, attendance: null, attendanceUnavailable: true };
   }
 }
 
@@ -2227,28 +2257,29 @@ async function handleRegistrationScannerTicketScan(request, env) {
     const ticketCode = parseRegistrationTicketScanValue(body.qrPayload ?? body.ticketCode ?? body.code);
     const result = await scanRegistrationEventTicket(db, {
       blockId: body.blockId,
+      eventId: body.eventId,
       ticketCode,
+      device,
       usedBy: `Scanner: ${device.name}`,
     });
 
-    await db
-      .prepare(
-        `
-          UPDATE registration_scanner_devices
-          SET last_scan_at = datetime('now'), updated_at = datetime('now')
-          WHERE id = ?
-        `,
-      )
-      .bind(device.id)
-      .run();
+    try {
+      await db.prepare(`
+        UPDATE registration_scanner_devices
+        SET last_scan_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(device.id).run();
+    } catch {
+      // Device telemetry must not turn an already committed admission into 500.
+    }
 
-    return sendJson(result);
+    return sendJson(await attachRegistrationTicketAttendance(db, result));
   } catch (error) {
     return sendRegistrationError(error);
   }
 }
 
-async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) {
+async function scanRegistrationEventTicket(db, { blockId, eventId, ticketCode, usedBy, device, actorId }) {
   const ticket = await getRegistrationEventTicketByCode(db, ticketCode);
 
   if (!ticket) {
@@ -2284,11 +2315,21 @@ async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) 
     : null;
 
   if (ticket.status === "used") {
+    const savedAdmission = await db.prepare(`
+      SELECT admission.pass_type, admission.coverage_json, event.metadata_json
+      FROM registration_ticket_admissions AS admission
+      INNER JOIN registration_attendance_events AS event ON event.id = admission.event_id
+      WHERE admission.event_id = ? AND admission.ticket_id = ? LIMIT 1
+    `).bind(ticket.event_id, ticket.id).first();
+    const savedSpec = savedAdmission ? {
+      passType: savedAdmission.pass_type,
+      block: JSON.parse(savedAdmission.metadata_json).blocks.find((block) => block.id === JSON.parse(savedAdmission.coverage_json)[0]),
+    } : ticketSpec;
     return {
       admitted: false,
       reason: "already_used",
       valid: true,
-      message: getRegistrationUsedTicketMessage(ticketSpec),
+      message: getRegistrationUsedTicketMessage(savedSpec),
       ticket: serializeRegistrationEventTicket(ticket),
     };
   }
@@ -2313,6 +2354,32 @@ async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) 
     };
   }
 
+  if (ticket.event_id !== ticketEvent.eventId || ticketSpec.eventId !== ticket.event_id || (eventId && eventId !== ticketEvent.eventId)) {
+    return { admitted: false, reason: "wrong_event", valid: true,
+      message: "Este boleto no corresponde al evento actual del escáner. Consulta con administración.",
+      ticket: serializeRegistrationEventTicket(ticket) };
+  }
+
+  if (ticketSpec.passType === "day" && !ticketSpec.day) {
+    return { admitted: false, reason: "ticket_day_unknown", valid: false,
+      message: "Este Day pass no tiene un día válido registrado. Consulta con administración antes de ingresar.",
+      ticket: serializeRegistrationEventTicket(ticket) };
+  }
+
+  const selectedBlockId = optionalString(blockId);
+  const selectedBlock = registrationTicketBlocks.find((block) => block.id === selectedBlockId);
+  if (!selectedBlock) {
+    return { admitted: false, reason: selectedBlockId ? "invalid_block" : "block_required", valid: true,
+      message: "Selecciona el bloque actual en el escáner antes de validar este boleto.",
+      ticket: serializeRegistrationEventTicket(ticket) };
+  }
+
+  if (ticketSpec.passType === "day" && ticketSpec.day.id !== selectedBlock.dayId) {
+    return { admitted: false, reason: "wrong_day", valid: true,
+      message: `Este Day pass corresponde a ${ticketSpec.day.label}. Selecciona un bloque de ese día. El boleto sigue disponible.`,
+      ticket: serializeRegistrationEventTicket(ticket) };
+  }
+
   if (ticketSpec.passType === "block") {
     if (!ticketSpec.block) {
       return {
@@ -2320,19 +2387,6 @@ async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) 
         reason: "ticket_block_unknown",
         valid: false,
         message: "Este boleto no tiene un bloque válido registrado. Consulta con administración.",
-        ticket: serializeRegistrationEventTicket(ticket),
-      };
-    }
-
-    const selectedBlockId = optionalString(blockId);
-    const selectedBlock = registrationTicketBlocks.find((block) => block.id === selectedBlockId);
-
-    if (!selectedBlock) {
-      return {
-        admitted: false,
-        reason: selectedBlockId ? "invalid_block" : "block_required",
-        valid: true,
-        message: "Selecciona el bloque actual en el escáner antes de validar este boleto.",
         ticket: serializeRegistrationEventTicket(ticket),
       };
     }
@@ -2348,39 +2402,28 @@ async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) 
     }
   }
 
-  const scanResult = await db
-    .prepare(
-      `
-        UPDATE registration_event_tickets
-        SET
-          status = 'used',
-          used_at = datetime('now'),
-          used_by = ?,
-          updated_at = datetime('now')
-        WHERE id = ?
-          AND status = 'active'
-          AND EXISTS (
-            SELECT 1 FROM ${orderTable} AS source_order
-            WHERE source_order.id = registration_event_tickets.source_order_id
-              AND source_order.status = 'paid'
-          )
-      `,
-    )
-    .bind(usedBy, ticket.id)
-    .run();
-  const updatedTicket = await getRegistrationEventTicketByCode(db, ticketCode);
-
-  if (Number(scanResult.meta?.changes || 0) === 0) {
+  const coverage = ticketSpec.passType === "full" ? registrationTicketBlocks.map((block) => block.id)
+    : ticketSpec.passType === "day" ? ticketSpec.day.blockIds : [ticketSpec.block.id];
+  const admission = await recordTicketAdmission(db, {
+    ticket, order, orderTable, passType: ticketSpec.passType,
+    dayId: ticketSpec.passType === "full" ? null : selectedBlock.dayId,
+    blockId: selectedBlock.id, coverage, usedBy, device, actorId,
+  });
+  if (!admission.admitted) {
+    const updatedTicket = await getRegistrationEventTicketByCode(db, ticketCode);
     const alreadyUsed = updatedTicket?.status === "used";
     const cancelled = updatedTicket?.status === "cancelled";
+    const currentOrder = alreadyUsed || cancelled ? null : await db.prepare(`SELECT status, line_items_json FROM ${orderTable} WHERE id = ?`)
+      .bind(ticket.source_order_id).first();
+    const changed = currentOrder?.status === "paid" && currentOrder.line_items_json !== order.line_items_json;
 
     return {
       admitted: false,
-      reason: alreadyUsed ? "already_used" : cancelled ? "cancelled" : "payment_not_approved",
+      reason: alreadyUsed ? "already_used" : cancelled ? "cancelled" : changed ? "ticket_changed" : "payment_not_approved",
       valid: alreadyUsed,
       message: alreadyUsed
         ? getRegistrationUsedTicketMessage(ticketSpec)
-        : cancelled ? "Este boleto fue cancelado." : "El pago de este boleto no está aprobado. Consulta con administración.",
+        : cancelled ? "Este boleto fue cancelado." : changed ? "Los datos del boleto cambiaron durante la validación. Escanea de nuevo." : "El pago de este boleto no está aprobado. Consulta con administración.",
       ticket: updatedTicket ? serializeRegistrationEventTicket(updatedTicket) : null,
     };
   }
@@ -2394,7 +2437,9 @@ async function scanRegistrationEventTicket(db, { blockId, ticketCode, usedBy }) 
       : ticketSpec.passType === "full"
         ? "Full pass válido. Entrega el brazalete Full pass. QR canjeado; no puede volver a utilizarse."
         : `Boleto válido para ${ticketSpec.block.label}. Acceso registrado.`,
-    ticket: serializeRegistrationEventTicket(updatedTicket),
+    ticket: serializeRegistrationEventTicket({
+      ...ticket, status: "used", used_at: admission.admittedAt, used_by: usedBy, updated_at: admission.admittedAt,
+    }),
   };
 }
 
@@ -3291,7 +3336,7 @@ async function ensureRegistrationStudentProfile(db, curp) {
   return user;
 }
 
-async function getRegistrationStateFromRequest({ db, request }) {
+async function getRegistrationStateFromRequest({ db, request, touchLastSeen = true }) {
   const sessionToken = readCookie(request, registrationSessionCookieName);
 
   if (!sessionToken) {
@@ -3334,7 +3379,7 @@ async function getRegistrationStateFromRequest({ db, request }) {
     throwHttpError("registration_session_invalid", "Tu sesión expiró o no existe", 401);
   }
 
-  await db
+  if (touchLastSeen) await db
     .prepare(
       `
         UPDATE registration_sessions
@@ -4186,6 +4231,12 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
 
       optionLabel = block.label;
     }
+    if (getRegistrationTicketPassType(product.id) === "day") {
+      if (!optionId) throwHttpError("shop_ticket_day_required", "Selecciona el día de tu Day pass.", 400);
+      const day = ticketEvent.days.find((item) => item.id === optionId);
+      if (!day) throwHttpError("shop_ticket_day_invalid", "El día seleccionado no es válido.", 400);
+      optionLabel = day.label;
+    }
     const danceId = optionalString(rawItem?.danceId);
     const danceTitle = optionalString(rawItem?.danceTitle);
     const groupKey = [product.id, optionId, danceId].filter(Boolean).join(":");
@@ -4213,6 +4264,7 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
       danceId: danceId || undefined,
       danceTitle: danceTitle || undefined,
       optionId: optionId || undefined,
+      eventId: product.itemType === "ticket" ? ticketEvent.eventId : undefined,
       optionLabel: optionLabel || undefined,
       productId: product.id,
       productName: product.name,
@@ -4973,6 +5025,7 @@ async function ensureRegistrationEventTicketsForOrder(db, order, sourceOrderType
           `
             INSERT INTO registration_event_tickets (
               id,
+              event_id,
               source_order_type,
               source_order_id,
               ticket_code,
@@ -4981,11 +5034,12 @@ async function ensureRegistrationEventTicketsForOrder(db, order, sourceOrderType
               holder_name,
               qr_payload
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .bind(
           crypto.randomUUID(),
+          ticketSpec.eventId,
           sourceOrderType,
           order.id,
           ticketCode,
@@ -5020,8 +5074,10 @@ function getRegistrationEventTicketSpecs(order) {
     const block = passType === "block"
       ? registrationTicketBlocks.find((item) => item.id === lineItem.optionId) || null
       : null;
+    const day = passType === "day" ? ticketEvent.days.find((item) => item.id === lineItem.optionId) || null : null;
+    const eventId = lineItem.eventId || "edomex-2026-otono";
 
-    return Array.from({ length: quantity }, () => ({ label, passType, block }));
+    return Array.from({ length: quantity }, () => ({ label, passType, block, day, eventId }));
   });
 }
 
@@ -6672,6 +6728,7 @@ async function serializeRegistrationShopOrderWithJoinedProof(db, order, options)
 function serializeRegistrationEventTicket(ticket) {
   return {
     id: ticket.id,
+    eventId: ticket.event_id,
     sourceOrderType: ticket.source_order_type,
     sourceOrderId: ticket.source_order_id,
     ticketCode: ticket.ticket_code,
@@ -8362,8 +8419,8 @@ function requirePassportAdmin(request, env) {
   }
 }
 
-async function requireRegistrationAdmin(request, env, db) {
-  const session = await getRegistrationStateFromRequest({ db, request });
+async function requireRegistrationAdmin(request, env, db, { touchLastSeen = true } = {}) {
+  const session = await getRegistrationStateFromRequest({ db, request, touchLastSeen });
 
   if (session.user.role !== "admin") {
     throwHttpError("registration_admin_forbidden", "Este usuario no tiene acceso al panel admin", 403);
@@ -8372,7 +8429,7 @@ async function requireRegistrationAdmin(request, env, db) {
   return { scope: "global", session };
 }
 
-async function requireRegistrationScannerDevice(request, db) {
+async function requireRegistrationScannerDevice(request, db, { touchLastSeen = true } = {}) {
   const authorization = request.headers.get("authorization") || "";
   const match = authorization.match(/^Scanner\s+(.+)$/i);
   const deviceToken = match?.[1]?.trim() || "";
@@ -8398,7 +8455,7 @@ async function requireRegistrationScannerDevice(request, db) {
     throwHttpError("registration_scanner_session_invalid", "La vinculación de este dispositivo ya no es válida.", 401);
   }
 
-  await db
+  if (touchLastSeen) await db
     .prepare(
       `
         UPDATE registration_scanner_devices

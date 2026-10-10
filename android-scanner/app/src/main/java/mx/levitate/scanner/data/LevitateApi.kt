@@ -3,12 +3,14 @@ package mx.levitate.scanner.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mx.levitate.scanner.model.ScanDecision
+import mx.levitate.scanner.model.AttendanceSnapshot
 import mx.levitate.scanner.model.ScannerBlock
 import mx.levitate.scanner.model.ScannerDevice
 import mx.levitate.scanner.model.TicketInfo
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 class LevitateApi(
     baseUrl: String,
@@ -72,7 +74,31 @@ class LevitateApi(
             reason = response.body.optString("reason", "unknown"),
             message = response.body.optString("message", "No se pudo validar el boleto."),
             ticket = ticketJson?.let(::parseTicket),
+            // A summary failure must never turn an accepted scan into a retry.
+            attendance = response.body.optJSONObject("attendance")?.let {
+                runCatching { AttendanceParser.parse(it) }.getOrNull()
+            },
         )
+    }
+
+    suspend fun attendance(eventId: String? = null): AttendanceSnapshot = withContext(Dispatchers.IO) {
+        val token = sessionStore.readToken() ?: throw SessionExpiredException()
+        val query = eventId?.let { "?eventId=${URLEncoder.encode(it, "UTF-8")}" }.orEmpty()
+        val response = request(
+            path = "/api/registration/scanner/attendance$query",
+            method = "GET",
+            scannerToken = token,
+        )
+        if (response.status == HttpURLConnection.HTTP_UNAUTHORIZED || response.status == HttpURLConnection.HTTP_FORBIDDEN) {
+            sessionStore.clear()
+            throw SessionExpiredException()
+        }
+        response.requireSuccess()
+        try {
+            AttendanceParser.parse(response.body.getJSONObject("attendance"))
+        } catch (_: Exception) {
+            throw ApiException(502, "invalid_attendance", "No se pudo leer el resumen de accesos. Actualiza para reintentar.")
+        }
     }
 
     fun unlink() {
@@ -91,7 +117,11 @@ class LevitateApi(
                     val block = blocks.optJSONObject(index) ?: return@mapNotNull null
                     val id = block.optString("id").trim()
                     val label = block.optString("label").trim()
-                    if (id.isBlank() || label.isBlank()) null else ScannerBlock(id, label)
+                    if (id.isBlank() || label.isBlank()) null else ScannerBlock(
+                        id, label,
+                        block.optString("dayId").takeIf { it.isNotBlank() && it != "null" },
+                        block.optString("date").takeIf { it.isNotBlank() && it != "null" },
+                    )
                 }.distinctBy { it.id }
             }.orEmpty(),
         )
@@ -118,7 +148,7 @@ class LevitateApi(
             useCaches = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("User-Agent", "Levitate-Entrada-Android/1.0")
+            setRequestProperty("User-Agent", "Levitate-Entrada-Android/1.1")
             scannerToken?.let { setRequestProperty("Authorization", "Scanner $it") }
 
             if (body != null) {

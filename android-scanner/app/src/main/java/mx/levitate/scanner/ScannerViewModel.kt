@@ -5,6 +5,10 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,11 +25,18 @@ import mx.levitate.scanner.model.ScanState
 import mx.levitate.scanner.model.SessionState
 import mx.levitate.scanner.model.TicketPayload
 import mx.levitate.scanner.model.TicketScanAttempt
+import mx.levitate.scanner.model.AttendanceState
 
 class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val api = LevitateApi(BuildConfig.API_BASE_URL, SecureSessionStore(application))
     private val mutableState = MutableStateFlow(ScannerUiState())
     val state: StateFlow<ScannerUiState> = mutableState.asStateFlow()
+    private var foreground = false
+    private var pollingJob: Job? = null
+    private var attendanceJob: Job? = null
+    private var historyJob: Job? = null
+    private var attendanceRequest = 0L
+    private var historyRequest = 0L
 
     init {
         restoreSession()
@@ -33,6 +44,108 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     fun retryProvisioning() {
         provisionBundledDevice()
+    }
+
+    fun setForeground(active: Boolean) {
+        if (foreground == active) return
+        foreground = active
+        pollingJob?.cancel()
+        if (!active) {
+            attendanceRequest += 1
+            historyRequest += 1
+            attendanceJob?.cancel()
+            historyJob?.cancel()
+            mutableState.update { it.copy(
+                attendance = it.attendance.copy(isLoading = false, isStale = true),
+                historyAttendance = it.historyAttendance.copy(isLoading = false, isStale = true),
+            ) }
+            return
+        }
+        refreshAttendance()
+        if (state.value.historyVisible) refreshHistory()
+        pollingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(30_000)
+                refreshAttendance()
+                if (state.value.historyVisible) refreshHistory()
+            }
+        }
+    }
+
+    fun refreshAttendance() {
+        if (!foreground || state.value.sessionState !is SessionState.SignedIn || attendanceJob?.isActive == true) return
+        val requestId = ++attendanceRequest
+        mutableState.update { it.copy(attendance = it.attendance.copy(isLoading = true)) }
+        attendanceJob = viewModelScope.launch {
+            try {
+                val snapshot = api.attendance()
+                if (requestId == attendanceRequest) mutableState.update {
+                    it.copy(attendance = it.attendance.receive(snapshot, System.currentTimeMillis()))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (requestId == attendanceRequest) {
+                    if (error is SessionExpiredException) expireSession(error)
+                    else mutableState.update {
+                        it.copy(attendance = it.attendance.failed(error.attendanceMessage()))
+                    }
+                }
+            }
+        }
+    }
+
+    fun openHistory() {
+        val current = state.value.attendance
+        mutableState.update { it.copy(
+            historyVisible = true,
+            historyEventId = current.snapshot?.eventId,
+            historyAttendance = current.copy(isLoading = false),
+        ) }
+        refreshHistory()
+    }
+
+    fun closeHistory() {
+        historyRequest += 1
+        historyJob?.cancel()
+        mutableState.update { it.copy(historyVisible = false, historyAttendance = it.historyAttendance.copy(isLoading = false)) }
+    }
+
+    fun selectHistoryEvent(eventId: String) {
+        val available = state.value.attendance.snapshot?.events.orEmpty() + state.value.historyAttendance.snapshot?.events.orEmpty()
+        if (!state.value.historyVisible || eventId == state.value.historyEventId || available.none { it.id == eventId }) return
+        historyRequest += 1
+        historyJob?.cancel()
+        historyJob = null
+        mutableState.update { it.copy(historyEventId = eventId, historyAttendance = AttendanceState()) }
+        refreshHistory()
+    }
+
+    fun refreshHistory() {
+        if (!foreground || !state.value.historyVisible || state.value.sessionState !is SessionState.SignedIn || historyJob?.isActive == true) return
+        val eventId = state.value.historyEventId
+        val requestId = ++historyRequest
+        mutableState.update { it.copy(historyAttendance = it.historyAttendance.copy(isLoading = true)) }
+        historyJob = viewModelScope.launch {
+            try {
+                val snapshot = api.attendance(eventId)
+                if (requestId == historyRequest) mutableState.update {
+                    it.copy(
+                        historyEventId = eventId ?: snapshot.eventId,
+                        historyAttendance = it.historyAttendance.receive(snapshot, System.currentTimeMillis(), eventId),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (requestId == historyRequest) {
+                    if (error is SessionExpiredException) expireSession(error)
+                    else mutableState.update {
+                        it.copy(historyAttendance = it.historyAttendance.failed(error.attendanceMessage()))
+                    }
+                }
+            }
+        }
     }
 
     private fun provisionBundledDevice() {
@@ -73,6 +186,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                             selectedBlockId = null,
                         )
                     }
+                    refreshAttendance()
                 }
                 .onFailure { error ->
                     mutableState.update {
@@ -88,6 +202,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     fun selectBlock(blockId: String) {
         mutableState.update { it.selectBlock(blockId) }
+        refreshAttendance()
     }
 
     fun scan(rawValue: String) {
@@ -118,17 +233,13 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                 .onSuccess(::completeLocally)
                 .onFailure { error ->
                     when (error) {
-                        is SessionExpiredException -> mutableState.update {
-                            it.copy(
-                                sessionState = SessionState.SignedOut,
-                                scanState = ScanState.Ready,
-                                activationError = error.message,
-                                selectedBlockId = null,
-                            )
-                        }
+                        is SessionExpiredException -> expireSession(error)
 
                         else -> mutableState.update {
-                            it.copy(scanState = ScanState.NetworkFailure(attempt, error.displayMessage()))
+                            it.copy(
+                                scanState = ScanState.NetworkFailure(attempt, error.displayMessage()),
+                                attendance = it.attendance.copy(isStale = true),
+                            )
                         }
                     }
                 }
@@ -157,6 +268,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                                 activationError = null,
                             )
                         }
+                        refreshAttendance()
                     }
                 }
                 .onFailure { error ->
@@ -168,14 +280,48 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun completeLocally(decision: ScanDecision) {
+        val currentEventId = state.value.attendance.snapshot?.eventId
+        val updatesCurrent = decision.attendance != null &&
+            (currentEventId == null || currentEventId == decision.attendance.eventId)
+        if (updatesCurrent) {
+            // Ignore any older GET that was started before this scan completed.
+            attendanceRequest += 1
+            attendanceJob?.cancel()
+            attendanceJob = null
+        }
+        mutableState.update {
+            val next = it.copy(scanState = ScanState.Complete(decision))
+            decision.attendance?.let { snapshot ->
+                next.receiveScanAttendance(snapshot, System.currentTimeMillis())
+            } ?: next.copy(attendance = next.attendance.copy(isStale = true))
+        }
+        if (!updatesCurrent) refreshAttendance()
+    }
+
+    private fun expireSession(error: SessionExpiredException) {
+        attendanceRequest += 1
+        historyRequest += 1
+        attendanceJob?.cancel()
+        historyJob?.cancel()
         mutableState.update {
             it.copy(
-                scanState = ScanState.Complete(decision),
-                acceptedCount = it.acceptedCount + if (decision.admitted) 1 else 0,
-                rejectedCount = it.rejectedCount + if (decision.admitted) 0 else 1,
+                sessionState = SessionState.SignedOut,
+                scanState = ScanState.Ready,
+                activationError = error.message,
+                selectedBlockId = null,
+                attendance = AttendanceState(),
+                historyAttendance = AttendanceState(),
+                historyEventId = null,
+                historyVisible = false,
             )
         }
     }
+}
+
+private fun Throwable.attendanceMessage(): String = when (this) {
+    is IOException -> "Sin conexión: el contador no está actualizado."
+    is ApiException -> message
+    else -> "No se pudo actualizar el contador. Intenta nuevamente."
 }
 
 private fun Throwable.displayMessage(): String = when (this) {

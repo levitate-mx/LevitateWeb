@@ -187,6 +187,7 @@ CREATE TABLE IF NOT EXISTS registration_shop_payment_proofs (
 
 CREATE TABLE IF NOT EXISTS registration_event_tickets (
   id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL DEFAULT 'edomex-2026-otono',
   source_order_type TEXT NOT NULL DEFAULT 'registration' CHECK (source_order_type IN ('registration', 'shop')),
   source_order_id TEXT NOT NULL,
   ticket_code TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -200,6 +201,44 @@ CREATE TABLE IF NOT EXISTS registration_event_tickets (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (source_order_type, source_order_id, ticket_number)
+);
+
+-- Admission history deliberately has no foreign key to orders, tickets or devices.
+-- Deleting operational records must not erase already-counted attendance.
+CREATE TABLE IF NOT EXISTS registration_attendance_events (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  venue TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  unique_admissions INTEGER NOT NULL DEFAULT 0 CHECK (unique_admissions >= 0),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_ticket_admissions (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES registration_attendance_events(id) ON DELETE RESTRICT,
+  ticket_id TEXT NOT NULL,
+  pass_type TEXT NOT NULL CHECK (pass_type IN ('block', 'day', 'full')),
+  day_id TEXT,
+  scanned_block_id TEXT NOT NULL,
+  device_id TEXT,
+  device_name TEXT NOT NULL,
+  actor_type TEXT NOT NULL CHECK (actor_type IN ('scanner', 'admin')),
+  actor_id TEXT,
+  coverage_json TEXT NOT NULL,
+  admitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (event_id, ticket_id)
+);
+
+CREATE TABLE IF NOT EXISTS registration_attendance_blocks (
+  event_id TEXT NOT NULL REFERENCES registration_attendance_events(id) ON DELETE RESTRICT,
+  block_id TEXT NOT NULL,
+  total INTEGER NOT NULL DEFAULT 0 CHECK (total >= 0),
+  single_count INTEGER NOT NULL DEFAULT 0 CHECK (single_count >= 0),
+  day_count INTEGER NOT NULL DEFAULT 0 CHECK (day_count >= 0),
+  full_count INTEGER NOT NULL DEFAULT 0 CHECK (full_count >= 0),
+  PRIMARY KEY (event_id, block_id)
 );
 
 CREATE TABLE IF NOT EXISTS registration_scanner_pairing_codes (

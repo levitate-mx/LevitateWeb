@@ -1,6 +1,9 @@
 // These additions replace the schema preparation previously done by request handlers.
 // Existing tables, columns, IDs, permissions, and nonempty access tokens are preserved.
 const additions = {
+  registration_event_tickets: {
+    event_id: "TEXT NOT NULL DEFAULT 'edomex-2026-otono'",
+  },
   registration_academies: {
     origin_type: "TEXT NOT NULL DEFAULT 'mexico' CHECK (origin_type IN ('mexico', 'international'))",
     origin_state: "TEXT",
@@ -54,6 +57,44 @@ const proofColumns = {
 };
 
 const createdTables = {
+  registration_attendance_events: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      name: "TEXT NOT NULL",
+      venue: "TEXT NOT NULL",
+      metadata_json: "TEXT NOT NULL",
+      unique_admissions: "INTEGER NOT NULL DEFAULT 0 CHECK (unique_admissions >= 0)",
+      ...timestamps,
+    },
+  },
+  registration_ticket_admissions: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      event_id: "TEXT NOT NULL REFERENCES registration_attendance_events(id) ON DELETE RESTRICT",
+      ticket_id: "TEXT NOT NULL",
+      pass_type: "TEXT NOT NULL CHECK (pass_type IN ('block', 'day', 'full'))",
+      day_id: "TEXT",
+      scanned_block_id: "TEXT NOT NULL",
+      device_id: "TEXT",
+      device_name: "TEXT NOT NULL",
+      actor_type: "TEXT NOT NULL CHECK (actor_type IN ('scanner', 'admin'))",
+      actor_id: "TEXT",
+      coverage_json: "TEXT NOT NULL",
+      admitted_at: "TEXT NOT NULL DEFAULT (datetime('now'))",
+    },
+    constraints: ["UNIQUE (event_id, ticket_id)"],
+  },
+  registration_attendance_blocks: {
+    columns: {
+      event_id: "TEXT NOT NULL REFERENCES registration_attendance_events(id) ON DELETE RESTRICT",
+      block_id: "TEXT NOT NULL",
+      total: "INTEGER NOT NULL DEFAULT 0 CHECK (total >= 0)",
+      single_count: "INTEGER NOT NULL DEFAULT 0 CHECK (single_count >= 0)",
+      day_count: "INTEGER NOT NULL DEFAULT 0 CHECK (day_count >= 0)",
+      full_count: "INTEGER NOT NULL DEFAULT 0 CHECK (full_count >= 0)",
+    },
+    constraints: ["PRIMARY KEY (event_id, block_id)"],
+  },
   registration_shop_orders: {
     columns: {
       id: "TEXT PRIMARY KEY",
@@ -118,6 +159,7 @@ const createdTables = {
 // Prerequisites cannot be repaired by this deliberately additive migration.
 // A fresh database must first receive db/registration_d1_schema.sql.
 const prerequisites = {
+  registration_event_tickets: ["id", "source_order_type", "source_order_id", "status", "used_at", "used_by", "updated_at"],
   registration_academies: ["id", "name", "contact_name", "email", "phone", "created_at", "updated_at"],
   registration_users: ["id", "academy_id", "name", "username", "email", "password_hash", "status", "email_confirmed_at", "created_at", "updated_at"],
   registration_participants: ["id", "academy_id", "full_name", "curp", "birth_date", "age", "division", "shirt_size", "created_by_user_id", "created_at", "updated_at"],

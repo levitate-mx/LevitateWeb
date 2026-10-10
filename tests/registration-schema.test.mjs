@@ -145,6 +145,33 @@ test("deployed inscription schema without an unused access_token column remains 
   assert.equal(sqlite.prepare("PRAGMA table_info(registration_inscription_orders)").all().some((row) => row.name === "access_token"), false);
 });
 
+test("attendance preparation preserves legacy QR codes and never fabricates past admissions", async (t) => {
+  const { db, sqlite, writes } = fixture(t, removeColumns(baseSchema, "registration_event_tickets", ["event_id"]));
+  sqlite.exec(`
+    DROP TABLE registration_ticket_admissions;
+    DROP TABLE registration_attendance_blocks;
+    DROP TABLE registration_attendance_events;
+    INSERT INTO registration_event_tickets(id, source_order_type, source_order_id, ticket_code, ticket_number, ticket_label, qr_payload, status)
+    VALUES ('active-ticket', 'shop', 'old-order', 'LV-ACTIVE', 1, 'Single pass', 'LEVITATE:TICKET:LV-ACTIVE', 'active'),
+      ('used-ticket', 'shop', 'old-order', 'LV-USED', 2, 'Full pass', 'LEVITATE:TICKET:LV-USED', 'used');
+  `);
+  const before = rows(sqlite, "registration_event_tickets");
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 4);
+  assert.deepEqual(writes, []);
+  await prepareRegistrationSchema(db, { apply: true });
+  for (const [index, ticket] of rows(sqlite, "registration_event_tickets").entries()) {
+    assert.equal(ticket.event_id, "edomex-2026-otono");
+    const { event_id, ...existingFields } = ticket;
+    assert.deepEqual(existingFields, before[index]);
+  }
+  for (const table of ["registration_ticket_admissions", "registration_attendance_events", "registration_attendance_blocks"]) {
+    assert.equal(sqlite.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get().total, 0);
+  }
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, 4);
+});
+
 for (const venue of [false, true]) {
   test(`legacy schema preserves rows and ${venue ? "retains" : "does not add"} academy venue`, async (t) => {
     const { db, sqlite, writes } = fixture(t, legacySchema({ venue }));

@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createTicketsPdfBlob, downloadBlob } from "../admin/RegistrationScreens";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
+import ticketEvent from "../../../shared/ticket-event.json";
 
 type TicketOption = {
   id: string;
@@ -181,20 +182,8 @@ type ShopMode = "tickets" | "media";
 
 const ticketSalesPaused = false;
 
-const blockOptions: TicketOption[] = [
-  { id: "bloque-1", label: "Bloque 1", detail: "14 noviembre · Baby + Petite" },
-  { id: "bloque-2", label: "Bloque 2", detail: "14 noviembre · Junior + Teen" },
-  { id: "bloque-3", label: "Bloque 3", detail: "14 noviembre · Senior + Legacy + Relevé" },
-  { id: "bloque-4", label: "Bloque 4", detail: "14 noviembre · Baby + Petite" },
-  { id: "bloque-5", label: "Bloque 5", detail: "15 noviembre · Junior" },
-  { id: "bloque-6", label: "Bloque 6", detail: "15 noviembre · Teen + Legacy" },
-  { id: "bloque-7", label: "Bloque 7", detail: "15 noviembre · Seniors + Relevé" },
-];
-
-const dayOptions: TicketOption[] = [
-  { id: "sabado-14", label: "Sábado 14 de noviembre", detail: "Acceso a bloques 1, 2, 3 y 4" },
-  { id: "domingo-15", label: "Domingo 15 de noviembre", detail: "Acceso a bloques 5, 6 y 7" },
-];
+const blockOptions: TicketOption[] = ticketEvent.blocks;
+const dayOptions: TicketOption[] = ticketEvent.days;
 
 const ticketProducts: TicketProduct[] = [
   {
