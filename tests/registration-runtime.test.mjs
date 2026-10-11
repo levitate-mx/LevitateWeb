@@ -1079,9 +1079,13 @@ test('ticket scanner denies previously issued QR codes after approval is reverse
   const admin = await seedAcademy(f, 'scanner-reversal-admin', { role: 'admin' });
   const scanner = await activateTicketScanner(f, admin);
   const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
-  await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie,
+  const { json: reversal } = await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie,
     body: { id: order.id, orderType: 'shop', status: 'rejected', rejectionReason: 'payment_not_found',
       rejectionMessage: 'La transferencia no se acreditó.' } });
+  assert.equal(reversal.order.status, 'rejected');
+  assert.equal(reversal.order.paidAt, null);
+  assert.equal(reversal.order.rejectionReason, 'payment_not_found');
+  assert.equal(reversal.order.participantTickets[0].sourceOrderStatus, 'rejected');
   const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
     body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-1' } });
   assert.equal(json.admitted, false);
@@ -1436,18 +1440,26 @@ test('payment filters, reference search, optional global totals and exports span
   assert.equal(literalSearch.orders.length, 0, 'SQL wildcard characters are literal searches');
 });
 
-test('payment details and exports preserve proofs and ticket counts without leaking private access tokens', async t => {
+test('payment details group every ticket for the same CURP and exports preserve private boundaries', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'detail-admin', { role: 'admin' });
   const paid = await createPaidTicketOrder(f, admin, [{ productId: 'ticket-full-pass', quantity: 3 }]);
+  const secondPaid = await createPaidTicketOrder(f, admin, [{ productId: 'ticket-block', optionId: 'bloque-2', quantity: 2 }]);
+  assert.equal(secondPaid.participantTickets.length, 5, 'approval responses refresh the grouped participant accesses');
   const { json: detail } = await f.request(`/admin/payment-order?id=${paid.id}&orderType=shop`, { cookie: admin.cookie });
   assert.equal(detail.order.proof.dataUrl, proof.dataUrl);
   assert.equal(detail.order.tickets.length, 3);
+  assert.equal(detail.order.participantTickets.length, 5);
+  assert.deepEqual(new Set(detail.order.participantTickets.map(ticket => ticket.sourceOrderId)), new Set([paid.id, secondPaid.id]));
+  assert.deepEqual(new Set(detail.order.participantTickets.map(ticket => ticket.sourceOrderReference)), new Set([paid.reference, secondPaid.reference]));
+  assert.ok(detail.order.participantTickets.every(ticket => ticket.sourceOrderStatus === 'paid'));
   const { json: exported } = await f.request('/admin/payment-orders?export=1', { cookie: admin.cookie });
-  assert.equal(exported.orders[0].proof.fileName, proof.fileName);
-  assert.equal(exported.orders[0].proof.dataUrl, '', 'CSV exports do not download the proof binary');
-  assert.equal(exported.orders[0].ticketCount, 3);
-  assert.equal('accessToken' in exported.orders[0], false);
+  const exportedPaid = exported.orders.find(order => order.id === paid.id && order.orderType === 'shop');
+  assert.equal(exportedPaid.proof.fileName, proof.fileName);
+  assert.equal(exportedPaid.proof.dataUrl, '', 'CSV exports do not download the proof binary');
+  assert.equal(exportedPaid.ticketCount, 3);
+  assert.equal('accessToken' in exportedPaid, false);
+  assert.equal('participantTickets' in exportedPaid, false, 'CSV exports stay bounded to per-order metadata');
   await f.request('/admin/payment-order?id=missing&orderType=shop', { cookie: admin.cookie, status: 404 });
 });
 

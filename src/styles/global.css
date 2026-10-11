@@ -24411,6 +24411,8 @@ button {
   color: rgba(17, 17, 17, 0.58);
   font-size: 0.76rem;
   font-weight: 720;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .registration-admin-note {
@@ -24452,6 +24454,14 @@ button {
 .registration-admin-review-panel label {
   display: grid;
   gap: 8px;
+}
+
+.registration-admin-review-panel__warning {
+  margin: 0;
+  color: #8f2940;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .registration-admin-review-panel select {

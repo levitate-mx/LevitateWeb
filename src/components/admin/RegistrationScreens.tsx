@@ -345,6 +345,12 @@ type RegistrationEventTicket = {
   updatedAt: string;
 };
 
+type RegistrationParticipantTicket = RegistrationEventTicket & {
+  sourceOrderReference: string;
+  sourceOrderStatus: RegistrationInscriptionOrderStatus;
+  sourceOrderCreatedAt: string;
+};
+
 export type RegistrationTicketPdfOrder = {
   academyName: string;
   participantName: string;
@@ -417,6 +423,7 @@ type RegistrationInscriptionOrder = {
   updatedAt: string;
   proof?: RegistrationPaymentProof | null;
   tickets?: RegistrationEventTicket[];
+  participantTickets?: RegistrationParticipantTicket[];
   ticketCount?: number;
 };
 
@@ -499,6 +506,7 @@ type RegistrationAdminParticipantsPayload = {
 
 type TicketDashboardOrder = {
   id: string;
+  orderType: "registration" | "shop";
   reference: string;
   status: RegistrationInscriptionOrderStatus;
   updatedAt: string;
@@ -511,6 +519,7 @@ type TicketDashboardRow = {
   curp: string;
   generatedTickets: number;
   latestOrderId: string;
+  latestOrderType: "registration" | "shop";
   latestReference: string;
   latestStatus: RegistrationInscriptionOrderStatus;
   orderCount: number;
@@ -2968,6 +2977,7 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
         curp: normalizedCurp,
         generatedTickets: 0,
         latestOrderId: order.id,
+        latestOrderType: getAdminOrderType(order),
         latestReference: reference,
         latestStatus: order.status,
         orderCount: 0,
@@ -2983,7 +2993,7 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
       } satisfies TicketDashboardRow);
 
     existingRow.orderCount += 1;
-    existingRow.orders.push({ id: order.id, reference, status: order.status, updatedAt });
+    existingRow.orders.push({ id: order.id, orderType: getAdminOrderType(order), reference, status: order.status, updatedAt });
     existingRow.requestedTickets += requestedTickets;
 
     if (order.status === "paid") {
@@ -3011,6 +3021,7 @@ function getTicketDashboardRows(orders: RegistrationInscriptionOrder[]) {
 
     if (!Number.isFinite(currentDate) || (Number.isFinite(orderDate) && orderDate >= currentDate)) {
       existingRow.latestOrderId = order.id;
+      existingRow.latestOrderType = getAdminOrderType(order);
       existingRow.latestReference = reference;
       existingRow.latestStatus = order.status;
       existingRow.updatedAt = updatedAt;
@@ -11408,10 +11419,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
                       matchingOrder ??
                       ({
                         id: row.latestOrderId,
+                        orderType: row.latestOrderType,
                         reference: row.latestReference,
                         status: row.latestStatus,
                         updatedAt: row.updatedAt,
                       } satisfies TicketDashboardOrder);
+                    const orderToOpen = orders.find((order) => adminOrderKey(order) === adminOrderKey(displayedOrder));
                     const date = getAdminOrderDate({
                       createdAt: displayedOrder.updatedAt,
                       updatedAt: displayedOrder.updatedAt,
@@ -11420,9 +11433,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
                     return (
                       <button
-                        className={`registration-admin-table__row${selectedOrder?.id === displayedOrder.id ? " is-selected" : ""}`}
+                        className={`registration-admin-table__row${selectedOrder && adminOrderKey(selectedOrder) === adminOrderKey(displayedOrder) ? " is-selected" : ""}`}
                         key={row.curp || row.latestOrderId}
-                        onClick={() => setSelectedOrderId(displayedOrder.id)}
+                        onClick={() => { if (orderToOpen) void openPaymentOrder(orderToOpen); }}
                         role="row"
                         type="button"
                       >
@@ -11827,18 +11840,28 @@ function RegistrationAdminOrderDetail({
   const [rejectionReason, setRejectionReason] = useState<RegistrationPaymentRejectionReason>(
     order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof"),
   );
-  const [isRejectionOpen, setIsRejectionOpen] = useState(order?.status === "rejected");
+  const [isRejectionOpen, setIsRejectionOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isTicketPdfLoading, setIsTicketPdfLoading] = useState(false);
+  const rejectionPanelRef = useRef<HTMLElement>(null);
+  const rejectionReasonRef = useRef<HTMLSelectElement>(null);
+  const shouldFocusRejection = useRef(false);
 
   useEffect(() => {
     const nextRejectionReason = order?.rejectionReason ?? (order ? getDefaultPaymentRejectionReason(order) : "missing_proof");
 
     setRejectionReason(nextRejectionReason);
-    setIsRejectionOpen(order?.status === "rejected");
+    setIsRejectionOpen(false);
   }, [order?.id, order?.status, order?.rejectionReason]);
+
+  useEffect(() => {
+    if (!isRejectionOpen || !shouldFocusRejection.current) return;
+    shouldFocusRejection.current = false;
+    rejectionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    rejectionReasonRef.current?.focus({ preventScroll: true });
+  }, [isRejectionOpen]);
 
   const handleSaveNote = async () => {
     if (!order || isSavingNote || isSaving || !hasNoteChanges) return;
@@ -11992,6 +12015,7 @@ function RegistrationAdminOrderDetail({
   };
 
   const handleRejectToggle = () => {
+    shouldFocusRejection.current = !isRejectionOpen;
     setIsRejectionOpen((currentValue) => !currentValue);
     setStatusMessage("");
     setErrorMessage("");
@@ -12095,6 +12119,15 @@ function RegistrationAdminOrderDetail({
 
   const whatsappPhone = getRegistrationOrderWhatsAppPhone(order);
   const messageTemplates = getAdminOrderMessageTemplates(order);
+  const participantTickets: RegistrationParticipantTicket[] = order.participantTickets?.length
+    ? order.participantTickets
+    : (order.tickets ?? []).map((ticket) => ({
+        ...ticket,
+        sourceOrderCreatedAt: order.createdAt,
+        sourceOrderReference: getRegistrationInscriptionPaymentReference(order),
+        sourceOrderStatus: order.status,
+      }));
+  const participantTicketOrderCount = new Set(participantTickets.map((ticket) => `${ticket.sourceOrderType}:${ticket.sourceOrderId}`)).size;
 
   return (
     <section className="registration-admin-detail" aria-label="Detalle de pago">
@@ -12147,50 +12180,63 @@ function RegistrationAdminOrderDetail({
         )}
       </section>
 
-      {order.tickets?.length ? (
-        <section className="registration-admin-ticket-pack" aria-label="Boletos QR">
+      {participantTickets.length ? (
+        <section className="registration-admin-ticket-pack" aria-label="Accesos del participante">
           <header>
             <div>
-              <span>Boletos QR</span>
+              <span>Accesos del participante</span>
               <strong>
-                {order.tickets.length} {order.tickets.length === 1 ? "boleto generado" : "boletos generados"}
+                {participantTickets.length} {participantTickets.length === 1 ? "acceso" : "accesos"}
+                {participantTicketOrderCount > 1 ? ` en ${participantTicketOrderCount} órdenes` : ""}
               </strong>
             </div>
-            <button disabled={isTicketPdfLoading} onClick={handleDownloadTicketsPdf} type="button">
-              {isTicketPdfLoading ? "Generando..." : "Descargar PDF"}
-            </button>
+            {order.tickets?.length ? (
+              <button disabled={isTicketPdfLoading} onClick={handleDownloadTicketsPdf} type="button">
+                {isTicketPdfLoading ? "Generando..." : participantTicketOrderCount > 1 ? "PDF de esta orden" : "Descargar PDF"}
+              </button>
+            ) : null}
           </header>
           <div>
-            {order.tickets.map((ticket) => (
-              <article key={ticket.id}>
-                <Ticket aria-hidden="true" size={18} />
-                <span>
-                  <strong>{ticket.ticketCode}</strong>
-                  <small>
-                    {ticket.ticketLabel} · {getTicketStatusLabel(ticket.status)}
-                  </small>
-                </span>
-              </article>
-            ))}
+            {participantTickets.map((ticket) => {
+              const isCurrentOrder = ticket.sourceOrderId === order.id && ticket.sourceOrderType === getAdminOrderType(order);
+
+              return (
+                <article key={ticket.id}>
+                  <Ticket aria-hidden="true" size={18} />
+                  <span>
+                    <strong>{ticket.ticketCode}</strong>
+                    <small>
+                      {ticket.ticketLabel} · {getTicketStatusLabel(ticket.status)} · {ticket.sourceOrderReference} · {getAdminPaymentStatusLabel(ticket.sourceOrderStatus)}
+                      {isCurrentOrder ? " · Orden abierta" : ""}
+                    </small>
+                  </span>
+                </article>
+              );
+            })}
           </div>
         </section>
       ) : null}
 
       <div className="registration-admin-detail-actions">
-        <button disabled={isSaving || isSavingNote} onClick={handleApprovePayment} type="button">
-          Aprobar pago
+        <button disabled={isSaving || isSavingNote || order.status === "paid"} onClick={handleApprovePayment} type="button">
+          {order.status === "paid" ? "Pago aprobado" : "Aprobar pago"}
         </button>
         <button aria-expanded={isRejectionOpen} disabled={isSaving || isSavingNote} onClick={handleRejectToggle} type="button">
-          Rechazar
+          {isRejectionOpen ? "Cancelar rechazo" : "Rechazar"}
         </button>
 
       </div>
 
       {isRejectionOpen ? (
-        <section className="registration-admin-review-panel" aria-label="Datos de rechazo">
+        <section className="registration-admin-review-panel" aria-label="Datos de rechazo" ref={rejectionPanelRef}>
+          {order.status === "paid" ? (
+            <p className="registration-admin-review-panel__warning">
+              Esta orden ya estaba aprobada. Al rechazarla, sus códigos QR dejarán de ser válidos hasta que vuelvas a aprobar el pago.
+            </p>
+          ) : null}
           <label>
             <span>Motivo de rechazo</span>
-            <select onChange={handleRejectionReasonChange} value={rejectionReason}>
+            <select onChange={handleRejectionReasonChange} ref={rejectionReasonRef} value={rejectionReason}>
               {paymentRejectionReasonOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -12200,7 +12246,7 @@ function RegistrationAdminOrderDetail({
           </label>
           <button className="registration-admin-review-panel__submit" disabled={isSaving || isSavingNote} onClick={handleRejectPayment} type="button">
             <MessageCircle aria-hidden="true" size={17} />
-            Enviar rechazo por WhatsApp
+            {isSaving ? "Rechazando pago..." : "Confirmar rechazo y abrir WhatsApp"}
           </button>
         </section>
       ) : null}

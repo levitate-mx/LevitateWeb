@@ -1994,9 +1994,7 @@ async function handleRegistrationAdminPaymentOrder(request, env) {
     const id = requireString(params.get("id"), "id");
     const type = requireRegistrationChoice(params.get("orderType"), "orderType", new Set(["registration", "shop"]));
     const row = type === "shop" ? await getRegistrationShopOrderRecordById(db, id) : await getRegistrationInscriptionOrderRecordById(db, id);
-    const order = type === "shop"
-      ? await serializeRegistrationShopOrderWithProof(db, row, { includeInternalNotes: true })
-      : await serializeRegistrationInscriptionOrderWithProof(db, row, { includeInternalNotes: true });
+    const order = await serializeRegistrationAdminOrderDetail(db, type, row);
     return sendJson({ order });
   } catch (error) {
     return sendRegistrationError(error);
@@ -2091,7 +2089,7 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
         await ensureRegistrationEventTicketsForOrder(db, order, "shop");
       }
 
-      return sendJson({ order: await serializeRegistrationShopOrderWithProof(db, order, { includeInternalNotes: true }) });
+      return sendJson({ order: await serializeRegistrationAdminOrderDetail(db, "shop", order) });
     }
 
     await updateRegistrationInscriptionOrderStatus(db, {
@@ -2114,7 +2112,7 @@ async function handleRegistrationAdminInscriptionOrderStatus(request, env) {
       await ensureRegistrationEventTicketsForOrder(db, order, "registration");
     }
 
-    return sendJson({ order: await serializeRegistrationInscriptionOrderWithProof(db, order, { includeInternalNotes: true }) });
+    return sendJson({ order: await serializeRegistrationAdminOrderDetail(db, "registration", order) });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -2150,9 +2148,7 @@ async function handleRegistrationAdminInscriptionOrderNotes(request, env) {
       ? await getRegistrationShopOrderRecordById(db, orderId)
       : await getRegistrationInscriptionOrderRecordById(db, orderId);
 
-    return sendJson({ order: orderType === "shop"
-      ? await serializeRegistrationShopOrderWithProof(db, order, { includeInternalNotes: true })
-      : await serializeRegistrationInscriptionOrderWithProof(db, order, { includeInternalNotes: true }) });
+    return sendJson({ order: await serializeRegistrationAdminOrderDetail(db, orderType, order) });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -5290,6 +5286,72 @@ async function getRegistrationEventTicketsForSource(db, sourceOrderType, sourceO
   }
 }
 
+async function getRegistrationEventTicketsForCurp(db, curp) {
+  const normalizedCurp = String(curp || "").trim();
+
+  if (!normalizedCurp) {
+    return [];
+  }
+
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT
+            tickets.*,
+            source_order.order_reference AS source_order_reference,
+            source_order.order_status AS source_order_status,
+            source_order.order_created_at AS source_order_created_at
+          FROM registration_event_tickets AS tickets
+          INNER JOIN (
+            SELECT
+              'registration' AS source_order_type,
+              id AS source_order_id,
+              reference AS order_reference,
+              status AS order_status,
+              created_at AS order_created_at
+            FROM registration_inscription_orders
+            WHERE curp = ? COLLATE NOCASE
+
+            UNION ALL
+
+            SELECT
+              'shop' AS source_order_type,
+              id AS source_order_id,
+              reference AS order_reference,
+              status AS order_status,
+              created_at AS order_created_at
+            FROM registration_shop_orders
+            WHERE curp = ? COLLATE NOCASE
+          ) AS source_order
+            ON source_order.source_order_type = tickets.source_order_type
+            AND source_order.source_order_id = tickets.source_order_id
+          ORDER BY
+            source_order.order_created_at DESC,
+            tickets.source_order_type ASC,
+            tickets.source_order_id ASC,
+            tickets.ticket_number ASC,
+            tickets.created_at ASC
+        `,
+      )
+      .bind(normalizedCurp, normalizedCurp)
+      .all();
+
+    return results.map((ticket) => ({
+      ...serializeRegistrationEventTicket(ticket),
+      sourceOrderReference: ticket.source_order_reference,
+      sourceOrderStatus: ticket.source_order_status,
+      sourceOrderCreatedAt: ticket.source_order_created_at,
+    }));
+  } catch (error) {
+    if (isMissingRegistrationEventTicketsTable(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 async function getRegistrationInscriptionOrders(db, academyId, options) {
   try {
     const { results = [] } = await db
@@ -6833,6 +6895,17 @@ async function serializeRegistrationShopOrderWithJoinedProof(db, order, options)
     ...serializeRegistrationShopOrder(order, options),
     proof: serializeJoinedRegistrationPaymentProof(order),
     tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
+  };
+}
+
+async function serializeRegistrationAdminOrderDetail(db, orderType, order) {
+  const serializedOrder = orderType === "shop"
+    ? await serializeRegistrationShopOrderWithProof(db, order, { includeInternalNotes: true })
+    : await serializeRegistrationInscriptionOrderWithProof(db, order, { includeInternalNotes: true });
+
+  return {
+    ...serializedOrder,
+    participantTickets: await getRegistrationEventTicketsForCurp(db, order.curp),
   };
 }
 
