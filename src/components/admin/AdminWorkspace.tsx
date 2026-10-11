@@ -114,7 +114,6 @@ export function AdminWorkspaceHome({
           </button>
         ))}
       </section>
-      {ticketSalesPanel}
       <div className="admin-home__columns">
         <section
           className="admin-home__priorities admin-surface"
@@ -231,6 +230,7 @@ export function AdminWorkspaceHome({
         Resumen de todas las sedes. Abre cada sección para filtrar y consultar
         el detalle.
       </p>
+      {ticketSalesPanel}
     </div>
   );
 }

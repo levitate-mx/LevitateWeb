@@ -69,13 +69,6 @@
   outline-offset: 3px;
 }
 
-.admin-ticket-sales__explanation {
-  margin: 14px 0 0;
-  color: var(--studio-muted, #756f7c);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .admin-ticket-sales__status {
   margin-top: 12px;
   font-size: 11px;

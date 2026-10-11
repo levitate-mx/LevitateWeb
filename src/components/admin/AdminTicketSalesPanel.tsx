@@ -55,12 +55,6 @@ export function AdminTicketSalesPanel({ sales, isLoading, error, onRefresh }: Pr
         </button>
       </header>
 
-      <p className="admin-ticket-sales__explanation">
-        Lugares vendidos según compras con pago aprobado, aunque todavía no se hayan escaneado los QR.
-        Single cuenta en su bloque, Day en todos los bloques de su día y Full en todo el evento.
-        La suma de los bloques no equivale a personas únicas.
-      </p>
-
       <div className="admin-ticket-sales__status" aria-live="polite">
         {sales ? (
           <p>
