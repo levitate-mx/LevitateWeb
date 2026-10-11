@@ -55,6 +55,20 @@ CREATE TABLE IF NOT EXISTS registration_password_reset_tokens (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS registration_academy_experience_surveys (
+  id TEXT PRIMARY KEY,
+  academy_id TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE,
+  submitted_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  survey_version TEXT NOT NULL,
+  registration_device TEXT CHECK (registration_device IS NULL OR registration_device IN ('computer', 'smartphone')),
+  registration_experience TEXT CHECK (registration_experience IS NULL OR registration_experience IN ('easy', 'good', 'difficult')),
+  payment_experience TEXT CHECK (payment_experience IS NULL OR payment_experience IN ('easy', 'good', 'difficult')),
+  feedback TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (academy_id, survey_version)
+);
+
 CREATE TABLE IF NOT EXISTS registration_student_users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE COLLATE NOCASE,
@@ -394,6 +408,7 @@ CREATE INDEX IF NOT EXISTS idx_registration_email_verification_tokens_user_id ON
 CREATE INDEX IF NOT EXISTS idx_registration_email_verification_tokens_expires_at ON registration_email_verification_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_password_reset_tokens_user_id ON registration_password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_password_reset_tokens_expires_at ON registration_password_reset_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_registration_academy_experience_surveys_created_at ON registration_academy_experience_surveys(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_user_id ON registration_student_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_registration_student_sessions_expires_at ON registration_student_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_participants_academy_id ON registration_participants(academy_id);

@@ -294,6 +294,57 @@ test('academy registration, verification, login, reset and logout work with prep
   assert.equal(f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_academies').get().total, 1);
 });
 
+test('academy experience survey is optional, authenticated and submitted once per academy', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'survey');
+  const otherAcademy = await seedAcademy(f, 'survey-other');
+  const admin = await seedAcademy(f, 'survey-admin', { role: 'admin' });
+
+  await f.request('/experience-survey', { status: 401 });
+  await f.request('/experience-survey', { cookie: admin.cookie, status: 403 });
+
+  const initial = await f.request('/experience-survey', { cookie: academy.cookie });
+  assert.equal(initial.json.hasSubmitted, false);
+  assert.equal(initial.json.surveyVersion, 'academy-web-experience-v1');
+
+  await f.request('/experience-survey', {
+    method: 'POST', cookie: academy.cookie, status: 400,
+    body: { registrationDevice: 'tablet' },
+  });
+
+  const submitted = await f.request('/experience-survey', {
+    method: 'POST', cookie: academy.cookie,
+    body: {
+      registrationDevice: 'smartphone',
+      registrationExperience: 'difficult',
+      feedback: 'En pantallas pequeñas me costó encontrar el botón para continuar.',
+    },
+  });
+  assert.equal(submitted.json.hasSubmitted, true);
+
+  const stored = f.db.sqlite.prepare(`SELECT academy_id, submitted_by_user_id, registration_device,
+    registration_experience, payment_experience, feedback
+    FROM registration_academy_experience_surveys`).get();
+  assert.deepEqual({ ...stored }, {
+    academy_id: academy.academyId,
+    submitted_by_user_id: academy.userId,
+    registration_device: 'smartphone',
+    registration_experience: 'difficult',
+    payment_experience: null,
+    feedback: 'En pantallas pequeñas me costó encontrar el botón para continuar.',
+  });
+
+  assert.equal((await f.request('/experience-survey', { cookie: academy.cookie })).json.hasSubmitted, true);
+  assert.equal((await f.request('/experience-survey', { cookie: otherAcademy.cookie })).json.hasSubmitted, false);
+
+  await f.request('/experience-survey', {
+    method: 'POST', cookie: academy.cookie,
+    body: { paymentExperience: 'easy' },
+  });
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_academy_experience_surveys').get().total, 1);
+  assert.equal(f.db.sqlite.prepare('SELECT payment_experience FROM registration_academy_experience_surveys').get().payment_experience, 'easy');
+});
+
 test('same-name academies stay isolated across bootstrap, participants, dances, orders and admin', async t => {
   const f = await fixture(t);
   const a = await seedAcademy(f, 'a');

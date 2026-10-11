@@ -242,12 +242,16 @@ for (const venue of [false, true]) {
 test("missing optional runtime tables are created without altering prerequisite rows", async (t) => {
   const { db, sqlite } = fixture(t);
   seed(sqlite);
-  sqlite.exec("DROP TABLE registration_shop_payment_proofs; DROP TABLE registration_shop_orders; DROP TABLE registration_inscription_payment_proofs; DROP TABLE registration_music_uploads;");
+  sqlite.exec("DROP TABLE registration_shop_payment_proofs; DROP TABLE registration_shop_orders; DROP TABLE registration_inscription_payment_proofs; DROP TABLE registration_music_uploads; DROP TABLE registration_academy_experience_surveys;");
   const before = rows(sqlite, "registration_inscription_orders");
   const plan = await planRegistrationSchema(db);
-  assert.equal(plan.steps.filter((step) => step.sql.startsWith("CREATE TABLE")).length, 4);
+  assert.equal(plan.steps.filter((step) => step.sql.startsWith("CREATE TABLE")).length, 5);
   await prepareRegistrationSchema(db, { apply: true });
   assert.deepEqual(rows(sqlite, "registration_inscription_orders"), before);
+  assert.deepEqual(sqlite.prepare("PRAGMA table_info(registration_academy_experience_surveys)").all().map((column) => column.name), [
+    "id", "academy_id", "submitted_by_user_id", "survey_version", "registration_device", "registration_experience",
+    "payment_experience", "feedback", "created_at", "updated_at",
+  ]);
   shopOrder(sqlite, "new-order", "token");
   assert.throws(() => sqlite.exec("INSERT INTO registration_shop_payment_proofs(id, order_id, file_name, content_type, file_size, data_url) VALUES ('invalid', 'new-order', 'x.pdf', 'application/pdf', 1800001, 'data')"), /CHECK constraint/);
   assert.deepEqual((await planRegistrationSchema(db)).steps, []);

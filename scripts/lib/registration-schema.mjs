@@ -57,6 +57,20 @@ const proofColumns = {
 };
 
 const createdTables = {
+  registration_academy_experience_surveys: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      academy_id: "TEXT NOT NULL REFERENCES registration_academies(id) ON DELETE CASCADE",
+      submitted_by_user_id: "TEXT REFERENCES registration_users(id) ON DELETE SET NULL",
+      survey_version: "TEXT NOT NULL",
+      registration_device: "TEXT CHECK (registration_device IS NULL OR registration_device IN ('computer', 'smartphone'))",
+      registration_experience: "TEXT CHECK (registration_experience IS NULL OR registration_experience IN ('easy', 'good', 'difficult'))",
+      payment_experience: "TEXT CHECK (payment_experience IS NULL OR payment_experience IN ('easy', 'good', 'difficult'))",
+      feedback: "TEXT",
+      ...timestamps,
+    },
+    constraints: ["UNIQUE (academy_id, survey_version)"],
+  },
   registration_attendance_events: {
     columns: {
       id: "TEXT PRIMARY KEY",
@@ -171,6 +185,7 @@ const prerequisites = {
 };
 
 const indexes = [
+  ["idx_registration_academy_experience_surveys_created_at", "registration_academy_experience_surveys", "created_at DESC"],
   ["idx_registration_event_tickets_event_sales", "registration_event_tickets", "event_id, source_order_type, source_order_id, status, ticket_number"],
   ["idx_registration_dance_participants_participant_dance", "registration_dance_participants", "participant_id, dance_id"],
   ["idx_registration_dance_choreographers_choreographer_dance", "registration_dance_choreographers", "choreographer_id, dance_id"],

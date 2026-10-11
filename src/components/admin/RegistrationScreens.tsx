@@ -16,6 +16,7 @@ import {
   Download,
   Eye,
   FileText,
+  Frown,
   Globe2,
   GraduationCap,
   Home,
@@ -26,8 +27,10 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Meh,
   Menu,
   MessageCircle,
+  Monitor,
   MoreVertical,
   Music2,
   Phone,
@@ -38,6 +41,9 @@ import {
   ShieldCheck,
   ShoppingBag,
   Shirt,
+  Smile,
+  Smartphone,
+  Sparkles,
   Ticket,
   Trash2,
   Trophy,
@@ -124,6 +130,8 @@ type RegistrationAcademyProfileTab =
   | "activity";
 type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 type StatusTone = "success" | "error" | "warning";
+type AcademyExperienceSurveyDevice = "" | "computer" | "smartphone";
+type AcademyExperienceSurveyRating = "" | "easy" | "good" | "difficult";
 
 const TICKET_BLOCK_MINIMUM = 3;
 const PARTICIPANT_REGISTRATION_PAYMENT_MINIMUM_PERCENT = 60;
@@ -185,6 +193,11 @@ type RegistrationAuthActionResponse = {
   user?: {
     email?: string;
   };
+};
+
+type AcademyExperienceSurveyStatus = {
+  hasSubmitted: boolean;
+  surveyVersion: string;
 };
 
 type RegistrationParticipant = {
@@ -692,6 +705,25 @@ const adminLookupTabs: Array<{ id: AdminLookupTab; label: string }> = [
   { id: "participants", label: "Participantes" },
   { id: "choreographers", label: "Coreógrafos" },
   { id: "dances", label: "Coreografías" },
+];
+
+const academyExperienceSurveyDeviceOptions: Array<{
+  icon: LucideIcon;
+  label: string;
+  value: Exclude<AcademyExperienceSurveyDevice, "">;
+}> = [
+  { icon: Monitor, label: "Computadora", value: "computer" },
+  { icon: Smartphone, label: "Smartphone", value: "smartphone" },
+];
+
+const academyExperienceSurveyRatingOptions: Array<{
+  icon: LucideIcon;
+  label: string;
+  value: Exclude<AcademyExperienceSurveyRating, "">;
+}> = [
+  { icon: Smile, label: "Muy fácil", value: "easy" },
+  { icon: Meh, label: "Bien", value: "good" },
+  { icon: Frown, label: "Difícil", value: "difficult" },
 ];
 
 const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = [
@@ -12730,6 +12762,218 @@ function getAdminScreen({
   );
 }
 
+function AcademyExperienceSurvey({
+  academyName,
+  onDismiss,
+  onSubmitted,
+}: {
+  academyName: string;
+  onDismiss: () => void;
+  onSubmitted: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [registrationDevice, setRegistrationDevice] = useState<AcademyExperienceSurveyDevice>("");
+  const [registrationExperience, setRegistrationExperience] = useState<AcademyExperienceSurveyRating>("");
+  const [paymentExperience, setPaymentExperience] = useState<AcademyExperienceSurveyRating>("");
+  const [feedback, setFeedback] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSubmitting && !isSubmitted) {
+        onDismiss();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    closeButtonRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSubmitted, isSubmitting, onDismiss]);
+
+  useEffect(() => {
+    if (!isSubmitted) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(onSubmitted, 1300);
+    return () => window.clearTimeout(timeout);
+  }, [isSubmitted, onSubmitted]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      await requestRegistrationApi<AcademyExperienceSurveyStatus>("/api/registration/experience-survey", {
+        body: JSON.stringify({
+          registrationDevice,
+          registrationExperience,
+          paymentExperience,
+          feedback,
+        }),
+        method: "POST",
+      });
+      setIsSubmitted(true);
+    } catch (error) {
+      setSubmitError(getErrorMessage(error, "No pudimos guardar tus respuestas. Intenta de nuevo."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const renderOptions = <T extends string>({
+    options,
+    selectedValue,
+    setSelectedValue,
+  }: {
+    options: Array<{ icon: LucideIcon; label: string; value: T }>;
+    selectedValue: string;
+    setSelectedValue: (value: T) => void;
+  }) => (
+    <div className="academy-experience-survey__options">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const isSelected = selectedValue === option.value;
+
+        return (
+          <button
+            aria-pressed={isSelected}
+            className={isSelected ? "is-selected" : ""}
+            key={option.value}
+            onClick={() => setSelectedValue(option.value)}
+            type="button"
+          >
+            <Icon aria-hidden="true" size={19} strokeWidth={1.8} />
+            <span>{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div
+      className="academy-experience-survey"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isSubmitting && !isSubmitted) {
+          onDismiss();
+        }
+      }}
+      role="presentation"
+    >
+      <section
+        aria-labelledby="academy-experience-survey-title"
+        aria-modal="true"
+        className={`academy-experience-survey__dialog${isSubmitted ? " is-complete" : ""}`}
+        role="dialog"
+      >
+        {isSubmitted ? (
+          <div className="academy-experience-survey__thanks" role="status">
+            <span aria-hidden="true">
+              <Sparkles size={26} strokeWidth={1.6} />
+            </span>
+            <p>Gracias, {academyName}.</p>
+            <h2>Nos ayudas a hacerlo más bonito y sencillo.</h2>
+          </div>
+        ) : (
+          <>
+            <button
+              aria-label="Cerrar encuesta"
+              className="academy-experience-survey__close"
+              disabled={isSubmitting}
+              onClick={onDismiss}
+              ref={closeButtonRef}
+              type="button"
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+
+            <header className="academy-experience-survey__header">
+              <span className="academy-experience-survey__sparkle" aria-hidden="true">
+                <Sparkles size={22} strokeWidth={1.7} />
+              </span>
+              <div>
+                <p>Te escuchamos</p>
+                <h2 id="academy-experience-survey-title">¿Nos regalas 30 segundos?</h2>
+              </div>
+            </header>
+
+            <form onSubmit={handleSubmit}>
+              <fieldset>
+                <legend>
+                  <span>01</span>
+                  ¿Desde dónde haces tus registros?
+                </legend>
+                {renderOptions({
+                  options: academyExperienceSurveyDeviceOptions,
+                  selectedValue: registrationDevice,
+                  setSelectedValue: setRegistrationDevice,
+                })}
+              </fieldset>
+
+              <fieldset>
+                <legend>
+                  <span>02</span>
+                  ¿Cómo ha sido registrar?
+                </legend>
+                {renderOptions({
+                  options: academyExperienceSurveyRatingOptions,
+                  selectedValue: registrationExperience,
+                  setSelectedValue: setRegistrationExperience,
+                })}
+              </fieldset>
+
+              <fieldset>
+                <legend>
+                  <span>03</span>
+                  ¿Y realizar tus pagos?
+                </legend>
+                {renderOptions({
+                  options: academyExperienceSurveyRatingOptions,
+                  selectedValue: paymentExperience,
+                  setSelectedValue: setPaymentExperience,
+                })}
+              </fieldset>
+
+              <label className="academy-experience-survey__feedback">
+                <span>¿Algo no se sintió bien o tienes una sugerencia?</span>
+                <textarea
+                  maxLength={500}
+                  onChange={(event) => setFeedback(event.target.value)}
+                  placeholder="Cuéntanos brevemente…"
+                  rows={3}
+                  value={feedback}
+                />
+                <small>{feedback.length}/500</small>
+              </label>
+
+              {submitError ? <p className="academy-experience-survey__error" role="alert">{submitError}</p> : null}
+
+              <div className="academy-experience-survey__actions">
+                <button disabled={isSubmitting} onClick={onDismiss} type="button">
+                  Ahora no
+                </button>
+                <button className="academy-experience-survey__submit" disabled={isSubmitting} type="submit">
+                  {isSubmitting ? "Enviando…" : "Enviar respuestas"}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialScreen?: AdminScreenId }) {
   const [activeScreen, setActiveScreen] = useState<AdminScreenId>(initialScreen);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -12737,6 +12981,8 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [session, setSession] = useState<RegistrationSession | null>(null);
+  const [isExperienceSurveyOpen, setIsExperienceSurveyOpen] = useState(false);
+  const [experienceSurveyVersion, setExperienceSurveyVersion] = useState("");
   const [participants, setParticipants] = useState<RegistrationParticipant[]>([]);
   const [choreographers, setChoreographers] = useState<RegistrationChoreographer[]>([]);
   const [dances, setDances] = useState<RegistrationDance[]>([]);
@@ -12782,6 +13028,47 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
     void loadRegistrationData();
   }, [loadRegistrationData]);
 
+  useEffect(() => {
+    if (!session || session.user.role !== "academy") {
+      return undefined;
+    }
+
+    let isCancelled = false;
+    void requestRegistrationApi<AcademyExperienceSurveyStatus>("/api/registration/experience-survey")
+      .then((status) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const storageKey = `levitate-experience-survey:${session.academy.id}:${status.surveyVersion}`;
+        setExperienceSurveyVersion(status.surveyVersion);
+        setIsExperienceSurveyOpen(!status.hasSubmitted && window.sessionStorage.getItem(storageKey) !== "dismissed");
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setIsExperienceSurveyOpen(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [session?.academy.id, session?.user.role]);
+
+  const handleExperienceSurveyDismiss = useCallback(() => {
+    if (session && experienceSurveyVersion) {
+      window.sessionStorage.setItem(
+        `levitate-experience-survey:${session.academy.id}:${experienceSurveyVersion}`,
+        "dismissed",
+      );
+    }
+    setIsExperienceSurveyOpen(false);
+  }, [experienceSurveyVersion, session]);
+
+  const handleExperienceSurveySubmitted = useCallback(() => {
+    setIsExperienceSurveyOpen(false);
+  }, []);
+
   const handleScreenChange = (screen: AdminScreenId) => {
     setActiveScreen(screen);
     setIsMobileMenuOpen(false);
@@ -12813,6 +13100,9 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
 
   const handleLogout = async () => {
     await requestRegistrationApi<{ ok: boolean }>("/api/registration/auth/logout", { method: "POST" }).catch(() => null);
+    if (session && experienceSurveyVersion) {
+      window.sessionStorage.removeItem(`levitate-experience-survey:${session.academy.id}:${experienceSurveyVersion}`);
+    }
     setSession(null);
     setParticipants([]);
     setChoreographers([]);
@@ -12922,6 +13212,13 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
           })}
         </div>
       </section>
+      {isExperienceSurveyOpen ? (
+        <AcademyExperienceSurvey
+          academyName={session.academy.name}
+          onDismiss={handleExperienceSurveyDismiss}
+          onSubmitted={handleExperienceSurveySubmitted}
+        />
+      ) : null}
     </main>
   );
 }

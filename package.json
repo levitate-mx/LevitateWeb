@@ -62,6 +62,8 @@
     "db:migrate:registration:scanner-devices:local": "wrangler d1 execute levitate-passport --local --file db/registration_scanner_devices.sql",
     "db:migrate:registration:user-roles": "wrangler d1 execute levitate-passport --remote --file db/registration_user_roles.sql",
     "db:migrate:registration:user-roles:local": "wrangler d1 execute levitate-passport --local --file db/registration_user_roles.sql",
+    "db:migrate:registration:experience-survey": "wrangler d1 execute levitate-passport --remote --file db/registration_academy_experience_surveys.sql",
+    "db:migrate:registration:experience-survey:local": "wrangler d1 execute levitate-passport --local --file db/registration_academy_experience_surveys.sql",
     "db:migrate": "npm run db:migrate:codi",
     "db:migrate:all": "npm run db:migrate:codi && npm run db:migrate:passport && npm run db:migrate:registration",
     "passport:generate": "node scripts/generate-passport-qr.mjs",

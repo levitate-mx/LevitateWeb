@@ -132,6 +132,9 @@ const registrationInscriptionOrderStatuses = new Set(["pending_payment", "paymen
 const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const registrationUserRoles = new Set(["academy", "admin"]);
+const registrationAcademyExperienceSurveyVersion = "academy-web-experience-v1";
+const registrationSurveyDevices = new Set(["computer", "smartphone"]);
+const registrationSurveyExperiences = new Set(["easy", "good", "difficult"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
@@ -561,6 +564,10 @@ export default {
 
     if (url.pathname === "/api/registration/bootstrap") {
       return handleRegistrationBootstrap(request, env);
+    }
+
+    if (url.pathname === "/api/registration/experience-survey") {
+      return handleRegistrationExperienceSurvey(request, env);
     }
 
     if (url.pathname === "/api/registration/participants") {
@@ -1164,6 +1171,99 @@ async function handleRegistrationBootstrap(request, env) {
       choreographers: await getRegistrationChoreographers(db, academyId),
       dances: await getRegistrationDances(db, academyId),
       inscriptionOrders: await getRegistrationInscriptionOrders(db, academyId),
+    });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationExperienceSurvey(request, env) {
+  try {
+    assertMethod(request, ["GET", "POST"]);
+
+    const db = getDb(env);
+    const session = await requireRegistrationAcademy(request, db);
+    const existingSurvey = await db
+      .prepare(
+        `
+          SELECT id
+          FROM registration_academy_experience_surveys
+          WHERE academy_id = ?
+            AND survey_version = ?
+          LIMIT 1
+        `,
+      )
+      .bind(session.academy.id, registrationAcademyExperienceSurveyVersion)
+      .first();
+
+    if (request.method === "GET") {
+      return sendJson({
+        hasSubmitted: Boolean(existingSurvey),
+        surveyVersion: registrationAcademyExperienceSurveyVersion,
+      });
+    }
+
+    const body = await readJsonBody(request);
+    const registrationDevice = optionalString(body.registrationDevice);
+    const registrationExperience = optionalString(body.registrationExperience);
+    const paymentExperience = optionalString(body.paymentExperience);
+    const feedback = optionalString(body.feedback);
+
+    if (registrationDevice && !registrationSurveyDevices.has(registrationDevice)) {
+      throwHttpError("validation_error", "El dispositivo seleccionado no es válido.", 400);
+    }
+
+    if (registrationExperience && !registrationSurveyExperiences.has(registrationExperience)) {
+      throwHttpError("validation_error", "La experiencia de registro seleccionada no es válida.", 400);
+    }
+
+    if (paymentExperience && !registrationSurveyExperiences.has(paymentExperience)) {
+      throwHttpError("validation_error", "La experiencia de pago seleccionada no es válida.", 400);
+    }
+
+    if (feedback.length > 500) {
+      throwHttpError("validation_error", "La sugerencia debe tener máximo 500 caracteres.", 400);
+    }
+
+    const surveyId = existingSurvey?.id || crypto.randomUUID();
+    await db
+      .prepare(
+        `
+          INSERT INTO registration_academy_experience_surveys (
+            id,
+            academy_id,
+            submitted_by_user_id,
+            survey_version,
+            registration_device,
+            registration_experience,
+            payment_experience,
+            feedback
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (academy_id, survey_version) DO UPDATE SET
+            submitted_by_user_id = excluded.submitted_by_user_id,
+            registration_device = excluded.registration_device,
+            registration_experience = excluded.registration_experience,
+            payment_experience = excluded.payment_experience,
+            feedback = excluded.feedback,
+            updated_at = datetime('now')
+        `,
+      )
+      .bind(
+        surveyId,
+        session.academy.id,
+        session.user.id,
+        registrationAcademyExperienceSurveyVersion,
+        registrationDevice || null,
+        registrationExperience || null,
+        paymentExperience || null,
+        feedback || null,
+      )
+      .run();
+
+    return sendJson({
+      hasSubmitted: true,
+      surveyVersion: registrationAcademyExperienceSurveyVersion,
     });
   } catch (error) {
     return sendRegistrationError(error);
