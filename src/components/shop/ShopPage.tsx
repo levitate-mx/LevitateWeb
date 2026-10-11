@@ -304,13 +304,12 @@ const ticketPaymentMethods = [
 
 const photoVideoPaymentMethods = [
   {
-    id: "bbva",
-    title: "BBVA",
+    id: "nubank",
+    title: "Nubank",
     rows: [
-      { label: "A nombre de", value: "Daniel Emiliano Jaimes Ponce" },
-      { label: "Banco", value: "BBVA" },
-      { label: "CLABE interbancaria", value: "012180015274110441" },
-      { label: "Tarjeta", value: "4152313990777117" },
+      { label: "Beneficiario", value: "DANIEL EMILIANO JAIMES PONCE" },
+      { label: "CLABE", value: "638180010162929398" },
+      { label: "Entidad financiera", value: "Nubank" },
     ],
   },
 ];

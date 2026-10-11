@@ -5601,6 +5601,31 @@ async function getRegistrationDanceById(db, academyId, danceId) {
   return serializedDance;
 }
 
+async function assertRegistrationParticipantHasNoDances(db, participantId) {
+  const linkedDance = await db
+    .prepare(
+      `
+        SELECT registration_dances.title
+        FROM registration_dance_participants
+        INNER JOIN registration_dances
+          ON registration_dances.id = registration_dance_participants.dance_id
+        WHERE registration_dance_participants.participant_id = ?
+        ORDER BY registration_dances.created_at DESC, registration_dances.title ASC
+        LIMIT 1
+      `,
+    )
+    .bind(participantId)
+    .first();
+
+  if (linkedDance) {
+    throwHttpError(
+      "registration_participant_has_dances",
+      `No puedes eliminar este participante porque está vinculado a la coreografía “${linkedDance.title}”. Primero elimina la coreografía asociada.`,
+      409,
+    );
+  }
+}
+
 async function deleteRegistrationParticipant(db, academyId, participantId) {
   await assertRegistrationIdsBelongToAcademy(
     db,
@@ -5610,10 +5635,8 @@ async function deleteRegistrationParticipant(db, academyId, participantId) {
     "Participante no encontrado",
   );
 
-  await db.batch([
-    db.prepare("DELETE FROM registration_dance_participants WHERE participant_id = ?").bind(participantId),
-    db.prepare("DELETE FROM registration_participants WHERE academy_id = ? AND id = ?").bind(academyId, participantId),
-  ]);
+  await assertRegistrationParticipantHasNoDances(db, participantId);
+  await db.prepare("DELETE FROM registration_participants WHERE academy_id = ? AND id = ?").bind(academyId, participantId).run();
 }
 
 async function deleteRegistrationChoreographer(db, academyId, choreographerId) {
@@ -5665,10 +5688,8 @@ async function deleteRegistrationAdminParticipant(db, { participantId }) {
     throwHttpError("registration_participant_not_found", "Participante no encontrado", 404);
   }
 
-  await db.batch([
-    db.prepare("DELETE FROM registration_dance_participants WHERE participant_id = ?").bind(participantId),
-    db.prepare("DELETE FROM registration_participants WHERE id = ?").bind(participantId),
-  ]);
+  await assertRegistrationParticipantHasNoDances(db, participantId);
+  await db.prepare("DELETE FROM registration_participants WHERE id = ?").bind(participantId).run();
 }
 
 async function deleteRegistrationAdminChoreographer(db, { choreographerId }) {

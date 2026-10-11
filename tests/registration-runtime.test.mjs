@@ -331,6 +331,33 @@ test('same-name academies stay isolated across bootstrap, participants, dances, 
   assert.equal(remaining.dances[0].id, other.dance.id);
 });
 
+test('linked participants cannot be deleted by their academy or an admin', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'protected-participant');
+  const admin = await seedAcademy(f, 'protected-participant-admin', { role: 'admin' });
+  const record = await createDance(f, academy);
+
+  for (const request of [
+    { path: '/participants', cookie: academy.cookie, body: { id: record.participant.id } },
+    { path: '/admin/delete', cookie: admin.cookie, body: { entityType: 'participant', id: record.participant.id } },
+  ]) {
+    const { json } = await f.request(request.path, {
+      method: 'DELETE', cookie: request.cookie, body: request.body, status: 409,
+    });
+    assert.equal(json.error.code, 'registration_participant_has_dances');
+    assert.match(json.error.message, /Vuelo de prueba/);
+    assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_participants WHERE id = ?')
+      .get(record.participant.id).total, 1);
+    assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_dance_participants WHERE participant_id = ?')
+      .get(record.participant.id).total, 1);
+  }
+
+  await f.request('/dances', { method: 'DELETE', cookie: academy.cookie, body: { id: record.dance.id } });
+  await f.request('/participants', { method: 'DELETE', cookie: academy.cookie, body: { id: record.participant.id } });
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_participants WHERE id = ?')
+    .get(record.participant.id).total, 0);
+});
+
 test('admin people summaries preserve distinct venues, empty people and latest dance ties', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'summary-admin', { role: 'admin' });

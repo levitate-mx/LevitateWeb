@@ -5086,6 +5086,7 @@ function downloadAdminParticipantsCsv(rows: RegistrationParticipantOperationalRo
     "CURP",
     "Academia",
     "División",
+    "Talla de playera",
     "Disciplina",
     "Costo inscripción",
     "Pago confirmado",
@@ -5100,6 +5101,7 @@ function downloadAdminParticipantsCsv(rows: RegistrationParticipantOperationalRo
     row.participant.curp,
     row.participant.academyName,
     getProgramDivisionLabel(row.participant.division),
+    getOptionLabel(shirtSizes, row.participant.shirtSize),
     row.discipline,
     row.registrationTotal,
     row.confirmedPaymentAmount,
@@ -5122,7 +5124,7 @@ function downloadAdminParticipantsCsv(rows: RegistrationParticipantOperationalRo
 }
 
 function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreographer[], fileName = "levitate-coreografos.csv") {
-  const headers = ["Nombre", "Academia", "Correo", "Teléfono", "Talla", "Maestro Relevé", "Coreografías", "Última actividad"];
+  const headers = ["Nombre", "Academia", "Correo", "Teléfono", "Talla de playera", "Maestro Relevé", "Coreografías", "Última actividad"];
   const rows = choreographers.map((choreographer) => [
     choreographer.fullName,
     choreographer.academyName,
@@ -10774,7 +10776,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
   const handleAdminParticipantDelete = async (participant: RegistrationAdminParticipant) => {
     const wasDeleted = await deleteAdminEntity({
-      detail: "Se eliminara el participante de sus coreografias y del registro.",
+      detail: "Solo se puede eliminar si no pertenece a ninguna coreografía.",
       entityType: "participant",
       id: participant.id,
       label: participant.fullName,
@@ -12319,7 +12321,7 @@ function AdminLookupPanel({
   const openDeleteConfirmation = (recordType: AdminLookupTab, recordId: string, recordLabel: string) => {
     const recordTypeCopy = {
       participants: {
-        description: "Se eliminará permanentemente el registro de este participante:",
+        description: "Se eliminará permanentemente el registro de este participante. Si pertenece a una coreografía, primero deberás eliminar esa coreografía:",
         label: "participante",
         title: "Eliminar participante",
       },
