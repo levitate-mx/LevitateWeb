@@ -7,6 +7,7 @@ import mx.levitate.scanner.model.AttendanceSnapshot
 import mx.levitate.scanner.model.ScannerBlock
 import mx.levitate.scanner.model.ScannerDevice
 import mx.levitate.scanner.model.TicketInfo
+import mx.levitate.scanner.model.TicketSalesSnapshot
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -101,6 +102,26 @@ class LevitateApi(
         }
     }
 
+    suspend fun ticketSales(eventId: String? = null): TicketSalesSnapshot = withContext(Dispatchers.IO) {
+        val token = sessionStore.readToken() ?: throw SessionExpiredException()
+        val query = eventId?.let { "?eventId=${URLEncoder.encode(it, "UTF-8")}" }.orEmpty()
+        val response = request(
+            path = "/api/registration/scanner/ticket-sales-summary$query",
+            method = "GET",
+            scannerToken = token,
+        )
+        if (response.status == HttpURLConnection.HTTP_UNAUTHORIZED || response.status == HttpURLConnection.HTTP_FORBIDDEN) {
+            sessionStore.clear()
+            throw SessionExpiredException()
+        }
+        response.requireSuccess()
+        try {
+            TicketSalesParser.parse(response.body.getJSONObject("sales"))
+        } catch (_: Exception) {
+            throw ApiException(502, "invalid_ticket_sales", "No se pudo leer el resumen de ventas. Actualiza para reintentar.")
+        }
+    }
+
     fun unlink() {
         sessionStore.clear()
     }
@@ -148,7 +169,7 @@ class LevitateApi(
             useCaches = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("User-Agent", "Levitate-Entrada-Android/1.1")
+            setRequestProperty("User-Agent", "Levitate-Entrada-Android/1.2")
             scannerToken?.let { setRequestProperty("Authorization", "Scanner $it") }
 
             if (body != null) {

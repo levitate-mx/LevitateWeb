@@ -146,7 +146,9 @@ test("deployed inscription schema without an unused access_token column remains 
 });
 
 test("attendance preparation preserves legacy QR codes and never fabricates past admissions", async (t) => {
-  const { db, sqlite, writes } = fixture(t, removeColumns(baseSchema, "registration_event_tickets", ["event_id"]));
+  const oldSchema = removeColumns(baseSchema, "registration_event_tickets", ["event_id"])
+    .replace(/^CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_event_sales.*\n/m, "");
+  const { db, sqlite, writes } = fixture(t, oldSchema);
   sqlite.exec(`
     DROP TABLE registration_ticket_admissions;
     DROP TABLE registration_attendance_blocks;
@@ -157,7 +159,7 @@ test("attendance preparation preserves legacy QR codes and never fabricates past
   `);
   const before = rows(sqlite, "registration_event_tickets");
   const plan = await planRegistrationSchema(db);
-  assert.equal(plan.steps.length, 4);
+  assert.equal(plan.steps.length, 5);
   assert.deepEqual(writes, []);
   await prepareRegistrationSchema(db, { apply: true });
   for (const [index, ticket] of rows(sqlite, "registration_event_tickets").entries()) {
@@ -169,7 +171,26 @@ test("attendance preparation preserves legacy QR codes and never fabricates past
     assert.equal(sqlite.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get().total, 0);
   }
   assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
-  assert.equal(writes.length, 4);
+  assert.equal(writes.length, 5);
+});
+
+test("sales index preparation preserves tickets and adds the event covering index once", async t => {
+  const { db, sqlite, writes } = fixture(t);
+  sqlite.exec(`
+    DROP INDEX idx_registration_event_tickets_event_sales;
+    INSERT INTO registration_event_tickets(id, source_order_type, source_order_id, ticket_code, ticket_number, ticket_label, qr_payload)
+    VALUES ('sales-index-ticket', 'shop', 'sales-order', 'LV-SALES', 1, 'Full pass', 'LEVITATE:TICKET:LV-SALES');
+  `);
+  const before = rows(sqlite, "registration_event_tickets");
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 1);
+  assert.deepEqual(writes, []);
+  await prepareRegistrationSchema(db, { apply: true });
+  assert.deepEqual(sqlite.prepare("PRAGMA index_info(idx_registration_event_tickets_event_sales)").all().map(column => column.name),
+    ["event_id", "source_order_type", "source_order_id", "status", "ticket_number"]);
+  assert.deepEqual(rows(sqlite, "registration_event_tickets"), before);
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, 1);
 });
 
 for (const venue of [false, true]) {

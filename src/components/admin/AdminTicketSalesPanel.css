@@ -1,0 +1,250 @@
+.admin-ticket-sales {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--studio-line, #e8e5eb);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--studio-ink, #292430);
+}
+
+.admin-ticket-sales__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.admin-ticket-sales__header > div {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.admin-ticket-sales__header h2 {
+  margin: 0;
+  color: var(--studio-ink, #292430);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.admin-ticket-sales__event {
+  margin: 7px 0 0;
+  color: var(--studio-pink, #b92e6c);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.admin-ticket-sales__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--studio-line, #e8e5eb);
+  border-radius: 8px;
+  background: #fff;
+  color: #695174;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-ticket-sales__refresh:hover:not(:disabled) {
+  background: var(--studio-soft, #fbf0f5);
+}
+
+.admin-ticket-sales__refresh:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.admin-ticket-sales__refresh:focus-visible {
+  outline: 2px solid var(--studio-pink, #b92e6c);
+  outline-offset: 3px;
+}
+
+.admin-ticket-sales__explanation {
+  margin: 14px 0 0;
+  color: var(--studio-muted, #756f7c);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-ticket-sales__status {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--studio-muted, #756f7c);
+  overflow-wrap: anywhere;
+}
+
+.admin-ticket-sales__status p {
+  margin: 0;
+}
+
+.admin-ticket-sales__status .admin-ticket-sales__error {
+  margin-top: 6px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: #fff1e8;
+  color: #934814;
+  font-size: 12px;
+}
+
+.admin-ticket-sales__summary {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 18px 0 12px;
+  color: var(--studio-muted, #756f7c);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-ticket-sales__summary strong {
+  color: var(--studio-ink, #292430);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-ticket-sales__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-ticket-sales__block {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--studio-line, #e8e5eb);
+  border-radius: 9px;
+  background: #faf8fb;
+  overflow-wrap: anywhere;
+}
+
+.admin-ticket-sales__block:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.admin-ticket-sales__block-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+}
+
+.admin-ticket-sales__block-heading h3 {
+  margin: 0;
+  color: var(--studio-ink, #292430);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.admin-ticket-sales__block-heading time {
+  color: var(--studio-muted, #756f7c);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-ticket-sales__occupancy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin: 15px 0 9px;
+  color: #695f72;
+  font-size: 12px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-ticket-sales__occupancy span strong {
+  color: var(--studio-ink, #292430);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.admin-ticket-sales__occupancy > strong {
+  color: var(--studio-pink, #b92e6c);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.admin-ticket-sales__bar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #eae4ed;
+}
+
+.admin-ticket-sales__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--studio-pink, #b92e6c);
+}
+
+.admin-ticket-sales__breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 11px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-ticket-sales__breakdown > div {
+  display: flex;
+  gap: 5px;
+}
+
+.admin-ticket-sales__breakdown dt {
+  color: var(--studio-muted, #756f7c);
+}
+
+.admin-ticket-sales__breakdown dd {
+  margin: 0;
+  color: var(--studio-ink, #292430);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-ticket-sales__block.is-over-capacity {
+  border-color: #eac6a5;
+  background: #fff9f4;
+}
+
+.admin-ticket-sales__capacity-warning {
+  margin: 10px 0 0;
+  color: #934814;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+@media (max-width: 680px) {
+  .admin-ticket-sales {
+    padding: 16px;
+  }
+
+  .admin-ticket-sales__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-ticket-sales__block {
+    padding: 14px;
+  }
+}

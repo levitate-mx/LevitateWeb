@@ -159,7 +159,7 @@ const createdTables = {
 // Prerequisites cannot be repaired by this deliberately additive migration.
 // A fresh database must first receive db/registration_d1_schema.sql.
 const prerequisites = {
-  registration_event_tickets: ["id", "source_order_type", "source_order_id", "status", "used_at", "used_by", "updated_at"],
+  registration_event_tickets: ["id", "source_order_type", "source_order_id", "ticket_number", "status", "used_at", "used_by", "updated_at"],
   registration_academies: ["id", "name", "contact_name", "email", "phone", "created_at", "updated_at"],
   registration_users: ["id", "academy_id", "name", "username", "email", "password_hash", "status", "email_confirmed_at", "created_at", "updated_at"],
   registration_participants: ["id", "academy_id", "full_name", "curp", "birth_date", "age", "division", "shirt_size", "created_by_user_id", "created_at", "updated_at"],
@@ -171,6 +171,7 @@ const prerequisites = {
 };
 
 const indexes = [
+  ["idx_registration_event_tickets_event_sales", "registration_event_tickets", "event_id, source_order_type, source_order_id, status, ticket_number"],
   ["idx_registration_dance_participants_participant_dance", "registration_dance_participants", "participant_id, dance_id"],
   ["idx_registration_dance_choreographers_choreographer_dance", "registration_dance_choreographers", "choreographer_id, dance_id"],
   ["idx_registration_inscription_orders_recent", "registration_inscription_orders", "updated_at DESC, created_at DESC, id DESC"],

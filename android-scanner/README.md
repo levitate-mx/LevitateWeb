@@ -16,25 +16,39 @@ La selección de bloque no puede cambiar durante una validación o un reintento.
 
 La app nunca admite un boleto sin conexión. En ese caso muestra `SIN CONEXIÓN / NO ADMITIR` y permite reintentar.
 
-## Accesos por bloque e historial (1.1.0)
+## Ocupación por ventas y QR canjeados (1.2.0)
 
-Debajo del bloque seleccionado se muestra **Accesos contabilizados**, con desglose
-Single / Day / Full. Son datos globales del servidor para todos los teléfonos:
-Single se atribuye a su bloque, Day a los bloques del día comprado y Full a todos
-los bloques del evento. Representan accesos atribuidos por pases canjeados, no
-butacas físicamente ocupadas. **QR únicos canjeados** cuenta cada boleto una sola vez.
+Debajo del bloque seleccionado se muestra **Ocupación por ventas**: por ejemplo,
+`120/500 vendidos · 24%`, con desglose de compras Single / Day / Full. La capacidad
+por bloque viene del servidor. El porcentaje puede superar el 100%; la barra se
+limita al ancho disponible y se advierte el exceso. Si hay boletos vendidos sin
+bloque asignado se informa por separado, sin atribuirlos a un bloque arbitrario.
+
+Las ventas se consultan al recuperar la sesión, al volver a la app y con
+**Actualizar**. No se consultan por cada QR ni en el sondeo de 30 segundos.
+Una consulta trae todos los bloques, así que cambiar de bloque reutiliza sus datos.
+Las ventas pueden disminuir al cancelar compras; no son un contador acumulativo.
+
+**QR canjeados atribuidos** sigue separado como dato secundario. Son datos globales
+del servidor para todos los teléfonos. Tanto para ventas como para accesos, Single
+se atribuye a su bloque, Day a los bloques de su día y Full a todos los del evento.
+Sumar los bloques no equivale a personas únicas y no mide butacas físicamente ocupadas.
+**QR únicos canjeados** cuenta cada boleto usado una sola vez.
 
 **Ver bloques / Historial** muestra los bloques del evento y permite elegir otro
 evento cuando existe historial. Esta selección no cambia el bloque del escáner.
 No se suman admisiones en el teléfono ni se reinician las cifras al cerrar la app.
 
-El resumen se consulta al recuperar la sesión, al cambiar de bloque, al volver a
+El resumen de QR se consulta al recuperar la sesión, al cambiar de bloque, al volver a
 la app, con **Actualizar** y cada 30 segundos mientras la actividad está visible.
 El sondeo se detiene al pasar a segundo plano. Una validación puede incluir el
 resumen actualizado; respuestas anteriores no reemplazan datos más recientes.
 Si el resumen falla se conserva el último dato, marcado sin actualizar con hora
 de consulta en CDMX. Si nunca se obtuvo un resumen se muestra `—`, no cero.
-Un fallo del contador no cambia la decisión de un QR ya validado.
+Cada fuente conserva su propia hora de consulta y error; una actualización de QR no
+cambia la fecha ni las cifras de ventas. No se mezclan eventos aunque tengan bloques
+con el mismo identificador. Un fallo de cualquiera de los resúmenes no cambia la
+decisión de un QR ya validado.
 
 Contrato: `GET /api/registration/scanner/attendance?eventId=...` devuelve
 `{attendance: {eventId, eventName, venue, updatedAt, uniqueAdmissions, blocks, events}}`.
@@ -42,9 +56,14 @@ Contrato: `GET /api/registration/scanner/attendance?eventId=...` devuelve
 mismo objeto `attendance`. Ambas solicitudes utilizan la sesión individual
 `Authorization: Scanner …`; el contador no requiere nuevas credenciales.
 
+Ventas: `GET /api/registration/scanner/ticket-sales-summary?eventId=...` devuelve
+`{sales: {eventId, eventName, venue, updatedAt, capacityPerBlock, uniqueTickets, unassignedTickets, blocks}}`.
+En este objeto `total`, `single`, `day` y `full` son compras. `eventId` es opcional
+para el evento actual. Usa la misma sesión `Authorization: Scanner …`.
+
 ## Actualizar una instalación existente
 
-La versión 1.1.0 usa `versionCode=2`. Instalar el APK **encima de la versión
+La versión 1.2.0 usa `versionCode=3`. Instalar el APK **encima de la versión
 anterior**, con el mismo identificador de aplicación y certificado de firma.
 No desinstalar ni borrar datos. Se mantienen el nombre de preferencias y el alias
 de Android Keystore para recuperar la sesión cifrada existente. Las variantes

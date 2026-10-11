@@ -485,6 +485,138 @@ test('attendance summaries authenticate before reads and return seven zero count
   await f.request('/scanner/attendance', { headers: scanner.headers, status: 401 });
 });
 
+test('ticket sales summaries require scanner or global admin authentication and never write', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'sales-admin', { role: 'admin' });
+  const academy = await seedAcademy(f, 'sales-academy');
+  const scanner = await activateTicketScanner(f, admin);
+  const start = f.db.runtimeQueries.length;
+  await f.request('/admin/ticket-sales-summary', { status: 401 });
+  await f.request('/scanner/ticket-sales-summary', { status: 401 });
+  await f.request('/admin/ticket-sales-summary', { cookie: academy.cookie, status: 403 });
+  assert.ok(f.db.runtimeQueries.slice(start).every(sql => !sql.includes('JSON_GROUP_ARRAY')));
+  const readStart = f.db.runtimeQueries.length;
+  for (const [path, options] of [['/admin/ticket-sales-summary', { cookie: admin.cookie }], ['/scanner/ticket-sales-summary', { headers: scanner.headers }]]) {
+    const { json: { sales } } = await f.request(path, options);
+    assert.equal(sales.eventId, ticketEvent.eventId);
+    assert.equal(sales.capacityPerBlock, 500);
+    assert.equal(sales.uniqueTickets, 0);
+    assert.equal(sales.unassignedTickets, 0);
+    assert.equal(sales.blocks.length, 7);
+    assert.ok(sales.blocks.every(block => block.total === 0 && block.single === 0 && block.day === 0 && block.full === 0));
+    assert.match(sales.updatedAt, /^\d{4}-\d\d-\d\dT.*Z$/);
+  }
+  assert.ok(f.db.runtimeQueries.slice(readStart).every(sql => /^\s*SELECT/.test(sql)), 'sales refresh must not write session timestamps, counters or ticket issuance');
+  await f.request('/admin/ticket-sales-summary?eventId=unknown', { cookie: admin.cookie, status: 404 });
+  await f.request('/scanner/ticket-sales-summary', { method: 'POST', headers: scanner.headers, status: 405 });
+  f.db.sqlite.prepare("UPDATE registration_scanner_devices SET status = 'revoked' WHERE id = ?").run(scanner.device.id);
+  await f.request('/scanner/ticket-sales-summary', { headers: scanner.headers, status: 401 });
+});
+
+test('sales count paid issued tickets across both order types and preserve ticket positions after cancellation', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'sales-coverage', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const first = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-1', quantity: 1 },
+    { productId: 'day', optionId: 'sabado-14', quantity: 1 },
+    { productId: 'day', optionId: 'domingo-15', quantity: 1 },
+    { productId: 'full', quantity: 1 },
+  ]);
+  const second = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-2', quantity: 2 }, { productId: 'full', quantity: 1 },
+  ]);
+  // Source type is part of the order identity. Media never consumes ticket numbers.
+  f.db.sqlite.prepare(`INSERT INTO registration_inscription_orders
+    (id, curp, participant_name, academy_name, venue, reference, status, line_items_json)
+    VALUES (?, 'PRIVATE-CURP', 'Private holder', 'Academia', 'cdmx', 'REG-SALES-COVERAGE', 'paid', ?)`)
+    .run(second.id, JSON.stringify([{ productId: 'photo-solos', itemType: 'media', quantity: 50 },
+      { productId: 'full', itemType: 'ticket', quantity: 1, eventId: ticketEvent.eventId }]));
+  f.db.sqlite.prepare(`INSERT INTO registration_event_tickets
+    (id, source_order_type, source_order_id, ticket_code, ticket_number, ticket_label, holder_name, qr_payload)
+    VALUES ('sales-registration-ticket', 'registration', ?, 'LV-SALE-REGO', 1, 'Old printed label', 'Private holder', 'LEVITATE:TICKET:LV-SALE-REGO')`).run(second.id);
+  const summary = async () => (await f.request('/scanner/ticket-sales-summary', { headers: scanner.headers })).json.sales;
+  const original = await summary();
+  assert.equal(original.uniqueTickets, 8);
+  assert.equal(original.unassignedTickets, 0);
+  assert.deepEqual(original.blocks.map(({ total, single, day, full }) => [total, single, day, full]), [
+    [5, 1, 1, 3], [6, 2, 1, 3], [4, 0, 1, 3], [4, 0, 1, 3], [4, 0, 1, 3], [4, 0, 1, 3], [4, 0, 1, 3],
+  ]);
+  assert.doesNotMatch(JSON.stringify(original), /Private holder|PRIVATE-CURP|buyerEmail|ticketCode|sourceOrderId/);
+  const scanStart = f.db.runtimeQueries.length;
+  const { json: scanned } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+    body: { qrPayload: first.tickets[3].qrPayload, blockId: 'bloque-1' } });
+  assert.equal(scanned.admitted, true);
+  await f.request('/scanner/attendance', { headers: scanner.headers });
+  assert.ok(f.db.runtimeQueries.slice(scanStart).every(sql => !sql.includes('JSON_GROUP_ARRAY')), 'QR scans and attendance polling must not recalculate sales');
+  assert.deepEqual((await summary()).blocks, original.blocks, 'using an already purchased QR does not sell another ticket');
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET status = 'cancelled' WHERE id = ?").run(second.tickets[0].id);
+  const cancelled = await summary();
+  assert.equal(cancelled.uniqueTickets, 7);
+  assert.deepEqual(cancelled.blocks.map(block => block.total), [5, 5, 4, 4, 4, 4, 4]);
+  assert.equal(cancelled.blocks[1].single, 1, 'ticket #2 remains the second Single while #3 remains Full');
+  await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie, body: {
+    id: second.id, orderType: 'shop', status: 'rejected', rejectionReason: 'payment_not_found', rejectionMessage: 'Revisión',
+  } });
+  const rejected = await summary();
+  assert.equal(rejected.uniqueTickets, 5);
+  assert.deepEqual(rejected.blocks.map(block => block.total), [4, 3, 3, 3, 3, 3, 3]);
+  for (const status of ['pending_payment', 'payment_reported', 'rejected']) {
+    f.db.sqlite.prepare('UPDATE registration_shop_orders SET status = ? WHERE id = ?').run(status, first.id);
+    assert.equal((await summary()).uniqueTickets, 1, `exclude ${status} even when tickets were previously issued or used`);
+  }
+  f.db.sqlite.prepare('DELETE FROM registration_inscription_orders WHERE id = ?').run(second.id);
+  assert.equal((await summary()).uniqueTickets, 0, 'orphan tickets do not count as approved purchases');
+  const { json: currentAttendance } = await f.request('/scanner/attendance', { headers: scanner.headers });
+  assert.equal(currentAttendance.attendance.uniqueAdmissions, 1, 'payment changes must preserve the admission ledger');
+  assert.ok(currentAttendance.attendance.blocks.every(block => block.total === 1));
+  const query = f.db.runtimeQueries.find(sql => sql.includes('JSON_GROUP_ARRAY'));
+  const plan = f.db.sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all(ticketEvent.eventId, ticketEvent.eventId).map(row => row.detail).join('\n');
+  assert.match(plan, /USING COVERING INDEX idx_registration_event_tickets_event_sales/);
+});
+
+test('sales report legacy tickets without trustworthy day or event metadata as unassigned', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'sales-legacy', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'day', optionId: 'sabado-14', quantity: 1 }, { productId: 'full', quantity: 1 },
+  ]);
+  const lines = order.lineItems.map((line, index) => index === 0 ? { ...line, optionId: undefined } : { ...line, eventId: 'different-event' });
+  f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?').run(JSON.stringify(lines), order.id);
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET ticket_label = 'Full pass válido todos los días' WHERE source_order_id = ?").run(order.id);
+  const { json: { sales } } = await f.request('/admin/ticket-sales-summary', { cookie: admin.cookie });
+  assert.equal(sales.uniqueTickets, 2);
+  assert.equal(sales.unassignedTickets, 2);
+  assert.ok(sales.blocks.every(block => block.total === 0));
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET event_id = 'different-event' WHERE id = ?").run(order.tickets[1].id);
+  const { json: scoped } = await f.request('/admin/ticket-sales-summary', { cookie: admin.cookie });
+  assert.equal(scoped.sales.uniqueTickets, 1, 'tickets issued for another event are excluded entirely');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_ticket_admissions').get().total, 0);
+});
+
+test('historical sales use the saved event catalog and the 500 capacity fallback', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'sales-history', { role: 'admin' });
+  const historical = { eventId: 'past-sales-event', eventName: 'Encuentro anterior', venue: 'puebla',
+    days: [{ id: 'past-day', label: 'Día anterior', blockIds: ['past-1', 'past-2'] }],
+    blocks: [1, 2].map(number => ({ id: `past-${number}`, label: `Anterior ${number}`, dayId: 'past-day', date: '2025-01-01' })) };
+  f.db.sqlite.prepare('INSERT INTO registration_attendance_events(id,name,venue,metadata_json) VALUES (?,?,?,?)')
+    .run(historical.eventId, historical.eventName, historical.venue, JSON.stringify(historical));
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 2 }]);
+  const historicLines = [
+    { productId: 'day', itemType: 'ticket', quantity: 1, optionId: 'past-day', eventId: historical.eventId },
+    { productId: 'full', itemType: 'ticket', quantity: 1, eventId: historical.eventId },
+  ];
+  f.db.sqlite.prepare('UPDATE registration_shop_orders SET line_items_json = ? WHERE id = ?').run(JSON.stringify(historicLines), order.id);
+  f.db.sqlite.prepare('UPDATE registration_event_tickets SET event_id = ? WHERE source_order_id = ?').run(historical.eventId, order.id);
+  const { json: { sales } } = await f.request('/admin/ticket-sales-summary?eventId=past-sales-event', { cookie: admin.cookie });
+  assert.equal(sales.eventName, historical.eventName);
+  assert.equal(sales.capacityPerBlock, 500);
+  assert.equal(sales.uniqueTickets, 2);
+  assert.equal(sales.unassignedTickets, 0);
+  assert.deepEqual(sales.blocks, historical.blocks.map(block => ({ ...block, total: 2, single: 0, day: 1, full: 1 })));
+});
+
 test('Day purchases require a canonical day and discard forged labels and event IDs', async t => {
   const f = await fixture(t);
   const buyer = { curp: curpA, buyerName: 'Titular', buyerEmail: 'day@example.test', ...phone };

@@ -54,7 +54,9 @@ data class ScannerUiState(
     val activationError: String? = null,
     val selectedBlockId: String? = null,
     val attendance: AttendanceState = AttendanceState(),
+    val ticketSales: TicketSalesState = TicketSalesState(),
     val historyAttendance: AttendanceState = AttendanceState(),
+    val historyTicketSales: TicketSalesState = TicketSalesState(),
     val historyEventId: String? = null,
     val historyVisible: Boolean = false,
 ) {

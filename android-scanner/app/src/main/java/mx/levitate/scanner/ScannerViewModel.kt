@@ -26,6 +26,7 @@ import mx.levitate.scanner.model.SessionState
 import mx.levitate.scanner.model.TicketPayload
 import mx.levitate.scanner.model.TicketScanAttempt
 import mx.levitate.scanner.model.AttendanceState
+import mx.levitate.scanner.model.TicketSalesState
 
 class ScannerViewModel(application: Application) : AndroidViewModel(application) {
     private val api = LevitateApi(BuildConfig.API_BASE_URL, SecureSessionStore(application))
@@ -35,8 +36,12 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     private var pollingJob: Job? = null
     private var attendanceJob: Job? = null
     private var historyJob: Job? = null
+    private var salesJob: Job? = null
+    private var historySalesJob: Job? = null
     private var attendanceRequest = 0L
     private var historyRequest = 0L
+    private var salesRequest = 0L
+    private var historySalesRequest = 0L
 
     init {
         restoreSession()
@@ -53,21 +58,53 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
         if (!active) {
             attendanceRequest += 1
             historyRequest += 1
+            salesRequest += 1
+            historySalesRequest += 1
             attendanceJob?.cancel()
             historyJob?.cancel()
+            salesJob?.cancel()
+            historySalesJob?.cancel()
             mutableState.update { it.copy(
                 attendance = it.attendance.copy(isLoading = false, isStale = true),
                 historyAttendance = it.historyAttendance.copy(isLoading = false, isStale = true),
+                ticketSales = it.ticketSales.copy(isLoading = false, isStale = true),
+                historyTicketSales = it.historyTicketSales.copy(isLoading = false, isStale = true),
             ) }
             return
         }
-        refreshAttendance()
-        if (state.value.historyVisible) refreshHistory()
+        refreshSummaries()
+        if (state.value.historyVisible) refreshHistorySummaries()
         pollingJob = viewModelScope.launch {
             while (isActive) {
                 delay(30_000)
                 refreshAttendance()
                 if (state.value.historyVisible) refreshHistory()
+            }
+        }
+    }
+
+    fun refreshSummaries() {
+        refreshAttendance()
+        refreshSales()
+    }
+
+    private fun refreshSales() {
+        if (!foreground || state.value.sessionState !is SessionState.SignedIn || salesJob?.isActive == true) return
+        val requestId = ++salesRequest
+        mutableState.update { it.copy(ticketSales = it.ticketSales.copy(isLoading = true)) }
+        salesJob = viewModelScope.launch {
+            try {
+                val snapshot = api.ticketSales()
+                if (requestId == salesRequest) mutableState.update {
+                    it.copy(ticketSales = it.ticketSales.receive(snapshot, System.currentTimeMillis()))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (requestId == salesRequest) {
+                    if (error is SessionExpiredException) expireSession(error)
+                    else mutableState.update { it.copy(ticketSales = it.ticketSales.failed(error.salesMessage())) }
+                }
             }
         }
     }
@@ -97,28 +134,72 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     fun openHistory() {
         val current = state.value.attendance
+        val sales = state.value.ticketSales
+        val eventId = current.snapshot?.eventId ?: sales.snapshot?.eventId
         mutableState.update { it.copy(
             historyVisible = true,
-            historyEventId = current.snapshot?.eventId,
-            historyAttendance = current.copy(isLoading = false),
+            historyEventId = eventId,
+            historyAttendance = if (current.snapshot?.eventId == eventId) current.copy(isLoading = false) else AttendanceState(),
+            historyTicketSales = if (sales.snapshot?.eventId == eventId) sales.copy(isLoading = false) else TicketSalesState(),
         ) }
-        refreshHistory()
+        refreshHistorySummaries()
     }
 
     fun closeHistory() {
         historyRequest += 1
+        historySalesRequest += 1
         historyJob?.cancel()
-        mutableState.update { it.copy(historyVisible = false, historyAttendance = it.historyAttendance.copy(isLoading = false)) }
+        historySalesJob?.cancel()
+        mutableState.update { it.copy(
+            historyVisible = false,
+            historyAttendance = it.historyAttendance.copy(isLoading = false),
+            historyTicketSales = it.historyTicketSales.copy(isLoading = false),
+        ) }
     }
 
     fun selectHistoryEvent(eventId: String) {
-        val available = state.value.attendance.snapshot?.events.orEmpty() + state.value.historyAttendance.snapshot?.events.orEmpty()
-        if (!state.value.historyVisible || eventId == state.value.historyEventId || available.none { it.id == eventId }) return
+        val available = (state.value.attendance.snapshot?.events.orEmpty() + state.value.historyAttendance.snapshot?.events.orEmpty())
+            .map { it.id } + listOfNotNull(state.value.ticketSales.snapshot?.eventId, state.value.historyTicketSales.snapshot?.eventId)
+        if (!state.value.historyVisible || eventId == state.value.historyEventId || eventId !in available) return
         historyRequest += 1
+        historySalesRequest += 1
         historyJob?.cancel()
+        historySalesJob?.cancel()
         historyJob = null
-        mutableState.update { it.copy(historyEventId = eventId, historyAttendance = AttendanceState()) }
+        historySalesJob = null
+        mutableState.update { it.copy(historyEventId = eventId, historyAttendance = AttendanceState(), historyTicketSales = TicketSalesState()) }
+        refreshHistorySummaries()
+    }
+
+    fun refreshHistorySummaries() {
         refreshHistory()
+        refreshHistorySales()
+    }
+
+    private fun refreshHistorySales() {
+        if (!foreground || !state.value.historyVisible || state.value.sessionState !is SessionState.SignedIn || historySalesJob?.isActive == true) return
+        val eventId = state.value.historyEventId
+        val requestId = ++historySalesRequest
+        mutableState.update { it.copy(historyTicketSales = it.historyTicketSales.copy(isLoading = true)) }
+        historySalesJob = viewModelScope.launch {
+            try {
+                val snapshot = api.ticketSales(eventId)
+                if (requestId == historySalesRequest) mutableState.update {
+                    val expectedEventId = it.historyEventId ?: eventId
+                    it.copy(
+                        historyEventId = expectedEventId ?: snapshot.eventId,
+                        historyTicketSales = it.historyTicketSales.receive(snapshot, System.currentTimeMillis(), expectedEventId),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (requestId == historySalesRequest) {
+                    if (error is SessionExpiredException) expireSession(error)
+                    else mutableState.update { it.copy(historyTicketSales = it.historyTicketSales.failed(error.salesMessage())) }
+                }
+            }
+        }
     }
 
     fun refreshHistory() {
@@ -130,9 +211,10 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val snapshot = api.attendance(eventId)
                 if (requestId == historyRequest) mutableState.update {
+                    val expectedEventId = it.historyEventId ?: eventId
                     it.copy(
-                        historyEventId = eventId ?: snapshot.eventId,
-                        historyAttendance = it.historyAttendance.receive(snapshot, System.currentTimeMillis(), eventId),
+                        historyEventId = expectedEventId ?: snapshot.eventId,
+                        historyAttendance = it.historyAttendance.receive(snapshot, System.currentTimeMillis(), expectedEventId),
                     )
                 }
             } catch (cancelled: CancellationException) {
@@ -186,7 +268,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                             selectedBlockId = null,
                         )
                     }
-                    refreshAttendance()
+                    refreshSummaries()
                 }
                 .onFailure { error ->
                     mutableState.update {
@@ -268,7 +350,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                                 activationError = null,
                             )
                         }
-                        refreshAttendance()
+                        refreshSummaries()
                     }
                 }
                 .onFailure { error ->
@@ -301,8 +383,12 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     private fun expireSession(error: SessionExpiredException) {
         attendanceRequest += 1
         historyRequest += 1
+        salesRequest += 1
+        historySalesRequest += 1
         attendanceJob?.cancel()
         historyJob?.cancel()
+        salesJob?.cancel()
+        historySalesJob?.cancel()
         mutableState.update {
             it.copy(
                 sessionState = SessionState.SignedOut,
@@ -310,12 +396,20 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                 activationError = error.message,
                 selectedBlockId = null,
                 attendance = AttendanceState(),
+                ticketSales = TicketSalesState(),
                 historyAttendance = AttendanceState(),
+                historyTicketSales = TicketSalesState(),
                 historyEventId = null,
                 historyVisible = false,
             )
         }
     }
+}
+
+private fun Throwable.salesMessage(): String = when (this) {
+    is IOException -> "Sin conexión: las ventas no están actualizadas."
+    is ApiException -> message
+    else -> "No se pudieron actualizar las ventas. Intenta nuevamente."
 }
 
 private fun Throwable.attendanceMessage(): String = when (this) {

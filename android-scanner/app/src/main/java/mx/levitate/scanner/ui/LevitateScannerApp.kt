@@ -84,6 +84,7 @@ import mx.levitate.scanner.model.ScanDecision
 import mx.levitate.scanner.model.ScannerUiState
 import mx.levitate.scanner.model.ScanState
 import mx.levitate.scanner.model.SessionState
+import mx.levitate.scanner.model.AttendanceEvent
 
 @Composable
 fun LevitateScannerApp(viewModel: ScannerViewModel) {
@@ -103,11 +104,11 @@ fun LevitateScannerApp(viewModel: ScannerViewModel) {
             onRetry = viewModel::retryLastScan,
             onContinue = viewModel::continueScanning,
             onSelectBlock = viewModel::selectBlock,
-            onRefreshAttendance = viewModel::refreshAttendance,
+            onRefreshAttendance = viewModel::refreshSummaries,
             onOpenHistory = viewModel::openHistory,
             onCloseHistory = viewModel::closeHistory,
             onSelectHistoryEvent = viewModel::selectHistoryEvent,
-            onRefreshHistory = viewModel::refreshHistory,
+            onRefreshHistory = viewModel::refreshHistorySummaries,
         )
     }
 }
@@ -238,6 +239,7 @@ private fun ScannerScreen(
                 }
                 AttendancePanel(
                     state = state.attendance,
+                    salesState = state.ticketSales,
                     blockId = selectedBlock.id,
                     canOpenHistory = isReady,
                     onRefresh = onRefreshAttendance,
@@ -300,8 +302,11 @@ private fun ScannerScreen(
     if (state.historyVisible) {
         AttendanceHistoryDialog(
             state = state.historyAttendance,
+            salesState = state.historyTicketSales,
             selectedEventId = state.historyEventId,
-            availableEvents = state.attendance.snapshot?.events.orEmpty(),
+            availableEvents = state.attendance.snapshot?.events.orEmpty() + listOfNotNull(
+                state.ticketSales.snapshot?.let { AttendanceEvent(it.eventId, it.eventName) },
+            ),
             onSelectEvent = onSelectHistoryEvent,
             onRefresh = onRefreshHistory,
             onDismiss = onCloseHistory,

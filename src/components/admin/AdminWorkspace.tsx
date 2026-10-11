@@ -13,7 +13,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { AcademyPendingPanel } from "./AcademyPendingPanel";
 import type { AcademyPendingSources } from "./academyPendingReport";
 import { AdminPagination } from "./AdminPagination";
@@ -36,6 +36,7 @@ type HomeProps = {
   items: AdminWorkQueueItem[];
   onNavigate: (section: AdminSection) => void;
   onOpen: (target: AdminWorkQueueTarget) => void;
+  ticketSalesPanel: ReactNode;
 };
 
 export function AdminWorkspaceHome({
@@ -49,6 +50,7 @@ export function AdminWorkspaceHome({
   items,
   onNavigate,
   onOpen,
+  ticketSalesPanel,
 }: HomeProps) {
   const urgentCount = items.filter((item) => item.urgent).length;
   const stats = [
@@ -112,6 +114,7 @@ export function AdminWorkspaceHome({
           </button>
         ))}
       </section>
+      {ticketSalesPanel}
       <div className="admin-home__columns">
         <section
           className="admin-home__priorities admin-surface"

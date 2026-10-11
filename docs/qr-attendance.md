@@ -1,8 +1,9 @@
-# Accesos contabilizados por bloque
+# Ventas y accesos por bloque
 
-El resumen del escáner representa accesos atribuidos a los bloques según los pases
-canjeados. No representa butacas físicamente ocupadas: las pulseras permiten volver
-a entrar sin escanear y no se registran salidas.
+La ocupación por ventas indica cuántos lugares se compraron. El contador de QR
+representa accesos atribuidos a los bloques según los pases canjeados. Ninguno
+representa butacas físicamente ocupadas: las pulseras permiten volver a entrar
+sin escanear y no se registran salidas.
 
 ## Reglas
 
@@ -56,6 +57,34 @@ cambiar de bloque, escanear y pulsar Actualizar. Mientras está en primer plano
 sincroniza cada 30 segundos; en segundo plano detiene esa sincronización.
 Si falla la consulta conserva el último dato y avisa que está pendiente de
 actualizar, sin confundirlo con un cero ni modificar la decisión de un QR.
+
+## Ocupación por ventas
+
+En administración (Inicio y Boletos) y Android se muestra **vendidos / 500** y
+su porcentaje, con desglose Single/Day/Full. Se cuentan los boletos activos o
+canjeados de compras con pago aprobado, aunque el comprador todavía no haya
+ingresado. Day y Full se atribuyen a los mismos bloques que sus accesos. Escanear
+un boleto no vuelve a sumarlo a las ventas. Las compras pendientes, rechazadas,
+eliminadas y los boletos cancelados se excluyen del cálculo; corregir una compra
+puede bajar el total vendido sin borrar el historial de ingresos.
+
+La capacidad por bloque se configura en `shared/ticket-event.json`. Es una
+referencia visual, no una restricción nueva de venta o admisión. Si las ventas
+superan la capacidad, se muestra el porcentaje real y una advertencia; sólo la
+barra visual se limita al 100 %. Los boletos sin bloque/día asignable se informan
+aparte para revisión, sin inventar su cobertura.
+
+`GET /api/registration/admin/ticket-sales-summary` y
+`GET /api/registration/scanner/ticket-sales-summary` requieren la misma
+autenticación que los resúmenes de asistencia y aceptan `eventId` opcional.
+El objeto `sales` contiene los totales de compras y la capacidad. Estas consultas
+no escriben en la base ni recorren otros eventos.
+
+Ventas se consulta al abrir la vista y con **Actualizar**; Android también al
+volver a primer plano. No se consulta por cada QR ni en el sondeo periódico de
+asistencia. Su fecha y sus errores se muestran por separado del contador de
+ingresos. Los filtros de compras del administrador no modifican el resumen del
+evento. Ante un error se conserva el último dato disponible con su fecha.
 
 ## Publicación
 

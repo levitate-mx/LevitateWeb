@@ -89,6 +89,8 @@ import "./AdminOrderNotes.css";
 import { AdminPagination } from "./AdminPagination";
 import { useAdminPagination } from "./useAdminPagination";
 import { useAdminOrderPage } from "./useAdminOrderPage";
+import { useAdminTicketSales } from "./useAdminTicketSales";
+import { AdminTicketSalesPanel } from "./AdminTicketSalesPanel";
 import { adminOrderKey, adjustAdminOrderTotals } from "./adminOrderState";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import { AcademyPendingPanel } from "./AcademyPendingPanel";
@@ -10122,6 +10124,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
     onTotals: setTotals,
   });
   const isLoading = isOrdersLoading || paymentPage.isLoading;
+  const ticketSalesSummary = useAdminTicketSales({
+    enabled: adminSession?.user.role === "admin" && (activeSection === "dashboard" || activeSection === "tickets"),
+    request: requestRegistrationApi,
+  });
   const visibleUpdatedAt = activeSection === "payments" ? paymentPage.updatedAt : adminLastUpdatedAt;
 
   useEffect(() => {
@@ -10927,6 +10933,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const handleDashboardRefresh = () => {
+    if (activeSection === "dashboard" || activeSection === "tickets") ticketSalesSummary.refresh();
     if (activeSection === "payments") paymentPage.refresh();
     else if (activeSection === "program") void loadAdminProgram(true);
     else if (activeSection === "tickets" || activeSection === "media") void loadAdminOrders(true);
@@ -11165,7 +11172,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
         {adminError || adminDataError || paymentPage.error ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError || paymentPage.error}</p> : null}
 
         {isDashboardSection ? (
-          <AdminWorkspaceHome name={adminSession.user.name} isLoading={isLoading || isParticipantsLoading || isProgramLoading} hasError={Boolean(adminDataError)} academyCount={adminAcademies.length} participantCount={getDashboardUniqueParticipantCount(adminParticipants)} danceCount={programDances.length} reviewCount={adminNavBadges.payments} items={workQueueItems} onNavigate={(section) => section === "payments" ? handleDashboardNavigate({ section, statusFilter: "payment_reported" }) : handleSectionChange(section)} onOpen={handleOpenWorkQueueItem} />
+          <AdminWorkspaceHome name={adminSession.user.name} isLoading={isLoading || isParticipantsLoading || isProgramLoading} hasError={Boolean(adminDataError)} academyCount={adminAcademies.length} participantCount={getDashboardUniqueParticipantCount(adminParticipants)} danceCount={programDances.length} reviewCount={adminNavBadges.payments} items={workQueueItems} onNavigate={(section) => section === "payments" ? handleDashboardNavigate({ section, statusFilter: "payment_reported" }) : handleSectionChange(section)} onOpen={handleOpenWorkQueueItem} ticketSalesPanel={<AdminTicketSalesPanel {...ticketSalesSummary} onRefresh={ticketSalesSummary.refresh} />} />
         ) : isCommunicationsSection ? (
           <AdminCommunications unavailableReason={reportUnavailableReason} contacts={communicationContacts} isLoading={isParticipantsLoading || isLoading || isProgramLoading} onOpenAcademy={handleOpenAcademyProfile} />
         ) : isFollowupSection ? (
@@ -11279,6 +11286,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           />
         ) : isTicketSection ? (
           <>
+            <AdminTicketSalesPanel {...ticketSalesSummary} onRefresh={ticketSalesSummary.refresh} />
             <section className="registration-admin-summary registration-admin-summary--tickets" aria-label="Resumen de boletos por niño">
               <article>
                 <span>Alumnos con boleto</span>

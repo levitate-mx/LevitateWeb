@@ -2,6 +2,7 @@
   "eventId": "edomex-2026-otono",
   "eventName": "Estado de México · Otoño 2026",
   "venue": "edomex",
+  "capacityPerBlock": 500,
   "days": [
     {
       "id": "sabado-14",

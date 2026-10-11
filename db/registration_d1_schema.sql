@@ -412,6 +412,7 @@ CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON regi
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_source_order ON registration_event_tickets(source_order_type, source_order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_ticket_code ON registration_event_tickets(ticket_code);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_status ON registration_event_tickets(status);
+CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_event_sales ON registration_event_tickets(event_id, source_order_type, source_order_id, status, ticket_number);
 CREATE INDEX IF NOT EXISTS idx_registration_scanner_pairing_codes_expires_at ON registration_scanner_pairing_codes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_registration_scanner_devices_status ON registration_scanner_devices(status);
 CREATE INDEX IF NOT EXISTS idx_registration_choreographers_academy_id ON registration_choreographers(academy_id);

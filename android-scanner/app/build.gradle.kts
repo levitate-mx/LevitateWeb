@@ -23,8 +23,8 @@ android {
         applicationId = "mx.levitate.scanner"
         minSdk = 23
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
         buildConfigField("String", "SCANNER_BOOTSTRAP_PAYLOAD", "\"$configuredBootstrapPayload\"")

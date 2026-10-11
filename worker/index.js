@@ -1,5 +1,7 @@
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
+import { getTicketSalesSummary } from "./ticket-sales.js";
+import { getRegistrationEventTicketSpecs, getRegistrationTicketPassType, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
 
 const passportSessionCookieName = "levitate_passport_session";
 const registrationSessionCookieName = "levitate_registration_session";
@@ -531,6 +533,14 @@ export default {
 
     if (url.pathname === "/api/registration/scanner/attendance") {
       return handleRegistrationAttendance(request, env, "scanner");
+    }
+
+    if (url.pathname === "/api/registration/admin/ticket-sales-summary") {
+      return handleRegistrationTicketSalesSummary(request, env, "admin");
+    }
+
+    if (url.pathname === "/api/registration/scanner/ticket-sales-summary") {
+      return handleRegistrationTicketSalesSummary(request, env, "scanner");
     }
 
     if (url.pathname === "/api/registration/scanner/activate") {
@@ -2133,6 +2143,19 @@ async function attachRegistrationTicketAttendance(db, result) {
   }
 }
 
+async function handleRegistrationTicketSalesSummary(request, env, audience) {
+  try {
+    assertMethod(request, ["GET"]);
+    const db = getDb(env);
+    if (audience === "scanner") await requireRegistrationScannerDevice(request, db, { touchLastSeen: false });
+    else await requireRegistrationAdmin(request, env, db, { touchLastSeen: false });
+    const eventId = optionalString(new URL(request.url).searchParams.get("eventId")) || ticketEvent.eventId;
+    return sendJson({ sales: await getTicketSalesSummary(db, eventId) });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
 async function handleRegistrationAdminScannerPairingCode(request, env) {
   try {
     assertMethod(request, ["POST"]);
@@ -2402,8 +2425,7 @@ async function scanRegistrationEventTicket(db, { blockId, eventId, ticketCode, u
     }
   }
 
-  const coverage = ticketSpec.passType === "full" ? registrationTicketBlocks.map((block) => block.id)
-    : ticketSpec.passType === "day" ? ticketSpec.day.blockIds : [ticketSpec.block.id];
+  const coverage = getRegistrationTicketCoverage(ticketSpec);
   const admission = await recordTicketAdmission(db, {
     ticket, order, orderTable, passType: ticketSpec.passType,
     dayId: ticketSpec.passType === "full" ? null : selectedBlock.dayId,
@@ -5059,52 +5081,6 @@ async function ensureRegistrationEventTicketsForOrder(db, order, sourceOrderType
 
     throw error;
   }
-}
-
-function getRegistrationEventTicketSpecs(order) {
-  return parseRegistrationOrderLineItems(order.line_items_json).flatMap((lineItem) => {
-    if (!isRegistrationTicketLineItem(lineItem)) {
-      return [];
-    }
-
-    const quantity = getRegistrationTicketLineQuantity(lineItem);
-    const label = lineItem.title || lineItem.name || lineItem.productName || "Boleto Levitate";
-    const productId = optionalString(lineItem.productId || lineItem.id).split(":")[0];
-    const passType = getRegistrationTicketPassType(productId);
-    const block = passType === "block"
-      ? registrationTicketBlocks.find((item) => item.id === lineItem.optionId) || null
-      : null;
-    const day = passType === "day" ? ticketEvent.days.find((item) => item.id === lineItem.optionId) || null : null;
-    const eventId = lineItem.eventId || "edomex-2026-otono";
-
-    return Array.from({ length: quantity }, () => ({ label, passType, block, day, eventId }));
-  });
-}
-
-function getRegistrationTicketPassType(productId) {
-  if (productId === "block" || productId === "ticket-block") return "block";
-  if (productId === "day" || productId === "ticket-day-pass") return "day";
-  if (productId === "full" || productId === "ticket-full-pass") return "full";
-  return null;
-}
-
-function isRegistrationTicketLineItem(lineItem) {
-  const category = String(lineItem.productCategory || lineItem.category || "").toLowerCase();
-  const itemType = String(lineItem.itemType || lineItem.type || "").toLowerCase();
-  const visual = String(lineItem.visual || "").toLowerCase();
-  const productId = String(lineItem.productId || lineItem.id || "").toLowerCase();
-
-  return category === "boletos" || category === "tickets" || itemType === "ticket" || visual === "ticket" || productId.startsWith("ticket-");
-}
-
-function getRegistrationTicketLineQuantity(lineItem) {
-  const quantity = Number(lineItem.quantity ?? lineItem.qty ?? lineItem.count ?? 1);
-
-  if (!Number.isFinite(quantity) || quantity < 1) {
-    return 1;
-  }
-
-  return Math.min(100, Math.floor(quantity));
 }
 
 async function createRegistrationEventTicketCode(db) {
