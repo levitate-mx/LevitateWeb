@@ -2572,7 +2572,6 @@ async function handleRegistrationDances(request, env) {
     const subgenre = requireRegistrationSubgenre(genre, body.subgenre);
     const subgenreDetail = normalizeRegistrationSubgenreDetail(subgenre, body.subgenreDetail);
     const category = requireRegistrationCategory(genre, body.category);
-    const level = requireRegistrationLevel(genre, body.level);
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
     const isReleve = optionalBoolean(body.isReleve);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
@@ -2615,13 +2614,19 @@ async function handleRegistrationDances(request, env) {
       choreographerIds,
       "Coreógrafo no encontrado",
     );
-    await assertRegistrationIdsBelongToAcademy(
+    const participantRows = await assertRegistrationIdsBelongToAcademy(
       db,
       "registration_participants",
       academyId,
       participantIds,
       "Participante no encontrado",
     );
+    const division = getRegistrationMusicDriveDivision({
+      category,
+      isReleve,
+      participants: participantRows,
+    });
+    const level = requireRegistrationLevel(genre, body.level, division);
 
     const danceId = crypto.randomUUID();
     const statements = [
@@ -6190,15 +6195,22 @@ async function assertRegistrationIdsBelongToAcademy(db, tableName, academyId, id
     throwHttpError("registration_invalid_table", "Tabla de registro inválida", 500);
   }
 
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const placeholders = ids.map(() => "?").join(", ");
+
   const { results = [] } = await db
     .prepare(
       `
-        SELECT id
+        SELECT *
         FROM ${tableName}
         WHERE academy_id = ?
+          AND id IN (${placeholders})
       `,
     )
-    .bind(academyId)
+    .bind(academyId, ...ids)
     .all();
   const existingIds = new Set(results.map((row) => row.id));
   const allExist = ids.every((id) => existingIds.has(id));
@@ -6206,6 +6218,8 @@ async function assertRegistrationIdsBelongToAcademy(db, tableName, academyId, id
   if (!allExist) {
     throwHttpError("registration_relation_not_found", message, 404);
   }
+
+  return results;
 }
 
 function serializeRegistrationSession(row) {
@@ -7530,12 +7544,16 @@ function requireRegistrationCategory(genre, value) {
   return requireRegistrationChoice(value, "category", allowedValues);
 }
 
-function requireRegistrationLevel(genre, value) {
+function requireRegistrationLevel(genre, value, division = "") {
   if (genre === "motion") {
     if (value !== undefined && value !== null && String(value).trim() !== "") {
       throwHttpError("validation_error", "Motion no tiene niveles", 400);
     }
 
+    return null;
+  }
+
+  if (normalizeRegistrationDriveDivision(division) === "baby") {
     return null;
   }
 

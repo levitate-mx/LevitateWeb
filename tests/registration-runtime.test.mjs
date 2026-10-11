@@ -358,6 +358,26 @@ test('linked participants cannot be deleted by their academy or an admin', async
     .get(record.participant.id).total, 0);
 });
 
+test('Baby Aerial choreographies omit the level even when the academy has older participants', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'baby-without-level');
+  const existing = await createDance(f, academy);
+  const { json: { participant: baby } } = await f.request('/participants', {
+    method: 'POST', cookie: academy.cookie, status: 201,
+    body: { fullName: 'Participante Baby', curp: 'BBBB210101MDFCCC01', birthDate: '2021-01-01', age: 5, division: 'baby', shirtSize: '6_8' },
+  });
+
+  for (const [title, level] of [['Baby sin nivel', undefined], ['Baby con nivel heredado', 'elite']]) {
+    const { json: { dance } } = await f.request('/dances', {
+      method: 'POST', cookie: academy.cookie, status: 201,
+      body: { title, genre: 'aereo', subgenre: 'aro', category: 'solo', venue: 'edomex', level,
+        choreographerIds: [existing.choreographer.id], participantIds: [baby.id] },
+    });
+    assert.equal(dance.level, null);
+    assert.deepEqual(dance.participants.map(participant => participant.id), [baby.id]);
+  }
+});
+
 test('admin people summaries preserve distinct venues, empty people and latest dance ties', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'summary-admin', { role: 'admin' });

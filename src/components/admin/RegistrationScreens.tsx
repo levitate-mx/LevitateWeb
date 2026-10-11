@@ -1323,27 +1323,30 @@ function getBirthDateFromCurp(curp: string, referenceDate: string) {
   return birthDate;
 }
 
-function getDanceProgramDivision(dance: RegistrationDance) {
-  if (isReleveTeacherDance(dance)) {
-    return "releve";
-  }
-
-  const participantsWithDivision = dance.participants.filter((participant) => Boolean(participant.division));
+function getProgramDivisionFromParticipants(participants: RegistrationDanceRelation[], category: string) {
+  const participantsWithDivision = participants.filter((participant) => Boolean(participant.division));
 
   if (participantsWithDivision.length === 0) {
     return "";
   }
 
   const participantsByAge = [...participantsWithDivision].sort(compareParticipantsByProgramAge);
-  const normalizedCategory = dance.category;
 
-  if (normalizedCategory === "grupo") {
+  if (category === "grupo") {
     return getGroupDanceProgramDivision(participantsByAge);
   }
 
   const selectedParticipant = participantsByAge[0];
 
   return selectedParticipant?.division ?? "";
+}
+
+function getDanceProgramDivision(dance: RegistrationDance) {
+  if (isReleveTeacherDance(dance)) {
+    return "releve";
+  }
+
+  return getProgramDivisionFromParticipants(dance.participants, dance.category);
 }
 
 function isReleveTeacherDance(dance: RegistrationDance) {
@@ -8895,7 +8898,9 @@ function DanceRegistrationPanel({
   const [isSaving, setIsSaving] = useState(false);
   const subgenreOptions = selectedGenre ? (danceSubgenresByGenre[selectedGenre] ?? []) : [];
   const categoryOptions = selectedGenre ? (danceCategoriesByGenre[selectedGenre] ?? []) : [];
-  const shouldShowLevel = selectedGenre === "aereo";
+  const selectedParticipants = participants.filter((participant) => selectedParticipantIds.includes(participant.id));
+  const selectedDivision = getProgramDivisionFromParticipants(selectedParticipants, selectedCategory);
+  const shouldShowLevel = selectedGenre === "aereo" && selectedDivision !== "baby";
   const shouldShowOpenOtherApparatus = selectedGenre === "aereo" && selectedSubgenre === "open_otro";
   const choreographerItems = choreographers.map((choreographer) => ({
     id: choreographer.id,
