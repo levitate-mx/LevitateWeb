@@ -409,6 +409,21 @@ function getOption(product: TicketProduct, optionId?: string) {
   return optionId ? product.options?.find((option) => option.id === optionId) : undefined;
 }
 
+function getTicketOptionSelectLabel(product: TicketProduct, option: TicketOption) {
+  if (product.id !== "block") {
+    return `${option.label} · ${option.detail}`;
+  }
+
+  const blockNumber = Number(option.id.match(/^bloque-(\d+)$/)?.[1]);
+  const discipline = blockNumber >= 1 && blockNumber <= 3
+    ? "Motion"
+    : blockNumber >= 4 && blockNumber <= 7
+      ? "Aerial"
+      : null;
+
+  return [discipline, option.label, option.detail].filter(Boolean).join(" · ");
+}
+
 function getCartItemId(productId: TicketProduct["id"], optionId?: string) {
   return `${productId}:${optionId ?? "general"}`;
 }
@@ -1687,7 +1702,7 @@ function TicketShopPage() {
                         >
                           {product.options.map((option) => (
                             <option key={option.id} value={option.id}>
-                              {option.label} · {option.detail}
+                              {getTicketOptionSelectLabel(product, option)}
                             </option>
                           ))}
                         </select>
