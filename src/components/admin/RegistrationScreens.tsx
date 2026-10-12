@@ -100,6 +100,7 @@ import { AdminWorkQueue } from "./AdminWorkQueue";
 import { buildAdminWorkQueue, type AdminWorkQueueTarget } from "./adminWorkQueueData";
 import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
 import { adminSectionPaths, getAdminSectionFromPath, type AdminSection } from "./adminNavigation";
+import { RegistrationApiError, requestRegistrationApi } from "./registrationApi";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "releve" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
@@ -666,25 +667,6 @@ type RegistrationAcademyDirectorySummary = {
   status: RegistrationAcademyDirectoryStatus;
 };
 
-type RegistrationApiErrorBody = {
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
-
-class RegistrationApiError extends Error {
-  code: string;
-  status: number;
-
-  constructor(message: string, status: number, code = "request_error") {
-    super(message);
-    this.name = "RegistrationApiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
 const adminMenuItems: AdminNavItem[] = [
   { label: "Inicio", icon: Home, screen: "home" },
   { label: "Registrar coreógrafos", icon: UserRoundPlus, screen: "choreographers" },
@@ -982,31 +964,6 @@ const studentPortalModules = [
   resourceType?: StudentRegistrationResource["type"];
   icon: LucideIcon;
 }>;
-
-async function requestRegistrationApi<T>(path: string, options: RequestInit = {}) {
-  const headers = new Headers(options.headers);
-
-  if (options.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-
-  const response = await fetch(path, {
-    ...options,
-    credentials: "same-origin",
-    headers,
-  });
-  const payload = (await response.json().catch(() => null)) as (T & RegistrationApiErrorBody) | null;
-
-  if (!response.ok) {
-    throw new RegistrationApiError(
-      payload?.error?.message || "No se pudo completar la solicitud.",
-      response.status,
-      payload?.error?.code,
-    );
-  }
-
-  return payload as T;
-}
 
 function confirmRegistrationDelete(title: string, detail: string) {
   if (typeof window === "undefined") {
@@ -10631,7 +10588,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [academyQuery, academySort, academyStatusFilter, academySummaries]);
   const selectedOrder = paymentDetail && selectedOrderId === adminOrderKey(paymentDetail)
     ? paymentDetail
-    : selectedOrderId ? orders.find((order) => order.id === selectedOrderId) || null : null;
+    : null;
 
   const openPaymentOrder = async (order: RegistrationInscriptionOrder) => {
     const requestId = ++paymentDetailRequest.current;
@@ -10647,6 +10604,16 @@ export function LevitateRegistrationAdminPaymentsRoute({
       if (requestId === paymentDetailRequest.current) setAdminError(getErrorMessage(error, "No se pudo abrir el pago."));
     } finally {
       if (requestId === paymentDetailRequest.current) setIsPaymentDetailLoading(false);
+    }
+  };
+
+  const openPaymentOrderById = (orderId: string) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (order) {
+      void openPaymentOrder(order);
+    } else {
+      setSelectedOrderId("");
+      setAdminError("No se encontró la orden. Actualiza los datos e intenta nuevamente.");
     }
   };
 
@@ -10854,7 +10821,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const handleOpenWorkQueueItem = (target: AdminWorkQueueTarget) => {
     if (target.type === "order") {
       handleSectionChange("payments");
-      setSelectedOrderId(target.id);
+      openPaymentOrderById(target.id);
     } else if (target.type === "participant") {
       handleSectionChange("registrations");
       setSelectedParticipantId(target.id);
@@ -10866,7 +10833,8 @@ export function LevitateRegistrationAdminPaymentsRoute({
 
   const handleDashboardNavigate = (target: RegistrationDashboardTarget) => {
     setActiveSection(target.section);
-    setSelectedOrderId(target.orderId ?? "");
+    if (target.orderId) openPaymentOrderById(target.orderId);
+    else setSelectedOrderId("");
     setSelectedAcademyId("");
     setSelectedParticipantId("");
     setSelectedChoreographerId("");
@@ -10930,7 +10898,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     setSelectedParticipantId("");
     setSelectedChoreographerId("");
     setSelectedAcademyId("");
-    setSelectedOrderId(orderId);
+    openPaymentOrderById(orderId);
   };
 
   const handleOpenChoreographerProfile = (choreographerId: string) => {

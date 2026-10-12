@@ -5186,6 +5186,38 @@ async function getRegistrationEventTicketsForSource(db, sourceOrderType, sourceO
   }
 }
 
+async function getRegistrationEventTicketsBySourceOrder(db, sourceOrderType) {
+  const ticketsByOrder = new Map();
+
+  try {
+    const { results = [] } = await db
+      .prepare(
+        `
+          SELECT *
+          FROM registration_event_tickets
+          WHERE source_order_type = ?
+          ORDER BY source_order_id ASC, ticket_number ASC, created_at ASC
+        `,
+      )
+      .bind(sourceOrderType)
+      .all();
+
+    for (const ticket of results) {
+      const tickets = ticketsByOrder.get(ticket.source_order_id) || [];
+      tickets.push(serializeRegistrationEventTicket(ticket));
+      ticketsByOrder.set(ticket.source_order_id, tickets);
+    }
+
+    return ticketsByOrder;
+  } catch (error) {
+    if (isMissingRegistrationEventTicketsTable(error)) {
+      return ticketsByOrder;
+    }
+
+    throw error;
+  }
+}
+
 async function getRegistrationEventTicketsForCurp(db, curp) {
   const normalizedCurp = String(curp || "").trim();
 
@@ -5287,7 +5319,7 @@ async function getAllRegistrationInscriptionOrders(db) {
             payment_proof.file_name AS proof_file_name,
             payment_proof.content_type AS proof_content_type,
             payment_proof.file_size AS proof_file_size,
-            payment_proof.data_url AS proof_data_url,
+            '' AS proof_data_url,
             payment_proof.status AS proof_status,
             payment_proof.uploaded_at AS proof_uploaded_at
           FROM registration_inscription_orders
@@ -5304,7 +5336,10 @@ async function getAllRegistrationInscriptionOrders(db) {
       )
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationInscriptionOrderWithJoinedProof(db, order, { includeInternalNotes: true })));
+    const ticketsByOrder = results.length ? await getRegistrationEventTicketsBySourceOrder(db, "registration") : new Map();
+    return results.map((order) => serializeRegistrationInscriptionOrderWithJoinedProof(
+      order, ticketsByOrder.get(order.id) || [], { includeInternalNotes: true },
+    ));
   } catch (error) {
     if (isMissingRegistrationInscriptionOrdersTable(error)) {
       return [];
@@ -5325,7 +5360,7 @@ async function getAllRegistrationShopOrders(db) {
             payment_proof.file_name AS proof_file_name,
             payment_proof.content_type AS proof_content_type,
             payment_proof.file_size AS proof_file_size,
-            payment_proof.data_url AS proof_data_url,
+            '' AS proof_data_url,
             payment_proof.status AS proof_status,
             payment_proof.uploaded_at AS proof_uploaded_at
           FROM registration_shop_orders
@@ -5342,7 +5377,10 @@ async function getAllRegistrationShopOrders(db) {
       )
       .all();
 
-    return Promise.all(results.map((order) => serializeRegistrationShopOrderWithJoinedProof(db, order, { includeInternalNotes: true })));
+    const ticketsByOrder = results.length ? await getRegistrationEventTicketsBySourceOrder(db, "shop") : new Map();
+    return results.map((order) => serializeRegistrationShopOrderWithJoinedProof(
+      order, ticketsByOrder.get(order.id) || [], { includeInternalNotes: true },
+    ));
   } catch (error) {
     if (isMissingRegistrationShopOrdersTable(error)) {
       return [];
@@ -6755,11 +6793,11 @@ async function serializeRegistrationInscriptionOrderWithProof(db, order, options
   };
 }
 
-async function serializeRegistrationInscriptionOrderWithJoinedProof(db, order, options) {
+function serializeRegistrationInscriptionOrderWithJoinedProof(order, tickets, options) {
   return {
     ...serializeRegistrationInscriptionOrder(order, options),
     proof: serializeJoinedRegistrationPaymentProof(order),
-    tickets: await getRegistrationEventTicketsForSource(db, "registration", order.id),
+    tickets,
   };
 }
 
@@ -6790,11 +6828,11 @@ async function serializePublicRegistrationShopOrderWithProof(db, order) {
   };
 }
 
-async function serializeRegistrationShopOrderWithJoinedProof(db, order, options) {
+function serializeRegistrationShopOrderWithJoinedProof(order, tickets, options) {
   return {
     ...serializeRegistrationShopOrder(order, options),
     proof: serializeJoinedRegistrationPaymentProof(order),
-    tickets: await getRegistrationEventTicketsForSource(db, "shop", order.id),
+    tickets,
   };
 }
 
