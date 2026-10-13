@@ -8,6 +8,7 @@ import {
   CircleAlert,
   ClipboardList,
   CreditCard,
+  GraduationCap,
   MessageCircle,
   Music2,
   Search,
@@ -224,7 +225,7 @@ export function AdminWorkspaceHome({
               <ChevronRight size={16} />
             </button>
             <button onClick={() => onNavigate("workshops")} type="button">
-              <Users size={18} />
+              <GraduationCap aria-hidden="true" size={18} />
               <span>Workshops<small>Inscritos por taller</small></span>
               <ChevronRight size={16} />
             </button>

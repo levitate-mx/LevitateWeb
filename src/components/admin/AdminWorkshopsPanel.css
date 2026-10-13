@@ -25,6 +25,8 @@
 .admin-workshops .admin-workshops__view { border: 0; padding-left: 0; background: transparent; }
 .admin-workshops__enrollments { min-width: 0; background: #fff; border: 1px solid #e9e1e9; border-radius: 16px; overflow: hidden; }
 .admin-workshops__enrollments > header { padding: 22px; }
+.admin-workshops__enrollments > header { flex-wrap: wrap; }
+.admin-workshops__export-error { margin: 0 22px 16px; color: #9e335d; font-size: 13px; }
 .admin-workshops__enrollments h2, .admin-workshops__payment-form h2 { margin: 0; font-size: 20px; }
 .admin-workshops__filters { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; padding: 0 22px 22px; align-items: center; }
 .admin-workshops .admin-workshops__search { display: flex; align-items: center; position: relative; }

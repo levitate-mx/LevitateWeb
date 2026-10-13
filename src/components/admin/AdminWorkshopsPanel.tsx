@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, RefreshCw, Search, X } from "lucide-react";
+import { Download, FileSpreadsheet, RefreshCw, Search, X } from "lucide-react";
 import { RegistrationApiError, requestRegistrationApi } from "./registrationApi";
 import { normalizeAdminSearch } from "./adminNavigation";
 import { AdminPagination } from "./AdminPagination";
@@ -52,6 +52,8 @@ export function AdminWorkshopsPanel({ refreshKey = 0, onUpdated }: { refreshKey?
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [query, setQuery] = useState("");
   const [sessionFilter, setSessionFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("all");
@@ -144,13 +146,21 @@ export function AdminWorkshopsPanel({ refreshKey = 0, onUpdated }: { refreshKey?
       || (decision === "approve" && !proofFile) || (decision === "reject" && !paymentNote.trim())) return;
     if (await mutate("payment-review", { curp: payment.curp, revision: review.revision, proofId: review.proofId, decision, notes: paymentNote.trim() }, decision === "approve" ? "Pago aprobado." : "Comprobante rechazado.")) setReview(null);
   };
-  const exportCsv = () => {
-    // Keep user-entered spreadsheet cells from becoming formulas.
-    const cell = (value: unknown) => `"${String(value ?? "").replace(/^[=+@\-\t\r]/, "'$&").replace(/"/g, '""')}"`;
-    const rows = [["Participante", "CURP", "Academia", "Talleres", "Extras", "Total extras MXN", "Pagado MXN", "Pendiente MXN", "Referencia", "Estado del pago"],
-      ...filtered.map(enrollment => [enrollment.name, enrollment.curp, enrollment.academyName, enrollment.sessionIds.map(sessionName).join(" / "), enrollment.extraCount, enrollment.amountDue, enrollment.paidAmount, enrollment.balance, enrollment.paymentReference, paymentLabels[enrollment.paymentStatus]])];
-    const csv = "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n");
-    startBrowserDownload(prepareBrowserDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "levitate-workshops.csv"));
+  const exportExcel = async () => {
+    if (!snapshot || exporting || loading || busy || !filtered.length) return;
+    setExporting(true); setExportError("");
+    // Export every matching participant, including results on other pages.
+    const rows = filtered.map(enrollment => ({
+      ...enrollment, workshops: enrollment.sessionIds.map(sessionName),
+      paymentStatus: paymentLabels[enrollment.paymentStatus],
+    }));
+    try {
+      const { createWorkshopExcel } = await import("./workshopExcel");
+      const file = await createWorkshopExcel(rows, snapshot.event.eventName);
+      startBrowserDownload(prepareBrowserDownload(file, `levitate-workshops-${snapshot.event.date}.xlsx`));
+    } catch {
+      setExportError("No se pudo generar el Excel. Intenta de nuevo.");
+    } finally { setExporting(false); }
   };
 
   return <div className="admin-workshops" aria-busy={loading || busy}>
@@ -175,7 +185,8 @@ export function AdminWorkshopsPanel({ refreshKey = 0, onUpdated }: { refreshKey?
         </article>)}
       </section>
       <section className="admin-workshops__enrollments" aria-labelledby="workshop-enrollments-title">
-        <header><h2 ref={enrollmentHeading} tabIndex={-1} id="workshop-enrollments-title">Inscritos</h2><button type="button" onClick={exportCsv} disabled={!filtered.length}><Download size={16} />Exportar</button></header>
+        <header><h2 ref={enrollmentHeading} tabIndex={-1} id="workshop-enrollments-title">Inscritos</h2><button type="button" onClick={() => void exportExcel()} disabled={!filtered.length || exporting || loading || busy} aria-busy={exporting} title="Exporta todos los participantes que coinciden con los filtros"><FileSpreadsheet aria-hidden="true" size={16} />{exporting ? "Generando Excel…" : "Exportar Excel"}</button></header>
+        {exportError && <p className="admin-workshops__export-error" role="alert">{exportError}</p>}
         <div className="admin-workshops__filters">
           <label className="admin-workshops__search"><Search size={17} /><input aria-label="Buscar inscritos en workshops" placeholder="Nombre, CURP o academia" value={query} onChange={event => setQuery(event.target.value)} /></label>
           <select aria-label="Filtrar por taller" value={sessionFilter} onChange={event => setSessionFilter(event.target.value)}><option value="">Todos los talleres</option>{snapshot.sessions.map(session => <option key={session.id} value={session.id}>{sessionName(session.id)} · {ages(session)}</option>)}</select>

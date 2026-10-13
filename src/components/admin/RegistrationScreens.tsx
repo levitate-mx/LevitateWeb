@@ -696,7 +696,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Directorio", label: "Coreografías", icon: Music2, section: "choreographies" },
   { group: "Operación", label: "Pagos", icon: CreditCard, section: "payments" },
   { group: "Operación", label: "Boletos", icon: Ticket, section: "tickets" },
-  { group: "Operación", label: "Workshops", icon: CalendarDays, section: "workshops" },
+  { group: "Operación", label: "Workshops", icon: GraduationCap, section: "workshops" },
   { group: "Operación", label: "Foto y video", icon: Camera, section: "media" },
   { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
 ];
