@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CheckCircle2, ReceiptText, Search, UploadCloud } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, Clock3, ReceiptText, Search, UploadCloud } from "lucide-react";
 import { emiTransferAccount } from "../../data/paymentAccounts";
 import { formatWorkshopTime } from "../../data/workshopsContent";
 import { RegistrationApiError, requestRegistrationApi } from "../admin/registrationApi";
@@ -308,7 +308,7 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
         <>
         <form className="workshop-registration__selection" onSubmit={(event) => void save(event)} aria-busy={isSaving}>
           <header className="workshop-registration__header">
-            <h4>Elige tus workshops.</h4>
+            <h4>Elige tus <span>workshops.</span></h4>
           </header>
           <div className="workshop-registration__participant">
             <div><strong>{data.participant.name}</strong><span>{data.participant.academyName}</span></div>
@@ -332,10 +332,13 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
                     return (
                       <label className={`workshop-registration__option${checked ? " is-selected" : ""}${unavailable ? " is-unavailable" : ""}`} key={session.id}>
                         <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => toggleSession(session.id, event.target.checked)} />
+                        <span className="workshop-registration__check" aria-hidden="true"><Check size={14} strokeWidth={2.5} /></span>
                         <span className="workshop-registration__option-content">
                           <strong>{session.title}</strong><span>{session.coach}</span>
-                          <span>{formatWorkshopTime(session.start)} – {formatWorkshopTime(session.end)}</span>
-                          <small>{availability(session, saved)}</small>
+                          <span className="workshop-registration__option-meta">
+                            <span className="workshop-registration__time"><Clock3 size={14} aria-hidden="true" />{formatWorkshopTime(session.start)} – {formatWorkshopTime(session.end)}</span>
+                            <small>{availability(session, saved)}</small>
+                          </span>
                         </span>
                       </label>
                     );
@@ -347,13 +350,14 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
           {eligibleSessions.length === 0 ? <p className="workshop-registration__hint">No hay workshops disponibles para este registro.</p> : null}
           <div className="workshop-registration__summary" aria-live="polite">
             <div><strong>{selectedIds.length} seleccionados</strong><span>{Math.min(selectedIds.length, data.event.includedCount)} incluidos · {extraCount} {extraCount === 1 ? "adicional" : "adicionales"}</span></div>
-            <div><strong>{money(amountDue, data.event.currency)} {data.event.currency}</strong><span>Total adicional</span></div>
+            <div className="workshop-registration__total"><span>Total adicional</span><strong>{money(amountDue, data.event.currency)} <small>{data.event.currency}</small></strong></div>
             {paidAmount > 0 ? <p>Pago registrado: {money(paidAmount, data.event.currency)}. Saldo pendiente: {money(balance, data.event.currency)}.</p> : null}
           </div>
           {saveError ? <p className="workshop-registration__error" role="alert">{saveError}</p> : null}
           <div className="workshop-registration__actions">
             <button type="submit" disabled={busy || proofPending || !data.eligible || mustLookupAgain || !dirty || !selectedIds.length || hasUnavailableSelection}>
               {isSaving ? "Guardando…" : data.enrollment ? "Guardar cambios" : "Guardar selección"}
+              <ArrowRight size={18} aria-hidden="true" />
             </button>
             <p className="workshop-registration__saved" role="status">
               {saveMessage ? <><CheckCircle2 size={17} aria-hidden="true" />{saveMessage}</>
@@ -378,7 +382,7 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
                 </div> : null}
                 {paidAmount > 0 ? <p className="workshop-registration__hint">Pago confirmado: {money(paidAmount, data.event.currency)} {data.event.currency}.</p> : null}
                 {enrollment.paymentReference ? <>
-                  <p className="workshop-registration__transfer-total">{latestProof?.status === "rejected" && latestProof.isCurrent ? "Importe por confirmar: " : "Transfiere "}<strong>{money(savedBalance, data.event.currency)} {data.event.currency}</strong></p>
+                  <p className="workshop-registration__transfer-total"><span>{latestProof?.status === "rejected" && latestProof.isCurrent ? "Importe por confirmar" : "Transfiere"}</span><strong>{money(savedBalance, data.event.currency)} <small>{data.event.currency}</small></strong></p>
                   <dl className="workshop-registration__bank">
                     {emiTransferAccount.rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
                     <div><dt>Concepto / referencia</dt><dd>{enrollment.paymentReference}</dd></div>
