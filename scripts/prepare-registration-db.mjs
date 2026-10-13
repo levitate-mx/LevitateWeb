@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parseArgs, promisify } from "node:util";
+import { parseArgs, promisify, stripVTControlCharacters } from "node:util";
 import { planRegistrationSchema, prepareRegistrationSchema } from "./lib/registration-schema.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,6 +44,17 @@ export function createWranglerDatabase({ remote, database = "levitate-passport",
     try {
       return JSON.parse(stdout);
     } catch {
+      // Wrangler's remote importer prints this warning even with --json. Accept
+      // only that known prefix; JSON.parse still rejects errors or trailing junk.
+      if (extraArgs[0] === "--file") {
+        const output = stripVTControlCharacters(String(stdout));
+        const start = output.search(/^\[/m);
+        const warning = output.slice(0, start).replace(/\s+/g, " ").trim();
+        const expected = "▲ [WARNING] ⚠️ This process may take some time, during which your D1 database will be unavailable to serve queries.";
+        if (start > 0 && warning === expected) {
+          try { return JSON.parse(output.slice(start)); } catch { /* Fail closed below. */ }
+        }
+      }
       throw new Error("Unexpected D1 response; schema preparation stopped.");
     }
   }

@@ -32,6 +32,7 @@ const triggerStatements = [
 ];
 const aggregate = [{ success: true, results: [{ 'Total queries executed': 5, 'Rows read': 0, 'Rows written': 3 }],
   finalBookmark: 'synthetic-import-bookmark', meta: { duration: 1, rows_read: 0, rows_written: 3 } }];
+const importWarning = '▲ [WARNING] ⚠️ This process may take some time, during which your D1 database will be unavailable to serve queries.\n\n';
 
 async function assertRemoved(path) {
   await assert.rejects(stat(path), { code: 'ENOENT' });
@@ -84,6 +85,17 @@ test('remote reads and simple writes retain command transport and per-statement 
   await assert.rejects(shortResponse.read(['SELECT 1', 'SELECT 2']), /Unexpected D1 response/);
 });
 
+test('Wrangler import warning before its JSON aggregate is accepted and the temporary file is removed', async () => {
+  let sqlPath;
+  const db = createWranglerDatabase({ remote: true, runCommand: async (_executable, args) => {
+    sqlPath = args[args.indexOf('--file') + 1];
+    return { stdout: `${importWarning}${JSON.stringify(aggregate, null, 2)}\n` };
+  } });
+  assert.deepEqual(await db.write(triggerStatements), [aggregate[0].results]);
+  await assertRemoved(sqlPath);
+  await assertRemoved(dirname(sqlPath));
+});
+
 test('local trigger writes remain local commands and preserve the isolated persistence target', async () => {
   const db = createWranglerDatabase({ remote: false, persistTo: 'tmp/adapter-test-never-created',
     runCommand: async (_executable, args) => {
@@ -116,7 +128,14 @@ test('temporary migration SQL is removed when Wrangler fails', async () => {
 
 test('temporary migration SQL is removed and import rejected for malformed or unsuccessful results', async () => {
   for (const stdout of ['not-json', '[]', '{}', '[{"success":false}]',
-    JSON.stringify([aggregate[0], aggregate[0]])]) {
+    JSON.stringify([aggregate[0], aggregate[0]]),
+    `${importWarning}[{"success":false}]`,
+    `${importWarning}{"error":{"message":"Synthetic import failure"}}`,
+    `${importWarning}${JSON.stringify(aggregate)}\ntrailing junk`,
+    `${JSON.stringify(aggregate)}\ntrailing junk`,
+    `unknown output prefix\n${JSON.stringify(aggregate)}`,
+    `[ { "success": false } ]\n${JSON.stringify(aggregate)}`,
+  ]) {
     let sqlPath;
     const db = createWranglerDatabase({ remote: true, runCommand: async (_executable, args) => {
       sqlPath = args[args.indexOf('--file') + 1];
