@@ -223,6 +223,11 @@ export function AdminWorkspaceHome({
               </span>
               <ChevronRight size={16} />
             </button>
+            <button onClick={() => onNavigate("workshops")} type="button">
+              <Users size={18} />
+              <span>Workshops<small>Inscritos por taller</small></span>
+              <ChevronRight size={16} />
+            </button>
           </section>
         </aside>
       </div>

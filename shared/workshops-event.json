@@ -1,0 +1,54 @@
+{
+  "eventId": "edomex-workshops-2026",
+  "eventName": "Workshops Estado de México 2026",
+  "venue": "edomex",
+  "date": "2026-11-13",
+  "dateLabel": "Viernes 13 de noviembre de 2026",
+  "includedCount": 3,
+  "extraUnitPrice": 200,
+  "currency": "MXN",
+  "requiresPaidRegistration": false,
+  "footnote": "La inscripción incluye acceso a 3 workshops de la elección del participante.",
+  "tracks": [
+    {
+      "id": "aerial",
+      "title": "Aerial",
+      "venue": "Centro Cultural Futurama",
+      "groups": [
+        { "label": "Grupo A", "ages": "Hasta 12 años", "minAge": 0, "maxAge": 12 },
+        { "label": "Grupo B", "ages": "Mayores de 12 años", "minAge": 13, "maxAge": null }
+      ],
+      "slots": [
+        { "start": "09:00", "end": "10:00", "shared": { "id": "aerial-flex", "title": "Flex", "coach": "Ana Karen Rojas" } },
+        { "start": "10:30", "end": "12:00", "classes": [
+          { "id": "aerial-tela-a", "title": "Tela", "coach": "Daniel Herrera" },
+          { "id": "aerial-trapecio-b", "title": "Trapecio", "coach": "Renata Pinal" }
+        ] },
+        { "start": "12:30", "end": "14:00", "classes": [
+          { "id": "aerial-aro-a", "title": "Aro", "coach": "Renata Pinal" },
+          { "id": "aerial-cuna-b", "title": "Cuna", "coach": "Daniel Herrera" }
+        ] }
+      ]
+    },
+    {
+      "id": "motion",
+      "title": "Motion",
+      "venue": "City Express Plus Mundo E by Marriott",
+      "groups": [
+        { "label": "Grupo C", "ages": "Hasta 12 años", "minAge": 0, "maxAge": 12 },
+        { "label": "Grupo D", "ages": "Mayores de 12 años", "minAge": 13, "maxAge": null }
+      ],
+      "slots": [
+        { "start": "15:00", "end": "16:00", "shared": { "id": "motion-flex", "title": "Flex", "coach": "Ana Karen Rojas" } },
+        { "start": "16:15", "end": "17:45", "classes": [
+          { "id": "motion-jazz-c", "title": "Contemporary Jazz", "coach": "Daniel Montalvo" },
+          { "id": "motion-musical-d", "title": "Comedia musical", "coach": "Jorge Díaz de León" }
+        ] },
+        { "start": "18:00", "end": "19:30", "classes": [
+          { "id": "motion-musical-c", "title": "Comedia musical", "coach": "Jorge Díaz de León" },
+          { "id": "motion-jazz-d", "title": "Contemporary Jazz", "coach": "Daniel Montalvo" }
+        ] }
+      ]
+    }
+  ]
+}

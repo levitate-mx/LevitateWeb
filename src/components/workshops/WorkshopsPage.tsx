@@ -54,8 +54,8 @@ const includedCards = [
   },
   {
     icon: Clock3,
-    title: "Cupo sujeto a disponibilidad",
-    copy: "Los talleres y grupos tienen cupo limitado. Asegura tu lugar o sé parte de cada sede.",
+    title: "Elige tus workshops",
+    copy: "Consulta los horarios y registra los talleres que vas a tomar.",
   },
 ];
 

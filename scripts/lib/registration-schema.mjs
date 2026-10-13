@@ -1,3 +1,13 @@
+import { readFileSync } from "node:fs";
+
+// Workshop DDL is shared with its explicit migration, including capacity triggers.
+const workshopMigration = readFileSync(new URL("../../db/registration_workshops.sql", import.meta.url), "utf8");
+const workshopStatements = workshopMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE TRIGGER[\s\S]*?\nEND;/g) || [];
+const workshopTables = workshopStatements.filter((sql) => sql.startsWith("CREATE TABLE")).map((sql) => ({
+  name: sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1],
+  columns: [...sql.matchAll(/^  (\w+) (?:TEXT|INTEGER)\b/gm)].map((match) => match[1]),
+}));
+
 // These additions replace the schema preparation previously done by request handlers.
 // Existing tables, columns, IDs, permissions, and nonempty access tokens are preserved.
 const additions = {
@@ -194,9 +204,9 @@ const indexes = [
 
 /** Adapter: read(sqlStatements) returns one array of rows per statement; write(sqlStatements) applies a batch. */
 export async function planRegistrationSchema(db) {
-  const tableNames = [...new Set([...Object.keys(prerequisites), ...Object.keys(createdTables)])];
+  const tableNames = [...new Set([...Object.keys(prerequisites), ...Object.keys(createdTables), ...workshopTables.map((table) => table.name)])];
   const [objects, ...columnResults] = await db.read([
-    "SELECT name, type, tbl_name FROM sqlite_schema WHERE type IN ('table', 'index')",
+    "SELECT name, type, tbl_name FROM sqlite_schema WHERE type IN ('table', 'index', 'trigger')",
     ...tableNames.map((name) => `PRAGMA table_info(${name})`),
   ]);
   const tables = new Set(objects.filter((row) => row.type === "table").map((row) => row.name));
@@ -218,6 +228,12 @@ export async function planRegistrationSchema(db) {
       if (!columns.get(name).has(column) && !Object.hasOwn(additions[name] || {}, column)) {
         errors.push(`Missing prerequisite column ${name}.${column}.`);
       }
+    }
+  }
+  for (const table of workshopTables) {
+    if (!tables.has(table.name)) continue;
+    for (const column of table.columns) {
+      if (!columns.get(table.name).has(column)) errors.push(`Missing prerequisite column ${table.name}.${column}.`);
     }
   }
   for (const [name, table] of indexes) {
@@ -265,6 +281,12 @@ export async function planRegistrationSchema(db) {
     if (!existingIndexes.has(name)) {
       steps.push({ description: `Create ${name}`, sql: `CREATE ${unique ? `${unique} ` : ""}INDEX IF NOT EXISTS ${name} ON ${table}(${column})${where ? ` ${where}` : ""}` });
     }
+  }
+  for (const sql of workshopStatements) {
+    const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) IF NOT EXISTS (\w+)/);
+    const existing = objects.find((row) => row.name === name);
+    if (existing && existing.type !== type.toLowerCase()) throw new Error(`Unexpected schema object ${name}. No changes applied.`);
+    if (!existing) steps.push({ description: `Create ${name}`, sql });
   }
   return { steps, legacyAcademyVenue: columns.get("registration_academies").has("venue") };
 }

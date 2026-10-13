@@ -8,6 +8,7 @@ export const adminSectionPaths = {
   choreographies: "/admin/coreografias",
   payments: "/admin/inscripciones",
   tickets: "/admin/boletos",
+  workshops: "/admin/workshops",
   media: "/admin/foto-video",
   program: "/admin/programa",
 } as const;

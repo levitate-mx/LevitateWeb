@@ -2,6 +2,8 @@ import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getRegistrationEventTicketSpecs, getRegistrationTicketPassType, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
+import { getWorkshopLookup, saveWorkshopEnrollment, getAdminWorkshops, saveWorkshopCapacity, saveWorkshopPayment,
+  submitWorkshopPaymentProof, getWorkshopPaymentProof, reviewWorkshopPaymentProof } from "./workshops.js";
 
 const passportSessionCookieName = "levitate_passport_session";
 const registrationSessionCookieName = "levitate_registration_session";
@@ -421,6 +423,38 @@ export default {
 
     if (url.pathname === "/api/registration/student/login") {
       return handleRegistrationStudentLogin(request, env);
+    }
+
+    if (url.pathname === "/api/registration/workshops/lookup") {
+      return handleRegistrationWorkshops(request, env, "lookup");
+    }
+
+    if (url.pathname === "/api/registration/workshops/enrollment") {
+      return handleRegistrationWorkshops(request, env, "enrollment");
+    }
+
+    if (url.pathname === "/api/registration/workshops/payment-proof") {
+      return handleRegistrationWorkshops(request, env, "proof");
+    }
+
+    if (url.pathname === "/api/registration/admin/workshops") {
+      return handleRegistrationAdminWorkshops(request, env, "lookup");
+    }
+
+    if (url.pathname === "/api/registration/admin/workshops/capacity") {
+      return handleRegistrationAdminWorkshops(request, env, "capacity");
+    }
+
+    if (url.pathname === "/api/registration/admin/workshops/payment") {
+      return handleRegistrationAdminWorkshops(request, env, "payment");
+    }
+
+    if (url.pathname === "/api/registration/admin/workshops/payment-proof") {
+      return handleRegistrationAdminWorkshops(request, env, "proof");
+    }
+
+    if (url.pathname === "/api/registration/admin/workshops/payment-review") {
+      return handleRegistrationAdminWorkshops(request, env, "review");
     }
 
     if (url.pathname === "/api/registration/student/logout") {
@@ -1268,6 +1302,52 @@ async function handleRegistrationParticipants(request, env) {
       .first();
 
     return sendJson({ participant: serializeRegistrationParticipant(participant) }, 201);
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationWorkshops(request, env, action) {
+  try {
+    assertMethod(request, ["POST"]);
+    const db = getDb(env);
+    const body = await readJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) throwHttpError("validation_error", "Envía los datos del workshop como un objeto JSON.", 400);
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+    if (curp.length !== 18) throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+    const options = { academyId: access.scope === "academy" ? access.session.academy.id : null };
+    const workshops = action === "enrollment"
+      ? await saveWorkshopEnrollment(db, curp, body, options)
+      : action === "proof"
+      ? await submitWorkshopPaymentProof(db, curp, body, getRegistrationPaymentProofInput(body), options)
+      : await getWorkshopLookup(db, curp, options);
+    return sendJson({ workshops });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAdminWorkshops(request, env, action) {
+  try {
+    assertMethod(request, [action === "lookup" || action === "proof" ? "GET" : "POST"]);
+    const db = getDb(env);
+    const access = await requireRegistrationAdmin(request, env, db, { touchLastSeen: false });
+    if (action === "lookup") return sendJson({ workshops: await getAdminWorkshops(db) });
+    if (action === "proof") {
+      const params = new URL(request.url).searchParams;
+      const curp = normalizeCurp(requireString(params.get("curp"), "curp"));
+      if (curp.length !== 18) throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+      return sendJson({ proof: await getWorkshopPaymentProof(db, curp, requireString(params.get("proofId"), "proofId")) });
+    }
+    const body = await readJsonBody(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) throwHttpError("validation_error", "Envía los datos del workshop como un objeto JSON.", 400);
+    if (action === "capacity") return sendJson({ workshops: await saveWorkshopCapacity(db, body) });
+    const curp = normalizeCurp(requireString(body.curp, "curp"));
+    if (curp.length !== 18) throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
+    return sendJson({ workshops: action === "review"
+      ? await reviewWorkshopPaymentProof(db, curp, body, access.session.user)
+      : await saveWorkshopPayment(db, curp, body, access.session.user) });
   } catch (error) {
     return sendRegistrationError(error);
   }

@@ -91,6 +91,7 @@ import { useAdminPagination } from "./useAdminPagination";
 import { useAdminOrderPage } from "./useAdminOrderPage";
 import { useAdminTicketSales } from "./useAdminTicketSales";
 import { AdminTicketSalesPanel } from "./AdminTicketSalesPanel";
+import { AdminWorkshopsPanel } from "./AdminWorkshopsPanel";
 import { adminOrderKey, adjustAdminOrderTotals } from "./adminOrderState";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import { AcademyPendingPanel } from "./AcademyPendingPanel";
@@ -695,6 +696,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Directorio", label: "Coreografías", icon: Music2, section: "choreographies" },
   { group: "Operación", label: "Pagos", icon: CreditCard, section: "payments" },
   { group: "Operación", label: "Boletos", icon: Ticket, section: "tickets" },
+  { group: "Operación", label: "Workshops", icon: CalendarDays, section: "workshops" },
   { group: "Operación", label: "Foto y video", icon: Camera, section: "media" },
   { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
 ];
@@ -10069,6 +10071,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [dashboardVenueFilter, setDashboardVenueFilter] = useState("all");
   const [dashboardVenueMetric] = useState<RegistrationDashboardVenueMetric>("participants");
   const [adminLastUpdatedAt, setAdminLastUpdatedAt] = useState("");
+  const [workshopsRefreshKey, setWorkshopsRefreshKey] = useState(0);
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedAcademyId, setSelectedAcademyId] = useState("");
   const [selectedParticipantId, setSelectedParticipantId] = useState("");
@@ -10270,7 +10273,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [loadAdminSession]);
 
   useEffect(() => {
-    if (adminSession?.user.role !== "admin" || activeSection === "payments") return;
+    if (adminSession?.user.role !== "admin" || activeSection === "payments" || activeSection === "workshops") return;
     if (activeSection === "program") {
       void loadAdminProgram();
     } else if (activeSection === "tickets" || activeSection === "media") {
@@ -10625,6 +10628,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     [dashboardCustomEndDate, dashboardCustomStartDate, dashboardDateRange],
   );
   const isDashboardSection = activeSection === "dashboard";
+  const isWorkshopsSection = activeSection === "workshops";
   const isFollowupSection = activeSection === "followup";
   const isCommunicationsSection = activeSection === "communications";
   const workQueueItems = useMemo(() => buildAdminWorkQueue({ orders, participants: adminParticipants, dances: programDances }), [orders, adminParticipants, programDances]);
@@ -10919,6 +10923,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const handleDashboardRefresh = () => {
+    if (activeSection === "workshops") {
+      setWorkshopsRefreshKey(current => current + 1);
+      return;
+    }
     if (activeSection === "dashboard" || activeSection === "tickets") ticketSalesSummary.refresh();
     if (activeSection === "payments") paymentPage.refresh();
     else if (activeSection === "program") void loadAdminProgram(true);
@@ -10974,6 +10982,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
   if (isDashboardSection) {
     headerTitle = "Inicio";
     headerDescription = "Control operativo del periodo seleccionado";
+  } else if (isWorkshopsSection) {
+    headerTitle = "Workshops";
+    headerDescription = "Inscritos por taller y pagos adicionales";
   } else if (isFollowupSection) {
     headerTitle = "Seguimiento";
   } else if (isCommunicationsSection) {
@@ -11081,7 +11092,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
               <h1>{headerTitle}<span className="admin-title-dot">.</span></h1>
               <p>{headerDescription}</p>
             </div>
-            {!isProgramSection && !isCommunicationsSection ? (
+            {!isProgramSection && !isCommunicationsSection && !isWorkshopsSection ? (
               <div className="registration-admin-header__actions">
                 {isAcademiesSection ? (
                   <button className="registration-admin-new-action" onClick={handleNewAcademy} type="button">
@@ -11155,9 +11166,11 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </header>
         ) : null}
 
-        {adminError || adminDataError || paymentPage.error ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError || paymentPage.error}</p> : null}
+        {!isWorkshopsSection && (adminError || adminDataError || paymentPage.error) ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError || paymentPage.error}</p> : null}
 
-        {isDashboardSection ? (
+        {isWorkshopsSection ? (
+          <AdminWorkshopsPanel refreshKey={workshopsRefreshKey} onUpdated={setAdminLastUpdatedAt} />
+        ) : isDashboardSection ? (
           <AdminWorkspaceHome name={adminSession.user.name} isLoading={isLoading || isParticipantsLoading || isProgramLoading} hasError={Boolean(adminDataError)} academyCount={adminAcademies.length} participantCount={getDashboardUniqueParticipantCount(adminParticipants)} danceCount={programDances.length} reviewCount={adminNavBadges.payments} items={workQueueItems} onNavigate={(section) => section === "payments" ? handleDashboardNavigate({ section, statusFilter: "payment_reported" }) : handleSectionChange(section)} onOpen={handleOpenWorkQueueItem} ticketSalesPanel={<AdminTicketSalesPanel {...ticketSalesSummary} onRefresh={ticketSalesSummary.refresh} />} />
         ) : isCommunicationsSection ? (
           <AdminCommunications unavailableReason={reportUnavailableReason} contacts={communicationContacts} isLoading={isParticipantsLoading || isLoading || isProgramLoading} onOpenAcademy={handleOpenAcademyProfile} />

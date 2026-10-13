@@ -29,6 +29,7 @@ import { createTicketsPdfBlob, downloadBlob } from "../admin/RegistrationScreens
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 import ticketEvent from "../../../shared/ticket-event.json";
+import { emiTransferAccount } from "../../data/paymentAccounts";
 
 type TicketOption = {
   id: string;
@@ -302,17 +303,7 @@ const ticketPaymentMethods = [
   },
 ];
 
-const photoVideoPaymentMethods = [
-  {
-    id: "nubank",
-    title: "Nubank",
-    rows: [
-      { label: "Beneficiario", value: "DANIEL EMILIANO JAIMES PONCE" },
-      { label: "CLABE", value: "638180010162929398" },
-      { label: "Entidad financiera", value: "Nubank" },
-    ],
-  },
-];
+const photoVideoPaymentMethods = [emiTransferAccount];
 
 const currencyFormatter = new Intl.NumberFormat("es-MX", {
   currency: "MXN",

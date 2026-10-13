@@ -1,5 +1,7 @@
 import { ArrowUpRight, CalendarDays, MapPin } from "lucide-react";
+import { useId, useState } from "react";
 import { edoMexWorkshops, formatWorkshopTime } from "../../data/workshopsContent";
+import { WorkshopRegistration } from "./WorkshopRegistration";
 
 function WorkshopTimeRange({ start, end }: { start: string; end: string }) {
   return (
@@ -12,6 +14,8 @@ function WorkshopTimeRange({ start, end }: { start: string; end: string }) {
 }
 
 export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
+  const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+  const registrationId = `workshop-registration-${useId()}`;
   return (
     <section className="workshop-schedule" id="horarios-edomex" aria-labelledby="workshop-schedule-title">
       <div className="workshop-schedule__inner">
@@ -49,6 +53,10 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
           </div>
           <p className="workshop-schedule__notice">Aerial y Motion se realizan en sedes distintas.</p>
           <p className="workshop-schedule__footnote">{edoMexWorkshops.footnote}</p>
+          <button className="workshop-registration-toggle" type="button" aria-expanded={isRegistrationOpen}
+            aria-controls={registrationId} onClick={() => setIsRegistrationOpen((current) => !current)}>
+            {isRegistrationOpen ? "Ocultar inscripción" : "Inscribirme a workshops"}<ArrowUpRight size={17} aria-hidden="true" />
+          </button>
         </div>
 
         <div className="workshop-schedule__agenda">
@@ -101,6 +109,7 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
             </section>
           ))}
         </div>
+        <WorkshopRegistration id={registrationId} isOpen={isRegistrationOpen} />
       </div>
     </section>
   );
