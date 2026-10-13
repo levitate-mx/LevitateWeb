@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs, promisify } from "node:util";
 import { planRegistrationSchema, prepareRegistrationSchema } from "./lib/registration-schema.mjs";
@@ -7,7 +9,7 @@ import { planRegistrationSchema, prepareRegistrationSchema } from "./lib/registr
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const execFileAsync = promisify(execFile);
 
-export function createWranglerDatabase({ remote, database = "levitate-passport", persistTo }) {
+export function createWranglerDatabase({ remote, database = "levitate-passport", persistTo, runCommand = execFileAsync }) {
   const args = [
     resolve(projectRoot, "node_modules/wrangler/bin/wrangler.js"),
     "d1", "execute", database,
@@ -15,19 +17,63 @@ export function createWranglerDatabase({ remote, database = "levitate-passport",
     remote ? "--remote" : "--local", "--json",
   ];
   if (persistTo) args.push("--persist-to", resolve(persistTo));
+  const sqlScript = (statements) => `${statements.map((sql) => sql.trim().replace(/;+$/, "")).join(";\n")};`;
+  async function invoke(extraArgs) {
+    let stdout;
+    try {
+      ({ stdout } = await runCommand(process.execPath, [...args, ...extraArgs], {
+        cwd: projectRoot,
+        maxBuffer: 8 * 1024 * 1024,
+        env: { ...process.env, CI: "true" },
+      }));
+    } catch (error) {
+      // execFile's message includes its full command, potentially including SQL.
+      // Prefer Wrangler's structured API error and never print command arguments.
+      let details = "";
+      for (const output of [error.stdout, error.stderr]) {
+        try {
+          const problem = JSON.parse(String(output)).error;
+          const parts = typeof problem === "string" ? [problem]
+            : [problem?.text || problem?.message, ...(problem?.notes || []).map((note) => note.text)];
+          details = parts.filter((part) => typeof part === "string").join(" ").slice(0, 1200);
+          if (details) break;
+        } catch { /* Non-JSON subprocess output is deliberately omitted. */ }
+      }
+      throw new Error(`Registration schema command failed${details ? `: ${details}` : ". Wrangler returned no structured error details."}`);
+    }
+    try {
+      return JSON.parse(stdout);
+    } catch {
+      throw new Error("Unexpected D1 response; schema preparation stopped.");
+    }
+  }
   async function execute(statements) {
-    const { stdout } = await execFileAsync(process.execPath, [...args, "--command", `${statements.join(";\n")};`], {
-      cwd: projectRoot,
-      maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, CI: "true" },
-    });
-    const result = JSON.parse(stdout);
+    const result = await invoke(["--command", sqlScript(statements)]);
     if (!Array.isArray(result) || result.length !== statements.length || result.some((item) => item.success !== true)) {
       throw new Error("Unexpected D1 response; schema preparation stopped.");
     }
     return result.map((item) => item.results || []);
   }
-  return { read: execute, write: execute };
+  async function write(statements) {
+    if (!remote || !statements.some((sql) => /^\s*CREATE\s+TRIGGER\b/i.test(sql))) return execute(statements);
+    // Remote --command uses D1's query parser; its trigger bodies can be split
+    // at internal semicolons. The SQL importer preserves complete trigger DDL.
+    const directory = await mkdtemp(join(tmpdir(), "levitate-registration-schema-"));
+    try {
+      const file = join(directory, "migration.sql");
+      await writeFile(file, sqlScript(statements), { mode: 0o600 });
+      const result = await invoke(["--file", file, "--yes"]);
+      // File imports return one aggregate result, not one per SQL statement.
+      // prepareRegistrationSchema separately verifies every object afterward.
+      if (!Array.isArray(result) || result.length !== 1 || result[0]?.success !== true) {
+        throw new Error("Unexpected D1 import response; schema preparation stopped.");
+      }
+      return result.map((item) => item.results || []);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+  return { read: execute, write };
 }
 
 export async function main(argv = process.argv.slice(2)) {
