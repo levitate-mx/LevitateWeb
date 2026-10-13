@@ -76,7 +76,7 @@ function requester(db) {
     }), { DB: db });
     const json = await response.json();
     if (status !== null) assert.equal(response.status, status, `${method} ${path}: ${JSON.stringify(json)}`);
-    return { status: response.status, json };
+    return { status: response.status, json, headers: response.headers };
   };
 }
 
@@ -207,6 +207,45 @@ test('workshop participant access requires a current session and the exact autho
   await f.lookup(person, { cookie: studentCookie, status: 401 });
   f.db.sqlite.prepare("UPDATE registration_sessions SET expires_at=datetime('now','-1 day') WHERE user_id=?").run(f.academy.id);
   await f.lookup(person, { status: 401 });
+});
+
+test('legacy deployment missing student portal tables can migrate then use the public workshop CURP flow', async t => {
+  const f = await fixture(t);
+  const person = await f.participant();
+  f.db.sqlite.exec(`
+    DROP TABLE registration_student_sessions;
+    DROP TABLE registration_student_users;
+    DROP TABLE registration_student_resources;
+  `);
+  const preservedTables = ['registration_academies', 'registration_participants', 'registration_inscription_orders'];
+  const snapshot = () => preservedTables.map(table => f.db.sqlite.prepare(`SELECT * FROM ${table} ORDER BY id`).all());
+  const before = snapshot();
+
+  const failedLogin = await f.request('/student/login', { body: { curp: person.curp }, status: 503 });
+  assert.equal(failedLogin.json.error.code, 'registration_schema_missing');
+  assert.doesNotMatch(failedLogin.json.error.message, /npm|migrat|SQL/i);
+  assert.equal((await prepareRegistrationSchema(f.prep)).steps.length, 6, 'read-only check must detect the missing portal tables and indexes');
+  const migrated = await prepareRegistrationSchema(f.prep, { apply: true });
+  assert.equal(migrated.applied, 6);
+  assert.deepEqual(snapshot(), before, 'creating the student portal must preserve registrations and payments');
+
+  const login = await f.request('/student/login', { body: { curp: person.curp } });
+  assert.equal(login.json.user.curp, person.curp);
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  assert.match(cookie, /^levitate_registration_student_session=.+/);
+  const view = await f.lookup(person, { cookie });
+  assert.equal(view.participant.curp, person.curp);
+  assert.equal(view.eligible, true);
+  assert.equal(ids(view).length, 6);
+  await f.lookup(person, { cookie: undefined, status: 401 });
+
+  const portalTables = ['registration_student_users', 'registration_student_sessions', 'registration_student_resources'];
+  const portalSnapshot = () => portalTables.map(table => f.db.sqlite.prepare(`SELECT * FROM ${table} ORDER BY id`).all());
+  const portalBefore = portalSnapshot();
+  assert.equal((await prepareRegistrationSchema(f.prep, { apply: true })).applied, 0);
+  assert.deepEqual(portalSnapshot(), portalBefore, 'repeat preparation preserves existing student sessions');
+  assert.deepEqual(snapshot(), before);
+  assert.deepEqual(f.db.sqlite.prepare('PRAGMA foreign_key_check').all(), []);
 });
 
 test('workshop age uses the event date, including the exact thirteenth birthday', async t => {

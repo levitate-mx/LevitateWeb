@@ -7997,7 +7997,7 @@ function sendRegistrationError(error) {
       {
         error: {
           code: "registration_schema_missing",
-          message: "Ejecuta npm run db:migrate:registration para preparar la base de registro",
+          message: "No pudimos consultar el registro en este momento. Intenta nuevamente en unos minutos.",
         },
       },
       503,

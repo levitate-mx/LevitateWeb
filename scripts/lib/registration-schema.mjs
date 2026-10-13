@@ -67,6 +67,40 @@ const proofColumns = {
 };
 
 const createdTables = {
+  // The public CURP flow establishes a student session before loading workshops.
+  // Older deployments can have academy registration without these portal tables.
+  registration_student_users: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      username: "TEXT UNIQUE COLLATE NOCASE",
+      curp: "TEXT NOT NULL UNIQUE COLLATE NOCASE",
+      password_hash: "TEXT",
+      status: "TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled'))",
+      ...timestamps,
+    },
+  },
+  registration_student_sessions: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      user_id: "TEXT NOT NULL REFERENCES registration_student_users(id) ON DELETE CASCADE",
+      session_token_hash: "TEXT NOT NULL UNIQUE",
+      user_agent: "TEXT",
+      last_seen_at: "TEXT NOT NULL DEFAULT (datetime('now'))",
+      expires_at: "TEXT NOT NULL",
+      created_at: timestamps.created_at,
+    },
+  },
+  registration_student_resources: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      curp: "TEXT NOT NULL COLLATE NOCASE",
+      resource_type: "TEXT NOT NULL CHECK (resource_type IN ('payment', 'judge_sheet', 'media_drive'))",
+      title: "TEXT NOT NULL",
+      url: "TEXT",
+      status: "TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'pending', 'hidden'))",
+      ...timestamps,
+    },
+  },
   registration_attendance_events: {
     columns: {
       id: "TEXT PRIMARY KEY",
@@ -181,6 +215,9 @@ const prerequisites = {
 };
 
 const indexes = [
+  ["idx_registration_student_sessions_user_id", "registration_student_sessions", "user_id"],
+  ["idx_registration_student_sessions_expires_at", "registration_student_sessions", "expires_at"],
+  ["idx_registration_student_resources_curp", "registration_student_resources", "curp"],
   ["idx_registration_event_tickets_event_sales", "registration_event_tickets", "event_id, source_order_type, source_order_id, status, ticket_number"],
   ["idx_registration_dance_participants_participant_dance", "registration_dance_participants", "participant_id, dance_id"],
   ["idx_registration_dance_choreographers_choreographer_dance", "registration_dance_choreographers", "choreographer_id, dance_id"],
