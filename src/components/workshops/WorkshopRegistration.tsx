@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CheckCircle2, Search, UploadCloud } from "lucide-react";
+import { CheckCircle2, ReceiptText, Search, UploadCloud } from "lucide-react";
 import { emiTransferAccount } from "../../data/paymentAccounts";
 import { formatWorkshopTime } from "../../data/workshopsContent";
 import { RegistrationApiError, requestRegistrationApi } from "../admin/registrationApi";
@@ -275,16 +275,18 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
 
   return (
     <section className="workshop-registration" id={id} hidden={!isOpen} ref={panelRef} aria-labelledby={`${id}-title`}>
-      <header className="workshop-registration__header">
-        <h3 id={`${id}-title`}>Elige tus workshops.</h3>
-        <p>3 incluidos. Cada adicional cuesta $200 MXN.</p>
-      </header>
+      <h3 className="workshop-registration__sr-only" id={`${id}-title`}>Inscripción a workshops</h3>
       <form className="workshop-registration__lookup" onSubmit={(event) => void lookup(event)} aria-busy={isLookingUp}>
-        <label htmlFor={`${id}-curp`}>CURP del participante</label>
+        <label className="workshop-registration__sr-only" htmlFor={`${id}-curp`}>CURP del participante</label>
         <div className="workshop-registration__search">
+          <button className="workshop-registration__search-submit" type="submit" disabled={busy}
+            aria-label={isLookingUp ? "Consultando workshops" : "Consultar workshops"}>
+            <Search size={23} aria-hidden="true" />
+          </button>
           <input id={`${id}-curp`} ref={inputRef} name="curp" type="text" value={curp} required minLength={18} maxLength={18}
-            pattern="[A-Za-z0-9]{18}" autoComplete="off" autoCapitalize="characters" spellCheck={false}
-            placeholder="Escribe tu CURP" disabled={busy} aria-describedby={lookupError ? `${id}-lookup-error` : undefined}
+            pattern="[A-Za-z0-9]{18}" autoComplete="off" autoCapitalize="characters" spellCheck={false} enterKeyHint="search"
+            placeholder="INGRESA TU CURP..." disabled={busy} aria-invalid={Boolean(lookupError)}
+            aria-describedby={lookupError ? `${id}-lookup-error` : undefined}
             onChange={(event) => {
               activeRequest.current?.abort(); activeRequest.current = null; operationInProgress.current = false;
               setCurp(event.target.value.toUpperCase().replace(/\s/g, ""));
@@ -292,13 +294,23 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
               setIsLookingUp(false); setIsSaving(false); setIsUploadingProof(false); setMustLookupAgain(false);
               setProofError(""); setProofMessage(""); clearProofFile();
             }} />
-          <button type="submit" disabled={busy}><Search size={17} aria-hidden="true" />{isLookingUp ? "Consultando…" : "Consultar"}</button>
         </div>
       </form>
       {lookupError ? <p className="workshop-registration__error" id={`${id}-lookup-error`} role="alert">{lookupError}</p> : null}
+      {!data && !lookupError ? (
+        <div className="workshop-registration__preview" role="status">
+          <ReceiptText size={24} aria-hidden="true" />
+          <strong>{isLookingUp ? "Consultando…" : "Sin consulta todavía."}</strong>
+          <p>{isLookingUp ? "Buscando tus talleres." : "Ingresa tu CURP para ver los workshops disponibles."}</p>
+        </div>
+      ) : null}
       {data ? (
         <>
         <form className="workshop-registration__selection" onSubmit={(event) => void save(event)} aria-busy={isSaving}>
+          <header className="workshop-registration__header">
+            <h4>Elige tus workshops.</h4>
+            <p>3 incluidos. Cada adicional cuesta $200 MXN.</p>
+          </header>
           <div className="workshop-registration__participant">
             <div><strong>{data.participant.name}</strong><span>{data.participant.academyName}</span></div>
             <p>{data.participant.age === null ? "Fecha de nacimiento pendiente" : `${data.participant.age} años al ${eventDate(data.event.date)}`}</p>

@@ -44,10 +44,8 @@
   min-width: 0;
   width: 100%;
   padding: 30px;
-  border: 1px solid rgba(42, 41, 40, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #29292c;
+  background: #f8f6f1;
+  color: var(--home-ink);
   scroll-margin-top: 110px;
 }
 
@@ -55,7 +53,11 @@
   display: none;
 }
 
-.workshop-registration__header h3 {
+.workshop-registration__header {
+  margin-bottom: 24px;
+}
+
+.workshop-registration__header h4 {
   margin: 0;
   color: #29292c;
   font-family: var(--font-body);
@@ -74,43 +76,115 @@
 }
 
 .workshop-registration__lookup {
-  max-width: 680px;
-  margin-top: 24px;
+  max-width: 980px;
 }
 
-.workshop-registration__lookup > label {
-  display: block;
-  margin-bottom: 7px;
-  color: #29292c;
-  font-size: 0.85rem;
-  font-weight: 650;
+.workshop-registration__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .workshop-registration__search {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 48px 1px minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 24px);
+  min-height: 94px;
+  padding: 14px 0;
+}
+
+.workshop-registration__search::before {
+  grid-row: 1;
+  grid-column: 2;
+  width: 1px;
+  height: 44px;
+  background: rgba(42, 41, 40, 0.34);
+  content: "";
+}
+
+.workshop-registration__search:focus-within::before {
+  height: 54px;
+  background: var(--home-pink);
 }
 
 .workshop-registration__search input {
-  flex: 1;
+  grid-row: 1;
+  grid-column: 3;
+  appearance: none;
   min-width: 0;
   width: 100%;
-  padding: 11px 13px;
-  border: 1px solid #c9c7c7;
-  border-radius: 6px;
-  background: #fff;
-  color: #29292c;
-  font: inherit;
-  font-size: 1rem;
-  line-height: 1.4;
-  letter-spacing: 0.035em;
+  min-height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--home-ink);
+  font-family: var(--font-body);
+  font-size: clamp(1.35rem, 2vw, 2.25rem);
+  font-weight: 620;
+  line-height: 1;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
+.workshop-registration .workshop-registration__search input:focus-visible {
+  outline: 0;
+}
+
 .workshop-registration__search input::placeholder {
-  color: #828088;
-  letter-spacing: 0;
-  text-transform: none;
+  color: rgba(42, 41, 40, 0.42);
+  opacity: 1;
+}
+
+.workshop-registration .workshop-registration__search-submit {
+  grid-row: 1;
+  grid-column: 1;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--home-ink);
+}
+
+.workshop-registration .workshop-registration__search-submit:hover:not(:disabled) {
+  background: transparent;
+  color: var(--home-pink);
+}
+
+.workshop-registration__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 360px;
+  padding: 42px 0 60px;
+  color: rgba(42, 41, 40, 0.48);
+}
+
+.workshop-registration__preview strong {
+  color: var(--home-ink);
+  font-family: var(--font-body);
+  font-size: clamp(2.1rem, 4vw, 3.2rem);
+  font-weight: 560;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.workshop-registration__preview p {
+  max-width: 520px;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .workshop-registration__selection {
@@ -427,10 +501,35 @@
   }
 
   .workshop-registration__search {
-    flex-direction: column;
+    grid-template-columns: 44px 1px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 76px;
+    padding: 8px 0;
   }
 
-  .workshop-registration__search button,
+  .workshop-registration__search::before {
+    height: 36px;
+  }
+
+  .workshop-registration__search:focus-within::before {
+    height: 44px;
+  }
+
+  .workshop-registration__search input {
+    min-height: 48px;
+    font-size: clamp(1rem, 5vw, 1.5rem);
+  }
+
+  .workshop-registration .workshop-registration__search-submit {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .workshop-registration__preview {
+    min-height: 280px;
+    padding: 32px 0 40px;
+  }
+
   .workshop-registration__actions button,
   .workshop-registration__proof-form button {
     width: 100%;
