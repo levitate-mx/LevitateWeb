@@ -309,7 +309,6 @@ export function WorkshopRegistration({ id, isOpen }: { id: string; isOpen: boole
         <form className="workshop-registration__selection" onSubmit={(event) => void save(event)} aria-busy={isSaving}>
           <header className="workshop-registration__header">
             <h4>Elige tus workshops.</h4>
-            <p>3 incluidos. Cada adicional cuesta $200 MXN.</p>
           </header>
           <div className="workshop-registration__participant">
             <div><strong>{data.participant.name}</strong><span>{data.participant.academyName}</span></div>
