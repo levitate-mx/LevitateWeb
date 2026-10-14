@@ -114,8 +114,8 @@ test('unpaid Relevé orders follow both CDMX deadlines instead of their creation
 
   f.sqlite.prepare(`INSERT INTO registration_dances
     (id, academy_id, title, genre, subgenre, is_releve, category, venue, created_at)
-    VALUES ('dance-after-presale', 'academy-one', 'Pieza posterior', 'aereo', 'aro', 1, 'solo', 'puebla', '2026-10-14 12:00:00')`).run();
-  now = Date.parse('2026-10-14T18:00:00Z');
+    VALUES ('dance-after-presale', 'academy-one', 'Pieza posterior', 'aereo', 'aro', 1, 'solo', 'puebla', '2026-10-27 12:00:00')`).run();
+  now = Date.parse('2026-10-27T18:00:00Z');
   const later = await f.request('/api/registration/releve/orders');
   assert.equal(later.orders.find(order => order.danceId === 'dance-after-presale').amount, 1500);
   assert.equal(later.orders.find(order => order.danceId === 'dance-one').amount, 1500);
@@ -141,9 +141,28 @@ function seedReleveOrder(f, id, { status = 'pending_payment', amount = 700, proo
   }
 }
 
+test('the extended Relevé presale applies through October 25 CDMX without reviving the 30 percent offer', async t => {
+  const f = await fixture(t);
+  let now = Date.parse('2026-10-14T18:00:00Z');
+  t.mock.method(Date, 'now', () => now);
+  seedReleveOrder(f, 'old-hot', { status: 'rejected' });
+  seedReleveOrder(f, 'old-regular', { amount: 1500 });
+  seedReleveOrder(f, 'paid-hot', { status: 'paid' });
+  for (const date of ['2026-10-14T18:00:00Z', '2026-10-26T05:59:59Z', '2026-10-26T06:00:00Z']) {
+    now = Date.parse(date);
+    const amount = date === '2026-10-26T06:00:00Z' ? 1500 : 1000;
+    const { orders } = await f.request('/api/registration/inscription/orders', { method: 'GET' });
+    assert.equal(orders.find(o => o.id === 'old-hot').amount, amount, date);
+    assert.equal(orders.find(o => o.id === 'old-regular').amount, amount, date);
+    assert.equal(orders.find(o => o.id === 'paid-hot').amount, 700, 'approved promotional payment stays unchanged');
+    const newlyBilled = await f.request('/api/registration/releve/orders');
+    assert.equal(newlyBilled.orders[0].amount, amount, 'new and existing orders agree');
+  }
+});
+
 test('admin list, export, detail and totals refresh old orders without an academy visit', async t => {
   const f = await fixture(t);
-  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-27T18:00:00Z'));
   seedReleveOrder(f, 'pending');
   seedReleveOrder(f, 'rejected', { status: 'rejected' });
   seedReleveOrder(f, 'approved', { status: 'paid' });
@@ -167,23 +186,23 @@ test('admin list, export, detail and totals refresh old orders without an academ
   const exported = await f.request('/api/registration/admin/payment-orders?export=1', admin);
   assert.equal(exported.orders.find(o => o.id === 'pending').amount, 1500);
   // Repeating a read does not rewrite dates, notes, paid amounts or proof data.
-  f.sqlite.prepare("UPDATE registration_inscription_orders SET updated_at = '2026-10-14 12:00:00' WHERE id = 'pending'").run();
+  f.sqlite.prepare("UPDATE registration_inscription_orders SET updated_at = '2026-10-27 12:00:00' WHERE id = 'pending'").run();
   const { order } = await f.request('/api/registration/admin/payment-order?id=pending&orderType=registration', admin);
   assert.equal(order.amount, 1500);
-  assert.equal(order.updatedAt, '2026-10-14 12:00:00');
+  assert.equal(order.updatedAt, '2026-10-27 12:00:00');
   assert.equal(order.notes, 'Conservar nota');
   assert.equal(order.paidAmount, 0);
 });
 
 test('only the latest valid submitted proof reserves the price at submission', async t => {
   const f = await fixture(t);
-  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-27T18:00:00Z'));
   const cases = [
     ['timely-hot', '2026-10-08 15:59:59', 700],
     ['hot-cutoff', '2026-10-08 16:00:00', 1000],
-    ['timely-presale', '2026-10-13 05:59:59', 1000],
-    ['presale-cutoff', '2026-10-13 06:00:00', 1500],
-    ['late', '2026-10-14 12:00:00', 1500],
+    ['timely-presale', '2026-10-26 05:59:59', 1000],
+    ['presale-cutoff', '2026-10-26 06:00:00', 1500],
+    ['late', '2026-10-27 12:00:00', 1500],
   ];
   for (const [id, proofAt] of cases) seedReleveOrder(f, id, { status: 'payment_reported', proofAt });
   seedReleveOrder(f, 'rejected-proof', { status: 'rejected', proofAt: '2026-10-07 12:00:00' });
@@ -192,7 +211,7 @@ test('only the latest valid submitted proof reserves the price at submission', a
   seedReleveOrder(f, 'replacement', { status: 'payment_reported', proofAt: '2026-10-07 12:00:00' });
   f.sqlite.prepare(`INSERT INTO registration_inscription_payment_proofs
     (id, order_id, file_name, content_type, file_size, data_url, uploaded_at)
-    VALUES ('new-proof', 'replacement', 'nuevo.png', 'image/png', 3, 'data:image/png;base64,AQID', '2026-10-14 12:00:00')`).run();
+    VALUES ('new-proof', 'replacement', 'nuevo.png', 'image/png', 3, 'data:image/png;base64,AQID', '2026-10-27 12:00:00')`).run();
   const listing = await f.request('/api/registration/inscription/orders', { method: 'GET' });
   for (const [id, , amount] of cases) assert.equal(listing.orders.find(o => o.id === id).amount, amount, id);
   for (const id of ['rejected-proof', 'missing-proof', 'invalid-proof', 'replacement']) {
@@ -203,10 +222,10 @@ test('only the latest valid submitted proof reserves the price at submission', a
 
 test('an old dance first billed after presale and stale approvals use the current rate', async t => {
   const f = await fixture(t);
-  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-27T18:00:00Z'));
   const { orders } = await f.request('/api/registration/releve/orders');
   assert.equal(orders[0].amount, 1500, 'dance creation during presale does not reserve a price');
-  seedReleveOrder(f, 'late-approval', { status: 'payment_reported', proofAt: '2026-10-14 12:00:00' });
+  seedReleveOrder(f, 'late-approval', { status: 'payment_reported', proofAt: '2026-10-27 12:00:00' });
   const rejected = await f.request('/api/registration/admin/inscription-order/status', {
     cookie: f.cookies['global-admin'], status: 400,
     body: { id: 'late-approval', status: 'paid', paidAmount: 700 },
@@ -225,10 +244,10 @@ test('a proof uploaded from an expired checkout updates the order before it can 
   t.mock.method(Date, 'now', () => now);
   const { orders: [order] } = await f.request('/api/registration/releve/orders');
   assert.equal(order.amount, 700);
-  now = Date.parse('2026-10-13T06:00:00Z');
+  now = Date.parse('2026-10-26T06:00:00Z');
   // Simulate the database clock at submission independently of the JS clock.
   f.sqlite.exec(`CREATE TRIGGER submission_time AFTER INSERT ON registration_inscription_payment_proofs
-    BEGIN UPDATE registration_inscription_payment_proofs SET uploaded_at = '2026-10-13 06:00:00' WHERE id = NEW.id; END;`);
+    BEGIN UPDATE registration_inscription_payment_proofs SET uploaded_at = '2026-10-26 06:00:00' WHERE id = NEW.id; END;`);
   const uploaded = await f.request('/api/registration/releve/order/proof', {
     body: { orderId: order.id, fileName: 'pago.png', contentType: 'image/png', fileSize: 3, dataUrl: 'data:image/png;base64,AQID' }, status: 201,
   });

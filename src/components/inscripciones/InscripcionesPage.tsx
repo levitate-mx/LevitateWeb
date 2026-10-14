@@ -488,8 +488,13 @@ export function InscripcionesPage() {
                 </span>
               ) : null}
               <span>
-                El precio preventa es aplicable hasta el <strong>12 de octubre de 2026.</strong> A partir del 13 de
+                La preventa general es aplicable hasta el <strong>12 de octubre de 2026.</strong> A partir del 13 de
                 octubre de 2026 se aplica el precio real.
+              </span>
+              <span>
+                <strong>Relevé: preventa de {relevePresalePrice} hasta el 25 de octubre de 2026</strong>, inclusive
+                (hora de CDMX). A partir del 26 de octubre, el precio es de <strong>$1,500 MXN</strong>.
+                Envía tu comprobante antes del cierre para conservar la tarifa de preventa.
               </span>
               <span>
                 El cierre de las inscripciones se realiza hasta el <strong>5 de noviembre de 2026</strong>, como fecha

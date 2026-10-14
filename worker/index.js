@@ -150,6 +150,8 @@ const registrationMusicDurationLimitsByDivision = {
 const registrationGoogleDriveScope = "https://www.googleapis.com/auth/drive.file";
 const registrationGmailSendScope = "https://www.googleapis.com/auth/gmail.send";
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
+// Relevé's regular presale extends through October 25, 23:59:59 in Mexico City.
+const registrationRelevePresaleEndsAt = Date.parse("2026-10-26T06:00:00.000Z");
 // Hot Presale runs in Mexico City (UTC-6 in October 2026): Oct 6 at 00:00 through Oct 8 at 10:00.
 const registrationReleveHotPresaleStartsAt = Date.parse("2026-10-06T06:00:00.000Z");
 const registrationReleveHotPresaleEndsAt = Date.parse("2026-10-08T16:00:00.000Z");
@@ -1860,7 +1862,7 @@ async function refreshRegistrationRelevePrices(db, { academyId, orderId } = {}) 
   `).bind(...bindings,
     registrationReleveHotPresaleStartsAt, registrationReleveHotPresaleEndsAt,
     getRegistrationReleveHotPresaleAmount(true), getRegistrationReleveHotPresaleAmount(),
-    registrationInscriptionPresaleEndsAt,
+    registrationRelevePresaleEndsAt,
     registrationInternationalInscriptionPrices.presale.releve, registrationInscriptionPrices.presale.releve,
     registrationInternationalInscriptionPrices.normal.releve, registrationInscriptionPrices.normal.releve,
   ).run();
@@ -6615,7 +6617,8 @@ function getRegistrationInscriptionAmount(dance, { isInternational = false } = {
     return getRegistrationReleveHotPresaleAmount(isInternational);
   }
 
-  const prices = Date.now() < registrationInscriptionPresaleEndsAt
+  const presaleEndsAt = priceKey === "releve" ? registrationRelevePresaleEndsAt : registrationInscriptionPresaleEndsAt;
+  const prices = Date.now() < presaleEndsAt
     ? priceTable.presale
     : priceTable.normal;
 

@@ -219,17 +219,25 @@ test('Hot Presale discounts only Relevé registration lines by 30 percent during
   const standardAcademy = await seedAcademy(f, 'hot-standard');
   await createDance(f, standardAcademy, curpB);
 
-  t.mock.method(Date, 'now', () => Date.parse('2026-10-07T18:00:00Z'));
-  const { json: releveLookup } = await f.request('/inscription/lookup', {
-    method: 'POST', cookie: releveAcademy.cookie, body: { curp: curpA },
-  });
-  const { json: standardLookup } = await f.request('/inscription/lookup', {
-    method: 'POST', cookie: standardAcademy.cookie, body: { curp: curpB },
-  });
-
-  assert.equal(releveLookup.lines[0].baseAmount, 700);
-  assert.equal(releveLookup.lines[0].amount, 700);
-  assert.equal(standardLookup.lines[0].baseAmount, 1500);
+  let now;
+  t.mock.method(Date, 'now', () => now);
+  for (const [date, relevePrice, standardPrice] of [
+    ['2026-10-07T18:00:00Z', 700, 1500],
+    ['2026-10-14T18:00:00Z', 1000, 1750],
+    ['2026-10-26T05:59:59Z', 1000, 1750],
+    ['2026-10-26T06:00:00Z', 1500, 1750],
+  ]) {
+    now = Date.parse(date);
+    const { json: releveLookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: releveAcademy.cookie, body: { curp: curpA },
+    });
+    const { json: standardLookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: standardAcademy.cookie, body: { curp: curpB },
+    });
+    assert.equal(releveLookup.lines[0].baseAmount, relevePrice, date);
+    assert.equal(releveLookup.lines[0].amount, relevePrice, date);
+    assert.equal(standardLookup.lines[0].baseAmount, standardPrice, 'only Relevé gets the extension');
+  }
 });
 
 test('two solos, a dupla and a trio total 4025 in presale for lookup and the generated payment order', async t => {
@@ -1381,7 +1389,7 @@ test('payment filters, reference search, optional global totals and exports span
   assert.ok(json.orders.length > 0);
   assert.ok(json.orders.every(order => order.status === 'paid' && order.venue === 'puebla' && order.orderType === 'registration'));
   assert.equal(json.totals.count, 63, 'summary cards describe the entire dataset, not the page');
-  assert.equal(json.totals.amount, 63500, 'global totals include the current Relevé price');
+  assert.equal(json.totals.amount, 63000, 'global totals include the extended Relevé presale price');
   const reference = json.orders[0].paymentReference;
   const { json: searched } = await f.request(`/admin/payment-orders?q=${encodeURIComponent(reference)}`, { cookie: admin.cookie });
   assert.ok(searched.orders.some(order => order.paymentReference === reference));

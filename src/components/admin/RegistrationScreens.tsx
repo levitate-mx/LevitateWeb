@@ -8626,7 +8626,7 @@ function ReleveRegistrationPanel({
               <p>
                 {isReleveHotPresaleActive()
                   ? `Hot Presale 30%: ${releveHotPresalePrice} hasta el 8 de octubre a las 10:00 a. m. (CDMX).`
-                  : `Preventa ${relevePresaleCost}; costo normal ${releveRegularCost}.`}
+                  : `Preventa ${relevePresaleCost} hasta el 25 de octubre de 2026, inclusive (CDMX). Desde el 26 de octubre: ${releveRegularCost}.`}
               </p>
             </article>
             <article>
@@ -8742,7 +8742,7 @@ function RelevePaymentsPanel({ dances }: { dances: RegistrationDance[] }) {
   return (
     <AdminPanel className="levitate-admin-panel--releve-payments" title="Pago de Relevé" eyebrow="Comprobantes">
       <div className="levitate-admin-releve-payments__toolbar">
-        <p className="levitate-admin-releve-payments__intro">Cada coreografía tiene su propio concepto. Transfiere el monto exacto y sube aquí el comprobante antes del cierre de la preventa para conservar esa tarifa. Las órdenes sin pago se actualizan al precio vigente.</p>
+        <p className="levitate-admin-releve-payments__intro">Cada coreografía tiene su propio concepto. La preventa de Relevé es de {relevePresaleCost} hasta el 25 de octubre de 2026, inclusive (CDMX). Transfiere el monto exacto y sube aquí el comprobante antes del cierre para conservar esa tarifa. Desde el 26 de octubre, las órdenes sin pago se actualizan a {releveRegularCost}.</p>
         <button className="levitate-admin-save" disabled={isLoading || !releveDanceIds} onClick={() => void loadOrders()} type="button">
           <RefreshCw aria-hidden="true" size={18} />
           Actualizar estado
