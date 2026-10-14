@@ -8742,7 +8742,7 @@ function RelevePaymentsPanel({ dances }: { dances: RegistrationDance[] }) {
   return (
     <AdminPanel className="levitate-admin-panel--releve-payments" title="Pago de Relevé" eyebrow="Comprobantes">
       <div className="levitate-admin-releve-payments__toolbar">
-        <p className="levitate-admin-releve-payments__intro">Cada coreografía tiene su propio concepto. Transfiere el monto exacto con ese concepto y sube aquí el comprobante.</p>
+        <p className="levitate-admin-releve-payments__intro">Cada coreografía tiene su propio concepto. Transfiere el monto exacto y sube aquí el comprobante antes del cierre de la preventa para conservar esa tarifa. Las órdenes sin pago se actualizan al precio vigente.</p>
         <button className="levitate-admin-save" disabled={isLoading || !releveDanceIds} onClick={() => void loadOrders()} type="button">
           <RefreshCw aria-hidden="true" size={18} />
           Actualizar estado
@@ -8791,7 +8791,9 @@ function RelevePaymentCard({ order, onOrderUpdated }: {
       onOrderUpdated(payload.order);
       setSelectedFile(null);
       form.reset();
-      setStatusMessage("Comprobante recibido. Administración revisará tu pago.");
+      setStatusMessage(payload.order.amount > order.amount
+        ? `Comprobante recibido. La preventa terminó y el monto vigente es ${formatAdminCurrency(payload.order.amount, "MXN")}. Administración revisará tu pago.`
+        : "Comprobante recibido. Administración revisará tu pago.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo subir el comprobante."));
     } finally {

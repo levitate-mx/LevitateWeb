@@ -1328,6 +1328,13 @@ function seedAdminPaymentPages(f, count = 63) {
   }
 }
 
+function paymentPageReadQueries(queries) {
+  const repricing = queries.filter(sql => /UPDATE registration_inscription_orders AS o/.test(sql));
+  assert.equal(repricing.length, 1, 'one set-based Relevé price refresh precedes pagination');
+  assert.doesNotMatch(repricing[0], /data_url|SELECT\s+\*|event_tickets/, 'price refresh reads only proof timestamps/status, never files or tickets');
+  return queries.filter(sql => !repricing.includes(sql));
+}
+
 test('admin payments use bounded SQL pages with stable identities and no proof or ticket hydration', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'page-admin', { role: 'admin' });
@@ -1345,7 +1352,7 @@ test('admin payments use bounded SQL pages with stable identities and no proof o
       assert.equal('accessToken' in order, false);
       visited.push(`${order.orderType}:${order.id}`);
     }
-    const queries = f.db.runtimeQueries.slice(start);
+    const queries = paymentPageReadQueries(f.db.runtimeQueries.slice(start));
     assert.ok(queries.some(sql => /LIMIT \? OFFSET \?/.test(sql)));
     assert.ok(queries.every(sql => !/payment_proofs|event_tickets/.test(sql)));
     const pageSql = queries.find(sql => /LIMIT \? OFFSET \?/.test(sql));
@@ -1367,13 +1374,14 @@ test('admin payments use bounded SQL pages with stable identities and no proof o
 
 test('payment filters, reference search, optional global totals and exports span all pages', async t => {
   const f = await fixture(t);
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
   const admin = await seedAcademy(f, 'filter-admin', { role: 'admin' });
   seedAdminPaymentPages(f);
   const { json } = await f.request('/admin/payment-orders?status=paid&venue=puebla&purchaseType=registration&includeTotals=1', { cookie: admin.cookie });
   assert.ok(json.orders.length > 0);
   assert.ok(json.orders.every(order => order.status === 'paid' && order.venue === 'puebla' && order.orderType === 'registration'));
   assert.equal(json.totals.count, 63, 'summary cards describe the entire dataset, not the page');
-  assert.equal(json.totals.amount, 63000);
+  assert.equal(json.totals.amount, 63500, 'global totals include the current Relevé price');
   const reference = json.orders[0].paymentReference;
   const { json: searched } = await f.request(`/admin/payment-orders?q=${encodeURIComponent(reference)}`, { cookie: admin.cookie });
   assert.ok(searched.orders.some(order => order.paymentReference === reference));
@@ -1438,7 +1446,7 @@ test('subsequent payment pages can skip counts and global totals, while filtered
   assert.equal(json.orders.length, 25);
   assert.equal(json.pagination.totalItems, undefined);
   assert.equal(json.totals, undefined);
-  const queries = f.db.runtimeQueries.slice(start);
+  const queries = paymentPageReadQueries(f.db.runtimeQueries.slice(start));
   assert.ok(queries.every(sql => !/COUNT\(|SUM\(|payment_proofs|event_tickets/.test(sql)));
   const selectQueries = queries.filter(sql => /SELECT \* FROM registration_(?:shop|inscription)_orders/.test(sql));
   assert.ok(selectQueries.length <= 2);

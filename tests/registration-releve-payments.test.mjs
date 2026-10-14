@@ -86,7 +86,7 @@ test('Relevé accepts exactly one teacher and only the solo category', async t =
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) AS count FROM registration_dances').get().count, 2);
 });
 
-test('Relevé applies Hot Presale only inside the CDMX campaign window and keeps the discounted order', async t => {
+test('unpaid Relevé orders follow both CDMX deadlines instead of their creation date', async t => {
   const f = await fixture(t);
   let now = Date.parse('2026-10-05T18:00:00Z');
   t.mock.method(Date, 'now', () => now);
@@ -109,7 +109,7 @@ test('Relevé applies Hot Presale only inside the CDMX campaign window and keeps
     VALUES ('dance-at-hot-presale-end', 'academy-one', 'Pieza al cierre de Hot Presale', 'aereo', 'aro', 1, 'solo', 'puebla', '2026-10-08 15:00:00')`).run();
   now = Date.parse('2026-10-08T16:00:00Z');
   const afterHotPresale = await f.request('/api/registration/releve/orders');
-  assert.equal(afterHotPresale.orders.find(order => order.danceId === 'dance-one').amount, 700);
+  assert.equal(afterHotPresale.orders.find(order => order.danceId === 'dance-one').amount, 1000);
   assert.equal(afterHotPresale.orders.find(order => order.danceId === 'dance-at-hot-presale-end').amount, 1000);
 
   f.sqlite.prepare(`INSERT INTO registration_dances
@@ -118,9 +118,123 @@ test('Relevé applies Hot Presale only inside the CDMX campaign window and keeps
   now = Date.parse('2026-10-14T18:00:00Z');
   const later = await f.request('/api/registration/releve/orders');
   assert.equal(later.orders.find(order => order.danceId === 'dance-after-presale').amount, 1500);
+  assert.equal(later.orders.find(order => order.danceId === 'dance-one').amount, 1500);
+  assert.equal(later.orders.find(order => order.danceId === 'dance-one').lineItems[0].amount, 1500);
   assert.equal(new Set(later.orders.map(order => order.reference)).size, 3);
   assert.deepEqual((await f.request('/api/registration/releve/orders', { cookie: f.cookies['academy-two'] })).orders, []);
   await f.request('/api/registration/releve/orders', { cookie: '', status: 401 });
+});
+
+function seedReleveOrder(f, id, { status = 'pending_payment', amount = 700, proofAt, proofStatus = 'submitted', currency = 'MXN' } = {}) {
+  f.sqlite.prepare(`INSERT INTO registration_inscription_orders
+    (id, curp, participant_name, academy_id, academy_name, venue, reference, amount, paid_amount,
+     status, line_items_json, notes, created_at, updated_at)
+    VALUES (?, ?, ?, 'academy-one', 'Academia Uno', 'edomex', ?, ?, ?, ?, ?, 'Conservar nota',
+      '2026-10-07 12:00:00', '2026-10-07 12:00:00')`)
+    .run(id, `RELEVE:${id}`, id, `REL-${id}`, amount, status === 'paid' ? amount : 0, status,
+      JSON.stringify([{ id, title: `Relevé · ${id}`, category: 'releve', genre: 'motion', currency, amount }]));
+  if (proofAt) {
+    f.sqlite.prepare(`INSERT INTO registration_inscription_payment_proofs
+      (id, order_id, file_name, content_type, file_size, data_url, status, uploaded_at, created_at)
+      VALUES (?, ?, 'pago.png', 'image/png', 3, 'data:image/png;base64,AQID', ?, ?, ?)`)
+      .run(`proof-${id}`, id, proofStatus, proofAt, proofAt);
+  }
+}
+
+test('admin list, export, detail and totals refresh old orders without an academy visit', async t => {
+  const f = await fixture(t);
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
+  seedReleveOrder(f, 'pending');
+  seedReleveOrder(f, 'rejected', { status: 'rejected' });
+  seedReleveOrder(f, 'approved', { status: 'paid' });
+  // Ordinary registrations and shop purchases do not share this price policy.
+  seedReleveOrder(f, 'ordinary');
+  f.sqlite.prepare("UPDATE registration_inscription_orders SET curp = 'SYNTHETIC-CURP' WHERE id = 'ordinary'").run();
+  const admin = { method: 'GET', cookie: f.cookies['global-admin'] };
+  const path = '/api/registration/admin/payment-orders?includeTotals=1';
+  await f.request(path, { method: 'GET', cookie: '', status: 401 });
+  await f.request(path, { method: 'GET', status: 403 });
+  assert.equal(f.sqlite.prepare("SELECT amount FROM registration_inscription_orders WHERE id = 'pending'").get().amount, 700);
+  const page = await f.request(path, admin);
+  assert.deepEqual(Object.fromEntries(page.orders.map(o => [o.id, o.amount])), {
+    pending: 1500, rejected: 1500, approved: 700, ordinary: 700,
+  });
+  assert.equal(page.totals.amount, 4400);
+  assert.equal(page.totals.paidAmount, 700);
+  for (const order of page.orders) assert.equal(order.lineItems[0].amount, order.amount);
+  const legacy = await f.request('/api/registration/admin/inscription-orders', admin);
+  assert.equal(legacy.totals.amount, page.totals.amount);
+  const exported = await f.request('/api/registration/admin/payment-orders?export=1', admin);
+  assert.equal(exported.orders.find(o => o.id === 'pending').amount, 1500);
+  // Repeating a read does not rewrite dates, notes, paid amounts or proof data.
+  f.sqlite.prepare("UPDATE registration_inscription_orders SET updated_at = '2026-10-14 12:00:00' WHERE id = 'pending'").run();
+  const { order } = await f.request('/api/registration/admin/payment-order?id=pending&orderType=registration', admin);
+  assert.equal(order.amount, 1500);
+  assert.equal(order.updatedAt, '2026-10-14 12:00:00');
+  assert.equal(order.notes, 'Conservar nota');
+  assert.equal(order.paidAmount, 0);
+});
+
+test('only the latest valid submitted proof reserves the price at submission', async t => {
+  const f = await fixture(t);
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
+  const cases = [
+    ['timely-hot', '2026-10-08 15:59:59', 700],
+    ['hot-cutoff', '2026-10-08 16:00:00', 1000],
+    ['timely-presale', '2026-10-13 05:59:59', 1000],
+    ['presale-cutoff', '2026-10-13 06:00:00', 1500],
+    ['late', '2026-10-14 12:00:00', 1500],
+  ];
+  for (const [id, proofAt] of cases) seedReleveOrder(f, id, { status: 'payment_reported', proofAt });
+  seedReleveOrder(f, 'rejected-proof', { status: 'rejected', proofAt: '2026-10-07 12:00:00' });
+  seedReleveOrder(f, 'missing-proof', { status: 'payment_reported' });
+  seedReleveOrder(f, 'invalid-proof', { status: 'payment_reported', proofAt: '2026-10-07 12:00:00', proofStatus: 'rejected' });
+  seedReleveOrder(f, 'replacement', { status: 'payment_reported', proofAt: '2026-10-07 12:00:00' });
+  f.sqlite.prepare(`INSERT INTO registration_inscription_payment_proofs
+    (id, order_id, file_name, content_type, file_size, data_url, uploaded_at)
+    VALUES ('new-proof', 'replacement', 'nuevo.png', 'image/png', 3, 'data:image/png;base64,AQID', '2026-10-14 12:00:00')`).run();
+  const listing = await f.request('/api/registration/inscription/orders', { method: 'GET' });
+  for (const [id, , amount] of cases) assert.equal(listing.orders.find(o => o.id === id).amount, amount, id);
+  for (const id of ['rejected-proof', 'missing-proof', 'invalid-proof', 'replacement']) {
+    assert.equal(listing.orders.find(o => o.id === id).amount, 1500, id);
+  }
+  assert.equal(listing.orders.find(o => o.id === 'replacement').proof.id, 'new-proof');
+});
+
+test('an old dance first billed after presale and stale approvals use the current rate', async t => {
+  const f = await fixture(t);
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-14T18:00:00Z'));
+  const { orders } = await f.request('/api/registration/releve/orders');
+  assert.equal(orders[0].amount, 1500, 'dance creation during presale does not reserve a price');
+  seedReleveOrder(f, 'late-approval', { status: 'payment_reported', proofAt: '2026-10-14 12:00:00' });
+  const rejected = await f.request('/api/registration/admin/inscription-order/status', {
+    cookie: f.cookies['global-admin'], status: 400,
+    body: { id: 'late-approval', status: 'paid', paidAmount: 700 },
+  });
+  assert.equal(rejected.error.code, 'payment_amount_incomplete');
+  const approved = await f.request('/api/registration/admin/inscription-order/status', {
+    cookie: f.cookies['global-admin'], body: { id: 'late-approval', status: 'paid', paidAmount: 1500 },
+  });
+  assert.equal(approved.order.amount, 1500);
+  assert.equal(approved.order.status, 'paid');
+});
+
+test('a proof uploaded from an expired checkout updates the order before it can be approved', async t => {
+  const f = await fixture(t);
+  let now = Date.parse('2026-10-07T18:00:00Z');
+  t.mock.method(Date, 'now', () => now);
+  const { orders: [order] } = await f.request('/api/registration/releve/orders');
+  assert.equal(order.amount, 700);
+  now = Date.parse('2026-10-13T06:00:00Z');
+  // Simulate the database clock at submission independently of the JS clock.
+  f.sqlite.exec(`CREATE TRIGGER submission_time AFTER INSERT ON registration_inscription_payment_proofs
+    BEGIN UPDATE registration_inscription_payment_proofs SET uploaded_at = '2026-10-13 06:00:00' WHERE id = NEW.id; END;`);
+  const uploaded = await f.request('/api/registration/releve/order/proof', {
+    body: { orderId: order.id, fileName: 'pago.png', contentType: 'image/png', fileSize: 3, dataUrl: 'data:image/png;base64,AQID' }, status: 201,
+  });
+  assert.equal(uploaded.order.amount, 1500);
+  assert.equal(uploaded.order.lineItems[0].amount, 1500);
+  assert.equal(uploaded.order.status, 'payment_reported');
 });
 
 test('Relevé proof stays academy-scoped and enters the admin review flow', async t => {

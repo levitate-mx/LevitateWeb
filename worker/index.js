@@ -1783,35 +1783,10 @@ async function ensureRegistrationReleveOrder(db, dance, academy) {
     .bind(curp, academy.id)
     .first();
   if (existing) {
-    const hotPresaleAmount = getRegistrationReleveHotPresaleAmount();
-    const canApplyHotPresale = ["pending_payment", "rejected"].includes(existing.status)
-      && isRegistrationReleveHotPresaleActive()
-      && Number(existing.amount || 0) > hotPresaleAmount;
-
-    if (!canApplyHotPresale) return existing;
-
-    const discountedLineItems = parseRegistrationOrderLineItems(existing.line_items_json).map((line) => ({
-      ...line,
-      amount: hotPresaleAmount,
-    }));
-    await db.prepare(`
-      UPDATE registration_inscription_orders
-      SET amount = ?, line_items_json = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(hotPresaleAmount, JSON.stringify(discountedLineItems), existing.id).run();
-
-    return await db
-      .prepare("SELECT * FROM registration_inscription_orders WHERE id = ? LIMIT 1")
-      .bind(existing.id)
-      .first();
+    return getRegistrationInscriptionOrderRecordById(db, existing.id);
   }
 
-  const createdAtText = String(dance.created_at || "").replace(" ", "T");
-  const createdAt = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(createdAtText) ? createdAtText : `${createdAtText}Z`);
-  const isPresale = (Number.isNaN(createdAt) ? Date.now() : createdAt) < registrationInscriptionPresaleEndsAt;
-  const amount = isRegistrationReleveHotPresaleActive()
-    ? getRegistrationReleveHotPresaleAmount()
-    : (isPresale ? registrationInscriptionPrices.presale : registrationInscriptionPrices.normal).releve;
+  const amount = getRegistrationInscriptionAmount(dance);
   const lineItems = JSON.stringify([{
     id: dance.id,
     title: `Relevé · ${dance.title}`,
@@ -1845,6 +1820,50 @@ async function ensureRegistrationReleveOrder(db, dance, academy) {
     }
   }
   throwHttpError("registration_releve_reference_unavailable", "No se pudo generar el concepto de pago. Intenta de nuevo.", 503);
+}
+
+// Call only after authorizing the order/academy or the global admin. Relevé has
+// one line per order. Unpaid orders follow today's price; a submitted proof
+// reserves the price at submission while it is reviewed. Approved payments
+// are immutable here, and a rejected proof does not reserve a promotional rate.
+async function refreshRegistrationRelevePrices(db, { academyId, orderId } = {}) {
+  const now = Date.now();
+  const scope = [];
+  const bindings = [now, now, now];
+  if (academyId) { scope.push("o.academy_id = ?"); bindings.push(academyId); }
+  if (orderId) { scope.push("o.id = ?"); bindings.push(orderId); }
+  await db.prepare(`
+    WITH candidates AS (
+      SELECT o.id, json_extract(o.line_items_json, '$[0].currency') = 'USD' AS international,
+        COALESCE(CASE WHEN o.status = 'payment_reported' THEN (
+          SELECT CASE WHEN p.status != 'rejected'
+            THEN MIN(COALESCE(unixepoch(p.uploaded_at) * 1000, ?), ?) END
+          FROM registration_inscription_payment_proofs p WHERE p.order_id = o.id
+          ORDER BY p.uploaded_at DESC, p.created_at DESC, p.rowid DESC LIMIT 1
+        ) END, ?) AS price_at
+      FROM registration_inscription_orders o
+      WHERE o.curp LIKE 'RELEVE:%' AND o.status IN ('pending_payment', 'rejected', 'payment_reported')
+        ${scope.length ? `AND ${scope.join(" AND ")}` : ""}
+    ), prices AS (
+      SELECT id, CASE
+        WHEN price_at >= ? AND price_at < ? THEN CASE WHEN international THEN ? ELSE ? END
+        WHEN price_at < ? THEN CASE WHEN international THEN ? ELSE ? END
+        ELSE CASE WHEN international THEN ? ELSE ? END
+      END AS amount FROM candidates
+    )
+    UPDATE registration_inscription_orders AS o
+    SET amount = prices.amount,
+        line_items_json = json_set(o.line_items_json, '$[0].amount', prices.amount),
+        updated_at = datetime('now')
+    FROM prices WHERE o.id = prices.id
+      AND (o.amount != prices.amount OR json_extract(o.line_items_json, '$[0].amount') IS NOT prices.amount)
+  `).bind(...bindings,
+    registrationReleveHotPresaleStartsAt, registrationReleveHotPresaleEndsAt,
+    getRegistrationReleveHotPresaleAmount(true), getRegistrationReleveHotPresaleAmount(),
+    registrationInscriptionPresaleEndsAt,
+    registrationInternationalInscriptionPrices.presale.releve, registrationInscriptionPrices.presale.releve,
+    registrationInternationalInscriptionPrices.normal.releve, registrationInscriptionPrices.normal.releve,
+  ).run();
 }
 
 async function handleRegistrationInscriptionOrderStatus(request, env) {
@@ -1956,6 +1975,7 @@ async function handleRegistrationAdminPaymentOrders(request, env) {
     assertMethod(request, ["GET"]);
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
+    await refreshRegistrationRelevePrices(db);
     const params = new URL(request.url).searchParams;
     return sendJson(await (params.get("export") === "1"
       ? getAdminOrderExport(db, params, serializeAdminOrderSummary)
@@ -4838,6 +4858,7 @@ async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
 }
 
 async function getRegistrationInscriptionOrderRecordById(db, orderId) {
+  await refreshRegistrationRelevePrices(db, { orderId });
   const order = await db
     .prepare(
       `
@@ -4896,7 +4917,7 @@ async function getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, cur
     throwHttpError("registration_inscription_order_not_found", "Orden de inscripción no encontrada para esa CURP", 404);
   }
 
-  return order;
+  return curp.startsWith("RELEVE:") ? getRegistrationInscriptionOrderRecordById(db, order.id) : order;
 }
 
 async function updateRegistrationInscriptionOrderStatus(db, {
@@ -5063,6 +5084,7 @@ async function updateRegistrationShopOrderStatus(db, {
 }
 
 async function getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId, academyId) {
+  await refreshRegistrationRelevePrices(db, { orderId, academyId });
   const academyClause = academyId ? "AND academy_id = ?" : "";
   const bindings = academyId ? [orderId, academyId] : [orderId];
   const order = await db
@@ -5366,6 +5388,7 @@ async function getRegistrationEventTicketsForCurp(db, curp) {
 
 async function getRegistrationInscriptionOrders(db, academyId, options) {
   try {
+    await refreshRegistrationRelevePrices(db, { academyId });
     const { results = [] } = await db
       .prepare(
         `
@@ -5390,6 +5413,7 @@ async function getRegistrationInscriptionOrders(db, academyId, options) {
 
 async function getAllRegistrationInscriptionOrders(db) {
   try {
+    await refreshRegistrationRelevePrices(db);
     const { results = [] } = await db
       .prepare(
         `
