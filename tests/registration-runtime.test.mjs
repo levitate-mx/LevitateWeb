@@ -332,6 +332,9 @@ test('same-name academies stay isolated across bootstrap, participants, dances, 
   assert.deepEqual(new Set(participants.participants.map(item => item.academyId)), new Set([a.academyId, b.academyId]));
   const { json: program } = await f.request('/admin/program', { cookie: admin.cookie });
   assert.deepEqual(new Set(program.dances.map(item => item.academyId)), new Set([a.academyId, b.academyId]));
+  assert.deepEqual(new Set(program.dances.map(item => item.academyOriginState)), new Set(['guanajuato']));
+  assert.deepEqual(new Set(program.dances.map(item => item.academyOriginType)), new Set(['mexico']));
+  assert.deepEqual(new Set(program.dances.map(item => item.academyOriginCountry)), new Set(['México']));
   await f.request('/dances', { method: 'DELETE', cookie: a.cookie, body: { id: record.dance.id } });
   await f.request('/participants', { method: 'DELETE', cookie: a.cookie, body: { id: record.participant.id } });
   await f.request('/choreographers', { method: 'DELETE', cookie: a.cookie, body: { id: record.choreographer.id } });

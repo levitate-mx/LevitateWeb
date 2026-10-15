@@ -282,6 +282,9 @@ type RegistrationMusicUpload = {
 
 type RegistrationDance = {
   academyName?: string;
+  academyOriginCountry?: string | null;
+  academyOriginState?: string | null;
+  academyOriginType?: string | null;
   id: string;
   title: string;
   genre: string;
@@ -1093,6 +1096,9 @@ const musicDurationLimitsByDivision: Record<string, { maximumSeconds: number; mi
 
 type ProgramRow = {
   academyName: string;
+  academyOriginCountry?: string | null;
+  academyOriginState?: string | null;
+  academyOriginType?: string | null;
   blockId: number;
   blockTitle: string;
   category: string;
@@ -1505,6 +1511,9 @@ function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "")
 
       return {
         academyName: dance.academyName || fallbackAcademyName,
+        academyOriginCountry: dance.academyOriginCountry,
+        academyOriginState: dance.academyOriginState,
+        academyOriginType: dance.academyOriginType,
         blockId: block.id,
         blockTitle: block.title,
         category: dance.category,
@@ -5254,7 +5263,11 @@ function getProgramRowDisplay(row: ProgramRow, includeLevel = false) {
     ...(includeLevel ? [isReleveRow ? "No aplica" : getDanceLevelLabel(row.level)] : []),
     row.choreographers,
     isReleveRow ? "Registro Relevé" : row.participants,
-    getVenueLabel(row.venue),
+    getAcademyOriginLabel({
+      originCountry: row.academyOriginCountry,
+      originState: row.academyOriginState,
+      originType: row.academyOriginType,
+    }),
   ];
 }
 

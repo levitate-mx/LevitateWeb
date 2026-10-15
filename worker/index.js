@@ -5772,7 +5772,10 @@ async function getAllRegistrationProgramDances(db) {
         `
           SELECT
             registration_dances.*,
-            registration_academies.name AS academy_name
+            registration_academies.name AS academy_name,
+            registration_academies.origin_type AS academy_origin_type,
+            registration_academies.origin_state AS academy_origin_state,
+            registration_academies.origin_country AS academy_origin_country
           FROM registration_dances
           INNER JOIN registration_academies
             ON registration_academies.id = registration_dances.academy_id
@@ -6262,6 +6265,9 @@ async function serializeRegistrationProgramDances(db, dances) {
   return dances.map((dance) => ({
     academyId: dance.academy_id,
     academyName: dance.academy_name,
+    academyOriginType: dance.academy_origin_type || "mexico",
+    academyOriginState: dance.academy_origin_state || null,
+    academyOriginCountry: dance.academy_origin_country || "México",
     id: dance.id,
     title: dance.title,
     genre: dance.genre,
