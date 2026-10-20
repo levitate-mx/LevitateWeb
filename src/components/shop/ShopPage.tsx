@@ -189,11 +189,6 @@ const dayOptions: TicketOption[] = ticketEvent.days;
 
 const singlePassPricing = ticketPricing.singlePass;
 const singlePassPresaleEndsAt = Date.parse(singlePassPricing.presaleEndsAt);
-const singlePassPresaleEndDate = new Intl.DateTimeFormat("es-MX", {
-  day: "numeric",
-  month: "long",
-  timeZone: singlePassPricing.timeZone,
-}).format(new Date(singlePassPresaleEndsAt));
 
 const ticketProductDefinitions: TicketProduct[] = [
   {
@@ -399,9 +394,7 @@ function getTicketProducts(isPresale: boolean): TicketProduct[] {
   return ticketProductDefinitions.map((product) => product.id === "block" ? {
     ...product,
     price: isPresale ? singlePassPricing.presalePrice : singlePassPricing.regularPrice,
-    priceNote: isPresale
-      ? `Preventa hasta las 00:00 h del ${singlePassPresaleEndDate} (hora de CDMX).`
-      : "Preventa finalizada. Precio normal vigente.",
+    priceNote: isPresale ? "Preventa hasta las 00:00h de hoy" : undefined,
     regularPrice: isPresale ? singlePassPricing.regularPrice : undefined,
   } : product);
 }
@@ -1103,9 +1096,6 @@ function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
 function TicketShopPage() {
   const isSinglePassPresale = useSinglePassPresale();
   const ticketProducts = useMemo(() => getTicketProducts(isSinglePassPresale), [isSinglePassPresale]);
-  const singlePassPriceNotice = isSinglePassPresale
-    ? `Single pass en preventa: ${formatCurrency(singlePassPricing.presalePrice)} hasta las 00:00 h del ${singlePassPresaleEndDate} (hora de CDMX). Solo los pagos aprobados antes del cierre conservan este precio; crear una orden o cargar un comprobante no lo reserva.`
-    : `Preventa finalizada. Single pass: ${formatCurrency(singlePassPricing.regularPrice)}. Solo las órdenes con pago aprobado antes del cierre conservan el precio de preventa. Las órdenes pendientes, en revisión o rechazadas se actualizan al precio normal.`;
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
     block: blockOptions[0]?.id ?? "",
@@ -1618,13 +1608,6 @@ function TicketShopPage() {
         <small>Referencia: {orderReference}</small>
       </div>
 
-      {shopOrder?.status !== "paid" ? (
-        <div className="ticket-shop-buyer__notice" role="status">
-          <Info aria-hidden="true" size={18} />
-          <span>{singlePassPriceNotice}</span>
-        </div>
-      ) : null}
-
       {shopOrder?.status === "paid" && shopOrder.tickets?.length ? (
         <section className="ticket-shop-accesses" aria-label="Boletos con código QR">
           <header>
@@ -1747,11 +1730,6 @@ function TicketShopPage() {
                 <strong>{ticketCount}</strong>
               </button>
             </section>
-
-            <div className="ticket-shop-buyer__notice" role="status">
-              <Info aria-hidden="true" size={18} />
-              <span>{singlePassPriceNotice}</span>
-            </div>
 
             <section className="ticket-shop-products" aria-label="Tipos de boleto">
               {ticketProducts.map((product) => (
