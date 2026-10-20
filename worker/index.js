@@ -1,6 +1,8 @@
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
+import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
+  hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit } from "./ticket-pricing.js";
 import { getRegistrationEventTicketSpecs, getRegistrationTicketPassType, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
 import { getWorkshopLookup, saveWorkshopEnrollment, getAdminWorkshops, saveWorkshopCapacity, saveWorkshopPayment,
   submitWorkshopPaymentProof, getWorkshopPaymentProof, reviewWorkshopPaymentProof } from "./workshops.js";
@@ -1193,6 +1195,7 @@ async function handleRegistrationBootstrap(request, env) {
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const academyId = session.academy.id;
+    await refreshSinglePassPrices(db, session.user.role === "admin" ? {} : { academyId });
 
     return sendJson({
       ...session,
@@ -1978,6 +1981,7 @@ async function handleRegistrationAdminPaymentOrders(request, env) {
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
     await refreshRegistrationRelevePrices(db);
+    await refreshSinglePassPrices(db);
     const params = new URL(request.url).searchParams;
     return sendJson(await (params.get("export") === "1"
       ? getAdminOrderExport(db, params, serializeAdminOrderSummary)
@@ -2142,9 +2146,21 @@ async function handleRegistrationAdminInscriptionOrderNotes(request, env) {
     const notes = body.notes.trim() || null;
     const table = orderType === "shop" ? "registration_shop_orders" : "registration_inscription_orders";
 
-    // Notes are independent of payment review. Preserve all operational dates,
-    // approval fields, and already-issued tickets when saving or clearing one.
-    await db.prepare(`UPDATE ${table} SET notes = ? WHERE id = ?`).bind(notes, orderId).run();
+    // Notes are independent of payment review. Keep the price audit even when
+    // an administrator submits a draft loaded before the automatic adjustment.
+    if (orderType === "shop") {
+      let saved = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const existingOrder = await getRegistrationShopOrderRecordById(db, orderId);
+        const nextNotes = preserveSinglePassPricingAudit(notes, existingOrder.notes);
+        const result = await db.prepare(`UPDATE ${table} SET notes = ? WHERE id = ? AND notes IS ?`)
+          .bind(nextNotes, orderId, existingOrder.notes ?? null).run();
+        if (Number(result.meta?.changes || 0) === 1) { saved = true; break; }
+      }
+      if (!saved) throwHttpError("registration_shop_order_changed", "La orden cambió mientras guardabas la nota. Actualiza e inténtalo de nuevo.", 409);
+    } else {
+      await db.prepare(`UPDATE ${table} SET notes = ? WHERE id = ?`).bind(notes, orderId).run();
+    }
 
     const order = orderType === "shop"
       ? await getRegistrationShopOrderRecordById(db, orderId)
@@ -4081,7 +4097,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
   const reusableOrder = await getReusableRegistrationShopOrderWithoutProof(db, curp);
 
   if (reusableOrder) {
-    await db
+    const result = await db
       .prepare(
         `
           UPDATE registration_shop_orders
@@ -4090,7 +4106,6 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
             academy_name = ?,
             venue = ?,
             amount = ?,
-            paid_amount = 0,
             status = 'pending_payment',
             buyer_name = ?,
             buyer_email = ?,
@@ -4107,7 +4122,11 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
             rejection_message = NULL,
             access_token = ?,
             updated_at = datetime('now')
-          WHERE id = ?
+          WHERE id = ? AND status = ? AND status IN ('pending_payment', 'rejected')
+            AND amount = ? AND line_items_json = ?
+            AND NOT EXISTS (SELECT 1 FROM registration_shop_payment_proofs WHERE order_id = registration_shop_orders.id)
+            AND NOT EXISTS (SELECT 1 FROM registration_event_tickets
+              WHERE source_order_type = 'shop' AND source_order_id = registration_shop_orders.id)
         `,
       )
       .bind(
@@ -4126,8 +4145,14 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
         JSON.stringify(normalizedCart.lineItems),
         crypto.randomUUID(),
         reusableOrder.id,
+        reusableOrder.status,
+        reusableOrder.amount,
+        reusableOrder.line_items_json,
       )
       .run();
+    if (Number(result.meta?.changes || 0) !== 1) {
+      throwHttpError("registration_shop_order_changed", "La orden cambió mientras actualizabas el carrito. Actualiza e inténtalo de nuevo.", 409);
+    }
 
     return getRegistrationShopOrderRecordById(db, reusableOrder.id);
   }
@@ -4381,7 +4406,8 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
 
   const lineItems = Array.from(groupedItems.values()).map((groupedItem) => {
     const { danceId, danceTitle, groupKey, optionId, optionLabel, product, quantity } = groupedItem;
-    const amount = product.price * quantity;
+    const unitPrice = getRegistrationTicketPassType(product.id) === "block" ? getSinglePassPrice() : product.price;
+    const amount = unitPrice * quantity;
     const title = [product.name, optionLabel || danceTitle].filter(Boolean).join(" · ");
 
     return {
@@ -4399,7 +4425,7 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
       itemType: product.itemType,
       visual: product.visual,
       quantity,
-      unitPrice: product.price,
+      unitPrice,
       amount,
     };
   });
@@ -4827,7 +4853,7 @@ async function getRegistrationShopOrderRecordById(db, orderId) {
     throwHttpError("registration_shop_order_not_found", "Orden de tienda no encontrada", 404);
   }
 
-  return order;
+  return refreshSinglePassPrices(db, { order });
 }
 
 async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
@@ -4839,6 +4865,10 @@ async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
           FROM registration_shop_orders
           WHERE registration_shop_orders.curp = ?
             AND registration_shop_orders.status IN ('pending_payment', 'rejected')
+            AND NOT EXISTS (
+              SELECT 1 FROM registration_event_tickets
+              WHERE source_order_type = 'shop' AND source_order_id = registration_shop_orders.id
+            )
             AND NOT EXISTS (
               SELECT 1
               FROM registration_shop_payment_proofs
@@ -4898,7 +4928,7 @@ async function getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, acc
     throwHttpError("registration_shop_order_not_found", "No pudimos abrir esa orden de tienda", 404);
   }
 
-  return order;
+  return refreshSinglePassPrices(db, { order });
 }
 
 async function getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp) {
@@ -5017,14 +5047,19 @@ async function updateRegistrationShopOrderStatus(db, {
   reviewedBy,
   status,
 }) {
+  const hasProof = Boolean(await getLatestRegistrationShopPaymentProof(db, orderId));
+  const cancelled = await hasOnlyCancelledShopTickets(db, orderId);
   const existingOrder = await getRegistrationShopOrderRecordForStatusUpdate(db, orderId);
   const nextPaidAmount = paidAmount == null ? Number(existingOrder.paid_amount || 0) : paidAmount;
-  const hasProof = Boolean(await getLatestRegistrationShopPaymentProof(db, orderId));
+  const nextNotes = preserveSinglePassPricingAudit(notes, existingOrder.notes);
   const nextReviewedBy = reviewedBy || "Admin";
   const nextRejectionReason = status === "rejected" ? rejectionReason : "";
   const nextRejectionMessage = status === "rejected" ? optionalString(rejectionMessage) : "";
 
   if (status === "paid") {
+    if (cancelled) {
+      throwHttpError("ticket_order_cancelled", "Los boletos de esta orden están cancelados y no pueden volver a aprobarse.", 409);
+    }
     if (!hasProof) {
       throwHttpError("payment_proof_required", "No se puede aprobar una orden sin comprobante.", 400);
     }
@@ -5044,7 +5079,10 @@ async function updateRegistrationShopOrderStatus(db, {
     }
   }
 
-  await db
+  // D1's clock closes the last race between validation and committing an old-price approval.
+  const presaleApproval = status === "paid" && existingOrder.status !== "paid"
+    && Boolean(repriceSinglePassOrder(existingOrder, singlePassPresaleEndsAt));
+  const result = await db
     .prepare(
       `
         UPDATE registration_shop_orders
@@ -5067,13 +5105,21 @@ async function updateRegistrationShopOrderStatus(db, {
           END,
           rejection_message = ?,
           updated_at = datetime('now')
-        WHERE id = ?
+        WHERE id = ? AND status = ? AND amount = ? AND line_items_json = ?
+          AND (? != 'paid' OR ? >= amount)
+          AND (? = 0 OR unixepoch('now') < ?)
+          AND (? != 'paid' OR NOT (
+            EXISTS (SELECT 1 FROM registration_event_tickets t
+              WHERE t.source_order_type = 'shop' AND t.source_order_id = registration_shop_orders.id)
+            AND NOT EXISTS (SELECT 1 FROM registration_event_tickets t
+              WHERE t.source_order_type = 'shop' AND t.source_order_id = registration_shop_orders.id AND t.status != 'cancelled')
+          ))
       `,
     )
     .bind(
       status,
       nextPaidAmount,
-      notes || null,
+      nextNotes,
       status,
       status,
       status === "paid" || status === "rejected" ? nextReviewedBy : null,
@@ -5081,8 +5127,20 @@ async function updateRegistrationShopOrderStatus(db, {
       status === "rejected" ? nextRejectionReason : null,
       status === "rejected" ? nextRejectionMessage : null,
       orderId,
+      existingOrder.status,
+      existingOrder.amount,
+      existingOrder.line_items_json,
+      status,
+      nextPaidAmount,
+      presaleApproval ? 1 : 0,
+      singlePassPresaleEndsAt / 1000,
+      status,
     )
     .run();
+  if (Number(result.meta?.changes || 0) !== 1) {
+    await refreshSinglePassPrices(db, { orderId });
+    throwHttpError("registration_shop_order_changed", "La orden cambió durante la revisión. Actualiza el importe antes de aprobarla.", 409);
+  }
 }
 
 async function getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId, academyId) {
@@ -5126,7 +5184,7 @@ async function getRegistrationShopOrderRecordForStatusUpdate(db, orderId) {
     throwHttpError("registration_shop_order_not_found", "Orden de tienda no encontrada", 404);
   }
 
-  return order;
+  return refreshSinglePassPrices(db, { order });
 }
 
 async function ensureRegistrationEventTicketsForOrder(db, order, sourceOrderType = "registration") {
@@ -5457,6 +5515,7 @@ async function getAllRegistrationInscriptionOrders(db) {
 
 async function getAllRegistrationShopOrders(db) {
   try {
+    await refreshSinglePassPrices(db);
     const { results = [] } = await db
       .prepare(
         `

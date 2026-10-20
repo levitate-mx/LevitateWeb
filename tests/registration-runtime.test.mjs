@@ -15,6 +15,8 @@ import ticketEvent from '../shared/ticket-event.json' with { type: 'json' };
 class LocalD1 {
   constructor(databasePath = ':memory:') {
     this.sqlite = new DatabaseSync(databasePath);
+    // Use the same simulated campaign time in JavaScript and the database commit guard.
+    this.sqlite.function('levitate_test_unixepoch_now', () => Math.floor(Date.now() / 1000));
     this.batchQueue = Promise.resolve();
     this.runtimeQueries = [];
     this.allowAcademyVenueProbe = false;
@@ -34,7 +36,7 @@ class LocalD1 {
       assert.ok(this.allowAcademyVenueProbe && /^\s*PRAGMA table_info\(registration_academies\)\s*$/i.test(sql),
         'only new-academy legacy venue compatibility may inspect schema');
     }
-    const statement = this.sqlite.prepare(sql);
+    const statement = this.sqlite.prepare(sql.replaceAll("unixepoch('now')", 'levitate_test_unixepoch_now()'));
     let values = [];
     const execute = {
       bind(...nextValues) { values = nextValues; return execute; },
@@ -43,7 +45,8 @@ class LocalD1 {
         return row ? (column ? row[column] : { ...row }) : null;
       },
       async all() { return { success: true, results: statement.all(...values).map(row => ({ ...row })) }; },
-      runSync() {
+      runSync: () => {
+        this.beforeRun?.(sql);
         const result = statement.run(...values);
         return { success: true, results: [], meta: { changes: result.changes, last_row_id: result.lastInsertRowid } };
       },
@@ -78,6 +81,8 @@ class LocalD1 {
 }
 
 async function fixture(t, { includeStudentSchema = false, workerUnderTest = worker, databasePath } = {}) {
+  // Keep existing checkout expectations stable after the dated ticket campaign ends.
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-20T12:00:00Z'));
   const db = new LocalD1(databasePath);
   t.after(() => db.sqlite.close());
   const schemaPath = !includeStudentSchema && process.env.REGISTRATION_TEST_SCHEMA_PATH
@@ -448,6 +453,216 @@ test('admin choreographer summaries retain legacy link counts when a linked danc
   assert.deepEqual(choreographer.eventVenues, []);
   assert.equal(choreographer.latestDanceTitle, null);
   assert.equal(choreographer.latestDanceAt, null);
+});
+
+
+const singlePassCutoff = Date.parse('2026-10-21T00:00:00-06:00');
+
+function singlePassBuyer(curp = curpA, quantity = 1, productId = 'block') {
+  return { curp, buyerName: 'Compradora preventa', buyerEmail: 'preventa@example.test', ...phone,
+    items: [{ productId, optionId: 'bloque-6', quantity }] };
+}
+
+async function singlePassAdmin(f, suffix = 'presale-admin') {
+  const admin = await seedAcademy(f, suffix, { role: 'admin' });
+  // Authentication is independent of the campaign clock exercised below.
+  f.db.sqlite.prepare("UPDATE registration_sessions SET expires_at = '2099-01-01 00:00:00'").run();
+  return admin;
+}
+
+test('Single pass changes at exactly midnight CDMX for both product aliases and reused carts', async t => {
+  for (const productId of ['block', 'ticket-block']) {
+    await t.test(productId, async t => {
+      const f = await fixture(t);
+      let now = singlePassCutoff - 1;
+      t.mock.method(Date, 'now', () => now);
+      const body = singlePassBuyer(curpA, 2, productId);
+      body.items.push({ productId: 'day', optionId: 'domingo-15', quantity: 1 }, { productId: 'full', quantity: 1 });
+      const { json: { order: before } } = await f.request('/shop/order', { method: 'POST', status: 201, body });
+      assert.equal(before.lineItems[0].unitPrice, 250);
+      assert.equal(before.amount, 1550);
+      now = singlePassCutoff;
+      const { json: { order: after } } = await f.request('/shop/order', { method: 'POST', status: 201, body });
+      assert.equal(after.id, before.id);
+      assert.deepEqual(after.lineItems.map(line => line.unitPrice), [350, 450, 600]);
+      assert.equal(after.amount, 1750);
+      assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_shop_orders WHERE id = ?').get(after.id).amount, 1750);
+    });
+  }
+});
+
+
+test('a cart edit cannot overwrite an order approved concurrently at the presale price', async t => {
+  const f = await fixture(t);
+  t.mock.method(Date, 'now', () => singlePassCutoff - 1);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer() });
+  let approved = false;
+  f.db.beforeRun = sql => {
+    if (!approved && /UPDATE registration_shop_orders\s+SET participant_name/.test(sql)) {
+      approved = true;
+      f.db.sqlite.prepare("UPDATE registration_shop_orders SET status = 'paid', paid_amount = 250, paid_at = '2026-10-21 05:59:59' WHERE id = ?").run(order.id);
+    }
+  };
+  const { json } = await f.request('/shop/order', { method: 'POST', status: 409, body: singlePassBuyer(curpA, 3) });
+  assert.equal(approved, true);
+  assert.equal(json.error.code, 'registration_shop_order_changed');
+  const saved = f.db.sqlite.prepare('SELECT status, amount, paid_amount, access_token FROM registration_shop_orders WHERE id = ?').get(order.id);
+  assert.equal(saved.status, 'paid');
+  assert.equal(saved.amount, 250);
+  assert.equal(saved.paid_amount, 250);
+  assert.equal(saved.access_token, order.accessToken);
+});
+
+test('unpaid presale orders refresh only after token validation and cannot be approved at the old total', async t => {
+  const f = await fixture(t);
+  const admin = await singlePassAdmin(f);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer(curpA, 3) });
+  assert.equal(order.amount, 750);
+  now = singlePassCutoff;
+  await f.request('/shop/order/lookup', { method: 'POST', status: 404, body: { orderId: order.id, accessToken: 'wrong-token' } });
+  assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_shop_orders WHERE id = ?').get(order.id).amount, 750,
+    'an invalid token cannot mutate another buyer order');
+  const { json: { order: refreshed } } = await f.request('/shop/order/lookup', {
+    method: 'POST', body: { orderId: order.id, accessToken: order.accessToken },
+  });
+  assert.equal(refreshed.amount, 1050);
+  assert.equal(refreshed.lineItems[0].unitPrice, 350);
+  const saved = f.db.sqlite.prepare('SELECT amount, line_items_json, notes FROM registration_shop_orders WHERE id = ?').get(order.id);
+  assert.equal(saved.amount, 1050);
+  assert.equal(JSON.parse(saved.line_items_json)[0].amount, 1050);
+  assert.match(saved.notes, /preventa/i);
+  assert.equal('notes' in refreshed, false, 'the audit note remains private');
+  await f.request('/shop/order/lookup', { method: 'POST', body: { orderId: order.id, accessToken: order.accessToken } });
+  assert.equal(f.db.sqlite.prepare('SELECT notes FROM registration_shop_orders WHERE id = ?').get(order.id).notes, saved.notes,
+    'the adjustment and audit entry are idempotent');
+  const { json: uploaded } = await f.request('/shop/order/proof', { method: 'POST', status: 201,
+    body: { orderId: order.id, accessToken: order.accessToken, ...proof } });
+  assert.equal(uploaded.order.amount, 1050);
+  const { json: rejected } = await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie, status: 400,
+    body: { id: order.id, orderType: 'shop', status: 'paid', paidAmount: 750 } });
+  assert.equal(rejected.error.code, 'payment_amount_incomplete');
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_event_tickets WHERE source_order_id = ?').get(order.id).n, 0);
+  const { json: approved } = await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie,
+    body: { id: order.id, orderType: 'shop', status: 'paid', paidAmount: 1050 } });
+  assert.equal(approved.order.amount, 1050);
+  assert.equal(approved.order.tickets.length, 3);
+});
+
+test('a pre-cutoff proof awaiting review loses presale at approval without an earlier lookup', async t => {
+  const f = await fixture(t);
+  const admin = await singlePassAdmin(f);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer(curpA, 2) });
+  await f.request('/shop/order/proof', { method: 'POST', status: 201, body: { orderId: order.id, accessToken: order.accessToken, ...proof } });
+  now = singlePassCutoff;
+  const { json } = await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie, status: 400,
+    body: { id: order.id, orderType: 'shop', status: 'paid', paidAmount: 500 } });
+  assert.equal(json.error.code, 'payment_amount_incomplete');
+  const saved = f.db.sqlite.prepare('SELECT amount, paid_amount, status FROM registration_shop_orders WHERE id = ?').get(order.id);
+  assert.equal(saved.amount, 700);
+  assert.equal(saved.status, 'payment_reported');
+  assert.equal(saved.paid_amount, 0);
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_shop_payment_proofs WHERE order_id = ?').get(order.id).n, 1);
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_event_tickets WHERE source_order_id = ?').get(order.id).n, 0);
+});
+
+
+test('an approval crossing midnight cannot commit the presale price and retains its audit on later edits', async t => {
+  const f = await fixture(t);
+  const admin = await singlePassAdmin(f);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer() });
+  await f.request('/shop/order/proof', { method: 'POST', status: 201, body: { orderId: order.id, accessToken: order.accessToken, ...proof } });
+  let crossed = false;
+  f.db.beforeRun = sql => {
+    if (!crossed && /UPDATE registration_shop_orders\s+SET\s+status = \?/.test(sql)) {
+      crossed = true;
+      now = singlePassCutoff;
+    }
+  };
+  const { json } = await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie, status: 409,
+    body: { id: order.id, orderType: 'shop', status: 'paid', paidAmount: 250 } });
+  assert.equal(crossed, true);
+  assert.equal(json.error.code, 'registration_shop_order_changed');
+  const read = () => f.db.sqlite.prepare('SELECT amount, status, notes FROM registration_shop_orders WHERE id = ?').get(order.id);
+  assert.equal(read().amount, 350);
+  assert.equal(read().status, 'payment_reported');
+  const audit = read().notes;
+  assert.match(audit, /preventa/i);
+  await f.request('/admin/inscription-order/notes', { method: 'POST', cookie: admin.cookie,
+    body: { id: order.id, orderType: 'shop', notes: 'Nota anterior del administrador' } });
+  assert.ok(read().notes.includes(audit));
+  await f.request('/admin/inscription-order/status', { method: 'POST', cookie: admin.cookie,
+    body: { id: order.id, orderType: 'shop', status: 'paid', paidAmount: 350, notes: 'Borrador previo a medianoche' } });
+  assert.ok(read().notes.includes(audit));
+  assert.equal(read().status, 'paid');
+});
+
+test('a proof submitted after cutoff receives the regular price even from a pre-cutoff reference', async t => {
+  const f = await fixture(t);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer() });
+  now = singlePassCutoff;
+  const { json } = await f.request('/shop/order/proof', { method: 'POST', status: 201,
+    body: { orderId: order.id, accessToken: order.accessToken, ...proof } });
+  assert.equal(json.order.amount, 350);
+  assert.equal(json.order.lineItems[0].unitPrice, 350);
+  assert.equal(json.order.status, 'payment_reported');
+});
+
+test('only paid orders keep presale; admin pages and exports update open orders without reviving cancelled tickets', async t => {
+  const f = await fixture(t);
+  const admin = await singlePassAdmin(f);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const paid = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-6', quantity: 1 }]);
+  const cancelled = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-6', quantity: 3 }]);
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET status = 'cancelled' WHERE source_order_id = ?").run(cancelled.id);
+  f.db.sqlite.prepare("UPDATE registration_shop_orders SET status = 'rejected', paid_amount = 0, notes = 'Duplicada cancelada' WHERE id = ?").run(cancelled.id);
+  const { json: { order: reported } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer(curpA, 2) });
+  await f.request('/shop/order/proof', { method: 'POST', status: 201, body: { orderId: reported.id, accessToken: reported.accessToken, ...proof } });
+  const { json: { order: pending } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer(curpB, 3) });
+  now = singlePassCutoff;
+  const { json } = await f.request('/admin/payment-orders?includeTotals=1', { cookie: admin.cookie });
+  const byId = new Map(json.orders.map(order => [order.id, order]));
+  assert.equal(byId.get(paid.id).amount, 250);
+  assert.equal(byId.get(paid.id).paidAmount, 250);
+  assert.equal(byId.get(reported.id).amount, 700);
+  assert.equal(byId.get(pending.id).amount, 1050);
+  assert.equal(byId.get(cancelled.id).amount, 750);
+  assert.equal(byId.get(cancelled.id).notes, 'Duplicada cancelada');
+  assert.equal(json.totals.amount, 2750);
+  assert.equal(json.totals.paidAmount, 250);
+  const { json: exported } = await f.request('/admin/payment-orders?export=1', { cookie: admin.cookie });
+  assert.equal(exported.orders.find(order => order.id === pending.id).amount, 1050);
+  const { json: kept } = await f.request('/shop/order/lookup', { method: 'POST', body: { orderId: paid.id, accessToken: paid.accessToken } });
+  assert.equal(kept.order.amount, 250);
+  assert.equal(kept.order.lineItems[0].unitPrice, 250);
+  assert.equal(kept.order.tickets.length, 1);
+  assert.equal(f.db.sqlite.prepare("SELECT count(*) AS n FROM registration_event_tickets WHERE source_order_id = ? AND status = 'cancelled'").get(cancelled.id).n, 3);
+});
+
+test('repricing preserves other products, media discount and a recorded partial payment', async t => {
+  const f = await fixture(t);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201, body: singlePassBuyer() });
+  const lines = [...order.lineItems, { id: 'solo:dance-one', productId: 'solo', productName: 'Solos', itemType: 'media',
+    productCategory: 'Fotografía y video', quantity: 1, unitPrice: 800, amount: 800 }];
+  f.db.sqlite.prepare("UPDATE registration_shop_orders SET line_items_json = ?, amount = 970, paid_amount = 100, discount_amount = 80, discount_code = 'COLIBRI26' WHERE id = ?")
+    .run(JSON.stringify(lines), order.id);
+  now = singlePassCutoff;
+  const { json } = await f.request('/shop/order/lookup', { method: 'POST', body: { orderId: order.id, accessToken: order.accessToken } });
+  assert.equal(json.order.amount, 1070);
+  assert.equal(json.order.paidAmount, 100);
+  assert.equal(json.order.discountAmount, 80);
+  assert.equal(json.order.lineItems[1].unitPrice, 800);
+  assert.equal(json.order.lineItems[1].amount, 800);
 });
 
 test('inscription and shop payments keep proof, approval, ticket creation and token validation', async t => {

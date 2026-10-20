@@ -29,6 +29,7 @@ import { createTicketsPdfBlob, downloadBlob } from "../admin/RegistrationScreens
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 import ticketEvent from "../../../shared/ticket-event.json";
+import ticketPricing from "../../../shared/ticket-pricing.json";
 import { emiTransferAccount } from "../../data/paymentAccounts";
 
 type TicketOption = {
@@ -186,14 +187,20 @@ const ticketSalesPaused = false;
 const blockOptions: TicketOption[] = ticketEvent.blocks;
 const dayOptions: TicketOption[] = ticketEvent.days;
 
-const ticketProducts: TicketProduct[] = [
+const singlePassPricing = ticketPricing.singlePass;
+const singlePassPresaleEndsAt = Date.parse(singlePassPricing.presaleEndsAt);
+const singlePassPresaleEndDate = new Intl.DateTimeFormat("es-MX", {
+  day: "numeric",
+  month: "long",
+  timeZone: singlePassPricing.timeZone,
+}).format(new Date(singlePassPresaleEndsAt));
+
+const ticketProductDefinitions: TicketProduct[] = [
   {
     id: "block",
     name: "Single pass",
     description: "Acceso individual al bloque de competencia que elijas.",
-    price: 250,
-    priceNote: "Preventa hasta el 10 de octubre.",
-    regularPrice: 350,
+    price: singlePassPricing.regularPrice,
     selectionLabel: "Elegir bloque",
     options: blockOptions,
   },
@@ -388,8 +395,48 @@ function formatCurrency(value: number) {
   return currencyFormatter.format(value);
 }
 
-function getProduct(productId: TicketProduct["id"]) {
-  return ticketProducts.find((product) => product.id === productId) ?? ticketProducts[0];
+function getTicketProducts(isPresale: boolean): TicketProduct[] {
+  return ticketProductDefinitions.map((product) => product.id === "block" ? {
+    ...product,
+    price: isPresale ? singlePassPricing.presalePrice : singlePassPricing.regularPrice,
+    priceNote: isPresale
+      ? `Preventa hasta las 00:00 h del ${singlePassPresaleEndDate} (hora de CDMX).`
+      : "Preventa finalizada. Precio normal vigente.",
+    regularPrice: isPresale ? singlePassPricing.regularPrice : undefined,
+  } : product);
+}
+
+function useSinglePassPresale() {
+  const [isPresale, setIsPresale] = useState(() => Date.now() < singlePassPresaleEndsAt);
+
+  useEffect(() => {
+    let timeout: number | undefined;
+    const updatePrice = () => {
+      window.clearTimeout(timeout);
+      const remaining = singlePassPresaleEndsAt - Date.now();
+      setIsPresale(remaining > 0);
+      if (remaining > 0) {
+        timeout = window.setTimeout(updatePrice, Math.min(remaining, 2147483647));
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updatePrice();
+      }
+    };
+
+    updatePrice();
+    window.addEventListener("focus", updatePrice);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("focus", updatePrice);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  return isPresale;
 }
 
 function getMediaProduct(productId: MediaProduct["id"]) {
@@ -474,7 +521,7 @@ function writeCartCookie<T>(name: string, items: T[]) {
 function normalizeStoredTicketCartItem(item: unknown): TicketCartItem | null {
   const candidate = item as Partial<TicketCartItem> | null;
   const productId = candidate?.productId;
-  const product = ticketProducts.find((ticketProduct) => ticketProduct.id === productId);
+  const product = ticketProductDefinitions.find((ticketProduct) => ticketProduct.id === productId);
   const optionId = typeof candidate?.optionId === "string" ? candidate.optionId : undefined;
   const hasValidOption = !optionId || product?.options?.some((option) => option.id === optionId);
   const quantity = Number(candidate?.quantity);
@@ -1054,6 +1101,11 @@ function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
 }
 
 function TicketShopPage() {
+  const isSinglePassPresale = useSinglePassPresale();
+  const ticketProducts = useMemo(() => getTicketProducts(isSinglePassPresale), [isSinglePassPresale]);
+  const singlePassPriceNotice = isSinglePassPresale
+    ? `Single pass en preventa: ${formatCurrency(singlePassPricing.presalePrice)} hasta las 00:00 h del ${singlePassPresaleEndDate} (hora de CDMX). Solo los pagos aprobados antes del cierre conservan este precio; crear una orden o cargar un comprobante no lo reserva.`
+    : `Preventa finalizada. Single pass: ${formatCurrency(singlePassPricing.regularPrice)}. Solo las órdenes con pago aprobado antes del cierre conservan el precio de preventa. Las órdenes pendientes, en revisión o rechazadas se actualizan al precio normal.`;
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
     block: blockOptions[0]?.id ?? "",
@@ -1095,14 +1147,14 @@ function TicketShopPage() {
   const cartLines = useMemo(
     () =>
       cartItems.map((item) => {
-        const product = getProduct(item.productId);
+        const product = ticketProducts.find((product) => product.id === item.productId) ?? ticketProducts[0];
         return {
           ...item,
           option: getOption(product, item.optionId),
           product,
         };
       }),
-    [cartItems],
+    [cartItems, ticketProducts],
   );
   const ticketCount = cartLines.reduce((total, line) => total + line.quantity, 0);
   const total = cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
@@ -1179,17 +1231,21 @@ function TicketShopPage() {
     const accessToken = shopOrder?.accessToken;
     const status = shopOrder?.status;
 
-    if (!orderId || !accessToken || !status || !["pending_payment", "payment_reported"].includes(status)) {
+    if (!orderId || !accessToken || !status || status === "paid") {
       return undefined;
     }
 
-    const interval = window.setInterval(() => {
+    let isCancelled = false;
+    const refreshOrder = () => {
       void requestShopApi<{ order: ShopOrder }>("/api/registration/shop/order/lookup", {
         body: JSON.stringify({ accessToken, orderId }),
         method: "POST",
       }).then(({ order }) => {
-        const recoveredBuyerData = getBuyerDataFromShopOrder(order);
+        if (isCancelled) {
+          return;
+        }
 
+        const recoveredBuyerData = getBuyerDataFromShopOrder(order);
         setShopOrder(order);
         setBuyerData(recoveredBuyerData);
         setOrderReference(getShopPaymentReference(order));
@@ -1201,10 +1257,25 @@ function TicketShopPage() {
           setProofMessage("Pago aprobado. Tus accesos con QR ya están disponibles.");
         }
       }).catch(() => undefined);
-    }, 15000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshOrder();
+      }
+    };
 
-    return () => window.clearInterval(interval);
-  }, [shopOrder?.accessToken, shopOrder?.id, shopOrder?.status]);
+    refreshOrder();
+    const interval = window.setInterval(refreshOrder, 15000);
+    window.addEventListener("focus", refreshOrder);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshOrder);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isSinglePassPresale, shopOrder?.accessToken, shopOrder?.id, shopOrder?.status]);
 
   useEffect(() => {
     writeCartCookie(ticketCartCookieName, cartItems);
@@ -1547,6 +1618,13 @@ function TicketShopPage() {
         <small>Referencia: {orderReference}</small>
       </div>
 
+      {shopOrder?.status !== "paid" ? (
+        <div className="ticket-shop-buyer__notice" role="status">
+          <Info aria-hidden="true" size={18} />
+          <span>{singlePassPriceNotice}</span>
+        </div>
+      ) : null}
+
       {shopOrder?.status === "paid" && shopOrder.tickets?.length ? (
         <section className="ticket-shop-accesses" aria-label="Boletos con código QR">
           <header>
@@ -1669,6 +1747,11 @@ function TicketShopPage() {
                 <strong>{ticketCount}</strong>
               </button>
             </section>
+
+            <div className="ticket-shop-buyer__notice" role="status">
+              <Info aria-hidden="true" size={18} />
+              <span>{singlePassPriceNotice}</span>
+            </div>
 
             <section className="ticket-shop-products" aria-label="Tipos de boleto">
               {ticketProducts.map((product) => (
