@@ -117,7 +117,7 @@ export const validEarlyShopProofSql = `EXISTS (
       WHERE latest.order_id = registration_shop_orders.id
       ORDER BY latest.uploaded_at DESC, latest.created_at DESC, latest.rowid DESC LIMIT 1)
     AND p.status IN ('submitted', 'accepted')
-    AND substr(p.uploaded_at, 1, 19) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T][0-9][0-9]:[0-9][0-9]:[0-9][0-9]'
+    AND p.uploaded_at GLOB '????-??-??[ T]??:??:??*'
     AND unixepoch(p.uploaded_at) < ${singlePassPresaleEndsAt / 1000}
 )`;
 
