@@ -2,7 +2,8 @@ import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
-  hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit } from "./ticket-pricing.js";
+  hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
+  getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
 import { getRegistrationEventTicketSpecs, getRegistrationTicketPassType, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
 import { getWorkshopLookup, saveWorkshopEnrollment, getAdminWorkshops, saveWorkshopCapacity, saveWorkshopPayment,
   submitWorkshopPaymentProof, getWorkshopPaymentProof, reviewWorkshopPaymentProof } from "./workshops.js";
@@ -1550,7 +1551,7 @@ async function handleRegistrationShopOrderProof(request, env) {
     const orderId = requireString(body.orderId, "orderId");
     const accessToken = requireString(body.accessToken, "accessToken");
     const order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken);
-    const existingProof = await getLatestRegistrationShopPaymentProof(db, order.id);
+    const existingProof = await getLatestShopProofMetadata(db, order.id);
 
     if (existingProof && order.status !== "rejected") {
       throwHttpError("payment_proof_already_uploaded", "Esta orden ya tiene un comprobante cargado.", 409);
@@ -1567,9 +1568,11 @@ async function handleRegistrationShopOrderProof(request, env) {
             file_name,
             content_type,
             file_size,
-            data_url
+            data_url,
+            uploaded_at,
+            created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `,
       )
       .bind(crypto.randomUUID(), order.id, proof.fileName, proof.contentType, proof.fileSize, proof.dataUrl)
@@ -5047,9 +5050,14 @@ async function updateRegistrationShopOrderStatus(db, {
   reviewedBy,
   status,
 }) {
-  const hasProof = Boolean(await getLatestRegistrationShopPaymentProof(db, orderId));
   const cancelled = await hasOnlyCancelledShopTickets(db, orderId);
-  const existingOrder = await getRegistrationShopOrderRecordForStatusUpdate(db, orderId);
+  let existingOrder = await getRegistrationShopOrderRecordForStatusUpdate(db, orderId);
+  let proof = await getLatestShopProofMetadata(db, orderId);
+  if (repriceSinglePassOrder(existingOrder, Date.now(), proof)) {
+    existingOrder = await refreshSinglePassPrices(db, { order: existingOrder });
+    proof = await getLatestShopProofMetadata(db, orderId);
+  }
+  const hasProof = Boolean(proof);
   const nextPaidAmount = paidAmount == null ? Number(existingOrder.paid_amount || 0) : paidAmount;
   const nextNotes = preserveSinglePassPricingAudit(notes, existingOrder.notes);
   const nextReviewedBy = reviewedBy || "Admin";
@@ -5107,7 +5115,8 @@ async function updateRegistrationShopOrderStatus(db, {
           updated_at = datetime('now')
         WHERE id = ? AND status = ? AND amount = ? AND line_items_json = ?
           AND (? != 'paid' OR ? >= amount)
-          AND (? = 0 OR unixepoch('now') < ?)
+          AND ${latestShopProofSnapshotSql} IS ?
+          AND (? = 0 OR unixepoch('now') < ? OR ${validEarlyShopProofSql})
           AND (? != 'paid' OR NOT (
             EXISTS (SELECT 1 FROM registration_event_tickets t
               WHERE t.source_order_type = 'shop' AND t.source_order_id = registration_shop_orders.id)
@@ -5132,6 +5141,7 @@ async function updateRegistrationShopOrderStatus(db, {
       existingOrder.line_items_json,
       status,
       nextPaidAmount,
+      getSinglePassProofSnapshot(proof),
       presaleApproval ? 1 : 0,
       singlePassPresaleEndsAt / 1000,
       status,
