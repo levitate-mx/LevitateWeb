@@ -17,6 +17,7 @@ type WorkshopTrack = {
   id: string;
   title: string;
   venue: string;
+  mapQuery?: string;
   groups: [{ label: string; ages: string }, { label: string; ages: string }];
   slots: WorkshopSlot[];
 };

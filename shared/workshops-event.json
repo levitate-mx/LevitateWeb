@@ -13,7 +13,8 @@
     {
       "id": "aerial",
       "title": "Aerial",
-      "venue": "Centro Cultural Futurama",
+      "venue": "Centro Cultural",
+      "mapQuery": "Centro Cultural Futurama",
       "groups": [
         { "label": "Grupo A", "ages": "Hasta 12 años", "minAge": 0, "maxAge": 12 },
         { "label": "Grupo B", "ages": "Mayores de 12 años", "minAge": 13, "maxAge": null }

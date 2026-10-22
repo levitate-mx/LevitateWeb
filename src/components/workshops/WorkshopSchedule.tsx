@@ -34,7 +34,7 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
                 <MapPin aria-hidden="true" size={20} />
                 <div>
                   <strong>{track.title}</strong>
-                  <a className="workshop-schedule__map" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(track.venue)}`} target="_blank" rel="noreferrer" aria-label={`Ver mapa de ${track.venue}`}>
+                  <a className="workshop-schedule__map" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(track.mapQuery ?? track.venue)}`} target="_blank" rel="noreferrer" aria-label={`Ver mapa de ${track.venue}`}>
                     {track.venue} <ArrowUpRight aria-hidden="true" size={15} />
                   </a>
                 </div>
