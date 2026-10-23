@@ -56,6 +56,7 @@ import {
   relevePresalePrice,
 } from "../../utils/releveHotPresale";
 import QRCode from "qrcode";
+import { useRegistrationPolicy } from "../../data/registrationPolicy";
 import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
 import { createMultiImagePdfBlob } from "./adminPdf";
 import {
@@ -148,6 +149,7 @@ type RegistrationAdminDashboardNavItem = {
 type FieldOption = {
   value: string;
   label: string;
+  disabled?: boolean;
 };
 
 type AdminFieldProps = {
@@ -3636,7 +3638,7 @@ function getDashboardActivityTimeLabel(rawDate: string) {
   return `${formatMexicoCityDate(date, { day: "2-digit", month: "short" })}, ${time}`;
 }
 
-function buildDashboardUpcomingEvents(programDances: RegistrationDance[]) {
+function buildDashboardUpcomingEvents(programDances: RegistrationDance[], isVenuePaused: (venue: string) => boolean) {
   const danceCountByVenue = programDances.reduce<Map<string, number>>((counts, dance) => {
     counts.set(dance.venue, (counts.get(dance.venue) ?? 0) + 1);
     return counts;
@@ -3647,7 +3649,9 @@ function buildDashboardUpcomingEvents(programDances: RegistrationDance[]) {
     .map((venue) => {
       const eventDate = venueEventDates[venue] ? parseDashboardInputDate(venueEventDates[venue]) : null;
       const danceCount = danceCountByVenue.get(venue) ?? 0;
-      const status = registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Borrador");
+      const status = isVenuePaused(venue)
+        ? "Inscripciones pausadas"
+        : registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Borrador");
 
       return {
         date: eventDate,
@@ -5411,7 +5415,7 @@ function AdminSelect({
           </option>
         ) : null}
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option disabled={option.disabled} key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
@@ -8545,6 +8549,13 @@ function ReleveRegistrationPanel({
   dances: RegistrationDance[];
   onDanceCreated: (dance: RegistrationDance) => void;
 }) {
+  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const [selectedVenue, setSelectedVenue] = useState("");
+  const registrationVenueOptions = venueOptions.map((option) => ({
+    ...option,
+    disabled: isVenuePaused(option.value),
+    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones pausadas` : option.label,
+  }));
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
   const [selectedSubgenre, setSelectedSubgenre] = useState("");
@@ -8563,7 +8574,7 @@ function ReleveRegistrationPanel({
     choreographers.length > 0 && selectedChoreographerIds.length !== 1
       ? "Selecciona un solo maestro para la coreografía Relevé."
       : "";
-  const cannotSave = isSaving || choreographers.length === 0;
+  const cannotSave = isSaving || choreographers.length === 0 || isVenuePaused(selectedVenue);
 
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
@@ -8581,6 +8592,11 @@ function ReleveRegistrationPanel({
     setHasAttemptedSubmit(true);
     setStatusMessage("");
     setErrorMessage("");
+
+    if (isVenuePaused(getFormValue(formData, "venue"))) {
+      setErrorMessage(policy.message);
+      return;
+    }
 
     if (choreographerSelectionMessage) {
       return;
@@ -8612,6 +8628,7 @@ function ReleveRegistrationPanel({
 
       onDanceCreated(response.dance);
       form.reset();
+      setSelectedVenue("");
       setSelectedGenre("");
       setSelectedSubgenre("");
       setOpenOtherApparatus("");
@@ -8628,6 +8645,7 @@ function ReleveRegistrationPanel({
   return (
     <div className="levitate-admin-releve-page">
       <AdminPanel className="levitate-admin-panel--releve" title="Inscripción Relevé" eyebrow="Premio Relevé">
+        <AdminStatusMessage message={policy.pausedVenues.length ? policy.message : ""} />
         <form className="levitate-admin-form levitate-admin-form--releve" onSubmit={handleSubmit}>
           <div className="levitate-admin-releve-intro">
             <article>
@@ -8656,7 +8674,7 @@ function ReleveRegistrationPanel({
             <input name="title" required type="text" />
           </AdminField>
           <AdminField icon={MapPin} label="Sede de competencia">
-            <AdminSelect defaultValue="" id="releve-venue" name="venue" options={venueOptions} placeholder="Selecciona una sede" />
+            <AdminSelect id="releve-venue" name="venue" onChange={(event) => setSelectedVenue(event.target.value)} options={registrationVenueOptions} placeholder="Selecciona una sede" value={selectedVenue} />
           </AdminField>
           <AdminField icon={Trophy} label="Modalidad">
             <AdminSelect
@@ -8871,6 +8889,13 @@ function DanceRegistrationPanel({
   participants: RegistrationParticipant[];
   onDanceCreated: (dance: RegistrationDance) => void;
 }) {
+  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const [selectedVenue, setSelectedVenue] = useState("");
+  const registrationVenueOptions = venueOptions.map((option) => ({
+    ...option,
+    disabled: isVenuePaused(option.value),
+    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones pausadas` : option.label,
+  }));
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
@@ -8907,6 +8932,7 @@ function DanceRegistrationPanel({
     (participants.length > 0 && selectedParticipantIds.length === 0 ? "Selecciona al menos un participante." : "");
   const cannotSave =
     isSaving ||
+    isVenuePaused(selectedVenue) ||
     choreographers.length === 0 ||
     participants.length === 0;
 
@@ -8927,6 +8953,11 @@ function DanceRegistrationPanel({
     setHasAttemptedSubmit(true);
     setStatusMessage("");
     setErrorMessage("");
+
+    if (isVenuePaused(getFormValue(formData, "venue"))) {
+      setErrorMessage(policy.message);
+      return;
+    }
 
     if (choreographerSelectionMessage || participantSelectionMessage) {
       return;
@@ -8957,6 +8988,7 @@ function DanceRegistrationPanel({
 
       onDanceCreated(response.dance);
       form.reset();
+      setSelectedVenue("");
       setSelectedGenre("");
       setSelectedSubgenre("");
       setOpenOtherApparatus("");
@@ -8974,12 +9006,13 @@ function DanceRegistrationPanel({
 
   return (
     <AdminPanel className="levitate-admin-panel--dance" title="Registro de nueva coreografía" eyebrow="Competencia">
+      <AdminStatusMessage message={policy.pausedVenues.length ? policy.message : ""} />
       <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
         <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
           <input name="title" required type="text" />
         </AdminField>
         <AdminField icon={MapPin} label="Sede de competencia">
-          <AdminSelect defaultValue="" id="dance-venue" name="venue" options={venueOptions} placeholder="Selecciona una sede" />
+          <AdminSelect id="dance-venue" name="venue" onChange={(event) => setSelectedVenue(event.target.value)} options={registrationVenueOptions} placeholder="Selecciona una sede" value={selectedVenue} />
         </AdminField>
         <AdminField icon={Music2} label="Género de coreografía">
           <AdminSelect
@@ -9765,12 +9798,15 @@ function AcademyMexicoPaymentSummaryCard({
 function AcademyInternationalPaymentsPanel({
   orders,
   participants,
+  dances,
   onOrderUpdated,
 }: {
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationParticipant[];
+  dances: RegistrationDance[];
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
+  const { policy, isVenuePaused } = useRegistrationPolicy();
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -9795,6 +9831,11 @@ function AcademyInternationalPaymentsPanel({
         order.curp.trim().toUpperCase() === selectedParticipantDocumentKey,
     )
     .sort((left, right) => left.participantName.localeCompare(right.participantName, "es"));
+  const hasNewPausedRegistration = dances.some((dance) =>
+    isVenuePaused(dance.venue)
+    && dance.participants.some((participant) => participant.id === selectedParticipantId)
+    && !registrationOrders.some((order) => order.venue === dance.venue),
+  );
 
   useEffect(() => {
     if (participants.length === 0) {
@@ -9810,6 +9851,11 @@ function AcademyInternationalPaymentsPanel({
   const handleSyncOrder = async () => {
     if (!selectedParticipant) {
       setErrorMessage("Selecciona un participante para generar su orden.");
+      return;
+    }
+
+    if (hasNewPausedRegistration) {
+      setErrorMessage(policy.message);
       return;
     }
 
@@ -9857,12 +9903,13 @@ function AcademyInternationalPaymentsPanel({
             value={selectedParticipantId}
           />
         </AdminField>
-        <button className="levitate-admin-save" disabled={isSyncing || !selectedParticipant} onClick={handleSyncOrder} type="button">
+        <button className="levitate-admin-save" disabled={isSyncing || !selectedParticipant || hasNewPausedRegistration} onClick={handleSyncOrder} type="button">
           <CreditCard aria-hidden="true" size={18} />
           {isSyncing ? "Actualizando..." : "Generar / actualizar pago"}
         </button>
       </div>
 
+      <AdminStatusMessage message={hasNewPausedRegistration ? policy.message : ""} />
       <AdminStatusMessage message={statusMessage} />
       <AdminStatusMessage message={errorMessage} tone="error" />
 
@@ -12747,6 +12794,7 @@ function getAdminScreen({
     if (session.academy.originType === "international") {
       return (
         <AcademyInternationalPaymentsPanel
+          dances={dances}
           onOrderUpdated={onOrderUpdated}
           orders={inscriptionOrders}
           participants={participants}
@@ -12773,6 +12821,7 @@ function getAdminScreen({
 }
 
 export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialScreen?: AdminScreenId }) {
+  const { policy } = useRegistrationPolicy();
   const [activeScreen, setActiveScreen] = useState<AdminScreenId>(initialScreen);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -12948,6 +12997,9 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
         <AdminTopBrand />
         <div className="levitate-admin-rule" aria-hidden="true" />
         <div className="levitate-admin-workspace__content">
+          {policy.pausedVenues.length > 0 && activeScreen !== "dance" && activeScreen !== "releve" ? (
+            <AdminStatusMessage message={policy.message} />
+          ) : null}
           {isLoadingData ? <AdminStatusMessage message="Actualizando registros..." /> : null}
           {getAdminScreen({
             screen: activeScreen,

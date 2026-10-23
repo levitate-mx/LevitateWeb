@@ -1,6 +1,7 @@
 import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { assets } from "../../data/homeContent";
+import { useRegistrationPolicy } from "../../data/registrationPolicy";
 import { LevitateFooter } from "../home/LevitateFooter";
 import { LevitateHeader } from "../home/LevitateHeader";
 import { WorkshopSchedule } from "../workshops/WorkshopSchedule";
@@ -186,6 +187,10 @@ type SedesPageProps = {
 };
 
 export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
+  const { isVenuePaused } = useRegistrationPolicy();
+  const isRegistrationPaused = isVenuePaused(venueKey);
+  const registrationHref = isRegistrationPaused ? "/inscripciones/consulta-curp" : "/inscripciones";
+  const registrationAction = isRegistrationPaused ? "Consultar inscripción" : "Inscribirme";
   const venue = sedesContent[venueKey] ?? sedesContent.edomex;
   const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
   const hasPublishedConvocation = venueKey === "edomex";
@@ -307,8 +312,8 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <div className="sedes-hero__actions">
               {hasPublishedConvocation ? (
                 <>
-                  <a className="sedes-button sedes-button--primary" href="/inscripciones">
-                    Inscribirme <ArrowRight aria-hidden="true" size={18} />
+                  <a className="sedes-button sedes-button--primary" href={registrationHref}>
+                    {registrationAction} <ArrowRight aria-hidden="true" size={18} />
                   </a>
                   <a
                     className="sedes-button sedes-button--ghost"
@@ -343,7 +348,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <article>
               <CheckCircle2 aria-hidden="true" size={24} />
               <span>{venue.metaLabel}</span>
-              <p>{venue.metaValue}</p>
+              <p>{isRegistrationPaused ? "Inscripciones pausadas" : venue.metaValue}</p>
             </article>
           </div>
         </div>
@@ -480,10 +485,10 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
           />
           <div className="sedes-final-cta__content">
             <p>{hasPublishedConvocation ? "Siguiente paso" : "Próxima sede"}</p>
-            <h2>{hasPublishedConvocation ? "Asegura tu lugar." : "Veracruz está en camino."}</h2>
+            <h2>{hasPublishedConvocation ? isRegistrationPaused ? "Consulta tu inscripción." : "Asegura tu lugar." : "Veracruz está en camino."}</h2>
             {hasPublishedConvocation ? (
-              <a href="/inscripciones">
-                Inscribirme <ArrowRight aria-hidden="true" size={18} />
+              <a href={registrationHref}>
+                {registrationAction} <ArrowRight aria-hidden="true" size={18} />
               </a>
             ) : (
               <span>Muy pronto compartiremos convocatoria y fechas finales.</span>

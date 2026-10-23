@@ -42839,3 +42839,15 @@ button {
     text-align: left;
   }
 }
+
+/* Allow the registration pause notice to wrap beside the CURP search. */
+.inscripciones-lookup-search .inscripciones-registration-pause {
+  max-width: 100%;
+  border-left: 3px solid var(--home-pink);
+  background: rgba(217, 76, 140, 0.06);
+  color: var(--home-ink);
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

@@ -12,6 +12,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
+import { useRegistrationPolicy } from "../../data/registrationPolicy";
 import { formatMexicoCityDate } from "../../utils/mexicoCityTime";
 import {
   isReleveHotPresaleActive,
@@ -398,6 +399,7 @@ function resetLookupScroll() {
 }
 
 export function InscripcionesPage() {
+  const { policy, isVenuePaused } = useRegistrationPolicy();
   return (
     <main className="levitate-home-redesign inscripciones-page">
       <section className="inscripciones-hero" id="inicio">
@@ -423,6 +425,12 @@ export function InscripcionesPage() {
 
         </div>
       </section>
+
+      {policy.pausedVenues.length > 0 ? (
+        <aside className="inscripciones-presale-note" aria-label="Estado de inscripciones" role="status">
+          <p><CircleAlert aria-hidden="true" size={20} /><span>{policy.message}</span></p>
+        </aside>
+      ) : null}
 
       <section className="inscripciones-pricing" aria-labelledby="inscripciones-pricing-title">
         <div className="inscripciones-section-head">
@@ -496,10 +504,12 @@ export function InscripcionesPage() {
                 (hora de CDMX). A partir del 26 de octubre, el precio es de <strong>$1,500 MXN</strong>.
                 Envía tu comprobante antes del cierre para conservar la tarifa de preventa.
               </span>
-              <span>
-                El cierre de las inscripciones se realiza hasta el <strong>5 de noviembre de 2026</strong>, como fecha
-                última para realizar el pago.
-              </span>
+              {!isVenuePaused("edomex") ? (
+                <span>
+                  El cierre de las inscripciones se realiza hasta el <strong>5 de noviembre de 2026</strong>, como fecha
+                  última para realizar el pago.
+                </span>
+              ) : null}
             </span>
           </p>
         </aside>
@@ -543,6 +553,7 @@ export function InscripcionesConsultaPage() {
 }
 
 function InscriptionLookupPanel() {
+  const { policy, isVenuePaused } = useRegistrationPolicy();
   const [curp, setCurp] = useState("");
   const [lookup, setLookup] = useState<InscriptionLookup | null>(null);
   const [lookupError, setLookupError] = useState("");
@@ -567,6 +578,8 @@ function InscriptionLookupPanel() {
   const shouldScrollToProofRef = useRef(false);
   const selectedPaymentMethod = paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? null;
   const visibleLines = lookup?.lines ?? [];
+  const isNewOrderPaused = Boolean(lookup && !lookup.order
+    && (isVenuePaused(lookup.venue) || lookup.lines.some((line) => isVenuePaused(line.venue))));
   const visibleSubtotal = lookup?.subtotal ?? 0;
   const visibleCurrency = getLookupCurrency(lookup);
   const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
@@ -658,7 +671,19 @@ function InscriptionLookupPanel() {
     setIsLookupLoading(true);
 
     try {
+      const loginResponse = await fetch("/api/registration/student/login", {
+        body: JSON.stringify({ curp: normalizedCurp }),
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!loginResponse.ok) {
+        const loginError = await loginResponse.json().catch(() => null) as ApiErrorResponse | null;
+        throw new Error(loginError?.error?.message ?? "No pudimos iniciar la sesión del participante.");
+      }
+
       const response = await fetch("/api/registration/inscription/payment-lookup", {
+        credentials: "same-origin",
         body: JSON.stringify({ curp: normalizedCurp }),
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -763,6 +788,7 @@ function InscriptionLookupPanel() {
       const dataUrl = await readFileAsDataUrl(proofFile);
 
       const response = await fetch("/api/registration/inscription/payment-proof", {
+        credentials: "same-origin",
         body: JSON.stringify({
           contentType: proofFile.type,
           curp: lookup.curp,
@@ -1432,6 +1458,15 @@ function InscriptionLookupPanel() {
     if (!lookup || visibleSubtotal <= 0) {
       return;
     }
+    if (lookup.order && (isVenuePaused(lookup.order.venue) || isVenuePaused(lookup.venue)
+      || lookup.lines.some((line) => isVenuePaused(line.venue)))) {
+      openPaymentPanel();
+      return;
+    }
+    if (isNewOrderPaused) {
+      setOrderError(policy.message);
+      return;
+    }
 
     const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
     setPhoneNumber(normalizedPhoneNumber);
@@ -1447,6 +1482,7 @@ function InscriptionLookupPanel() {
 
     try {
       const response = await fetch("/api/registration/inscription/payment-order", {
+        credentials: "same-origin",
         body: JSON.stringify({
           buyerPhone: buildBuyerPhone(phoneCountryCode, normalizedPhoneNumber),
           buyerPhoneCountryCode: phoneCountryCode,
@@ -1496,6 +1532,9 @@ function InscriptionLookupPanel() {
       >
         <section className="inscripciones-payment-main">
           <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
+            {policy.pausedVenues.length > 0 ? (
+              <p className="inscripciones-query-message inscripciones-registration-pause" role="status">{policy.message}</p>
+            ) : null}
             <form onSubmit={handleLookupSubmit}>
               <div className="inscripciones-lookup-search__field">
                 <label htmlFor="inscription-curp">Buscar por CURP</label>
@@ -1646,10 +1685,10 @@ function InscriptionLookupPanel() {
               </label>
               <button
                 className="inscripciones-photo-payment-button"
-                disabled={visibleSubtotal <= 0 || isOrderLoading}
+                disabled={visibleSubtotal <= 0 || isOrderLoading || isNewOrderPaused}
                 type="submit"
               >
-                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : "Datos de pago"}</span>
+                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : isNewOrderPaused ? "Nuevas inscripciones pausadas" : "Datos de pago"}</span>
                 <ArrowRight aria-hidden="true" size={22} />
               </button>
               {whatsappError ? (

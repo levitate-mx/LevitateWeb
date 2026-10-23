@@ -14,7 +14,8 @@
     "not_found_handling": "single-page-application"
   },
   "vars": {
-    "TICKET_SALES_PAUSED": "false"
+    "TICKET_SALES_PAUSED": "false",
+    "REGISTRATION_PAUSED_VENUES": "edomex"
   },
   "d1_databases": [
     {

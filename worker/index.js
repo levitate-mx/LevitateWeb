@@ -1,3 +1,4 @@
+import registrationPolicyDefaults from "../shared/registration-policy.json" with { type: "json" };
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
@@ -396,6 +397,10 @@ export default {
 
     if (url.pathname === "/api/passport/admin/export.csv") {
       return handlePassportAdminExport(request, env);
+    }
+
+    if (url.pathname === "/api/registration/status") {
+      return handleRegistrationStatus(request, env);
     }
 
     if (url.pathname === "/api/registration/auth/register") {
@@ -1179,6 +1184,32 @@ async function handleRegistrationStudentMe(request, env) {
   }
 }
 
+function getRegistrationPolicy(env) {
+  // This public availability policy contains no participant or payment data.
+  const pausedVenues = [...new Set(String(env.REGISTRATION_PAUSED_VENUES || "")
+    .split(",").map((venue) => venue.trim().toLowerCase()).filter((venue) => registrationVenues.has(venue)))];
+  return { pausedVenues, message: registrationPolicyDefaults.message };
+}
+
+function assertRegistrationVenueOpen(venue, pausedVenues) {
+  if (pausedVenues.includes(venue)) {
+    throwHttpError("registration_paused", registrationPolicyDefaults.message, 403);
+  }
+}
+
+function hasPausedRegistrationVenue(record, pausedVenues) {
+  return pausedVenues.includes(record.venue) || record.lines.some((line) => pausedVenues.includes(line.venue));
+}
+
+async function handleRegistrationStatus(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+    return sendJson({ registrationPolicy: getRegistrationPolicy(env) }, 200, { "cache-control": "no-store" });
+  } catch (error) {
+    return sendRegistrationError(error);
+  }
+}
+
 async function handleRegistrationMe(request, env) {
   try {
     assertMethod(request, ["GET"]);
@@ -1375,6 +1406,7 @@ async function handleRegistrationInscriptionLookup(request, env) {
 
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
+      pausedVenues: getRegistrationPolicy(env).pausedVenues,
     });
     return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
   } catch (error) {
@@ -1394,7 +1426,11 @@ async function handleRegistrationInscriptionPaymentLookup(request, env) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
-    const lookup = await getRegistrationInscriptionLookup(db, curp);
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+    const lookup = await getRegistrationInscriptionLookup(db, curp, {
+      academyId: access.scope === "academy" ? access.session.academy.id : null,
+      pausedVenues: getRegistrationPolicy(env).pausedVenues,
+    });
     return sendJson(serializePublicRegistrationInscriptionPaymentLookup(lookup));
   } catch (error) {
     return sendRegistrationError(error);
@@ -1419,6 +1455,7 @@ async function handleRegistrationInscriptionOrder(request, env) {
         : getRegistrationBuyerPhoneContact(body);
     const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
+      pausedVenues: getRegistrationPolicy(env).pausedVenues,
     });
     return sendJson(
       {
@@ -1444,8 +1481,12 @@ async function handleRegistrationInscriptionPaymentOrder(request, env) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
     const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
-    const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact);
+    const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
+      academyId: access.scope === "academy" ? access.session.academy.id : null,
+      pausedVenues: getRegistrationPolicy(env).pausedVenues,
+    });
 
     return sendJson(
       {
@@ -1470,9 +1511,12 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
 
     assertRegistrationLookupIdentifier(curp);
 
-    await requireRegistrationInscriptionLookupAccess({ db, request, curp });
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
     const order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    if (access.scope === "academy" && order.academy_id !== access.session.academy.id) {
+      throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
+    }
     const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
 
     return sendJson({ order: serializePublicRegistrationInscriptionOrder(serializedOrder) }, 201);
@@ -1631,7 +1675,11 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
       throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     }
 
+    const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
     const order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    if (access.scope === "academy" && order.academy_id !== access.session.academy.id) {
+      throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
+    }
     const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
 
     return sendJson({ order: serializePublicRegistrationInscriptionPaymentOrder(serializedOrder) }, 201);
@@ -1748,7 +1796,10 @@ async function handleRegistrationReleveOrders(request, env) {
 
     const orders = [];
     for (const dance of dances) {
-      const order = await ensureRegistrationReleveOrder(db, dance, session.academy);
+      const order = await ensureRegistrationReleveOrder(db, dance, session.academy, {
+        pausedVenues: getRegistrationPolicy(env).pausedVenues,
+      });
+      if (!order) continue;
       orders.push({
         ...await serializeRegistrationInscriptionOrderWithProof(db, order),
         danceId: dance.id,
@@ -1783,7 +1834,7 @@ async function handleRegistrationReleveOrderProof(request, env) {
   }
 }
 
-async function ensureRegistrationReleveOrder(db, dance, academy) {
+async function ensureRegistrationReleveOrder(db, dance, academy, { pausedVenues = [] } = {}) {
   // Relevé has no participant CURP; this stable key links one payment order to one dance.
   const curp = `RELEVE:${dance.id}`;
   const existing = await db
@@ -1793,6 +1844,9 @@ async function ensureRegistrationReleveOrder(db, dance, academy) {
   if (existing) {
     return getRegistrationInscriptionOrderRecordById(db, existing.id);
   }
+
+  // A list request may expose existing orders during a pause, but must not create new ones.
+  if (pausedVenues.includes(dance.venue)) return null;
 
   const amount = getRegistrationInscriptionAmount(dance);
   const lineItems = JSON.stringify([{
@@ -2690,6 +2744,7 @@ async function handleRegistrationDances(request, env) {
     const subgenreDetail = normalizeRegistrationSubgenreDetail(subgenre, body.subgenreDetail);
     const category = requireRegistrationCategory(genre, body.category);
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
+    assertRegistrationVenueOpen(venue, getRegistrationPolicy(env).pausedVenues);
     const isReleve = optionalBoolean(body.isReleve);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
@@ -3809,7 +3864,7 @@ async function getRegistrationStudentState(db, user) {
   };
 }
 
-async function getRegistrationInscriptionLookup(db, curp, { academyId = null } = {}) {
+async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pausedVenues = [] } = {}) {
   const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
   const lookupBindings = academyId ? [curp, academyId] : [curp];
   const { results: registrationRows = [] } = await db
@@ -3908,7 +3963,11 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
   let order = openOrder;
   let reference = openOrder?.reference || getNextRegistrationInscriptionReference(baseReference, orders);
 
-  if (openOrder?.status === "payment_reported") {
+  const openOrderIsPaused = openOrder && hasPausedRegistrationVenue({
+    venue: openOrder.venue,
+    lines: parseRegistrationOrderLineItems(openOrder.line_items_json),
+  }, pausedVenues);
+  if (openOrder?.status === "payment_reported" || openOrderIsPaused) {
     lines = parseRegistrationOrderLineItems(openOrder.line_items_json);
   } else if (!openOrder && unpaidLines.length === 0 && paidOrder) {
     order = paidOrder;
@@ -3916,7 +3975,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
     lines = parseRegistrationOrderLineItems(paidOrder.line_items_json);
   }
 
-  const subtotal = order?.status === "payment_reported" || order?.status === "paid"
+  const subtotal = order?.status === "payment_reported" || order?.status === "paid" || openOrderIsPaused
     ? Number(order.amount || 0)
     : lines.reduce((total, line) => total + Number(line.amount || 0), 0);
   const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
@@ -3943,8 +4002,8 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null } =
   };
 }
 
-async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false } = {}) {
-  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId });
+async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false, pausedVenues = [] } = {}) {
+  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId, pausedVenues });
 
   if (skipEmpty && lookup.lines.length === 0) {
     return {
@@ -3954,6 +4013,28 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
   }
 
   const existingOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
+  const existingLines = existingOrder ? parseRegistrationOrderLineItems(existingOrder.line_items_json) : [];
+  if (existingOrder && hasPausedRegistrationVenue({ venue: existingOrder.venue, lines: existingLines }, pausedVenues)) {
+    // Keep the original order payable without recalculating prices or adding concepts during the pause.
+    return {
+      ...lookup,
+      venue: existingOrder.venue,
+      reference: existingOrder.reference,
+      paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
+        academyId: existingOrder.academy_id,
+        isInternational: lookup.pricingMode === "international",
+        orderReference: existingOrder.reference,
+        venue: existingOrder.venue,
+      }),
+      lines: existingLines,
+      subtotal: Number(existingOrder.amount || 0),
+      order: await serializeRegistrationInscriptionOrderWithProof(db, existingOrder),
+    };
+  }
+  if (hasPausedRegistrationVenue(lookup, pausedVenues)) {
+    throwHttpError("registration_paused", registrationPolicyDefaults.message, 403);
+  }
+
   const lineItemsJson = JSON.stringify(lookup.lines);
   const buyerPhoneCountryCode = buyerPhoneContact?.countryCode || null;
   const buyerPhoneNumber = buyerPhoneContact?.number || null;
