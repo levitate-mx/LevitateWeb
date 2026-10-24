@@ -6795,7 +6795,7 @@ function getRegistrationInscriptionCurrency(isInternational = false) {
 }
 
 function getRegistrationInscriptionPriceKey(dance) {
-  if (isRegistrationReleveTeacherDance(dance)) {
+  if (isRegistrationReleveDance(dance)) {
     return "releve";
   }
 
@@ -6813,25 +6813,8 @@ function getRegistrationInscriptionPriceKey(dance) {
   return categoryPriceKeys[dance.category] ?? "grupo";
 }
 
-function isRegistrationReleveTeacherDance(dance) {
-  if (Boolean(Number(dance.is_releve || 0)) || Boolean(dance.isReleve)) {
-    return true;
-  }
-
-  if (Boolean(Number(dance.selected_participant_is_releve_teacher || 0))) {
-    return true;
-  }
-
-  if (Boolean(Number(dance.has_releve_teacher_choreographer || 0))) {
-    return true;
-  }
-
-  const people = [
-    ...(Array.isArray(dance.choreographers) ? dance.choreographers : []),
-    ...(Array.isArray(dance.participants) ? dance.participants : []),
-  ];
-
-  return people.some((person) => Boolean(person.isReleveTeacher || person.is_releve_teacher));
+function isRegistrationReleveDance(dance) {
+  return Boolean(Number(dance.is_releve || 0)) || dance.isReleve === true;
 }
 
 function buildRegistrationInscriptionReference(curp, venue, { academyId = "", isInternational = false } = {}) {
@@ -7650,7 +7633,7 @@ function getRegistrationDriveSubgenreLabel(dance) {
 }
 
 function getRegistrationMusicDriveDivision(dance) {
-  if (isRegistrationReleveTeacherDance(dance)) {
+  if (isRegistrationReleveDance(dance)) {
     return "releve";
   }
 

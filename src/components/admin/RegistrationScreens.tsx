@@ -1318,19 +1318,15 @@ function getProgramDivisionFromParticipants(participants: RegistrationDanceRelat
 }
 
 function getDanceProgramDivision(dance: RegistrationDance) {
-  if (isReleveTeacherDance(dance)) {
+  if (isReleveDance(dance)) {
     return "releve";
   }
 
   return getProgramDivisionFromParticipants(dance.participants, dance.category);
 }
 
-function isReleveTeacherDance(dance: RegistrationDance) {
-  if (dance.isReleve) {
-    return true;
-  }
-
-  return [...dance.choreographers, ...dance.participants].some((person) => Boolean(person.isReleveTeacher));
+function isReleveDance(dance: RegistrationDance) {
+  return dance.isReleve === true;
 }
 
 function getMusicDurationLimitForDance(dance: RegistrationDance) {
@@ -1924,7 +1920,7 @@ function getRegistrationAcademyAlerts({
   const pendingMediaCount = orders.filter((order) => getOrderMediaItemCount(order) > 0 && order.status !== "paid").length;
   const incompleteParticipantCount = participants.filter((participant) => !participant.birthDate || participant.age == null || !participant.shirtSize).length;
   const missingMusicCount = choreographies.filter((dance) => !dance.musicUpload).length;
-  const hasOnlyReleveChoreographies = choreographies.length > 0 && choreographies.every(isReleveTeacherDance);
+  const hasOnlyReleveChoreographies = choreographies.length > 0 && choreographies.every(isReleveDance);
 
   if (!academy.contactName || !academy.email || !academy.phone) {
     alerts.push("Contacto incompleto");
@@ -2777,8 +2773,8 @@ function getAcademyPendingSources(summary: RegistrationAcademyDirectorySummary):
     dances: summary.choreographies.map((dance) => ({
       id: dance.id, academyId: summary.academy.id, title: dance.title,
       venue: dance.venue, venueLabel: getVenueLabel(dance.venue),
-      categoryLabel: isReleveTeacherDance(dance) ? "Relevé" : getOptionLabel(danceCategories, dance.category),
-      isReleve: isReleveTeacherDance(dance), hasMusic: Boolean(dance.musicUpload),
+      categoryLabel: isReleveDance(dance) ? "Relevé" : getOptionLabel(danceCategories, dance.category),
+      isReleve: isReleveDance(dance), hasMusic: Boolean(dance.musicUpload),
       participantIds: dance.participants.map((person) => person.id), choreographerCount: dance.choreographers.length,
     })),
     orders: summary.orders.map((order) => ({
@@ -3721,7 +3717,7 @@ function buildDashboardAlerts({
     return counts;
   }, new Map());
   const duplicateCurpCount = Array.from(curpCounts.values()).filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
-  const dancesWithoutParticipants = programDances.filter((dance) => !isReleveTeacherDance(dance) && dance.participants.length === 0);
+  const dancesWithoutParticipants = programDances.filter((dance) => !isReleveDance(dance) && dance.participants.length === 0);
   const dancesWithoutMusic = programDances.filter((dance) => !dance.musicUpload);
   const ticketIssueOrders = orders.filter(
     (order) => getOrderRequestedTicketCount(order) > 0 && (order.status === "pending_payment" || order.status === "payment_reported" || order.status === "rejected"),
@@ -7167,7 +7163,7 @@ function RegistrationAcademyQuickPanel({
           <RegistrationAcademyProfileList
             emptyMessage="No hay coreografías para esta academia en el programa cargado."
             items={summary.choreographies.map((dance) => {
-              const isReleve = isReleveTeacherDance(dance);
+              const isReleve = isReleveDance(dance);
 
               return {
                 detail: isReleve
@@ -7739,7 +7735,7 @@ function RegistrationAdminChoreographiesPanel({
             </div>
 
             {pagination.visibleItems.map((dance) => {
-              const isReleve = isReleveTeacherDance(dance);
+              const isReleve = isReleveDance(dance);
               const categoryLabel = isReleve ? "Relevé" : getOptionLabel(danceCategoriesByGenre[dance.genre] ?? danceCategories, dance.category);
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
               const levelLabel = !isReleve && dance.genre === "aereo" ? getDanceLevelLabel(dance.level) : "";
@@ -8773,7 +8769,7 @@ function RelevePaymentsPanel({ dances }: { dances: RegistrationDance[] }) {
   return (
     <AdminPanel className="levitate-admin-panel--releve-payments" title="Pago de Relevé" eyebrow="Comprobantes">
       <div className="levitate-admin-releve-payments__toolbar">
-        <p className="levitate-admin-releve-payments__intro">Cada coreografía tiene su propio concepto. La preventa de Relevé es de {relevePresaleCost} hasta el 25 de octubre de 2026, inclusive (CDMX). Transfiere el monto exacto y sube aquí el comprobante antes del cierre para conservar esa tarifa. Desde el 26 de octubre, las órdenes sin pago se actualizan a {releveRegularCost}.</p>
+        <p className="levitate-admin-releve-payments__intro">Sube el comprobante de pago de cada coreografía Relevé.</p>
         <button className="levitate-admin-save" disabled={isLoading || !releveDanceIds} onClick={() => void loadOrders()} type="button">
           <RefreshCw aria-hidden="true" size={18} />
           Actualizar estado
@@ -9292,7 +9288,7 @@ function MusicUploadPanel({
   const selectedDance = dances.find((dance) => dance.id === selectedDanceId) ?? dances[0] ?? null;
   const selectedDanceValue = selectedDance?.id ?? "";
   const currentMusicUpload = selectedDance?.musicUpload ?? null;
-  const selectedDanceIsReleve = selectedDance ? isReleveTeacherDance(selectedDance) : false;
+  const selectedDanceIsReleve = selectedDance ? isReleveDance(selectedDance) : false;
   const selectedCategoryOptions = selectedDance ? danceCategoriesByGenre[selectedDance.genre] ?? danceCategories : danceCategories;
   const selectedDivision = selectedDance ? getDanceProgramDivision(selectedDance) : "";
   const selectedDivisionLabel = selectedDivision ? getProgramDivisionLabel(selectedDivision).split(":")[0] : "";
@@ -9303,7 +9299,7 @@ function MusicUploadPanel({
     : "";
   const danceOptions = dances.map((dance) => ({
     value: dance.id,
-    label: isReleveTeacherDance(dance) ? `${dance.title} · Relevé` : dance.title,
+    label: isReleveDance(dance) ? `${dance.title} · Relevé` : dance.title,
   }));
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -10727,7 +10723,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     return {
       media: mediaOrdersForBadges.filter((order) => order.status === "pending_payment" || order.status === "payment_reported").length,
       payments: totals?.reported ?? 0,
-      program: programDances.filter((dance) => !dance.musicUpload || (!isReleveTeacherDance(dance) && dance.participants.length === 0)).length,
+      program: programDances.filter((dance) => !dance.musicUpload || (!isReleveDance(dance) && dance.participants.length === 0)).length,
       tickets: ticketTotalsForBadges.pendingTickets + ticketTotalsForBadges.rejectedTickets,
     };
   }, [orders, programDances, totals]);
@@ -12647,7 +12643,7 @@ function AdminLookupPanel({
             <span role="columnheader">Acciones</span>
             {dances.map((dance) => {
               const categoryOptions = danceCategoriesByGenre[dance.genre] ?? danceCategories;
-              const isReleve = isReleveTeacherDance(dance);
+              const isReleve = isReleveDance(dance);
               const divisionLabel = getProgramDivisionLabel(getDanceProgramDivision(dance));
               const compactDivisionLabel = divisionLabel.split(":")[0] || "Sin división";
               const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");

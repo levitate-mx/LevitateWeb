@@ -227,8 +227,8 @@ test('Hot Presale discounts only Relevé registration lines by 30 percent during
   const f = await fixture(t);
   const releveAcademy = await seedAcademy(f, 'hot-releve');
   const releveRecord = await createDance(f, releveAcademy, curpA);
-  f.db.sqlite.prepare('UPDATE registration_participants SET is_releve_teacher = 1 WHERE id = ?')
-    .run(releveRecord.participant.id);
+  f.db.sqlite.prepare('UPDATE registration_dances SET is_releve = 1 WHERE id = ?')
+    .run(releveRecord.dance.id);
 
   const standardAcademy = await seedAcademy(f, 'hot-standard');
   await createDance(f, standardAcademy, curpB);
@@ -252,6 +252,22 @@ test('Hot Presale discounts only Relevé registration lines by 30 percent during
     assert.equal(releveLookup.lines[0].amount, relevePrice, date);
     assert.equal(standardLookup.lines[0].baseAmount, standardPrice, 'only Relevé gets the extension');
   }
+});
+
+test('a historical Maestro Relevé mark does not reclassify a standard choreography', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'legacy-releve-teacher');
+  const record = await createDance(f, academy, curpA);
+  f.db.sqlite.prepare('UPDATE registration_choreographers SET is_releve_teacher = 1 WHERE id = ?')
+    .run(record.choreographer.id);
+
+  const { json: lookup } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA },
+  });
+
+  assert.equal(lookup.lines[0].category, 'solo');
+  assert.equal(lookup.lines[0].division, 'teen');
+  assert.equal(lookup.lines[0].baseAmount, 1750);
 });
 
 test('two solos, a dupla and a trio total 4025 in presale for lookup and the generated payment order', async t => {
