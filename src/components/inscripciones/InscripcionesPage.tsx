@@ -426,7 +426,7 @@ export function InscripcionesPage() {
         </div>
       </section>
 
-      {policy.pausedVenues.length > 0 ? (
+      {policy.pausedVenues.length > 0 || policy.temporaryOpeningActive ? (
         <aside className="inscripciones-presale-note" aria-label="Estado de inscripciones" role="status">
           <p><CircleAlert aria-hidden="true" size={20} /><span>{policy.message}</span></p>
         </aside>
@@ -504,7 +504,7 @@ export function InscripcionesPage() {
                 (hora de CDMX). A partir del 26 de octubre, el precio es de <strong>$1,500 MXN</strong>.
                 Envía tu comprobante antes del cierre para conservar la tarifa de preventa.
               </span>
-              {!isVenuePaused("edomex") ? (
+              {!isVenuePaused("edomex") && !policy.temporaryOpeningActive ? (
                 <span>
                   El cierre de las inscripciones se realiza hasta el <strong>5 de noviembre de 2026</strong>, como fecha
                   última para realizar el pago.
@@ -1532,7 +1532,7 @@ function InscriptionLookupPanel() {
       >
         <section className="inscripciones-payment-main">
           <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
-            {policy.pausedVenues.length > 0 ? (
+            {policy.pausedVenues.length > 0 || policy.temporaryOpeningActive ? (
               <p className="inscripciones-query-message inscripciones-registration-pause" role="status">{policy.message}</p>
             ) : null}
             <form onSubmit={handleLookupSubmit}>

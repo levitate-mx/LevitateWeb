@@ -187,7 +187,8 @@ type SedesPageProps = {
 };
 
 export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
-  const { isVenuePaused } = useRegistrationPolicy();
+  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const isTemporarilyOpen = policy.temporaryOpeningActive && policy.temporaryOpening?.venue === venueKey;
   const isRegistrationPaused = isVenuePaused(venueKey);
   const registrationHref = isRegistrationPaused ? "/inscripciones/consulta-curp" : "/inscripciones";
   const registrationAction = isRegistrationPaused ? "Consultar inscripción" : "Inscribirme";
@@ -348,7 +349,8 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <article>
               <CheckCircle2 aria-hidden="true" size={24} />
               <span>{venue.metaLabel}</span>
-              <p>{isRegistrationPaused ? "Inscripciones pausadas" : venue.metaValue}</p>
+              <p>{isRegistrationPaused ? "Inscripciones pausadas" : isTemporarilyOpen ? "Abiertas solo hoy" : venue.metaValue}</p>
+              {isRegistrationPaused || isTemporarilyOpen ? <small role="status">{policy.message}</small> : null}
             </article>
           </div>
         </div>

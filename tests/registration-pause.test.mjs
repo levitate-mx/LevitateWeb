@@ -9,6 +9,7 @@ import worker from '../worker/index.js';
 class PauseD1 {
   constructor() {
     this.sqlite = new DatabaseSync(':memory:');
+    this.sqlite.function('levitate_test_unixepoch_now', () => Math.floor(Date.now() / 1000));
     this.queries = [];
     this.writes = [];
     this.queue = Promise.resolve();
@@ -17,7 +18,7 @@ class PauseD1 {
   prepare(sql) {
     assert.doesNotMatch(sql, /^\s*(?:CREATE|ALTER|DROP|PRAGMA)\b/i, 'requests must not prepare schema');
     this.queries.push(sql);
-    const statement = this.sqlite.prepare(sql);
+    const statement = this.sqlite.prepare(sql.replaceAll("unixepoch('now')", 'levitate_test_unixepoch_now()'));
     let values = [];
     const db = this;
     const query = {
@@ -28,6 +29,7 @@ class PauseD1 {
       },
       async all() { return { success: true, results: statement.all(...values).map(row => ({ ...row })) }; },
       runSync() {
+        db.beforeRun?.(sql);
         const result = statement.run(...values);
         if (/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)) db.writes.push(sql);
         return { success: true, results: [], meta: { changes: result.changes, last_row_id: result.lastInsertRowid } };
@@ -39,6 +41,7 @@ class PauseD1 {
 
   batch(statements) {
     const result = this.queue.then(() => {
+      this.beforeBatch?.();
       this.sqlite.exec('BEGIN');
       try {
         const results = statements.map(statement => statement.runSync());
@@ -100,7 +103,7 @@ async function fixture(t, { pausedVenues = 'edomex' } = {}) {
       }), { ...env, ...envOverrides });
       const json = await response.json();
       if (status != null) assert.equal(response.status, status, `${method} ${path}: ${JSON.stringify(json)}`);
-      return { status: response.status, json };
+      return { status: response.status, json, headers: response.headers };
     },
     person({ owner = academy, curp } = {}) {
       const index = sequence++;
@@ -361,5 +364,222 @@ test('Relevé listing keeps existing closed-venue orders, skips missing ones and
   assert.equal(proofResult.json.order.amount, 1000);
   assert.equal(proofResult.json.order.status, 'payment_reported');
   await f.request('/releve/order/proof', { cookie: f.other.cookie, body: { orderId: id, ...proof }, status: 404 });
+  assertNoDeletes(f);
+});
+
+
+const reopeningStart = Date.parse('2026-10-25T00:00:00-06:00');
+const reopeningEnd = Date.parse('2026-10-26T00:00:00-06:00');
+const reopeningCases = [
+  ['one millisecond before October 25 CDMX', reopeningStart - 1, false],
+  ['exactly October 25 at midnight CDMX', reopeningStart, true],
+  ['the last millisecond of October 25 CDMX', reopeningEnd - 1, true],
+  ['exactly October 26 at midnight CDMX', reopeningEnd, false],
+  ['after the reopening has finished', reopeningEnd + 24 * 60 * 60 * 1000, false],
+];
+
+test('the shared reopening policy uses the exact CDMX day and retains unrelated venue pauses', async () => {
+  const { resolveRegistrationPolicy } = await import('../shared/registration-policy.js');
+  const base = Object.freeze(['edomex', 'puebla']);
+  for (const [label, now, active] of reopeningCases) {
+    const policy = resolveRegistrationPolicy(base, now);
+    assert.deepEqual(policy.basePausedVenues, ['edomex', 'puebla'], label);
+    assert.deepEqual(policy.pausedVenues, active ? ['puebla'] : ['edomex', 'puebla'], label);
+    assert.equal(policy.temporaryOpeningActive, active, label);
+    assert.equal(policy.temporaryOpening.venue, 'edomex', label);
+    assert.equal(Date.parse(policy.temporaryOpening.startsAt), reopeningStart);
+    assert.equal(Date.parse(policy.temporaryOpening.endsAt), reopeningEnd);
+    assert.equal(Date.parse(policy.serverTime), now);
+    const next = now < reopeningStart ? reopeningStart : now < reopeningEnd ? reopeningEnd : null;
+    assert.equal(policy.nextChangeAt == null ? null : Date.parse(policy.nextChangeAt), next, label);
+  }
+});
+
+test('server status, ordinary and Relevé dances and both new-order routes follow the reopening boundaries', async t => {
+  for (const [label, timestamp, active] of reopeningCases) {
+    await t.test(label, async t => {
+      const f = await fixture(t);
+      t.mock.method(Date, 'now', () => timestamp);
+      const status = await f.request('/status', { method: 'GET', cookie: '' });
+      assert.deepEqual(status.json.registrationPolicy.pausedVenues, active ? [] : ['edomex']);
+      assert.equal(status.json.registrationPolicy.temporaryOpeningActive, active);
+      assert.equal(Date.parse(status.json.registrationPolicy.serverTime), timestamp);
+      assert.equal(status.headers.get('cache-control'), 'no-store');
+
+      const person = f.person();
+      for (const isReleve of [false, true]) {
+        const body = danceBody(f, person, 'edomex', isReleve);
+        await f.request('/dances', { cookie: '', body, status: 401 });
+        const before = businessSnapshot(f);
+        const result = await f.request('/dances', { body, status: active ? 201 : 403 });
+        if (active) {
+          assert.equal(result.json.dance.venue, 'edomex');
+          assert.equal(result.json.dance.isReleve, isReleve);
+        } else {
+          assert.equal(result.json.error.code, 'registration_paused');
+          assert.deepEqual(businessSnapshot(f), before);
+        }
+      }
+      for (const path of orderPaths) {
+        const orderPerson = f.person();
+        f.dance({ person: orderPerson, venue: 'edomex' });
+        const body = { curp: orderPerson.curp, ...phone };
+        await f.request(path, { cookie: '', body, status: 401 });
+        const before = businessSnapshot(f);
+        const result = await f.request(path, { body, status: active ? 201 : 403 });
+        if (active) {
+          assert.equal(result.json.order.venue, 'edomex');
+          assert.equal(result.json.order.status, 'pending_payment');
+        } else {
+          assert.equal(result.json.error.code, 'registration_paused');
+          assert.deepEqual(businessSnapshot(f), before);
+        }
+      }
+      assertNoDeletes(f);
+    });
+  }
+});
+
+test('the temporary Edomex reopening leaves other venue rules unchanged', async t => {
+  for (const [label, timestamp] of reopeningCases) {
+    await t.test(label, async t => {
+      const f = await fixture(t, { pausedVenues: 'edomex,puebla' });
+      t.mock.method(Date, 'now', () => timestamp);
+      const person = f.person();
+      const status = await f.request('/status', { method: 'GET', cookie: '' });
+      assert.ok(status.json.registrationPolicy.pausedVenues.includes('puebla'));
+      const blocked = await f.request('/dances', { body: danceBody(f, person, 'puebla'), status: 403 });
+      assert.equal(blocked.json.error.code, 'registration_paused');
+      for (const venue of ['cdmx', 'veracruz']) {
+        const { json } = await f.request('/dances', { body: danceBody(f, person, venue), status: 201 });
+        assert.equal(json.dance.venue, venue);
+      }
+      assertNoDeletes(f);
+    });
+  }
+});
+
+test('a proof can still be submitted after the reopened day ends without changing or deleting the existing registration', async t => {
+  for (const path of proofPaths) {
+    await t.test(path, async t => {
+      const f = await fixture(t);
+      let now = reopeningStart;
+      t.mock.method(Date, 'now', () => now);
+      const person = f.person();
+      const { json: { dance } } = await f.request('/dances', { body: danceBody(f, person), status: 201 });
+      const { json: { order } } = await f.request('/inscription/order', { body: { curp: person.curp, ...phone }, status: 201 });
+      const before = orderRow(f, order.id);
+      now = reopeningEnd;
+      await f.request('/dances', { body: danceBody(f, person), status: 403 });
+      for (const orderPath of orderPaths) {
+        const response = await f.request(orderPath, { body: { curp: person.curp, ...phone, buyerPhoneNumber: '5512345678' }, status: 201 });
+        assert.equal(response.json.order.id, order.id);
+        assert.deepEqual(orderRow(f, order.id), before, 'a stale checkout cannot rewrite the existing paused order');
+      }
+      await f.request(path, { cookie: '', body: { curp: person.curp, orderId: order.id, ...proof }, status: 401 });
+      const { json } = await f.request(path, { body: { curp: person.curp, orderId: order.id, ...proof }, status: 201 });
+      assert.equal(json.order.id, order.id);
+      assert.equal(json.order.status, 'payment_reported');
+      const after = orderRow(f, order.id);
+      for (const field of ['amount', 'paid_amount', 'line_items_json', 'buyer_phone', 'buyer_phone_number', 'created_at']) {
+        assert.equal(after[field], before[field], field);
+      }
+      assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_dances WHERE id = ?').get(dance.id).n, 1);
+      assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_payment_proofs WHERE order_id = ?').get(order.id).n, 1);
+      assertNoDeletes(f);
+    });
+  }
+});
+
+test('a dance request crossing the closing instant cannot commit an ordinary or Relevé dance', async t => {
+  for (const isReleve of [false, true]) {
+    await t.test(isReleve ? 'Relevé' : 'ordinary', async t => {
+      const f = await fixture(t);
+      let now = reopeningEnd - 1;
+      t.mock.method(Date, 'now', () => now);
+      const person = f.person();
+      const before = businessSnapshot(f);
+      f.db.beforeBatch = () => { now = reopeningEnd; };
+      const { json } = await f.request('/dances', { body: danceBody(f, person, 'edomex', isReleve), status: 403 });
+      assert.equal(json.error.code, 'registration_paused');
+      assert.deepEqual(businessSnapshot(f), before, 'the closing guard must roll back the dance and every participant/teacher link');
+      assertNoDeletes(f);
+    });
+  }
+});
+
+test('a new order request crossing the closing instant cannot insert a registration order', async t => {
+  for (const path of orderPaths) {
+    await t.test(path, async t => {
+      const f = await fixture(t);
+      let now = reopeningEnd - 1;
+      t.mock.method(Date, 'now', () => now);
+      const person = f.person();
+      f.dance({ person });
+      const before = businessSnapshot(f);
+      f.db.beforeRun = sql => {
+        if (/^\s*INSERT\s+INTO\s+registration_inscription_orders\b/i.test(sql)) now = reopeningEnd;
+      };
+      const { json } = await f.request(path, { body: { curp: person.curp, ...phone }, status: 403 });
+      assert.equal(json.error.code, 'registration_paused');
+      assert.deepEqual(businessSnapshot(f), before);
+      assertNoDeletes(f);
+    });
+  }
+});
+
+test('an existing pending order is not rewritten by a checkout that crosses the closing instant', async t => {
+  const f = await fixture(t);
+  const person = f.person();
+  f.dance({ person });
+  const existing = await createExistingOrder(f, person);
+  const before = orderRow(f, existing.id);
+  let now = reopeningEnd - 1;
+  t.mock.method(Date, 'now', () => now);
+  f.db.beforeRun = sql => {
+    if (/^\s*UPDATE\s+registration_inscription_orders\b/i.test(sql)) now = reopeningEnd;
+  };
+  const response = await f.request('/inscription/order', {
+    body: { curp: person.curp, ...phone, buyerPhoneNumber: '5512345678' }, status: null,
+  });
+  assert.ok([201, 403].includes(response.status), JSON.stringify(response.json));
+  if (response.status === 403) assert.equal(response.json.error.code, 'registration_paused');
+  else assert.equal(response.json.order.id, existing.id);
+  assert.deepEqual(orderRow(f, existing.id), before, 'a boundary-crossing retry must preserve amount, status, lines and phone');
+  assertNoDeletes(f);
+});
+
+
+test('Relevé missing orders are created only during the reopened day while other venues continue billing', async t => {
+  for (const [label, timestamp, active] of reopeningCases) {
+    await t.test(label, async t => {
+      const f = await fixture(t);
+      t.mock.method(Date, 'now', () => timestamp);
+      const edomex = f.dance({ venue: 'edomex', isReleve: true });
+      const puebla = f.dance({ venue: 'puebla', isReleve: true });
+      const { json } = await f.request('/releve/orders', { body: {} });
+      const expected = active ? [edomex.id, puebla.id] : [puebla.id];
+      assert.deepEqual(new Set(json.orders.map(order => order.danceId)), new Set(expected));
+      assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_orders WHERE curp = ?')
+        .get(`RELEVE:${edomex.id}`).n, active ? 1 : 0);
+      assertNoDeletes(f);
+    });
+  }
+});
+
+test('Relevé listing skips an unbilled dance if its insert crosses the closing instant', async t => {
+  const f = await fixture(t);
+  let now = reopeningEnd - 1;
+  t.mock.method(Date, 'now', () => now);
+  const dance = f.dance({ venue: 'edomex', isReleve: true });
+  const before = businessSnapshot(f);
+  f.db.beforeRun = sql => {
+    if (/^\s*INSERT\s+INTO\s+registration_inscription_orders\b/i.test(sql)) now = reopeningEnd;
+  };
+  const { json } = await f.request('/releve/orders', { body: {} });
+  assert.deepEqual(json.orders, []);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_orders WHERE curp = ?')
+    .get(`RELEVE:${dance.id}`).n, 0);
+  assert.deepEqual(businessSnapshot(f), before);
   assertNoDeletes(f);
 });

@@ -8641,7 +8641,7 @@ function ReleveRegistrationPanel({
   return (
     <div className="levitate-admin-releve-page">
       <AdminPanel className="levitate-admin-panel--releve" title="Inscripción Relevé" eyebrow="Premio Relevé">
-        <AdminStatusMessage message={policy.pausedVenues.length ? policy.message : ""} />
+        <AdminStatusMessage message={policy.pausedVenues.length || policy.temporaryOpeningActive ? policy.message : ""} />
         <form className="levitate-admin-form levitate-admin-form--releve" onSubmit={handleSubmit}>
           <div className="levitate-admin-releve-intro">
             <article>
@@ -9002,7 +9002,7 @@ function DanceRegistrationPanel({
 
   return (
     <AdminPanel className="levitate-admin-panel--dance" title="Registro de nueva coreografía" eyebrow="Competencia">
-      <AdminStatusMessage message={policy.pausedVenues.length ? policy.message : ""} />
+      <AdminStatusMessage message={policy.pausedVenues.length || policy.temporaryOpeningActive ? policy.message : ""} />
       <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
         <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
           <input name="title" required type="text" />
@@ -12993,7 +12993,7 @@ export function LevitateRegistrationRoute({ initialScreen = "home" }: { initialS
         <AdminTopBrand />
         <div className="levitate-admin-rule" aria-hidden="true" />
         <div className="levitate-admin-workspace__content">
-          {policy.pausedVenues.length > 0 && activeScreen !== "dance" && activeScreen !== "releve" ? (
+          {(policy.pausedVenues.length > 0 || policy.temporaryOpeningActive) && activeScreen !== "dance" && activeScreen !== "releve" ? (
             <AdminStatusMessage message={policy.message} />
           ) : null}
           {isLoadingData ? <AdminStatusMessage message="Actualizando registros..." /> : null}

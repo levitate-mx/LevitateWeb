@@ -2,5 +2,11 @@
   "pausedVenues": [
     "edomex"
   ],
-  "message": "Las nuevas inscripciones a competencia en Estado de México están temporalmente pausadas hasta nuevo aviso. Puedes consultar tus registros y enviar comprobantes de órdenes existentes."
+  "message": "Las nuevas inscripciones a competencia en Estado de México están temporalmente pausadas hasta nuevo aviso. Puedes consultar tus registros y enviar comprobantes de órdenes existentes.",
+  "temporaryOpening": {
+    "venue": "edomex",
+    "startsAt": "2026-10-25T00:00:00-06:00",
+    "endsAt": "2026-10-26T00:00:00-06:00",
+    "message": "Las inscripciones de Estado de México están abiertas solo el 25 de octubre. Cerrarán automáticamente a las 00:00 h del 26 de octubre (hora de CDMX). Las consultas y el envío de comprobantes de órdenes existentes seguirán disponibles."
+  }
 }
