@@ -15,7 +15,7 @@
   },
   "vars": {
     "TICKET_SALES_PAUSED": "false",
-    "REGISTRATION_PAUSED_VENUES": "edomex"
+    "REGISTRATION_PAUSED_VENUES": ""
   },
   "d1_databases": [
     {

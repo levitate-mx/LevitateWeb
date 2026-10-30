@@ -109,6 +109,7 @@ type InscriptionOrder = {
   createdAt: string;
   updatedAt: string;
   proof?: InscriptionPaymentProof | null;
+  lineItems?: InscriptionLookupLine[];
 };
 
 type InscriptionLookup = {
@@ -124,6 +125,7 @@ type InscriptionLookup = {
   currency?: string;
   pricingMode?: "mexico" | "international";
   order?: InscriptionOrder | null;
+  orderSnapshotOnly?: boolean;
 };
 
 type ApiErrorResponse = {
@@ -577,12 +579,16 @@ function InscriptionLookupPanel() {
   const proofUploaderRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToProofRef = useRef(false);
   const selectedPaymentMethod = paymentMethodSections.find((method) => method.id === selectedPaymentMethodId) ?? null;
-  const visibleLines = lookup?.lines ?? [];
+  const hasCurrentLines = Boolean(lookup?.lines.length);
+  const visibleLines = lookup?.lines.length ? lookup.lines : lookup?.order?.lineItems ?? [];
+  const hasExistingOrder = Boolean(lookup?.order);
   const isNewOrderPaused = Boolean(lookup && !lookup.order
     && (isVenuePaused(lookup.venue) || lookup.lines.some((line) => isVenuePaused(line.venue))));
-  const visibleSubtotal = lookup?.subtotal ?? 0;
-  const visibleCurrency = getLookupCurrency(lookup);
-  const visibleOriginalSubtotal = visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0);
+  const visibleSubtotal = !hasCurrentLines && lookup?.order ? lookup.order.amount : lookup?.subtotal ?? 0;
+  const visibleCurrency = !hasCurrentLines && lookup?.order?.currency ? lookup.order.currency : getLookupCurrency(lookup);
+  const visibleOriginalSubtotal = visibleLines.length > 0
+    ? visibleLines.reduce((total, line) => total + (line.baseAmount ?? line.amount), 0)
+    : visibleSubtotal;
   const visibleDiscount = Math.max(0, visibleOriginalSubtotal - visibleSubtotal);
   const hasUploadedPaymentProof = Boolean(lookup?.order?.proof);
   const canUploadPaymentProof = canSubmitPaymentProof(lookup?.order);
@@ -684,7 +690,10 @@ function InscriptionLookupPanel() {
 
       const response = await fetch("/api/registration/inscription/payment-lookup", {
         credentials: "same-origin",
-        body: JSON.stringify({ curp: normalizedCurp }),
+        body: JSON.stringify({
+          curp: normalizedCurp,
+          ...(options.expectedOrderId ? { orderId: options.expectedOrderId } : {}),
+        }),
         headers: { "content-type": "application/json" },
         method: "POST",
       });
@@ -1455,12 +1464,24 @@ function InscriptionLookupPanel() {
   };
 
   const handlePaymentOrder = async () => {
-    if (!lookup || visibleSubtotal <= 0) {
+    if (!lookup) {
       return;
     }
-    if (lookup.order && (isVenuePaused(lookup.order.venue) || isVenuePaused(lookup.venue)
-      || lookup.lines.some((line) => isVenuePaused(line.venue)))) {
+    if (lookup.order && (
+      lookup.order.status === "paid"
+      || lookup.order.status === "payment_reported"
+      || isVenuePaused(lookup.order.venue)
+      || isVenuePaused(lookup.venue)
+      || lookup.lines.some((line) => isVenuePaused(line.venue))
+      || lookup.order.lineItems?.some((line) => isVenuePaused(line.venue))
+      || lookup.lines.length === 0
+      || visibleSubtotal <= 0
+      || lookup.orderSnapshotOnly === true
+    )) {
       openPaymentPanel();
+      return;
+    }
+    if (visibleSubtotal <= 0) {
       return;
     }
     if (isNewOrderPaused) {
@@ -1609,12 +1630,14 @@ function InscriptionLookupPanel() {
               ) : (
                 <div className="inscripciones-lookup-empty">
                   <ReceiptText aria-hidden="true" size={24} />
-                  <strong>No hay coreografías disponibles</strong>
-                  <p>La academia todavía no vinculó coreografías pagables a este participante.</p>
+                  <strong>{hasExistingOrder ? "Orden recuperada" : "No hay coreografías disponibles"}</strong>
+                  <p>{hasExistingOrder
+                    ? "Puedes consultar los datos y el estado de tu orden existente."
+                    : "La academia todavía no vinculó coreografías pagables a este participante."}</p>
                 </div>
               )}
 
-              {visibleLines.length > 0 ? (
+              {visibleLines.length > 0 || hasExistingOrder ? (
                 <div className="inscripciones-payment-summary">
                   <dl>
                     <div>
@@ -1659,7 +1682,7 @@ function InscriptionLookupPanel() {
         >
           <img alt="" src="/assets/inscripciones-payment-moment.jpg" />
 
-          {lookup && visibleLines.length > 0 && !isTransferVisible ? (
+          {lookup && (visibleLines.length > 0 || hasExistingOrder) && !isTransferVisible ? (
             <form
               className="inscripciones-photo-payment-actions"
               onSubmit={(event) => {
@@ -1685,7 +1708,7 @@ function InscriptionLookupPanel() {
               </label>
               <button
                 className="inscripciones-photo-payment-button"
-                disabled={visibleSubtotal <= 0 || isOrderLoading || isNewOrderPaused}
+                disabled={(!hasExistingOrder && visibleSubtotal <= 0) || isOrderLoading || isNewOrderPaused}
                 type="submit"
               >
                 <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : isNewOrderPaused ? "Nuevas inscripciones pausadas" : "Datos de pago"}</span>

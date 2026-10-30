@@ -10,7 +10,7 @@ export function useRegistrationPolicy() {
   useEffect(() => {
     let isCancelled = false;
     let isLoading = false;
-    let basePausedVenues = initialRegistrationPolicy.pausedVenues;
+    let basePausedVenues: string[] = initialRegistrationPolicy.pausedVenues;
     let temporaryOpening: Parameters<typeof resolveRegistrationPolicy>[2] = initialRegistrationPolicy.temporaryOpening;
     let serverClock: { timestamp: number; receivedAt: number } | null = null;
     let transitionTimeout: number | undefined;

@@ -10651,7 +10651,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
     ? paymentDetail
     : null;
 
-  const openPaymentOrder = async (order: RegistrationInscriptionOrder) => {
+  const openPaymentOrder = async (
+    order: Pick<RegistrationInscriptionOrder, "id" | "orderType">,
+    tryShopIfMissing = false,
+  ) => {
     const requestId = ++paymentDetailRequest.current;
     setSelectedOrderId(adminOrderKey(order));
     setPaymentDetail(null);
@@ -10659,8 +10662,18 @@ export function LevitateRegistrationAdminPaymentsRoute({
     setAdminError("");
     try {
       const params = new URLSearchParams({ id: order.id, orderType: getAdminOrderType(order) });
-      const payload = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(`/api/registration/admin/payment-order?${params}`);
-      if (requestId === paymentDetailRequest.current) setPaymentDetail(payload.order);
+      let payload: { order: RegistrationInscriptionOrder };
+      try {
+        payload = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(`/api/registration/admin/payment-order?${params}`);
+      } catch (error) {
+        if (!tryShopIfMissing || !(error instanceof RegistrationApiError) || error.status !== 404) throw error;
+        params.set("orderType", "shop");
+        payload = await requestRegistrationApi<{ order: RegistrationInscriptionOrder }>(`/api/registration/admin/payment-order?${params}`);
+      }
+      if (requestId === paymentDetailRequest.current) {
+        setSelectedOrderId(adminOrderKey(payload.order));
+        setPaymentDetail(payload.order);
+      }
     } catch (error) {
       if (requestId === paymentDetailRequest.current) setAdminError(getErrorMessage(error, "No se pudo abrir el pago."));
     } finally {
@@ -10669,12 +10682,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const openPaymentOrderById = (orderId: string) => {
-    const order = orders.find((item) => item.id === orderId);
+    const order = orders.find((item) => item.id === orderId)
+      ?? paymentPage.orders.find((item) => item.id === orderId)
+      ?? participantOperationalRows.flatMap((row) => row.allOrders).find((item) => item.id === orderId);
     if (order) {
       void openPaymentOrder(order);
     } else {
-      setSelectedOrderId("");
-      setAdminError("No se encontró la orden. Actualiza los datos e intenta nuevamente.");
+      void openPaymentOrder({ id: orderId, orderType: "registration" }, true);
     }
   };
 

@@ -1422,6 +1422,7 @@ async function handleRegistrationInscriptionLookup(request, env) {
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
       pausedVenues: getRegistrationPolicy(env).pausedVenues,
+      orderId: optionalString(body.orderId),
     });
     return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
   } catch (error) {
@@ -1445,6 +1446,7 @@ async function handleRegistrationInscriptionPaymentLookup(request, env) {
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
       pausedVenues: getRegistrationPolicy(env).pausedVenues,
+      orderId: optionalString(body.orderId),
     });
     return sendJson(serializePublicRegistrationInscriptionPaymentLookup(lookup));
   } catch (error) {
@@ -3889,7 +3891,7 @@ async function getRegistrationStudentState(db, user) {
   };
 }
 
-async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pausedVenues = [] } = {}) {
+async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pausedVenues = [], orderId = "" } = {}) {
   const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
   const lookupBindings = academyId ? [curp, academyId] : [curp];
   const { results: registrationRows = [] } = await db
@@ -3971,6 +3973,37 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pa
     .all();
   const dancesWithParticipants = await attachRegistrationDanceParticipants(db, danceRows);
   const allLines = buildRegistrationInscriptionLines(dancesWithParticipants, { isInternational });
+  if (orderId) {
+    const selectedOrder = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    if (academyId && selectedOrder.academy_id !== academyId) {
+      throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
+    }
+    const selectedLines = parseRegistrationOrderLineItems(selectedOrder.line_items_json);
+    const currency = getRegistrationOrderCurrency(selectedLines);
+    return {
+      curp,
+      academyId: selectedOrder.academy_id,
+      participantName: selectedOrder.participant_name,
+      academyName: selectedOrder.academy_name,
+      venue: selectedOrder.venue,
+      reference: selectedOrder.reference,
+      paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
+        academyId: selectedOrder.academy_id,
+        isInternational: currency === "USD",
+        orderReference: selectedOrder.reference,
+        venue: selectedOrder.venue,
+      }),
+      currency,
+      pricingMode: currency === "USD" ? "international" : "mexico",
+      registrations: registrationRows.filter((row) => row.academy_id === selectedOrder.academy_id)
+        .map(serializeRegistrationStudentRecord),
+      lines: selectedLines,
+      mediaLines: allLines,
+      subtotal: Number(selectedOrder.amount || 0),
+      orderSnapshotOnly: true,
+      order: await serializeRegistrationInscriptionOrderWithProof(db, selectedOrder),
+    };
+  }
   const primaryRegistration = registrationRows[0];
   const orders = await getRegistrationInscriptionOrdersByParticipant(db, curp, primaryRegistration.academy_id);
   const latestOrder = orders[0] || null;
@@ -4022,6 +4055,8 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pa
     pricingMode: isInternational ? "international" : "mexico",
     registrations: registrationRows.map(serializeRegistrationStudentRecord),
     lines,
+    // Media purchases use every owned dance, independently of payment order coverage.
+    mediaLines: allLines,
     subtotal,
     order: serializedOrder,
   };
@@ -4583,9 +4618,10 @@ async function validateRegistrationShopMediaLineItems(db, curp, lineItems) {
   }
 
   const lookup = await getRegistrationInscriptionLookup(db, curp);
+  const mediaLines = lookup.mediaLines || lookup.lines;
   const dancesById = new Map();
 
-  lookup.lines.forEach((line, index) => {
+  mediaLines.forEach((line, index) => {
     dancesById.set(line.id, line);
     dancesById.set(`concepto-${index + 1}`, line);
   });
@@ -4604,7 +4640,7 @@ async function validateRegistrationShopMediaLineItems(db, curp, lineItems) {
       throwHttpError("shop_media_dance_required", "Selecciona una coreografía compatible para cada paquete de foto y video.", 400);
     }
 
-    const dance = getRegistrationShopMediaDanceForLine(lookup.lines, dancesById, danceId, danceTitle, expectedDanceType);
+    const dance = getRegistrationShopMediaDanceForLine(mediaLines, dancesById, danceId, danceTitle, expectedDanceType);
 
     if (!dance) {
       throwHttpError("shop_media_dance_not_found", "La coreografía seleccionada no está vinculada a esa CURP.", 400);
@@ -7260,6 +7296,8 @@ function serializePublicRegistrationInscriptionPaymentLookup(lookup) {
       ...line,
       id: `concepto-${index + 1}`,
     })),
+    mediaLines: lookup.mediaLines || lookup.lines,
+    orderSnapshotOnly: Boolean(lookup.orderSnapshotOnly),
     subtotal: lookup.subtotal,
     order: lookup.order ? serializePublicRegistrationInscriptionPaymentOrder(lookup.order) : null,
   };
@@ -7280,6 +7318,7 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     reference: order.reference,
     paymentReference: order.paymentReference || buildRegistrationInscriptionPaymentReference(order.curp),
     amount: order.amount,
+    lineItems: (order.lineItems || []).map((line, index) => ({ ...line, id: `concepto-${index + 1}` })),
     paidAmount: order.paidAmount,
     currency: order.currency || getRegistrationOrderCurrency(order.lineItems),
     status: order.status,

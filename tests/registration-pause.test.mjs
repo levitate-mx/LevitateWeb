@@ -583,3 +583,211 @@ test('Relevé listing skips an unbilled dance if its insert crosses the closing 
   assert.deepEqual(businessSnapshot(f), before);
   assertNoDeletes(f);
 });
+
+
+test('production registration configuration keeps Edomex open after October 29 without another automatic closing time', async t => {
+  const defaults = JSON.parse(await readFile(new URL('../shared/registration-policy.json', import.meta.url), 'utf8'));
+  const deployment = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.deepEqual(defaults.pausedVenues, [], 'the website default must no longer pause Edomex');
+  assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, '', 'the deployed server must use the same open policy');
+  const { resolveRegistrationPolicy } = await import('../shared/registration-policy.js');
+  const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
+  let now;
+  t.mock.method(Date, 'now', () => now);
+  for (const date of ['2026-10-29T00:00:00-06:00', '2026-11-10T12:00:00-06:00', '2027-01-01T00:00:00-06:00']) {
+    now = Date.parse(date);
+    const fallback = resolveRegistrationPolicy(defaults.pausedVenues, now);
+    const { json, headers } = await f.request('/status', { method: 'GET', cookie: '' });
+    for (const policy of [fallback, json.registrationPolicy]) {
+      assert.deepEqual(policy.basePausedVenues, [], date);
+      assert.deepEqual(policy.pausedVenues, [], date);
+      assert.equal(policy.temporaryOpeningActive, false, date);
+      assert.equal(policy.temporaryOpening, null, 'the expired October 25 exception cannot impose a closing time on an open base policy');
+      assert.equal(policy.nextChangeAt, null, date);
+    }
+    assert.equal(headers.get('cache-control'), 'no-store');
+  }
+  assertNoDeletes(f);
+});
+
+test('the open production policy allows Edomex dance and payment flows while previous orders and proofs stay authenticated and available', async t => {
+  const deployment = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, '');
+  const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
+  const previous = [];
+  for (const path of proofPaths) {
+    const person = f.person();
+    f.dance({ person });
+    const order = await createExistingOrder(f, person);
+    previous.push({ person, order, path, before: orderRow(f, order.id) });
+  }
+  let now;
+  t.mock.method(Date, 'now', () => now);
+  for (const date of ['2026-10-29T00:00:00-06:00', '2026-11-10T12:00:00-06:00']) {
+    now = Date.parse(date);
+    const person = f.person();
+    const regular = await f.request('/dances', { body: danceBody(f, person), status: 201 });
+    assert.equal(regular.json.dance.venue, 'edomex');
+    const releve = await f.request('/dances', { body: danceBody(f, person, 'edomex', true), status: 201 });
+    assert.equal(releve.json.dance.isReleve, true);
+    const listing = await f.request('/releve/orders', { body: {} });
+    assert.ok(listing.json.orders.some(order => order.danceId === releve.json.dance.id), date);
+    for (const path of orderPaths) {
+      const buyer = f.person();
+      await f.request('/dances', { body: danceBody(f, buyer), status: 201 });
+      const { json } = await f.request(path, { body: { curp: buyer.curp, ...phone }, status: 201 });
+      assert.equal(json.order.venue, 'edomex');
+      assert.equal(json.order.status, 'pending_payment');
+      assert.ok(json.order.amount > 0);
+    }
+  }
+  for (const { person, order, path, before } of previous) {
+    const login = await f.request('/student/login', { cookie: '', body: { curp: person.curp } });
+    const cookie = login.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(cookie, 'the normal CURP login must issue the session required by payment lookup');
+    for (const lookupPath of lookupPaths) {
+      await f.request(lookupPath, { cookie: '', body: { curp: person.curp }, status: 401 });
+      await f.request(lookupPath, { cookie: f.other.cookie, body: { curp: person.curp }, status: 403 });
+      const { json } = await f.request(lookupPath, { cookie, body: { curp: person.curp } });
+      assert.equal(json.order.id, order.id);
+      assert.equal(json.order.amount, before.amount);
+    }
+    await f.request(path, { cookie: '', body: { curp: person.curp, orderId: order.id, ...proof }, status: 401 });
+    const uploaded = await f.request(path, { cookie, body: { curp: person.curp, orderId: order.id, ...proof }, status: 201 });
+    assert.equal(uploaded.json.order.id, order.id);
+    assert.equal(uploaded.json.order.status, 'payment_reported');
+    const after = orderRow(f, order.id);
+    for (const field of ['amount', 'paid_amount', 'line_items_json', 'buyer_phone', 'created_at']) {
+      assert.equal(after[field], before[field], field);
+    }
+    const retrieved = await f.request('/inscription/payment-lookup', { cookie, body: { curp: person.curp } });
+    assert.equal(retrieved.json.order.proof.fileName, proof.fileName);
+    assert.equal(retrieved.json.order.status, 'payment_reported');
+  }
+  assertNoDeletes(f);
+});
+
+
+async function paidRegistrationWithNewPendingDance(f) {
+  const person = f.person();
+  const paidDance = f.dance({ person, title: 'Coreografía anterior pagada' });
+  const created = await f.request('/inscription/order', { body: { curp: person.curp, ...phone }, status: 201 });
+  const order = created.json.order;
+  await f.request('/inscription/order/proof', { body: { curp: person.curp, orderId: order.id, ...proof }, status: 201 });
+  await f.request('/admin/inscription-order/status', { cookie: f.admin.cookie,
+    body: { id: order.id, orderType: 'registration', status: 'paid', paidAmount: order.amount } });
+  const paidSnapshot = orderRow(f, order.id);
+  const pendingDance = f.dance({ person, title: 'Coreografía nueva pendiente' });
+  const next = await f.request('/inscription/order', { body: { curp: person.curp, ...phone }, status: 201 });
+  assert.notEqual(next.json.order.id, order.id);
+  assert.equal(next.json.order.status, 'pending_payment');
+  return { person, paidDance, pendingDance, paid: order, pending: next.json.order,
+    paidSnapshot, pendingSnapshot: orderRow(f, next.json.order.id) };
+}
+
+test('an authorized historical order link returns its own snapshot even when a newer order exists', async t => {
+  const f = await fixture(t, { pausedVenues: '' });
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-29T12:00:00-06:00'));
+  const { person, paid, pending, paidSnapshot, pendingSnapshot } = await paidRegistrationWithNewPendingDance(f);
+  const login = await f.request('/student/login', { cookie: '', body: { curp: person.curp } });
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  assert.ok(cookie);
+  const wrongCurp = f.person();
+  f.dance({ person: wrongCurp });
+  const sameCurpOtherAcademy = f.person({ owner: f.other, curp: person.curp });
+  f.dance({ person: sameCurpOtherAcademy, venue: 'puebla' });
+  for (const path of lookupPaths) {
+    const current = await f.request(path, { cookie: f.academy.cookie, body: { curp: person.curp } });
+    assert.equal(current.json.order.id, pending.id, 'ordinary lookup keeps its existing latest-order behavior');
+    assert.equal(Boolean(current.json.orderSnapshotOnly), false);
+    if (path === '/inscription/payment-lookup') assert.equal(current.json.orderSnapshotOnly, false);
+    await f.request(path, { cookie: '', body: { curp: person.curp, orderId: paid.id }, status: 401 });
+    for (const ownerCookie of [f.academy.cookie, cookie]) {
+      const { json } = await f.request(path, { cookie: ownerCookie, body: { curp: person.curp, orderId: paid.id } });
+      assert.equal(json.order.id, paid.id);
+      assert.equal(json.orderSnapshotOnly, true, 'an explicit historical link must be displayed without rebuilding its order');
+      assert.equal(json.order.status, 'paid');
+      assert.equal(json.order.amount, paidSnapshot.amount);
+      assert.equal(json.subtotal, paidSnapshot.amount);
+      assert.deepEqual(json.lines.map(line => line.title), JSON.parse(paidSnapshot.line_items_json).map(line => line.title));
+      assert.equal(json.order.proof.fileName, proof.fileName);
+    }
+    await f.request(path, { body: { curp: wrongCurp.curp, orderId: paid.id }, status: 404 });
+    await f.request(path, { cookie: f.other.cookie, body: { curp: person.curp, orderId: paid.id }, status: 403 });
+  }
+  assert.deepEqual(orderRow(f, paid.id), paidSnapshot, 'history lookup must not reprice or rewrite the original paid order');
+  assert.deepEqual(orderRow(f, pending.id), pendingSnapshot, 'viewing history must not replace the current pending order');
+  assertNoDeletes(f);
+});
+
+test('the photo and video catalog retains paid choreographies while payment lines contain only the new amount due', async t => {
+  const f = await fixture(t, { pausedVenues: '' });
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-29T12:00:00-06:00'));
+  const { person, paidDance, pendingDance, paid, pending, paidSnapshot, pendingSnapshot } = await paidRegistrationWithNewPendingDance(f);
+  for (const path of lookupPaths) {
+    const { json } = await f.request(path, { body: { curp: person.curp } });
+    assert.equal(json.order.id, pending.id);
+    assert.deepEqual(new Set(json.mediaLines.map(line => line.id)), new Set([paidDance.id, pendingDance.id]),
+      'media selection must use canonical choreography IDs from both paid and pending registrations');
+    assert.deepEqual(json.lines.map(line => line.title), JSON.parse(pendingSnapshot.line_items_json).map(line => line.title));
+    assert.equal(json.subtotal, pendingSnapshot.amount);
+  }
+  const purchased = await f.request('/shop/order', { status: 201, body: {
+    curp: person.curp, buyerName: 'Compradora de prueba', buyerEmail: 'foto@example.test', ...phone,
+    items: [{ productId: 'photo-solos', quantity: 1, danceId: paidDance.id }],
+  } });
+  assert.equal(purchased.json.order.lineItems[0].danceId, paidDance.id);
+  assert.match(purchased.json.order.lineItems[0].danceTitle, /Coreografía anterior pagada/);
+  const unrelated = f.person({ owner: f.other });
+  const unrelatedDance = f.dance({ person: unrelated });
+  const rejected = await f.request('/shop/order', { status: 400, body: {
+    curp: person.curp, buyerName: 'Compradora de prueba', buyerEmail: 'foto@example.test', ...phone,
+    items: [{ productId: 'photo-solos', quantity: 1, danceId: unrelatedDance.id }],
+  } });
+  assert.equal(rejected.json.error.code, 'shop_media_dance_not_found');
+  assert.deepEqual(orderRow(f, paid.id), paidSnapshot);
+  assert.deepEqual(orderRow(f, pending.id), pendingSnapshot);
+  assertNoDeletes(f);
+});
+
+
+test('an ordinary pending checkout synchronizes newly added dance lines before payment without losing notes or recorded money', async t => {
+  const f = await fixture(t, { pausedVenues: '' });
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-29T12:00:00-06:00'));
+  const person = f.person();
+  const firstDance = f.dance({ person, title: 'Coreografía anterior pendiente' });
+  const original = await createExistingOrder(f, person);
+  f.db.sqlite.prepare('UPDATE registration_inscription_orders SET paid_amount = 100 WHERE id = ?').run(original.id);
+  const before = orderRow(f, original.id);
+  const addedDance = f.dance({ person, title: 'Coreografía nueva por incluir' });
+  let expectedTotal;
+  let expectedLines;
+  for (const path of lookupPaths) {
+    const { json } = await f.request(path, { body: { curp: person.curp } });
+    assert.equal(json.order.id, original.id);
+    assert.equal(Boolean(json.orderSnapshotOnly), false, 'a regular pending lookup is a current quote, not a frozen historical order');
+    if (path === '/inscription/payment-lookup') assert.equal(json.orderSnapshotOnly, false);
+    assert.equal(json.order.amount, before.amount);
+    assert.ok(json.subtotal > before.amount, 'the computed quote must include the newly added choreography');
+    assert.equal(json.lines.length, 2);
+    assert.deepEqual(orderRow(f, original.id), before, 'reading the quote does not silently rewrite the stored payment order');
+    expectedTotal = json.subtotal;
+    expectedLines = json.lines.map(line => [line.title, line.amount]);
+  }
+  const { json } = await f.request('/inscription/payment-order', {
+    body: { curp: person.curp, ...phone }, status: 201,
+  });
+  assert.equal(json.order.id, original.id);
+  assert.equal(json.order.status, 'pending_payment');
+  assert.equal(json.order.amount, expectedTotal);
+  const after = orderRow(f, original.id);
+  assert.equal(after.amount, expectedTotal);
+  assert.deepEqual(JSON.parse(after.line_items_json).map(line => [line.title, line.amount]), expectedLines);
+  assert.deepEqual(new Set(JSON.parse(after.line_items_json).map(line => line.id)), new Set([firstDance.id, addedDance.id]));
+  assert.equal(after.notes, before.notes);
+  assert.equal(after.paid_amount, 100, 'synchronizing the quote must preserve a partial payment already recorded');
+  assert.equal(after.created_at, before.created_at);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_orders').get().n, 1);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_payment_proofs').get().n, 0);
+  assertNoDeletes(f);
+});

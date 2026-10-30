@@ -170,6 +170,7 @@ type MediaParticipantLookup = {
   academyName: string;
   curp: string;
   lines: MediaParticipantLookupLine[];
+  mediaLines?: MediaParticipantLookupLine[];
   participantName: string;
   venue: string;
 };
@@ -2185,7 +2186,19 @@ function PhotoVideoShopPage() {
     setIsParticipantLookupLoading(true);
 
     try {
+      const loginResponse = await fetch("/api/registration/student/login", {
+        body: JSON.stringify({ curp: normalizedCurp }),
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      if (!loginResponse.ok) {
+        const loginError = await loginResponse.json().catch(() => null) as ApiErrorResponse | null;
+        throw new Error(loginError?.error?.message ?? "No pudimos iniciar la sesión del participante.");
+      }
+
       const response = await fetch("/api/registration/inscription/payment-lookup", {
+        credentials: "same-origin",
         body: JSON.stringify({ curp: normalizedCurp }),
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -2194,25 +2207,23 @@ function PhotoVideoShopPage() {
 
       if (!response.ok) {
         const errorPayload = payload as ApiErrorResponse | null;
-        const shouldShowMissingDancesMessage =
-          response.status === 401 ||
-          response.status === 403 ||
-          response.status === 404 ||
-          errorPayload?.error?.message === "Inicia sesión para consultar una inscripción";
-
-        throw new Error(
-          shouldShowMissingDancesMessage
-            ? noMediaDancesLinkedMessage
-            : errorPayload?.error?.message ?? "No pudimos consultar esa CURP.",
-        );
+        throw new Error(errorPayload?.error?.message ?? "No pudimos consultar esa CURP. Vuelve a intentarlo.");
       }
 
       if (!payload || !("curp" in payload) || !Array.isArray(payload.lines)) {
         throw new Error("La respuesta de la consulta no fue válida.");
       }
 
-      setParticipantLookup(payload);
-      setSelectedDanceIdsBySlot(buildInitialMediaDanceSelections(mediaSelectionSlots, payload.lines));
+      const mediaLines = payload.mediaLines ?? payload.lines;
+      if (!Array.isArray(mediaLines)) {
+        throw new Error("La respuesta de la consulta no fue válida.");
+      }
+      if (mediaLines.length === 0) {
+        throw new Error(noMediaDancesLinkedMessage);
+      }
+
+      setParticipantLookup({ ...payload, lines: mediaLines });
+      setSelectedDanceIdsBySlot(buildInitialMediaDanceSelections(mediaSelectionSlots, mediaLines));
     } catch (error) {
       setParticipantLookup(null);
       setBuyerError(error instanceof Error ? error.message : "No pudimos consultar esa CURP.");
