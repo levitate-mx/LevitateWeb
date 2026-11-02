@@ -8,6 +8,14 @@ JueceoCore. No copia ni modifica eventos, coreografías, notas o comprobantes.
 - `JUDGING_SUPABASE_URL`: URL del proyecto confirmado de jueceo.
 - `JUDGING_SUPABASE_PUBLISHABLE_KEY`: clave pública de la aplicación, almacenada
   como secreto del Worker. No se incluye en el JavaScript del navegador.
+- `JUDGING_LEVITATE_EVENT_IDS`: lista de UUID de eventos verificados de Levitate,
+  separados por comas. Se aplica tanto al listado como a la consulta directa de
+  puntuaciones. Si falta o es inválida, la consulta se bloquea.
+
+Los eventos de otras marcas y los programas sin una asociación verificada con
+Levitate no aparecen. No se deduce la pertenencia por coincidencias de nombre.
+Para incorporar un programa nuevo, se verifica su identidad y se añade su UUID
+a la configuración del Worker.
 
 La conexión usa exclusivamente `GET` a tablas y columnas permitidas. No admite
 claves secretas ni `service_role`. Conserva las políticas RLS existentes y no

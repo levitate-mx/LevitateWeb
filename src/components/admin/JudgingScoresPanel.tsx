@@ -230,7 +230,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
     <section className="judging-scores" aria-label="Puntuaciones por coreografía" aria-busy={loading}>
       <div className="judging-scores__toolbar">
         <div>
-          <p>Calificaciones sincronizadas desde la app de jueceo.</p>
+          <p>Calificaciones de Levitate sincronizadas desde la app de jueceo.</p>
           <p className="judging-scores__consulted" role="status">{loading ? "Consultando puntuaciones…" : current ? <>Consultado <time dateTime={current.fetchedAt}>{formatMexicoCityDateTime(current.fetchedAt)}</time> · CDMX</> : "Selecciona un evento para consultar sus calificaciones."}</p>
         </div>
         <button disabled={loading} onClick={() => setRefreshRevision((value) => value + 1)} type="button"><RefreshCw aria-hidden="true" size={16} />Actualizar</button>
@@ -240,7 +240,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
         {events.map((event) => <option key={event.id} value={event.id}>{event.name}{event.sourceName ? ` · ${event.sourceName}` : ""}{event.isActive ? " · Activo" : ""}</option>)}
       </select></label>
       {eventsError || scoresError ? <p className="registration-admin-alert" role="alert">{eventsError || scoresError}</p> : null}
-      {!eventsLoading && !eventsError && !events.length ? <p className="judging-scores__empty" role="status">No hay eventos de jueceo disponibles para consultar.</p> : null}
+      {!eventsLoading && !eventsError && !events.length ? <p className="judging-scores__empty" role="status">Todavía no hay eventos de Levitate disponibles para consultar.</p> : null}
       {current ? (
         <>
           {current.warnings.length ? <div className="judging-scores__warnings" role="status"><ul>{current.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div> : null}

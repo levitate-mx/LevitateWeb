@@ -151,9 +151,11 @@ test('judging admin routes authenticate before upstream reads and never write to
   Object.assign(f.env, {
     JUDGING_SUPABASE_URL: 'https://judgingfixture.supabase.co',
     JUDGING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic_test_key',
+    JUDGING_LEVITATE_EVENT_IDS: eventId,
   });
   const data = {
-    events: [{ id: eventId, name: 'Evento local de prueba', is_active: true, event_type: 'event' }],
+    events: [{ id: eventId, name: 'Evento local de prueba', is_active: true, event_type: 'event' },
+      { id: 'f3c2e100-1234-4567-8abc-987654321abc', name: 'Prisma Aurora Sandbox', is_active: true, event_type: 'event' }],
     blocks: [{ event_id: eventId, block_id: 'b1', name: 'Bloque 1' }],
     routines: [{ event_id: eventId, routine_id: 'r1', name: 'Pieza de prueba', genre: 'Jazz', block_id: 'b1' }],
     judges: [{ event_id: eventId, judge_id: 'j1', name: 'Juez de prueba', role: 'judge' }],
@@ -171,7 +173,9 @@ test('judging admin routes authenticate before upstream reads and never write to
     const table = url.pathname.split('/').at(-1);
     const offset = Number(url.searchParams.get('offset'));
     assert.ok(Object.hasOwn(data, table));
-    return Response.json(data[table].slice(offset, offset + 1000));
+    const rows = table === 'events' && url.searchParams.get('id')?.startsWith('eq.')
+      ? data.events.filter(row => `eq.${row.id}` === url.searchParams.get('id')) : data[table];
+    return Response.json(rows.slice(offset, offset + 1000));
   });
   const paths = ['/admin/judging/events', `/admin/judging/scores?eventId=${eventId}`];
   const initialChanges = f.db.sqlite.prepare('SELECT total_changes() AS count').get().count;
@@ -191,7 +195,12 @@ test('judging admin routes authenticate before upstream reads and never write to
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'private, no-store');
     const result = await response.json();
-    if (path.endsWith('/events')) assert.equal(result.events[0].id, eventId);
+    if (path.endsWith('/events')) {
+      assert.equal(result.events[0].id, eventId);
+      assert.equal(result.events.length, 1, 'the API must not expose another competition even if upstream ignores its filter');
+      assert.doesNotMatch(JSON.stringify(result), /Prisma|Aurora|Sandbox/);
+      assert.equal(calls.at(-1).searchParams.get('id'), `in.(${eventId})`);
+    }
     else {
       assert.equal(result.event.id, eventId);
       assert.equal(result.rows[0].judges[0].total, 8);
@@ -200,6 +209,9 @@ test('judging admin routes authenticate before upstream reads and never write to
     assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
       'judging reads must not update sessions, registrations, orders or payments');
   }
+  const beforeForeignEvent = calls.length;
+  await f.request('/admin/judging/scores?eventId=f3c2e100-1234-4567-8abc-987654321abc', { cookie: admin.cookie, status: 404 });
+  assert.equal(calls.length, beforeForeignEvent, 'direct URL access cannot fetch a valid event outside the explicit Levitate scope');
   assert.equal(f.db.sqlite.prepare('SELECT total_changes() AS count').get().count, initialChanges,
     'the real SQLite database confirms that all judging API probes were read-only');
 });
@@ -220,7 +232,16 @@ test('judging API missing configuration and upstream failures stay explicit, pri
   Object.assign(f.env, {
     JUDGING_SUPABASE_URL: 'https://judgingfixture.supabase.co',
     JUDGING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic_test_key',
+    JUDGING_LEVITATE_EVENT_IDS: 'invalid-event-scope',
   });
+  const invalidScope = await worker.fetch(new Request('http://localhost/api/registration/admin/judging/events', {
+    headers: { cookie: admin.cookie },
+  }), f.env);
+  assert.equal(invalidScope.status, 503);
+  assert.equal(invalidScope.headers.get('cache-control'), 'private, no-store');
+  assert.equal((await invalidScope.json()).error.code, 'judging_not_configured');
+  assert.equal(calls, 0, 'malformed scope must fail closed before an upstream read');
+  f.env.JUDGING_LEVITATE_EVENT_IDS = 'f3c2e100-1234-4567-8abc-123456789abc';
   const queryStart = f.db.runtimeQueries.length;
   const unavailable = await worker.fetch(new Request('http://localhost/api/registration/admin/judging/events', {
     headers: { cookie: admin.cookie },

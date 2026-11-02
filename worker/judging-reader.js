@@ -2,6 +2,7 @@ import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
 
 const pageSize = 1000;
 const maximumRows = 50000;
+const eventIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const eventColumns = "id,name,source_name,starts_at,is_active,event_type,competition_config,created_at";
 const tableColumns = {
   blocks: "event_id,block_id,name,title,sort_order,is_active",
@@ -26,6 +27,19 @@ const tableOrders = {
 
 function fail(code, message, statusCode = 503) {
   throw Object.assign(new Error(message), { code, statusCode });
+}
+
+function levitateEventIds(env) {
+  const ids = [...new Set(String(env.JUDGING_LEVITATE_EVENT_IDS || "")
+    .split(",").map(value => value.trim().toLowerCase()).filter(Boolean))];
+  if (!ids.length || ids.some(id => !eventIdPattern.test(id))) {
+    fail("judging_not_configured", "Los eventos de Levitate todavía no están configurados para esta consulta.");
+  }
+  return new Set(ids);
+}
+
+function isVisibleEvent(event) {
+  return event.event_type == null || event.event_type === "event";
 }
 
 function configuration(env) {
@@ -87,22 +101,29 @@ function mapEvent(event) {
 }
 
 export async function getJudgingEvents(env, { fetcher = fetch } = {}) {
+  const allowedIds = levitateEventIds(env);
   const config = configuration(env);
   const events = await readRows(config, "events", {
-    select: eventColumns, or: "(event_type.is.null,event_type.eq.event)", order: "is_active.desc,created_at.desc,id.asc",
+    select: eventColumns, id: `in.(${[...allowedIds].join(",")})`,
+    or: "(event_type.is.null,event_type.eq.event)", order: "is_active.desc,created_at.desc,id.asc",
   }, fetcher);
-  return { events: events.map(mapEvent), fetchedAt: new Date().toISOString() };
+  return { events: events.filter(event => allowedIds.has(event.id) && isVisibleEvent(event)).map(mapEvent), fetchedAt: new Date().toISOString() };
 }
 
 export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
-  if (typeof eventId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId)) {
+  if (typeof eventId !== "string" || !eventIdPattern.test(eventId)) {
     fail("judging_invalid_event", "Selecciona un evento válido de JueceoCore.", 400);
   }
+  eventId = eventId.toLowerCase();
+  const allowedIds = levitateEventIds(env);
+  if (!allowedIds.has(eventId)) fail("judging_event_not_found", "No se encontró el evento de Levitate seleccionado.", 404);
   const config = configuration(env);
   const events = await readRows(config, "events", {
     select: eventColumns, id: `eq.${eventId}`, or: "(event_type.is.null,event_type.eq.event)", order: "id.asc",
   }, fetcher);
-  if (events.length !== 1 || events[0].id !== eventId) fail("judging_event_not_found", "No se encontró el evento seleccionado en JueceoCore.", 404);
+  if (events.length !== 1 || events[0].id !== eventId || !isVisibleEvent(events[0])) {
+    fail("judging_event_not_found", "No se encontró el evento de Levitate seleccionado.", 404);
+  }
   const entries = await Promise.all(Object.entries(tableColumns).map(async ([table, columns]) => [table,
     await readRows(config, table, { select: columns, event_id: `eq.${eventId}`, order: tableOrders[table] }, fetcher),
   ]));

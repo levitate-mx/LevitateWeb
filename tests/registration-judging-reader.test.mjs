@@ -7,6 +7,7 @@ const otherEventId = 'f3c2e100-1234-4567-8abc-987654321abc';
 const env = {
   JUDGING_SUPABASE_URL: 'https://judgingfixture.supabase.co',
   JUDGING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic_test_key',
+  JUDGING_LEVITATE_EVENT_IDS: eventId,
 };
 const allowedColumns = {
   events: 'id,name,source_name,starts_at,is_active,event_type,competition_config,created_at',
@@ -60,16 +61,69 @@ function upstream(data, { cap = 1000 } = {}) {
 }
 
 test('judging event reads use GET-only column allowlists and continue through a server cap below the requested page size', async () => {
-  const data = { events: [event(), event(otherEventId), event('a'), event('b'), event('c')] };
+  const ids = [eventId, otherEventId, ...[1, 2, 3].map(id => `f3c2e100-1234-4567-8abc-${String(id).padStart(12, '0')}`)];
+  const data = { events: ids.map(id => event(id)) };
   const server = upstream(data, { cap: 2 });
-  const result = await getJudgingEvents(env, server);
+  const result = await getJudgingEvents({ ...env, JUDGING_LEVITATE_EVENT_IDS: ids.join(',') }, server);
   assert.deepEqual(result.events.map(row => row.id), data.events.map(row => row.id));
   assert.deepEqual(server.calls.map(call => call.url.searchParams.get('offset')), ['0', '2', '4', '5']);
   assert.ok(Number.isFinite(Date.parse(result.fetchedAt)));
   for (const { url, options } of server.calls) {
+    assert.equal(url.searchParams.get('id'), `in.(${ids.join(',')})`, 'the catalog must request only explicitly configured Levitate events');
     assert.equal(url.searchParams.get('or'), '(event_type.is.null,event_type.eq.event)');
     assert.equal(options.headers.apikey, env.JUDGING_SUPABASE_PUBLISHABLE_KEY);
     assert.equal(options.headers.authorization, undefined, 'publishable keys do not become bearer JWTs');
+  }
+});
+
+test('the Levitate event catalog normalizes its explicit allowlist and excludes rogue IDs and archived event types', async () => {
+  const archivedId = 'f3c2e100-1234-4567-8abc-000000000001';
+  const legacyId = 'f3c2e100-1234-4567-8abc-000000000002';
+  const nullTypeId = 'f3c2e100-1234-4567-8abc-000000000003';
+  const ids = [eventId, otherEventId, archivedId, legacyId, nullTypeId];
+  const data = { events: [event(), event(otherEventId),
+    { ...event(archivedId), event_type: 'archived', name: 'Archived event' },
+    { ...event(legacyId), event_type: 'legacy', name: 'Legacy event' },
+    { ...event(nullTypeId), event_type: null },
+    { ...event('f3c2e100-1234-4567-8abc-000000000004'), name: 'Prisma Aurora Sandbox' },
+  ] };
+  const server = upstream(data, { cap: 2 });
+  const result = await getJudgingEvents({ ...env,
+    JUDGING_LEVITATE_EVENT_IDS: ` ${eventId.toUpperCase()} , ${otherEventId}, ${eventId}, ${archivedId},${legacyId},${nullTypeId} `,
+  }, server);
+  assert.deepEqual(result.events.map(row => row.id), [eventId, otherEventId, nullTypeId]);
+  for (const { url } of server.calls) assert.equal(url.searchParams.get('id'), `in.(${ids.join(',')})`, 'trim, lowercase and deduplicate before constructing the REST filter');
+  assert.doesNotMatch(JSON.stringify(result), /Prisma|Aurora|Sandbox|Archived event|Legacy event/);
+});
+
+test('valid but unconfigured event IDs are rejected before fetch while explicitly allowed additional IDs remain readable', async () => {
+  let calls = 0;
+  await assert.rejects(getJudgingScores(env, otherEventId, { fetcher: async () => {
+    calls += 1;
+    throw new Error('unconfigured event must never be fetched');
+  } }), error => error.code === 'judging_event_not_found' && error.statusCode === 404);
+  assert.equal(calls, 0);
+  const server = upstream(scoreData(otherEventId));
+  const result = await getJudgingScores({ ...env, JUDGING_LEVITATE_EVENT_IDS: `${eventId},${otherEventId}` },
+    otherEventId.toUpperCase(), server);
+  assert.equal(result.event.id, otherEventId);
+  assert.equal(result.rows[0].judges[0].total, 8);
+  for (const { url } of server.calls) {
+    const table = url.pathname.split('/').at(-1);
+    assert.equal(url.searchParams.get(table === 'events' ? 'id' : 'event_id'), `eq.${otherEventId}`);
+  }
+});
+
+test('missing or malformed Levitate event scope fails closed instead of exposing the unfiltered catalog', async () => {
+  for (const value of [undefined, null, '', '   ', ',,', 'invalid-id', `${eventId},invalid-id`,
+    `${eventId}&id=not.is.null`, `in.(${eventId})`]) {
+    const scopedEnv = { ...env, JUDGING_LEVITATE_EVENT_IDS: value };
+    let calls = 0;
+    const fetcher = async () => { calls += 1; throw new Error('invalid scope must never fetch'); };
+    for (const operation of [() => getJudgingEvents(scopedEnv, { fetcher }), () => getJudgingScores(scopedEnv, eventId, { fetcher })]) {
+      await assert.rejects(operation(), error => error.code === 'judging_not_configured' && error.statusCode === 503);
+    }
+    assert.equal(calls, 0);
   }
 });
 
@@ -101,7 +155,8 @@ test('invalid event IDs cannot inject a REST filter or trigger an upstream reque
 });
 
 test('a missing or ambiguous event remains an explicit not-found error rather than a fake empty score set', async () => {
-  for (const events of [[], [event(otherEventId)], [event(), event()]]) {
+  for (const events of [[], [event(otherEventId)], [event(), event()],
+    [{ ...event(), event_type: 'archived' }], [{ ...event(), event_type: 'legacy' }]]) {
     const server = upstream({ events });
     await assert.rejects(getJudgingScores(env, eventId, server),
       error => error.code === 'judging_event_not_found' && error.statusCode === 404);
