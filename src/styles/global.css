@@ -30915,6 +30915,14 @@ button {
   white-space: pre-line;
 }
 
+.sedes-event-info small {
+  grid-column: 2;
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
 .sedes-event-info a {
   display: inline-flex;
   align-items: center;

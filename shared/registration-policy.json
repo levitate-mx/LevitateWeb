@@ -1,6 +1,6 @@
 {
-  "pausedVenues": [],
-  "message": "Las nuevas inscripciones a competencia en Estado de México están temporalmente pausadas hasta nuevo aviso. Puedes consultar tus registros y enviar comprobantes de órdenes existentes.",
+  "pausedVenues": ["edomex"],
+  "message": "¡Cupo agotado en Estado de México! Gracias por ser parte de Levitate. Las nuevas inscripciones a competencia para esta edición están cerradas. Si ya tienes una inscripción, puedes consultarla y enviar tu comprobante.",
   "temporaryOpening": {
     "venue": "edomex",
     "startsAt": "2026-10-25T00:00:00-06:00",

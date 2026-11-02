@@ -3650,7 +3650,7 @@ function buildDashboardUpcomingEvents(programDances: RegistrationDance[], isVenu
       const eventDate = venueEventDates[venue] ? parseDashboardInputDate(venueEventDates[venue]) : null;
       const danceCount = danceCountByVenue.get(venue) ?? 0;
       const status = isVenuePaused(venue)
-        ? "Inscripciones pausadas"
+        ? "Inscripciones cerradas"
         : registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Borrador");
 
       return {
@@ -8563,7 +8563,7 @@ function ReleveRegistrationPanel({
   const registrationVenueOptions = venueOptions.map((option) => ({
     ...option,
     disabled: isVenuePaused(option.value),
-    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones pausadas` : option.label,
+    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones cerradas` : option.label,
   }));
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
@@ -8903,7 +8903,7 @@ function DanceRegistrationPanel({
   const registrationVenueOptions = venueOptions.map((option) => ({
     ...option,
     disabled: isVenuePaused(option.value),
-    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones pausadas` : option.label,
+    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones cerradas` : option.label,
   }));
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);

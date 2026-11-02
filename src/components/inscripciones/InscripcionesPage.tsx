@@ -1711,7 +1711,7 @@ function InscriptionLookupPanel() {
                 disabled={(!hasExistingOrder && visibleSubtotal <= 0) || isOrderLoading || isNewOrderPaused}
                 type="submit"
               >
-                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : isNewOrderPaused ? "Nuevas inscripciones pausadas" : "Datos de pago"}</span>
+                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : isNewOrderPaused ? "Inscripciones cerradas" : "Datos de pago"}</span>
                 <ArrowRight aria-hidden="true" size={22} />
               </button>
               {whatsappError ? (

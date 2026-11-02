@@ -585,86 +585,147 @@ test('Relevé listing skips an unbilled dance if its insert crosses the closing 
 });
 
 
-test('production registration configuration keeps Edomex open after October 29 without another automatic closing time', async t => {
+const productionClosureDates = [
+  '2026-11-02T00:00:00-06:00',
+  '2026-11-13T00:00:00-06:00',
+  '2026-11-15T23:59:59-06:00',
+  '2027-01-01T00:00:00-06:00',
+];
+
+test('production registration configuration keeps Edomex sold out throughout the event and has no scheduled reopening', async t => {
   const defaults = JSON.parse(await readFile(new URL('../shared/registration-policy.json', import.meta.url), 'utf8'));
   const deployment = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
-  assert.deepEqual(defaults.pausedVenues, [], 'the website default must no longer pause Edomex');
-  assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, '', 'the deployed server must use the same open policy');
+  assert.deepEqual(defaults.pausedVenues, ['edomex'], 'the website default must show the closed Edomex edition');
+  assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, 'edomex', 'the deployed server must enforce the same closure');
+  assert.equal(deployment.vars.TICKET_SALES_PAUSED, 'false', 'competition closure does not stop spectator tickets');
+  assert.match(defaults.message, /cupo agotado/i);
+  assert.match(defaults.message, /comprobante/i);
   const { resolveRegistrationPolicy } = await import('../shared/registration-policy.js');
   const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
   let now;
   t.mock.method(Date, 'now', () => now);
-  for (const date of ['2026-10-29T00:00:00-06:00', '2026-11-10T12:00:00-06:00', '2027-01-01T00:00:00-06:00']) {
+  for (const date of productionClosureDates) {
     now = Date.parse(date);
     const fallback = resolveRegistrationPolicy(defaults.pausedVenues, now);
     const { json, headers } = await f.request('/status', { method: 'GET', cookie: '' });
     for (const policy of [fallback, json.registrationPolicy]) {
-      assert.deepEqual(policy.basePausedVenues, [], date);
-      assert.deepEqual(policy.pausedVenues, [], date);
+      assert.deepEqual(policy.basePausedVenues, ['edomex'], date);
+      assert.deepEqual(policy.pausedVenues, ['edomex'], date);
+      assert.equal(policy.message, defaults.message, date);
       assert.equal(policy.temporaryOpeningActive, false, date);
-      assert.equal(policy.temporaryOpening, null, 'the expired October 25 exception cannot impose a closing time on an open base policy');
-      assert.equal(policy.nextChangeAt, null, date);
+      assert.ok(Date.parse(policy.temporaryOpening.endsAt) < now,
+        'the historical October 25 exception stays expired and cannot reopen this edition');
+      assert.equal(policy.nextChangeAt, null, 'there must be no future automatic opening or closing time');
     }
     assert.equal(headers.get('cache-control'), 'no-store');
   }
   assertNoDeletes(f);
 });
 
-test('the open production policy allows Edomex dance and payment flows while previous orders and proofs stay authenticated and available', async t => {
+test('the closed production policy rejects new Edomex registrations while existing orders, proofs and other venues remain available', async t => {
   const deployment = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
-  assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, '');
-  const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
-  const previous = [];
-  for (const path of proofPaths) {
-    const person = f.person();
-    f.dance({ person });
-    const order = await createExistingOrder(f, person);
-    previous.push({ person, order, path, before: orderRow(f, order.id) });
+  assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, 'edomex');
+  for (const date of productionClosureDates) {
+    await t.test(date, async t => {
+      const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
+      const previous = [];
+      for (const path of proofPaths) {
+        const person = f.person();
+        f.dance({ person });
+        const order = await createExistingOrder(f, person);
+        previous.push({ person, order, path, before: orderRow(f, order.id) });
+      }
+      t.mock.method(Date, 'now', () => Date.parse(date));
+      const unbilled = f.person();
+      f.dance({ person: unbilled });
+      const existingReleveDance = f.dance({ isReleve: true });
+      const missingReleveDance = f.dance({ isReleve: true });
+      const existingReleveId = seedReleveOrder(f, existingReleveDance);
+      // Use the already-current normal price so this test isolates closure from
+      // the independent, existing Relevé presale repricing policy.
+      f.db.sqlite.prepare(`UPDATE registration_inscription_orders SET amount = 1500,
+        line_items_json = json_set(line_items_json, '$[0].amount', 1500) WHERE id = ?`).run(existingReleveId);
+      const releveBefore = orderRow(f, existingReleveId);
+      const beforeBlocked = businessSnapshot(f);
+      for (const isReleve of [false, true]) {
+        const body = danceBody(f, unbilled, 'edomex', isReleve);
+        await f.request('/dances', { cookie: '', body, status: 401 });
+        const result = await f.request('/dances', { body, status: 403 });
+        assert.equal(result.json.error.code, 'registration_paused');
+        assert.deepEqual(businessSnapshot(f), beforeBlocked);
+      }
+      for (const path of orderPaths) {
+        const body = { curp: unbilled.curp, ...phone };
+        await f.request(path, { cookie: '', body, status: 401 });
+        const result = await f.request(path, { body, status: 403 });
+        assert.equal(result.json.error.code, 'registration_paused');
+        assert.deepEqual(businessSnapshot(f), beforeBlocked);
+      }
+      await f.request('/releve/orders', { cookie: '', body: {}, status: 401 });
+      const listing = await f.request('/releve/orders', { body: {} });
+      assert.deepEqual(listing.json.orders.map(order => order.id), [existingReleveId]);
+      assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_orders WHERE curp = ?')
+        .get(`RELEVE:${missingReleveDance.id}`).n, 0, 'listing must not create an unbilled Edomex Relevé order');
+      assert.deepEqual(businessSnapshot(f), beforeBlocked);
+      await f.request('/releve/order/proof', { cookie: f.other.cookie,
+        body: { orderId: existingReleveId, ...proof }, status: 404 });
+      const releveProof = await f.request('/releve/order/proof', {
+        body: { orderId: existingReleveId, ...proof }, status: 201,
+      });
+      assert.equal(releveProof.json.order.status, 'payment_reported');
+      for (const field of ['amount', 'paid_amount', 'line_items_json', 'buyer_phone', 'created_at']) {
+        assert.equal(orderRow(f, existingReleveId)[field], releveBefore[field], field);
+      }
+      for (const venue of ['cdmx', 'puebla', 'veracruz']) {
+        const person = f.person();
+        for (const isReleve of [false, true]) {
+          const created = await f.request('/dances', { body: danceBody(f, person, venue, isReleve), status: 201 });
+          assert.equal(created.json.dance.venue, venue);
+          assert.equal(created.json.dance.isReleve, isReleve);
+        }
+        for (const path of orderPaths) {
+          const created = await f.request(path, { body: { curp: person.curp, ...phone }, status: 201 });
+          assert.equal(created.json.order.venue, venue);
+          assert.equal(created.json.order.status, 'pending_payment');
+          assert.ok(created.json.order.amount > 0);
+        }
+      }
+      for (const { person, order, path, before } of previous) {
+        const login = await f.request('/student/login', { cookie: '', body: { curp: person.curp } });
+        const cookie = login.headers.get('set-cookie')?.split(';')[0];
+        assert.ok(cookie, 'the normal CURP login must issue the session required by payment lookup');
+        for (const lookupPath of lookupPaths) {
+          await f.request(lookupPath, { cookie: '', body: { curp: person.curp }, status: 401 });
+          await f.request(lookupPath, { cookie: f.other.cookie, body: { curp: person.curp }, status: 403 });
+          const { json } = await f.request(lookupPath, { cookie, body: { curp: person.curp } });
+          assert.equal(json.order.id, order.id);
+          assert.equal(json.order.amount, before.amount);
+          assert.deepEqual(orderRow(f, order.id), before, 'consulting an existing order during closure preserves its record');
+        }
+        for (const orderPath of orderPaths) {
+          const existing = await f.request(orderPath, {
+            cookie, body: { curp: person.curp, ...phone, buyerPhoneNumber: '5512345678' }, status: 201,
+          });
+          assert.equal(existing.json.order.id, order.id);
+          assert.deepEqual(orderRow(f, order.id), before, 'stale checkout returns the existing order without changing it');
+        }
+        await f.request(path, { cookie: '', body: { curp: person.curp, orderId: order.id, ...proof }, status: 401 });
+        await f.request(path, { cookie: f.other.cookie,
+          body: { curp: person.curp, orderId: order.id, ...proof }, status: 403 });
+        const uploaded = await f.request(path, { cookie, body: { curp: person.curp, orderId: order.id, ...proof }, status: 201 });
+        assert.equal(uploaded.json.order.id, order.id);
+        assert.equal(uploaded.json.order.status, 'payment_reported');
+        const after = orderRow(f, order.id);
+        for (const field of ['amount', 'paid_amount', 'line_items_json', 'buyer_phone', 'created_at']) {
+          assert.equal(after[field], before[field], field);
+        }
+        const retrieved = await f.request('/inscription/payment-lookup', { cookie, body: { curp: person.curp } });
+        assert.equal(retrieved.json.order.proof.fileName, proof.fileName);
+        assert.equal(retrieved.json.order.status, 'payment_reported');
+      }
+      assertNoDeletes(f);
+    });
   }
-  let now;
-  t.mock.method(Date, 'now', () => now);
-  for (const date of ['2026-10-29T00:00:00-06:00', '2026-11-10T12:00:00-06:00']) {
-    now = Date.parse(date);
-    const person = f.person();
-    const regular = await f.request('/dances', { body: danceBody(f, person), status: 201 });
-    assert.equal(regular.json.dance.venue, 'edomex');
-    const releve = await f.request('/dances', { body: danceBody(f, person, 'edomex', true), status: 201 });
-    assert.equal(releve.json.dance.isReleve, true);
-    const listing = await f.request('/releve/orders', { body: {} });
-    assert.ok(listing.json.orders.some(order => order.danceId === releve.json.dance.id), date);
-    for (const path of orderPaths) {
-      const buyer = f.person();
-      await f.request('/dances', { body: danceBody(f, buyer), status: 201 });
-      const { json } = await f.request(path, { body: { curp: buyer.curp, ...phone }, status: 201 });
-      assert.equal(json.order.venue, 'edomex');
-      assert.equal(json.order.status, 'pending_payment');
-      assert.ok(json.order.amount > 0);
-    }
-  }
-  for (const { person, order, path, before } of previous) {
-    const login = await f.request('/student/login', { cookie: '', body: { curp: person.curp } });
-    const cookie = login.headers.get('set-cookie')?.split(';')[0];
-    assert.ok(cookie, 'the normal CURP login must issue the session required by payment lookup');
-    for (const lookupPath of lookupPaths) {
-      await f.request(lookupPath, { cookie: '', body: { curp: person.curp }, status: 401 });
-      await f.request(lookupPath, { cookie: f.other.cookie, body: { curp: person.curp }, status: 403 });
-      const { json } = await f.request(lookupPath, { cookie, body: { curp: person.curp } });
-      assert.equal(json.order.id, order.id);
-      assert.equal(json.order.amount, before.amount);
-    }
-    await f.request(path, { cookie: '', body: { curp: person.curp, orderId: order.id, ...proof }, status: 401 });
-    const uploaded = await f.request(path, { cookie, body: { curp: person.curp, orderId: order.id, ...proof }, status: 201 });
-    assert.equal(uploaded.json.order.id, order.id);
-    assert.equal(uploaded.json.order.status, 'payment_reported');
-    const after = orderRow(f, order.id);
-    for (const field of ['amount', 'paid_amount', 'line_items_json', 'buyer_phone', 'created_at']) {
-      assert.equal(after[field], before[field], field);
-    }
-    const retrieved = await f.request('/inscription/payment-lookup', { cookie, body: { curp: person.curp } });
-    assert.equal(retrieved.json.order.proof.fileName, proof.fileName);
-    assert.equal(retrieved.json.order.status, 'payment_reported');
-  }
-  assertNoDeletes(f);
 });
 
 
