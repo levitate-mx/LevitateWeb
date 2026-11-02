@@ -401,7 +401,7 @@ function resetLookupScroll() {
 }
 
 export function InscripcionesPage() {
-  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const { policy } = useRegistrationPolicy();
   return (
     <main className="levitate-home-redesign inscripciones-page">
       <section className="inscripciones-hero" id="inicio">
@@ -506,12 +506,6 @@ export function InscripcionesPage() {
                 (hora de CDMX). A partir del 26 de octubre, el precio es de <strong>$1,500 MXN</strong>.
                 Envía tu comprobante antes del cierre para conservar la tarifa de preventa.
               </span>
-              {!isVenuePaused("edomex") && !policy.temporaryOpeningActive ? (
-                <span>
-                  El cierre de las inscripciones se realiza hasta el <strong>5 de noviembre de 2026</strong>, como fecha
-                  última para realizar el pago.
-                </span>
-              ) : null}
             </span>
           </p>
         </aside>
@@ -555,7 +549,7 @@ export function InscripcionesConsultaPage() {
 }
 
 function InscriptionLookupPanel() {
-  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const { policy } = useRegistrationPolicy();
   const [curp, setCurp] = useState("");
   const [lookup, setLookup] = useState<InscriptionLookup | null>(null);
   const [lookupError, setLookupError] = useState("");
@@ -582,8 +576,6 @@ function InscriptionLookupPanel() {
   const hasCurrentLines = Boolean(lookup?.lines.length);
   const visibleLines = lookup?.lines.length ? lookup.lines : lookup?.order?.lineItems ?? [];
   const hasExistingOrder = Boolean(lookup?.order);
-  const isNewOrderPaused = Boolean(lookup && !lookup.order
-    && (isVenuePaused(lookup.venue) || lookup.lines.some((line) => isVenuePaused(line.venue))));
   const visibleSubtotal = !hasCurrentLines && lookup?.order ? lookup.order.amount : lookup?.subtotal ?? 0;
   const visibleCurrency = !hasCurrentLines && lookup?.order?.currency ? lookup.order.currency : getLookupCurrency(lookup);
   const visibleOriginalSubtotal = visibleLines.length > 0
@@ -1470,10 +1462,6 @@ function InscriptionLookupPanel() {
     if (lookup.order && (
       lookup.order.status === "paid"
       || lookup.order.status === "payment_reported"
-      || isVenuePaused(lookup.order.venue)
-      || isVenuePaused(lookup.venue)
-      || lookup.lines.some((line) => isVenuePaused(line.venue))
-      || lookup.order.lineItems?.some((line) => isVenuePaused(line.venue))
       || lookup.lines.length === 0
       || visibleSubtotal <= 0
       || lookup.orderSnapshotOnly === true
@@ -1482,10 +1470,6 @@ function InscriptionLookupPanel() {
       return;
     }
     if (visibleSubtotal <= 0) {
-      return;
-    }
-    if (isNewOrderPaused) {
-      setOrderError(policy.message);
       return;
     }
 
@@ -1708,10 +1692,10 @@ function InscriptionLookupPanel() {
               </label>
               <button
                 className="inscripciones-photo-payment-button"
-                disabled={(!hasExistingOrder && visibleSubtotal <= 0) || isOrderLoading || isNewOrderPaused}
+                disabled={(!hasExistingOrder && visibleSubtotal <= 0) || isOrderLoading}
                 type="submit"
               >
-                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : isNewOrderPaused ? "Inscripciones cerradas" : "Datos de pago"}</span>
+                <span>{isOrderLoading ? "Generando..." : lookup.order ? "Ver datos de pago" : "Datos de pago"}</span>
                 <ArrowRight aria-hidden="true" size={22} />
               </button>
               {whatsappError ? (

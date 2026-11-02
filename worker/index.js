@@ -1197,7 +1197,8 @@ function getRegistrationPolicy(env) {
   return resolveRegistrationPolicy(pausedVenues);
 }
 
-function getRegistrationWriteGuard(env, venues) {
+function getChoreographyCreationWriteGuard(env, venues) {
+  // Only new choreography INSERTs are restricted; payment and profile flows remain open.
   const { basePausedVenues, temporaryOpening } = getRegistrationPolicy(env || {});
   const restricted = venues.filter((venue) => basePausedVenues.includes(venue));
   if (!restricted.length) return { sql: "1", values: [] };
@@ -1211,14 +1212,10 @@ function getRegistrationWriteGuard(env, venues) {
   };
 }
 
-function assertRegistrationVenueOpen(venue, pausedVenues) {
+function assertChoreographyCreationOpen(venue, pausedVenues) {
   if (pausedVenues.includes(venue)) {
     throwHttpError("registration_paused", registrationPolicyDefaults.message, 403);
   }
-}
-
-function hasPausedRegistrationVenue(record, pausedVenues) {
-  return pausedVenues.includes(record.venue) || record.lines.some((line) => pausedVenues.includes(line.venue));
 }
 
 async function handleRegistrationStatus(request, env) {
@@ -1426,7 +1423,6 @@ async function handleRegistrationInscriptionLookup(request, env) {
 
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
-      pausedVenues: getRegistrationPolicy(env).pausedVenues,
       orderId: optionalString(body.orderId),
     });
     return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
@@ -1450,7 +1446,6 @@ async function handleRegistrationInscriptionPaymentLookup(request, env) {
     const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
-      pausedVenues: getRegistrationPolicy(env).pausedVenues,
       orderId: optionalString(body.orderId),
     });
     return sendJson(serializePublicRegistrationInscriptionPaymentLookup(lookup));
@@ -1477,8 +1472,6 @@ async function handleRegistrationInscriptionOrder(request, env) {
         : getRegistrationBuyerPhoneContact(body);
     const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
-      registrationEnv: env,
-      pausedVenues: getRegistrationPolicy(env).pausedVenues,
     });
     return sendJson(
       {
@@ -1508,8 +1501,6 @@ async function handleRegistrationInscriptionPaymentOrder(request, env) {
     const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
     const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
-      registrationEnv: env,
-      pausedVenues: getRegistrationPolicy(env).pausedVenues,
     });
 
     return sendJson(
@@ -1820,11 +1811,7 @@ async function handleRegistrationReleveOrders(request, env) {
 
     const orders = [];
     for (const dance of dances) {
-      const order = await ensureRegistrationReleveOrder(db, dance, session.academy, {
-        registrationEnv: env,
-        pausedVenues: getRegistrationPolicy(env).pausedVenues,
-      });
-      if (!order) continue;
+      const order = await ensureRegistrationReleveOrder(db, dance, session.academy);
       orders.push({
         ...await serializeRegistrationInscriptionOrderWithProof(db, order),
         danceId: dance.id,
@@ -1859,7 +1846,7 @@ async function handleRegistrationReleveOrderProof(request, env) {
   }
 }
 
-async function ensureRegistrationReleveOrder(db, dance, academy, { pausedVenues = [], registrationEnv } = {}) {
+async function ensureRegistrationReleveOrder(db, dance, academy) {
   // Relevé has no participant CURP; this stable key links one payment order to one dance.
   const curp = `RELEVE:${dance.id}`;
   const existing = await db
@@ -1870,10 +1857,6 @@ async function ensureRegistrationReleveOrder(db, dance, academy, { pausedVenues 
     return getRegistrationInscriptionOrderRecordById(db, existing.id);
   }
 
-  // A list request may expose existing orders during a pause, but must not create new ones.
-  if (pausedVenues.includes(dance.venue)) return null;
-
-  const writeGuard = getRegistrationWriteGuard(registrationEnv, [dance.venue]);
   const amount = getRegistrationInscriptionAmount(dance);
   const lineItems = JSON.stringify([{
     id: dance.id,
@@ -1891,14 +1874,13 @@ async function ensureRegistrationReleveOrder(db, dance, academy, { pausedVenues 
     const digits = crypto.getRandomValues(new Uint32Array(1))[0] % 100000;
     const reference = `REL-${String(digits).padStart(5, "0")}`;
     try {
-      const inserted = await db.prepare(`
+      await db.prepare(`
         INSERT INTO registration_inscription_orders
           (id, curp, participant_name, academy_id, academy_name, venue, reference, amount,
            buyer_phone, line_items_json)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${writeGuard.sql}
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(crypto.randomUUID(), curp, dance.title, academy.id, academy.name, dance.venue,
-        reference, amount, academy.phone || null, lineItems, ...writeGuard.values).run();
-      if (Number(inserted.meta?.changes || 0) !== 1) return null;
+        reference, amount, academy.phone || null, lineItems).run();
       return await db.prepare("SELECT * FROM registration_inscription_orders WHERE curp = ? AND academy_id = ? LIMIT 1")
         .bind(curp, academy.id).first();
     } catch (error) {
@@ -2787,7 +2769,7 @@ async function handleRegistrationDances(request, env) {
     const subgenreDetail = normalizeRegistrationSubgenreDetail(subgenre, body.subgenreDetail);
     const category = requireRegistrationCategory(genre, body.category);
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
-    assertRegistrationVenueOpen(venue, getRegistrationPolicy(env).pausedVenues);
+    assertChoreographyCreationOpen(venue, getRegistrationPolicy(env).pausedVenues);
     const isReleve = optionalBoolean(body.isReleve);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
@@ -2843,8 +2825,8 @@ async function handleRegistrationDances(request, env) {
     });
     const level = requireRegistrationLevel(genre, body.level, division);
 
-    assertRegistrationVenueOpen(venue, getRegistrationPolicy(env).pausedVenues);
-    const writeGuard = getRegistrationWriteGuard(env, [venue]);
+    assertChoreographyCreationOpen(venue, getRegistrationPolicy(env).pausedVenues);
+    const writeGuard = getChoreographyCreationWriteGuard(env, [venue]);
     const danceId = crypto.randomUUID();
     const statements = [
       db
@@ -3915,7 +3897,7 @@ async function getRegistrationStudentState(db, user) {
   };
 }
 
-async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pausedVenues = [], orderId = "" } = {}) {
+async function getRegistrationInscriptionLookup(db, curp, { academyId = null, orderId = "" } = {}) {
   const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
   const lookupBindings = academyId ? [curp, academyId] : [curp];
   const { results: registrationRows = [] } = await db
@@ -4045,11 +4027,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pa
   let order = openOrder;
   let reference = openOrder?.reference || getNextRegistrationInscriptionReference(baseReference, orders);
 
-  const openOrderIsPaused = openOrder && hasPausedRegistrationVenue({
-    venue: openOrder.venue,
-    lines: parseRegistrationOrderLineItems(openOrder.line_items_json),
-  }, pausedVenues);
-  if (openOrder?.status === "payment_reported" || openOrderIsPaused) {
+  if (openOrder?.status === "payment_reported") {
     lines = parseRegistrationOrderLineItems(openOrder.line_items_json);
   } else if (!openOrder && unpaidLines.length === 0 && paidOrder) {
     order = paidOrder;
@@ -4057,7 +4035,7 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pa
     lines = parseRegistrationOrderLineItems(paidOrder.line_items_json);
   }
 
-  const subtotal = order?.status === "payment_reported" || order?.status === "paid" || openOrderIsPaused
+  const subtotal = order?.status === "payment_reported" || order?.status === "paid"
     ? Number(order.amount || 0)
     : lines.reduce((total, line) => total + Number(line.amount || 0), 0);
   const serializedOrder = order ? await serializeRegistrationInscriptionOrderWithProof(db, order) : null;
@@ -4086,8 +4064,8 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, pa
   };
 }
 
-async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false, pausedVenues = [], registrationEnv } = {}) {
-  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId, pausedVenues });
+async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false } = {}) {
+  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId });
 
   if (skipEmpty && lookup.lines.length === 0) {
     return {
@@ -4097,29 +4075,6 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
   }
 
   const existingOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
-  const existingLines = existingOrder ? parseRegistrationOrderLineItems(existingOrder.line_items_json) : [];
-  if (existingOrder && hasPausedRegistrationVenue({ venue: existingOrder.venue, lines: existingLines }, pausedVenues)) {
-    // Keep the original order payable without recalculating prices or adding concepts during the pause.
-    return {
-      ...lookup,
-      venue: existingOrder.venue,
-      reference: existingOrder.reference,
-      paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
-        academyId: existingOrder.academy_id,
-        isInternational: lookup.pricingMode === "international",
-        orderReference: existingOrder.reference,
-        venue: existingOrder.venue,
-      }),
-      lines: existingLines,
-      subtotal: Number(existingOrder.amount || 0),
-      order: await serializeRegistrationInscriptionOrderWithProof(db, existingOrder),
-    };
-  }
-  if (hasPausedRegistrationVenue(lookup, pausedVenues)) {
-    throwHttpError("registration_paused", registrationPolicyDefaults.message, 403);
-  }
-
-  const writeGuard = getRegistrationWriteGuard(registrationEnv, [lookup.venue, ...lookup.lines.map((line) => line.venue)]);
   const lineItemsJson = JSON.stringify(lookup.lines);
   const buyerPhoneCountryCode = buyerPhoneContact?.countryCode || null;
   const buyerPhoneNumber = buyerPhoneContact?.number || null;
@@ -4155,7 +4110,7 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
   }
 
   if (existingOrder) {
-    const saved = await db
+    await db
       .prepare(
         `
           UPDATE registration_inscription_orders
@@ -4183,7 +4138,7 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
             buyer_phone_number = COALESCE(?, buyer_phone_number),
             buyer_phone = COALESCE(?, buyer_phone),
             updated_at = datetime('now')
-          WHERE reference = ? AND (${writeGuard.sql})
+          WHERE reference = ?
         `,
       )
       .bind(
@@ -4201,14 +4156,10 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
         buyerPhoneNumber,
         buyerPhone,
         lookup.reference,
-        ...writeGuard.values,
       )
       .run();
-    if (Number(saved.meta?.changes || 0) !== 1) {
-      throwHttpError("registration_paused", registrationPolicyDefaults.message, 403);
-    }
   } else {
-    const saved = await db
+    await db
       .prepare(
         `
           INSERT INTO registration_inscription_orders (
@@ -4228,8 +4179,7 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
             buyer_phone,
             line_items_json
           )
-          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE NULL END, 'bank_transfer', ?, ?, ?, ?
-          WHERE ${writeGuard.sql}
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE NULL END, 'bank_transfer', ?, ?, ?, ?)
         `,
       )
       .bind(
@@ -4247,12 +4197,8 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
         buyerPhoneNumber,
         buyerPhone,
         lineItemsJson,
-        ...writeGuard.values,
       )
       .run();
-    if (Number(saved.meta?.changes || 0) !== 1) {
-      throwHttpError("registration_paused", registrationPolicyDefaults.message, 403);
-    }
   }
 
   const order = await getRegistrationInscriptionOrderByReference(db, lookup.reference);

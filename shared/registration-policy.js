@@ -1,5 +1,7 @@
 import defaults from "./registration-policy.json" with { type: "json" };
 
+// This policy controls creation of new choreographies only. Participants,
+// academies, existing choreographies and all payment flows remain available.
 // A temporary opening is an exception to the base pause, with an exclusive end.
 export function resolveRegistrationPolicy(basePausedVenues, now = Date.now(), opening = defaults.temporaryOpening) {
   const base = [...new Set(basePausedVenues)];

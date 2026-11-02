@@ -190,8 +190,8 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
   const { policy, isVenuePaused } = useRegistrationPolicy();
   const isTemporarilyOpen = policy.temporaryOpeningActive && policy.temporaryOpening?.venue === venueKey;
   const isRegistrationPaused = isVenuePaused(venueKey);
-  const registrationHref = isRegistrationPaused ? "/inscripciones/consulta-curp" : "/inscripciones";
-  const registrationAction = isRegistrationPaused ? "Consultar inscripción" : "Inscribirme";
+  const registrationHref = "/inscripciones";
+  const registrationAction = isRegistrationPaused ? "Participantes y pagos" : "Inscribirme";
   const venue = sedesContent[venueKey] ?? sedesContent.edomex;
   const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
   const hasPublishedConvocation = venueKey === "edomex";
@@ -349,7 +349,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <article>
               <CheckCircle2 aria-hidden="true" size={24} />
               <span>{venue.metaLabel}</span>
-              <p>{isRegistrationPaused ? "Cupo agotado" : isTemporarilyOpen ? "Abiertas solo hoy" : venue.metaValue}</p>
+              <p>{isRegistrationPaused ? "Registro de coreografías cerrado" : isTemporarilyOpen ? "Coreografías abiertas hoy" : venue.metaValue}</p>
               {isRegistrationPaused || isTemporarilyOpen ? <small role="status">{policy.message}</small> : null}
             </article>
           </div>
@@ -487,7 +487,7 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
           />
           <div className="sedes-final-cta__content">
             <p>{hasPublishedConvocation ? "Siguiente paso" : "Próxima sede"}</p>
-            <h2>{hasPublishedConvocation ? isRegistrationPaused ? "Consulta tu inscripción." : "Asegura tu lugar." : "Veracruz está en camino."}</h2>
+            <h2>{hasPublishedConvocation ? isRegistrationPaused ? "Participantes y pagos disponibles." : "Asegura tu lugar." : "Veracruz está en camino."}</h2>
             {hasPublishedConvocation ? (
               <a href={registrationHref}>
                 {registrationAction} <ArrowRight aria-hidden="true" size={18} />

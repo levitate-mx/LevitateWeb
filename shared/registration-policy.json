@@ -1,10 +1,10 @@
 {
   "pausedVenues": ["edomex"],
-  "message": "¡Cupo agotado en Estado de México! Gracias por ser parte de Levitate. Las nuevas inscripciones a competencia para esta edición están cerradas. Si ya tienes una inscripción, puedes consultarla y enviar tu comprobante.",
+  "message": "¡Gracias por ser parte de Levitate! El registro de nuevas coreografías para Estado de México está cerrado. Puedes seguir agregando participantes y academias, consultar tus registros, realizar pagos y enviar comprobantes.",
   "temporaryOpening": {
     "venue": "edomex",
-    "startsAt": "2026-10-25T00:00:00-06:00",
-    "endsAt": "2026-10-26T00:00:00-06:00",
-    "message": "Las inscripciones de Estado de México están abiertas solo el 25 de octubre. Cerrarán automáticamente a las 00:00 h del 26 de octubre (hora de CDMX). Las consultas y el envío de comprobantes de órdenes existentes seguirán disponibles."
+    "startsAt": "2026-11-02T00:00:00-06:00",
+    "endsAt": "2026-11-03T00:00:00-06:00",
+    "message": "El registro de nuevas coreografías para Estado de México permanece abierto hoy, 2 de noviembre. Cierra el 3 de noviembre a las 00:00 h (hora de CDMX). Los demás registros y pagos seguirán habilitados."
   }
 }

@@ -3652,7 +3652,7 @@ function buildDashboardUpcomingEvents(programDances: RegistrationDance[], isVenu
       const eventDate = venueEventDates[venue] ? parseDashboardInputDate(venueEventDates[venue]) : null;
       const danceCount = danceCountByVenue.get(venue) ?? 0;
       const status = isVenuePaused(venue)
-        ? "Inscripciones cerradas"
+        ? "Registro de nuevas coreografías cerrado"
         : registrationDashboardEventStatusByVenue[venue] ?? (danceCount > 0 ? "En preparación" : "Borrador");
 
       return {
@@ -8565,7 +8565,7 @@ function ReleveRegistrationPanel({
   const registrationVenueOptions = venueOptions.map((option) => ({
     ...option,
     disabled: isVenuePaused(option.value),
-    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones cerradas` : option.label,
+    label: isVenuePaused(option.value) ? `${option.label} · Nuevas coreografías cerradas` : option.label,
   }));
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
@@ -8905,7 +8905,7 @@ function DanceRegistrationPanel({
   const registrationVenueOptions = venueOptions.map((option) => ({
     ...option,
     disabled: isVenuePaused(option.value),
-    label: isVenuePaused(option.value) ? `${option.label} · Inscripciones cerradas` : option.label,
+    label: isVenuePaused(option.value) ? `${option.label} · Nuevas coreografías cerradas` : option.label,
   }));
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
@@ -9809,15 +9809,12 @@ function AcademyMexicoPaymentSummaryCard({
 function AcademyInternationalPaymentsPanel({
   orders,
   participants,
-  dances,
   onOrderUpdated,
 }: {
   orders: RegistrationInscriptionOrder[];
   participants: RegistrationParticipant[];
-  dances: RegistrationDance[];
   onOrderUpdated: (order: RegistrationInscriptionOrder) => void;
 }) {
-  const { policy, isVenuePaused } = useRegistrationPolicy();
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -9842,11 +9839,6 @@ function AcademyInternationalPaymentsPanel({
         order.curp.trim().toUpperCase() === selectedParticipantDocumentKey,
     )
     .sort((left, right) => left.participantName.localeCompare(right.participantName, "es"));
-  const hasNewPausedRegistration = dances.some((dance) =>
-    isVenuePaused(dance.venue)
-    && dance.participants.some((participant) => participant.id === selectedParticipantId)
-    && !registrationOrders.some((order) => order.venue === dance.venue),
-  );
 
   useEffect(() => {
     if (participants.length === 0) {
@@ -9862,11 +9854,6 @@ function AcademyInternationalPaymentsPanel({
   const handleSyncOrder = async () => {
     if (!selectedParticipant) {
       setErrorMessage("Selecciona un participante para generar su orden.");
-      return;
-    }
-
-    if (hasNewPausedRegistration) {
-      setErrorMessage(policy.message);
       return;
     }
 
@@ -9914,13 +9901,12 @@ function AcademyInternationalPaymentsPanel({
             value={selectedParticipantId}
           />
         </AdminField>
-        <button className="levitate-admin-save" disabled={isSyncing || !selectedParticipant || hasNewPausedRegistration} onClick={handleSyncOrder} type="button">
+        <button className="levitate-admin-save" disabled={isSyncing || !selectedParticipant} onClick={handleSyncOrder} type="button">
           <CreditCard aria-hidden="true" size={18} />
           {isSyncing ? "Actualizando..." : "Generar / actualizar pago"}
         </button>
       </div>
 
-      <AdminStatusMessage message={hasNewPausedRegistration ? policy.message : ""} />
       <AdminStatusMessage message={statusMessage} />
       <AdminStatusMessage message={errorMessage} tone="error" />
 
@@ -12830,7 +12816,6 @@ function getAdminScreen({
     if (session.academy.originType === "international") {
       return (
         <AcademyInternationalPaymentsPanel
-          dances={dances}
           onOrderUpdated={onOrderUpdated}
           orders={inscriptionOrders}
           participants={participants}
