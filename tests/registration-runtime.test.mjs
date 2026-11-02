@@ -143,6 +143,97 @@ const curpB = 'BBBB100101MDFBBB01';
 const phone = { buyerPhoneCountryCode: '+52', buyerPhoneNumber: '5555555555' };
 const proof = { fileName: 'comprobante.png', contentType: 'image/png', dataUrl: 'data:image/png;base64,AQID', fileSize: 3 };
 
+test('judging admin routes authenticate before upstream reads and never write to the registration database', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'judging-academy');
+  const admin = await seedAcademy(f, 'judging-admin', { role: 'admin' });
+  const eventId = 'f3c2e100-1234-4567-8abc-123456789abc';
+  Object.assign(f.env, {
+    JUDGING_SUPABASE_URL: 'https://judgingfixture.supabase.co',
+    JUDGING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic_test_key',
+  });
+  const data = {
+    events: [{ id: eventId, name: 'Evento local de prueba', is_active: true, event_type: 'event' }],
+    blocks: [{ event_id: eventId, block_id: 'b1', name: 'Bloque 1' }],
+    routines: [{ event_id: eventId, routine_id: 'r1', name: 'Pieza de prueba', genre: 'Jazz', block_id: 'b1' }],
+    judges: [{ event_id: eventId, judge_id: 'j1', name: 'Juez de prueba', role: 'judge' }],
+    criteria_templates: [{ event_id: eventId, template_id: 'jazz', genre: 'Jazz' }],
+    criteria: [{ event_id: eventId, template_id: 'jazz', criterion_id: 1, label: 'Técnica', section: 'Arte', max_score: 10 }],
+    scores: [{ event_id: eventId, routine_id: 'r1', judge_id: 'j1', criterion_id: 1, value: 8 }],
+    penalties: [], feedback: [],
+  };
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (input, options) => {
+    const url = new URL(input);
+    assert.equal(url.origin, f.env.JUDGING_SUPABASE_URL, 'tests must never contact a real remote service');
+    assert.equal(options.method, 'GET');
+    calls.push(url);
+    const table = url.pathname.split('/').at(-1);
+    const offset = Number(url.searchParams.get('offset'));
+    assert.ok(Object.hasOwn(data, table));
+    return Response.json(data[table].slice(offset, offset + 1000));
+  });
+  const paths = ['/admin/judging/events', `/admin/judging/scores?eventId=${eventId}`];
+  const initialChanges = f.db.sqlite.prepare('SELECT total_changes() AS count').get().count;
+  for (const path of paths) {
+    for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403]]) {
+      const before = calls.length;
+      await f.request(path, { cookie, status });
+      assert.equal(calls.length, before, 'unauthorized access must not fetch judging data');
+    }
+    const beforePost = calls.length;
+    await f.request(path, { method: 'POST', cookie: admin.cookie, body: {}, status: 405 });
+    assert.equal(calls.length, beforePost, 'read-only routes must not forward writes');
+    const queryStart = f.db.runtimeQueries.length;
+    const response = await worker.fetch(new Request(`http://localhost/api/registration${path}`, {
+      headers: { cookie: admin.cookie },
+    }), f.env);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    const result = await response.json();
+    if (path.endsWith('/events')) assert.equal(result.events[0].id, eventId);
+    else {
+      assert.equal(result.event.id, eventId);
+      assert.equal(result.rows[0].judges[0].total, 8);
+    }
+    assert.doesNotMatch(JSON.stringify(result), /sb_publishable_|supabase\.co/);
+    assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
+      'judging reads must not update sessions, registrations, orders or payments');
+  }
+  assert.equal(f.db.sqlite.prepare('SELECT total_changes() AS count').get().count, initialChanges,
+    'the real SQLite database confirms that all judging API probes were read-only');
+});
+
+test('judging API missing configuration and upstream failures stay explicit, private and safe to display', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'judging-errors-admin', { role: 'admin' });
+  let calls = 0;
+  const privateMessage = 'PRIVATE-JUDGING-KEY https://judgingfixture.supabase.co';
+  t.mock.method(globalThis, 'fetch', async () => { calls += 1; throw new Error(privateMessage); });
+  const missing = await worker.fetch(new Request('http://localhost/api/registration/admin/judging/events', {
+    headers: { cookie: admin.cookie },
+  }), f.env);
+  assert.equal(missing.status, 503);
+  assert.equal(missing.headers.get('cache-control'), 'private, no-store');
+  assert.equal((await missing.json()).error.code, 'judging_not_configured');
+  assert.equal(calls, 0);
+  Object.assign(f.env, {
+    JUDGING_SUPABASE_URL: 'https://judgingfixture.supabase.co',
+    JUDGING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic_test_key',
+  });
+  const queryStart = f.db.runtimeQueries.length;
+  const unavailable = await worker.fetch(new Request('http://localhost/api/registration/admin/judging/events', {
+    headers: { cookie: admin.cookie },
+  }), f.env);
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.headers.get('cache-control'), 'private, no-store');
+  const body = await unavailable.json();
+  assert.equal(body.error.code, 'judging_unavailable');
+  assert.doesNotMatch(JSON.stringify(body), /PRIVATE-JUDGING-KEY|supabase\.co|sb_publishable_/);
+  assert.equal(calls, 1);
+  assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)));
+});
+
 async function createPaidTicketOrder(f, admin, items) {
   const { json: { order } } = await f.request('/shop/order', { method: 'POST', status: 201,
     body: { curp: curpA, buyerName: 'Titular de boletos', buyerEmail: 'boletos@example.test', ...phone, items } });

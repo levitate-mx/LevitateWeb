@@ -15,7 +15,8 @@
   },
   "vars": {
     "TICKET_SALES_PAUSED": "false",
-    "REGISTRATION_PAUSED_VENUES": "edomex"
+    "REGISTRATION_PAUSED_VENUES": "edomex",
+    "JUDGING_SUPABASE_URL": "https://twazfaytgmgeyqeopgut.supabase.co"
   },
   "d1_databases": [
     {

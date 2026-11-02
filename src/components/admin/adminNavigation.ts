@@ -11,6 +11,7 @@ export const adminSectionPaths = {
   workshops: "/admin/workshops",
   media: "/admin/foto-video",
   program: "/admin/programa",
+  scores: "/admin/puntuaciones",
 } as const;
 
 export type AdminSection = keyof typeof adminSectionPaths;
