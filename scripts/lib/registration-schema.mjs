@@ -44,6 +44,7 @@ const additions = {
     buyer_email: "TEXT",
   },
   registration_music_uploads: {
+    duration_seconds: "REAL CHECK (duration_seconds IS NULL OR duration_seconds > 0)",
     storage_provider: "TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive'))",
     drive_file_id: "TEXT",
     drive_web_view_link: "TEXT",

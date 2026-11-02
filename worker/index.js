@@ -2923,6 +2923,7 @@ async function handleRegistrationMusic(request, env) {
             file_name,
             content_type,
             file_size,
+            duration_seconds,
             data_url,
             storage_provider,
             drive_file_id,
@@ -2930,11 +2931,12 @@ async function handleRegistrationMusic(request, env) {
             drive_web_content_link,
             uploaded_by_user_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(dance_id) DO UPDATE SET
             file_name = excluded.file_name,
             content_type = excluded.content_type,
             file_size = excluded.file_size,
+            duration_seconds = excluded.duration_seconds,
             data_url = excluded.data_url,
             storage_provider = excluded.storage_provider,
             drive_file_id = excluded.drive_file_id,
@@ -2952,6 +2954,7 @@ async function handleRegistrationMusic(request, env) {
         musicUpload.fileName,
         musicUpload.contentType,
         musicUpload.fileSize,
+        musicUpload.durationSeconds,
         storedMusicUpload.dataUrl,
         storedMusicUpload.storageProvider,
         storedMusicUpload.driveFileId,
@@ -6482,6 +6485,7 @@ async function serializeRegistrationProgramDances(db, dances) {
     .all();
   const choreographersByDance = groupRegistrationRelations(choreographers, danceIds);
   const participantsByDance = groupRegistrationRelations(participants, danceIds);
+  const musicUploadsByDance = await getRegistrationProgramMusicUploadsByDance(db, danceIds);
 
   return dances.map((dance) => ({
     academyId: dance.academy_id,
@@ -6501,6 +6505,7 @@ async function serializeRegistrationProgramDances(db, dances) {
     createdAt: dance.created_at,
     choreographers: choreographersByDance.get(dance.id) || [],
     participants: participantsByDance.get(dance.id) || [],
+    musicUpload: musicUploadsByDance.get(dance.id) || null,
   }));
 }
 
@@ -6541,6 +6546,40 @@ async function attachRegistrationDanceParticipants(db, dances) {
     ...dance,
     participants: participantsByDance.get(dance.id) || [],
   }));
+}
+
+async function getRegistrationProgramMusicUploadsByDance(db, danceIds) {
+  const uploadsByDance = new Map();
+
+  if (danceIds.size === 0) {
+    return uploadsByDance;
+  }
+
+  try {
+    // Program exports need metadata only; keep MP3 bytes and private Drive
+    // identifiers out of both the query result and the admin response.
+    const { results: uploads = [] } = await db
+      .prepare(
+        `
+          SELECT id, dance_id, file_name, content_type, file_size,
+            duration_seconds, storage_provider, uploaded_at
+          FROM registration_music_uploads
+        `,
+      )
+      .all();
+
+    for (const upload of uploads) {
+      if (danceIds.has(upload.dance_id)) {
+        uploadsByDance.set(upload.dance_id, serializeRegistrationMusicUpload(upload, { metadataOnly: true }));
+      }
+    }
+  } catch (error) {
+    if (!isMissingRegistrationMusicUploadsTable(error)) {
+      throw error;
+    }
+  }
+
+  return uploadsByDance;
 }
 
 async function getRegistrationMusicUploadsByDance(db, academyId, danceIds) {
@@ -7383,20 +7422,25 @@ function isMissingRegistrationMusicUploadsTable(error) {
   return String(error?.message || error).includes("registration_music_uploads");
 }
 
-function serializeRegistrationMusicUpload(upload) {
+function serializeRegistrationMusicUpload(upload, { metadataOnly = false } = {}) {
   const storageProvider = upload.storage_provider || (upload.drive_file_id ? "google_drive" : "d1");
-
-  return {
+  const parsedDuration = Number(upload.duration_seconds);
+  const metadata = {
     id: upload.id,
     danceId: upload.dance_id,
     fileName: upload.file_name,
     contentType: upload.content_type,
     fileSize: Number(upload.file_size || 0),
+    durationSeconds: Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : null,
+    storageProvider,
+    uploadedAt: upload.uploaded_at,
+  };
+
+  return metadataOnly ? metadata : {
+    ...metadata,
     dataUrl: upload.data_url || null,
     driveFileId: null,
     driveUrl: null,
-    storageProvider,
-    uploadedAt: upload.uploaded_at,
   };
 }
 

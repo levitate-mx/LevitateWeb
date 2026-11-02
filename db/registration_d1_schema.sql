@@ -350,6 +350,7 @@ CREATE TABLE IF NOT EXISTS registration_music_uploads (
   file_name TEXT NOT NULL,
   content_type TEXT NOT NULL CHECK (content_type IN ('audio/mpeg', 'audio/mp3')),
   file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 12000000),
+  duration_seconds REAL CHECK (duration_seconds IS NULL OR duration_seconds > 0),
   data_url TEXT NOT NULL,
   storage_provider TEXT NOT NULL DEFAULT 'd1' CHECK (storage_provider IN ('d1', 'google_drive')),
   drive_file_id TEXT,

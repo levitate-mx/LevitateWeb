@@ -1489,8 +1489,14 @@ test('legacy D1 and Drive music remain visible; upload, replacement and removal 
   const { json: uploaded } = await f.request('/music', { method: 'POST', cookie: academy.cookie, body: music });
   assert.equal(uploaded.musicUpload.storageProvider, 'd1');
   assert.equal(uploaded.musicUpload.dataUrl, music.dataUrl);
+  assert.equal(uploaded.musicUpload.durationSeconds, 180);
+  assert.equal(uploaded.dance.musicUpload.durationSeconds, 180);
+  assert.equal(f.db.sqlite.prepare('SELECT duration_seconds FROM registration_music_uploads WHERE dance_id = ?').get(dance.id).duration_seconds, 180);
   await f.request('/music', { method: 'POST', cookie: otherAcademy.cookie, body: music, status: 404 });
-  await f.request('/music', { method: 'POST', cookie: academy.cookie, body: { ...music, fileName: 'nueva.mp3' } });
+  const { json: replaced } = await f.request('/music', { method: 'POST', cookie: academy.cookie,
+    body: { ...music, fileName: 'nueva.mp3', durationSeconds: 181.25 } });
+  assert.equal(replaced.musicUpload.durationSeconds, 181.25);
+  assert.equal(replaced.dance.musicUpload.durationSeconds, 181.25);
   assert.equal(f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_music_uploads').get().total, 1);
   f.db.sqlite.prepare(`UPDATE registration_music_uploads SET storage_provider = 'google_drive', data_url = '',
     drive_file_id = 'fixture-drive-id', drive_web_view_link = 'https://drive.google.com/file/d/fixture-drive-id/view',
@@ -1498,6 +1504,7 @@ test('legacy D1 and Drive music remain visible; upload, replacement and removal 
   const { json: bootstrap } = await f.request('/bootstrap', { cookie: academy.cookie });
   assert.equal(bootstrap.dances[0].musicUpload.storageProvider, 'google_drive');
   assert.equal(bootstrap.dances[0].musicUpload.fileName, 'nueva.mp3');
+  assert.equal(bootstrap.dances[0].musicUpload.durationSeconds, 181.25);
   assert.equal(bootstrap.dances[0].musicUpload.driveFileId, null, 'public payload still hides internal Drive identifiers');
   assert.equal(f.db.sqlite.prepare('SELECT drive_file_id FROM registration_music_uploads WHERE dance_id = ?').get(dance.id).drive_file_id, 'fixture-drive-id');
   await f.request('/music', { method: 'DELETE', cookie: otherAcademy.cookie, body: { danceId: dance.id }, status: 404 });
@@ -1505,6 +1512,55 @@ test('legacy D1 and Drive music remain visible; upload, replacement and removal 
   const { json: deleted } = await f.request('/music', { method: 'DELETE', cookie: academy.cookie, body: { danceId: dance.id } });
   assert.equal(deleted.musicUpload, null);
   assert.equal(f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_music_uploads').get().total, 0);
+});
+
+test('program returns known and legacy song durations as metadata only behind admin authentication', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'program-duration');
+  const legacyAcademy = await seedAcademy(f, 'legacy-program-duration');
+  const emptyAcademy = await seedAcademy(f, 'empty-program-duration');
+  const admin = await seedAcademy(f, 'program-duration-admin', { role: 'admin' });
+  const { dance: known } = await createDance(f, academy);
+  const { dance: legacy } = await createDance(f, legacyAcademy, curpB);
+  const { dance: empty } = await createDance(f, emptyAcademy, 'CCCC100101MDFBBB01');
+  await f.request('/music', { method: 'POST', cookie: academy.cookie, body: {
+    danceId: known.id, fileName: 'known.mp3', contentType: 'audio/mpeg',
+    dataUrl: 'data:audio/mpeg;base64,AQID', fileSize: 3, durationSeconds: 183.75,
+  } });
+  f.db.sqlite.prepare(`INSERT INTO registration_music_uploads
+    (id, academy_id, dance_id, file_name, content_type, file_size, data_url, storage_provider,
+      drive_file_id, drive_web_view_link, drive_web_content_link)
+    VALUES ('legacy-track', ?, ?, 'legacy.mp3', 'audio/mpeg', 3, '', 'google_drive',
+      'private-file-id', 'https://drive.google.com/private-view', 'https://drive.google.com/private-download')`)
+    .run(legacyAcademy.academyId, legacy.id);
+  const { json: legacyBootstrap } = await f.request('/bootstrap', { cookie: legacyAcademy.cookie });
+  assert.equal(legacyBootstrap.dances[0].musicUpload.durationSeconds, null);
+
+  for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403]]) {
+    const queryStart = f.db.runtimeQueries.length;
+    await f.request('/admin/program', { cookie, status });
+    assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/FROM registration_music_uploads/i.test(sql)),
+      'unauthorized requests never read music');
+  }
+  const queryStart = f.db.runtimeQueries.length;
+  const { json: program } = await f.request('/admin/program', { cookie: admin.cookie });
+  const programById = new Map(program.dances.map(dance => [dance.id, dance]));
+  assert.equal(programById.get(known.id).musicUpload.durationSeconds, 183.75);
+  assert.equal(programById.get(known.id).musicUpload.fileName, 'known.mp3');
+  assert.equal(programById.get(legacy.id).musicUpload.durationSeconds, null);
+  assert.equal(programById.get(legacy.id).musicUpload.storageProvider, 'google_drive');
+  assert.equal(programById.get(empty.id).musicUpload, null);
+  const musicQueries = f.db.runtimeQueries.slice(queryStart).filter(sql => /FROM registration_music_uploads/i.test(sql));
+  assert.equal(musicQueries.length, 1, 'program music metadata is loaded in one query');
+  assert.doesNotMatch(musicQueries[0], /SELECT\s+(?:registration_music_uploads\.)?\*|data_url|drive_file_id|drive_web_/i);
+  for (const dance of program.dances) {
+    if (!dance.musicUpload) continue;
+    for (const privateField of ['dataUrl', 'driveFileId', 'driveUrl']) {
+      assert.equal(Object.hasOwn(dance.musicUpload, privateField), false, `${privateField} is excluded from program metadata`);
+    }
+  }
+  assert.doesNotMatch(JSON.stringify(program), /data:audio|private-file-id|drive\.google\.com/);
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_music_uploads').get().total, 2);
 });
 
 test('student profile creation and repeated access work without schema preparation, and protected routes stay protected', async t => {

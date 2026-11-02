@@ -1110,6 +1110,8 @@ type ProgramRow = {
   division: string;
   genre: string;
   level: string;
+  hasMusicUpload: boolean;
+  musicDurationSeconds: number | null;
   participants: string;
   subgenre: string;
   subgenreDetail?: string | null;
@@ -1521,6 +1523,8 @@ function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "")
         division,
         genre: dance.genre,
         level: dance.level || "",
+        hasMusicUpload: Boolean(dance.musicUpload),
+        musicDurationSeconds: dance.musicUpload?.durationSeconds ?? null,
         participants: dance.participants.map((participant) => participant.fullName).join(", "),
         subgenre: dance.subgenre,
         subgenreDetail: dance.subgenreDetail || "",
@@ -5271,15 +5275,24 @@ function getProgramRowDisplay(row: ProgramRow, includeLevel = false) {
   ];
 }
 
+function getProgramMusicDurationLabel(row: ProgramRow) {
+  if (!row.hasMusicUpload) return "Sin música";
+  if (row.musicDurationSeconds === null || !Number.isFinite(row.musicDurationSeconds) || row.musicDurationSeconds <= 0) {
+    return "Duración pendiente";
+  }
+
+  return formatMusicDuration(row.musicDurationSeconds).padStart(5, "0");
+}
+
 function downloadProgramXls(blocks: ProgramBlock[]) {
   const rows = blocks.flatMap((block) => {
     const includeLevel = isAerialProgramBlock(block);
-    const headers = getProgramHeaders(includeLevel);
+    const headers = [...getProgramHeaders(includeLevel), "DURACIÓN CANCIÓN (MM:SS)"];
 
     return [
       `<tr><td colspan="${headers.length}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
       `<tr>${headers.map((header) => `<th>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
-      ...block.rows.map((row) => `<tr>${getProgramRowDisplay(row, includeLevel).map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}</tr>`),
+      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel), getProgramMusicDurationLabel(row)].map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}</tr>`),
     ];
   });
   const worksheet = `<!doctype html>

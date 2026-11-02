@@ -14,7 +14,7 @@ const removableColumns = {
   registration_dances: ["subgenre_detail", "is_releve"],
   registration_inscription_orders: ["buyer_phone_country_code", "buyer_phone_number", "buyer_phone"],
   registration_shop_orders: ["access_token", "buyer_name", "buyer_email"],
-  registration_music_uploads: ["storage_provider", "drive_file_id", "drive_web_view_link", "drive_web_content_link"],
+  registration_music_uploads: ["duration_seconds", "storage_provider", "drive_file_id", "drive_web_view_link", "drive_web_content_link"],
 };
 
 function removeColumns(schema, table, columns) {
@@ -334,3 +334,36 @@ test("existing databases receive the six ordered payment indexes once without ch
   assert.deepEqual(rows(sqlite, "registration_shop_orders"), original);
   assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
 });
+
+for (const migration of ["prepare", "standalone"]) {
+  test(`music duration ${migration} migration preserves existing songs and adds a nullable positive value`, async t => {
+    const oldSchema = removeColumns(baseSchema, "registration_music_uploads", ["duration_seconds"]);
+    const { db, sqlite, writes } = fixture(t, oldSchema);
+    seed(sqlite);
+    sqlite.exec(`INSERT INTO registration_music_uploads
+      (id, academy_id, dance_id, file_name, content_type, file_size, data_url, storage_provider, drive_file_id)
+      VALUES ('duration-music', 'academy-1', 'dance-1', 'song.mp3', 'audio/mpeg', 10, '', 'google_drive', 'unchanged-drive-id');`);
+    const before = rows(sqlite, "registration_music_uploads")[0];
+    const plan = await planRegistrationSchema(db);
+    assert.equal(plan.steps.length, 1);
+    assert.match(plan.steps[0].sql, /ALTER TABLE registration_music_uploads ADD COLUMN duration_seconds REAL/);
+    assert.deepEqual(writes, []);
+    if (migration === "prepare") {
+      await prepareRegistrationSchema(db, { apply: true });
+    } else {
+      sqlite.exec(readFileSync(new URL("../db/registration_music_duration.sql", import.meta.url), "utf8"));
+    }
+    const { duration_seconds, ...preserved } = rows(sqlite, "registration_music_uploads")[0];
+    assert.equal(duration_seconds, null);
+    assert.deepEqual(preserved, before);
+    for (const invalid of [0, -1]) {
+      assert.throws(() => sqlite.prepare("UPDATE registration_music_uploads SET duration_seconds = ?").run(invalid), /CHECK constraint/);
+    }
+    sqlite.prepare("UPDATE registration_music_uploads SET duration_seconds = ?").run(180.125);
+    assert.equal(rows(sqlite, "registration_music_uploads")[0].duration_seconds, 180.125);
+    assert.deepEqual((await planRegistrationSchema(db)).steps, []);
+    const writeCount = writes.length;
+    assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+    assert.equal(writes.length, writeCount);
+  });
+}
