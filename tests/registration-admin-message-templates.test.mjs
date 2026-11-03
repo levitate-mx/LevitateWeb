@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAcademyMessageTemplates, buildOrderMessageTemplates } from "../src/components/admin/adminMessageTemplates.ts";
+import {
+  buildAcademyMessageTemplates,
+  buildOrderMessageTemplates,
+  getShopProofCorrectionPath,
+} from "../src/components/admin/adminMessageTemplates.ts";
 
 const order = Object.freeze({
   status: "pending_payment", participantName: "Participante Ejemplo", academyName: "Academia Ejemplo",
@@ -19,6 +23,12 @@ test("messages never offer approved payment or ticket delivery for unpaid orders
     assert.ok(templates.every((template) => !template.body.includes(order.ticketDeliveryUrl)));
   }
   assert.equal(order.status, "pending_payment");
+});
+
+test("proof correction links send photo and video orders to their shop", () => {
+  assert.equal(getShopProofCorrectionPath([{ itemType: "media", productId: "photo-package" }]), "/tienda/foto-video");
+  assert.equal(getShopProofCorrectionPath([{ productCategory: "Fotografía y video" }]), "/tienda/foto-video");
+  assert.equal(getShopProofCorrectionPath([{ itemType: "ticket", productId: "ticket-day-pass" }]), "/taquilla");
 });
 
 test("an existing proof produces a review notice instead of asking the buyer to pay again", () => {

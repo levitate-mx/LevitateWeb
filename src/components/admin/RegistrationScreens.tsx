@@ -97,7 +97,7 @@ import { adminOrderKey, adjustAdminOrderTotals } from "./adminOrderState";
 import { AdminMessageComposer } from "./AdminMessageComposer";
 import { AcademyPendingPanel } from "./AcademyPendingPanel";
 import { buildAcademyPendingReport, pendingCategories, type AcademyPendingSources } from "./academyPendingReport";
-import { buildOrderMessageTemplates } from "./adminMessageTemplates";
+import { buildOrderMessageTemplates, getShopProofCorrectionPath } from "./adminMessageTemplates";
 import { AdminWorkQueue } from "./AdminWorkQueue";
 import { buildAdminWorkQueue, type AdminWorkQueueTarget } from "./adminWorkQueueData";
 import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
@@ -2676,6 +2676,19 @@ function buildShopTicketDeliveryUrl(order: RegistrationInscriptionOrder) {
   return url.toString();
 }
 
+function buildShopProofCorrectionUrl(order: RegistrationInscriptionOrder) {
+  if (typeof window === "undefined" || getAdminOrderType(order) !== "shop" || !order.accessToken) {
+    return "";
+  }
+
+  const url = new URL(getShopProofCorrectionPath(order.lineItems ?? []), window.location.origin);
+  url.searchParams.set("accessKey", order.accessToken);
+  url.searchParams.set("orderId", order.id);
+  url.searchParams.set("upload", "proof");
+
+  return url.toString();
+}
+
 function buildPaymentApprovalWhatsAppMessage(order: RegistrationInscriptionOrder) {
   const amount = formatAdminCurrency(order.paidAmount || order.amount, getRegistrationOrderCurrency(order));
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
@@ -2714,14 +2727,8 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
   const paymentReference = getRegistrationInscriptionPaymentReference(order);
   const message =
     (order.rejectionMessage || correctionMessage || buildPaymentRejectionMessage(order, order.rejectionReason ?? getDefaultPaymentRejectionReason(order))).trim();
-  const correctionUrl = isShopOrder && order.accessToken
-    ? (() => {
-        const url = new URL("/taquilla", window.location.origin);
-        url.searchParams.set("accessKey", order.accessToken);
-        url.searchParams.set("orderId", order.id);
-        url.searchParams.set("upload", "proof");
-        return url.toString();
-      })()
+  const correctionUrl = isShopOrder
+    ? buildShopProofCorrectionUrl(order)
     : buildInscriptionProofCorrectionUrl(order);
   const correctionLinkLines = correctionUrl
     ? ["", "Puedes cargar el comprobante aquí:", correctionUrl]
@@ -2749,12 +2756,8 @@ function buildPaymentCorrectionWhatsAppMessage(order: RegistrationInscriptionOrd
 
 function getAdminOrderMessageTemplates(order: RegistrationInscriptionOrder) {
   let correctionUrl = buildInscriptionProofCorrectionUrl(order);
-  if (getAdminOrderType(order) === "shop" && order.accessToken && typeof window !== "undefined") {
-    const url = new URL("/taquilla", window.location.origin);
-    url.searchParams.set("accessKey", order.accessToken);
-    url.searchParams.set("orderId", order.id);
-    url.searchParams.set("upload", "proof");
-    correctionUrl = url.toString();
+  if (getAdminOrderType(order) === "shop") {
+    correctionUrl = buildShopProofCorrectionUrl(order);
   }
   return buildOrderMessageTemplates({
     status: order.status,

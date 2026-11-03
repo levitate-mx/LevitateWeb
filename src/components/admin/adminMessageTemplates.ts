@@ -1,5 +1,37 @@
 type MessageTemplate = { id: string; label: string; body: string };
 
+type ShopOrderLinkItem = {
+  category?: string | null;
+  id?: string | null;
+  itemType?: string | null;
+  productCategory?: string | null;
+  productId?: string | null;
+  type?: string | null;
+  visual?: string | null;
+};
+
+export function getShopProofCorrectionPath(lineItems: readonly ShopOrderLinkItem[]) {
+  const hasMedia = lineItems.some((lineItem) => {
+    const category = String(lineItem.productCategory || lineItem.category || "").toLowerCase();
+    const itemType = String(lineItem.itemType || "").toLowerCase();
+    const lineType = String(lineItem.type || "").toLowerCase();
+    const visual = String(lineItem.visual || "").toLowerCase();
+    const productId = String(lineItem.productId || lineItem.id || "").toLowerCase();
+
+    return (
+      itemType === "media" ||
+      lineType === "media" ||
+      visual === "photo" ||
+      category.includes("foto") ||
+      category.includes("video") ||
+      productId.startsWith("photo-") ||
+      productId.startsWith("media-")
+    );
+  });
+
+  return hasMedia ? "/tienda/foto-video" : "/taquilla";
+}
+
 type OrderMessageContext = {
   status: string;
   participantName: string;
