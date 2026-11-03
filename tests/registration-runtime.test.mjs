@@ -143,6 +143,49 @@ const curpB = 'BBBB100101MDFBBB01';
 const phone = { buyerPhoneCountryCode: '+52', buyerPhoneNumber: '5555555555' };
 const proof = { fileName: 'comprobante.png', contentType: 'image/png', dataUrl: 'data:image/png;base64,AQID', fileSize: 3 };
 
+test('Relevé voting preview is private to admins and cannot record votes or change registration data', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'releve-preview-academy');
+  const admin = await seedAcademy(f, 'releve-preview-admin', { role: 'admin' });
+  const path = '/admin/releve-voting/preview';
+  const initialChanges = f.db.sqlite.prepare('SELECT total_changes() AS count').get().count;
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('a private prototype must not contact a voting or external service'); });
+
+  for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403]]) {
+    const response = await worker.fetch(new Request(`http://localhost/api/registration${path}`, {
+      headers: cookie ? { cookie } : {},
+    }), f.env);
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    const body = await response.json();
+    assert.equal(body.candidates, undefined, 'no candidate fixture is returned before administrator authorization');
+  }
+  const queryStart = f.db.runtimeQueries.length;
+  const response = await worker.fetch(new Request(`http://localhost/api/registration${path}`, {
+    headers: { cookie: admin.cookie },
+  }), f.env);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.match(response.headers.get('vary'), /Cookie/i);
+  const preview = await response.json();
+  assert.equal(preview.mode, 'preview');
+  assert.equal(preview.publicVotingEnabled, false);
+  assert.equal(preview.candidates.length, 6);
+  assert.equal(preview.candidates.filter(candidate => candidate.division === 'motion').length, 3);
+  assert.equal(preview.candidates.filter(candidate => candidate.division === 'aerial').length, 3);
+  assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)), 'even session last-seen timestamps stay untouched');
+
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    await f.request(path, { method, cookie: admin.cookie, body: { candidateId: preview.candidates[0].id }, status: 405 });
+  }
+  for (const publicPath of ['/releve-voting/preview', '/releve-voting/vote', '/admin/releve-voting/vote']) {
+    await f.request(publicPath, { cookie: admin.cookie, status: 404 });
+    await f.request(publicPath, { method: 'POST', body: { candidateId: preview.candidates[0].id }, status: 404 });
+  }
+  assert.equal(f.db.sqlite.prepare('SELECT total_changes() AS count').get().count, initialChanges,
+    'preview reads and attempted votes must not alter any registration, payment or session data');
+});
+
 test('judging admin routes authenticate before upstream reads and never write to the registration database', async t => {
   const f = await fixture(t);
   const academy = await seedAcademy(f, 'judging-academy');

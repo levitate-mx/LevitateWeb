@@ -4,6 +4,7 @@ import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getJudgingEvents, getJudgingScores } from "./judging-reader.js";
+import { getReleveVotingPreview } from "./releve-voting-preview.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
   getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
@@ -551,6 +552,10 @@ export default {
 
     if (url.pathname === "/api/registration/admin/judging/events" || url.pathname === "/api/registration/admin/judging/scores") {
       return handleRegistrationAdminJudging(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/releve-voting/preview") {
+      return handleRegistrationAdminReleveVotingPreview(request, env);
     }
 
     if (url.pathname === "/api/registration/admin/participants") {
@@ -2124,6 +2129,20 @@ async function handleRegistrationAdminJudging(request, env) {
     response = sendRegistrationError(error);
   }
   response.headers.set("cache-control", "private, no-store");
+  return response;
+}
+
+async function handleRegistrationAdminReleveVotingPreview(request, env) {
+  let response;
+  try {
+    assertMethod(request, ["GET"]);
+    await requireRegistrationAdmin(request, env, getDb(env), { touchLastSeen: false });
+    response = sendJson(getReleveVotingPreview());
+  } catch (error) {
+    response = sendRegistrationError(error);
+  }
+  response.headers.set("cache-control", "private, no-store");
+  response.headers.set("vary", "Cookie");
   return response;
 }
 

@@ -102,6 +102,7 @@ import { AdminWorkQueue } from "./AdminWorkQueue";
 import { buildAdminWorkQueue, type AdminWorkQueueTarget } from "./adminWorkQueueData";
 import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
 import { JudgingScoresPanel } from "./JudgingScoresPanel";
+import { ReleveVotingPreview } from "./ReleveVotingPreview";
 import { adminSectionPaths, getAdminSectionFromPath, type AdminSection } from "./adminNavigation";
 import { RegistrationApiError, requestRegistrationApi } from "./registrationApi";
 
@@ -706,6 +707,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Operación", label: "Foto y video", icon: Camera, section: "media" },
   { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
   { group: "Operación", label: "Puntuaciones", icon: BadgeCheck, section: "scores" },
+  { group: "Pruebas", label: "Votación Relevé", icon: Trophy, section: "releveVoting" },
 ];
 
 const maxMusicUploadBytes = 12000000;
@@ -10333,7 +10335,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [loadAdminSession]);
 
   useEffect(() => {
-    if (adminSession?.user.role !== "admin" || activeSection === "payments" || activeSection === "workshops" || activeSection === "scores") return;
+    if (adminSession?.user.role !== "admin" || activeSection === "payments" || activeSection === "workshops" || activeSection === "scores" || activeSection === "releveVoting") return;
     if (activeSection === "program") {
       void loadAdminProgram();
     } else if (activeSection === "tickets" || activeSection === "media") {
@@ -10730,6 +10732,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const isTicketSection = activeSection === "tickets";
   const isProgramSection = activeSection === "program";
   const isScoresSection = activeSection === "scores";
+  const isReleveVotingSection = activeSection === "releveVoting";
   const isMediaSection = activeSection === "media";
   const isRegistrationsSection = activeSection === "registrations";
   const adminNavBadges = useMemo(() => {
@@ -10998,6 +11001,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
   };
 
   const handleDashboardRefresh = () => {
+    if (activeSection === "releveVoting") return;
     if (activeSection === "scores") {
       setScoresRefreshKey(current => current + 1);
       return;
@@ -11087,6 +11091,9 @@ export function LevitateRegistrationAdminPaymentsRoute({
   } else if (isScoresSection) {
     headerTitle = "Puntuaciones";
     headerDescription = "Dictamen final de Levitate por bloque";
+  } else if (isReleveVotingSection) {
+    headerTitle = "Votación Relevé";
+    headerDescription = "Vista previa privada para probar la votación del público";
   } else if (isMediaSection) {
     headerTitle = "Foto/Video";
     headerDescription = "Compras de paquetes de fotografía y video realizadas en tienda";
@@ -11165,7 +11172,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
       <section className={`registration-admin-workspace${isDashboardSection || isAcademiesSection ? " registration-admin-workspace--dashboard" : ""}`} inert={isAdminMenuOpen}>
         <div className="admin-topbar">
           <div><button className="admin-menu-toggle" ref={adminMenuToggleRef} type="button" aria-label="Abrir navegación" aria-expanded={isAdminMenuOpen} aria-controls="admin-navigation" onClick={() => setIsAdminMenuOpen(true)}><Menu size={22} /></button><span>Administración</span><ChevronDown className="admin-breadcrumb-chevron" size={13} /><strong>{headerTitle}</strong></div>
-          {isScoresSection ? <span className="admin-sync-status">Solo consulta · JueceoCore</span> : <div><span className={`admin-sync-status${isLoading || isParticipantsLoading || isProgramLoading ? " is-updating" : ""}`} role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : (adminDataError || paymentPage.error) ? "Error de actualización" : visibleUpdatedAt ? `Actualizado ${formatMexicoCityTime(visibleUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>}
+          {isReleveVotingSection ? <span className="admin-sync-status">Prueba privada · Sin votos reales</span> : isScoresSection ? <span className="admin-sync-status">Solo consulta · JueceoCore</span> : <div><span className={`admin-sync-status${isLoading || isParticipantsLoading || isProgramLoading ? " is-updating" : ""}`} role="status">{isLoading || isParticipantsLoading || isProgramLoading ? "Actualizando…" : (adminDataError || paymentPage.error) ? "Error de actualización" : visibleUpdatedAt ? `Actualizado ${formatMexicoCityTime(visibleUpdatedAt)}` : "Sin actualizar"}</span><button className="admin-refresh" type="button" title="Actualizar datos" aria-label="Actualizar datos" disabled={isLoading || isParticipantsLoading || isProgramLoading} onClick={handleDashboardRefresh}><RefreshCw size={17} /></button></div>}
         </div>
         {!isDashboardSection && !isFollowupSection ? (
           <header className="registration-admin-header">
@@ -11174,7 +11181,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
               <h1>{headerTitle}<span className="admin-title-dot">.</span></h1>
               <p>{headerDescription}</p>
             </div>
-            {!isProgramSection && !isCommunicationsSection && !isWorkshopsSection && !isScoresSection ? (
+            {!isProgramSection && !isCommunicationsSection && !isWorkshopsSection && !isScoresSection && !isReleveVotingSection ? (
               <div className="registration-admin-header__actions">
                 {isAcademiesSection ? (
                   <button className="registration-admin-new-action" onClick={handleNewAcademy} type="button">
@@ -11248,9 +11255,11 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </header>
         ) : null}
 
-        {!isWorkshopsSection && !isScoresSection && (adminError || adminDataError || paymentPage.error) ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError || paymentPage.error}</p> : null}
+        {!isWorkshopsSection && !isScoresSection && !isReleveVotingSection && (adminError || adminDataError || paymentPage.error) ? <p className="registration-admin-alert" role="alert">{adminError || adminDataError || paymentPage.error}</p> : null}
 
-        {isWorkshopsSection ? (
+        {isReleveVotingSection ? (
+          <ReleveVotingPreview />
+        ) : isWorkshopsSection ? (
           <AdminWorkshopsPanel refreshKey={workshopsRefreshKey} onUpdated={setAdminLastUpdatedAt} />
         ) : isScoresSection ? (
           <JudgingScoresPanel refreshKey={scoresRefreshKey} onUpdated={setAdminLastUpdatedAt} />

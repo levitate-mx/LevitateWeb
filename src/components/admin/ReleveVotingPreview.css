@@ -1,0 +1,92 @@
+.releve-voting-preview { display: grid; gap: 18px; min-width: 0; color: #3b3041; }
+.releve-voting-preview :is(button, input, select) { font: inherit; }
+.releve-voting-preview button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 10px 14px; border: 1px solid #e5dae5; border-radius: 10px; background: #fff; color: #885772; font-size: 12px; font-weight: 650; cursor: pointer; }
+.releve-voting-preview button:disabled { opacity: .48; cursor: default; }
+.releve-voting-preview :is(button, select, input, [tabindex]):focus-visible { outline: 3px solid #e29fc1; outline-offset: 3px; }
+.releve-voting-preview__private-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border: 1px solid #ddd3e4; border-radius: 12px; color: #70587c; background: #f0eaf5; }
+.releve-voting-preview__private-bar > span:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.releve-voting-preview__private-bar strong { font-size: 12px; font-weight: 750; }
+.releve-voting-preview__private-bar small { color: #806780; font-size: 10px; }
+.releve-voting-preview__demo-tag { flex-shrink: 0; border: 1px solid #dccce5; border-radius: 20px; padding: 5px 8px; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.releve-voting-preview__controls { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.releve-voting-preview__controls label { display: grid; gap: 6px; min-width: 180px; color: #806780; font-size: 10px; font-weight: 650; }
+.releve-voting-preview__controls select { min-width: 0; min-height: 42px; padding: 9px 36px 9px 12px; border: 1px solid #e5dae5; border-radius: 9px; background: #fff; color: #6a4d75; font-size: 12px; color-scheme: light; }
+.releve-voting-preview__controls > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.releve-voting-preview__controls button { font-size: 10px; }
+.releve-voting-preview__announcements { color: #6d836f; font-size: 12px; line-height: 1.5; }
+.releve-voting-preview__announcements:empty { display: none; }
+.releve-voting-preview__load-error { padding: 18px; border: 1px solid #ebccd9; border-radius: 12px; background: #fff4f8; color: #a45172; font-size: 13px; }
+.releve-voting-preview__load-error p { margin: 0 0 12px; }
+.releve-voting-preview__loading, .releve-voting-preview__empty { margin: 0; padding: 30px; text-align: center; color: #806780; font-size: 13px; }
+.releve-voting-preview__stage { min-width: 0; overflow: hidden; border: 1px solid #ebdfea; border-radius: 22px; background: #fffafb; box-shadow: 0 16px 40px #62436d08; }
+.releve-voting-preview__intro { display: grid; justify-items: center; gap: 16px; padding: 46px 32px 36px; text-align: center; background: radial-gradient(ellipse at 50% 0%, #fbd9e9, transparent 72%); }
+.releve-voting-preview__eyebrow { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: #bb5588; font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.releve-voting-preview__intro h2 { max-width: 720px; margin: 0; color: #413045; font-size: clamp(30px, 3.5vw, 46px); font-weight: 800; line-height: 1.1; letter-spacing: -.045em; text-wrap: balance; overflow-wrap: anywhere; }
+.releve-voting-preview__intro > p { max-width: 530px; margin: 0; color: #806780; font-size: 13px; line-height: 1.8; }
+.releve-voting-preview__phase { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #e9d8e5; border-radius: 20px; background: #ffffffa3; color: #806780; font-size: 10px; font-weight: 700; }
+.releve-voting-preview__phase > span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.releve-voting-preview__phase.is-open { color: #46764f; border-color: #d1e3d5; background: #f4fcf5; }
+.releve-voting-preview__phase.is-closed { color: #806780; background: #f8f0f5; }
+.releve-voting-preview__tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-width: 440px; margin: 0 auto 30px; padding: 5px; border: 1px solid #eadee8; border-radius: 15px; background: #f4ecf3; }
+.releve-voting-preview__tabs button { min-width: 0; min-height: 44px; padding: 10px 24px; border: 0; border-radius: 11px; background: transparent; color: #806780; font-size: 12px; }
+.releve-voting-preview__tabs button[aria-selected=true] { color: #b6437f; background: #fff; box-shadow: 0 3px 8px #795d6e0a; }
+.releve-voting-preview__panel { padding: 0 28px 30px; min-width: 0; }
+.releve-voting-preview__section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+.releve-voting-preview__section-heading h3 { margin: 7px 0 0; color: #624b69; font-size: 22px; font-weight: 750; letter-spacing: -.03em; }
+.releve-voting-preview__section-heading > p { margin: 0; color: #806780; font-size: 10px; }
+.releve-voting-preview__phase-notice { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding: 14px 16px; border: 1px solid #eadfe8; border-radius: 12px; background: #fff; color: #806780; }
+.releve-voting-preview__phase-notice > svg { flex-shrink: 0; color: #c582a6; }
+.releve-voting-preview__phase-notice p { margin: 0; font-size: 11px; line-height: 1.7; }
+.releve-voting-preview__candidates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; min-width: 0; padding: 0; margin: 0; border: 0; }
+.releve-voting-preview__candidates > legend { margin-bottom: 12px; padding: 0; color: #9f8ba7; font-size: 11px; }
+.releve-voting-preview__candidate { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; padding: 16px; border: 1px solid #eadfe9; border-radius: 17px; background: #fff; cursor: pointer; text-align: center; }
+.releve-voting-preview__candidate:last-of-type:nth-of-type(3n+1) { grid-column: 1 / -1; }
+.releve-voting-preview__candidate.is-selected { border-color: #d877a6; background: #fff6fb; box-shadow: 0 0 0 2px #f7deed; }
+.releve-voting-preview__candidate.is-disabled { cursor: default; }
+.releve-voting-preview__candidate > input { position: absolute; width: 1px; height: 1px; opacity: 0; top: 17px; right: 17px; margin: 0; }
+.releve-voting-preview__candidate:focus-within { outline: 3px solid #e29fc1; outline-offset: 3px; }
+.releve-voting-preview__candidate-top { display: flex; justify-content: space-between; align-items: center; align-self: stretch; color: #806780; font-size: 10px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.releve-voting-preview__radio-mark { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid #e6d6e4; border-radius: 50%; background: #fff; color: #fff; }
+.releve-voting-preview__candidate.is-selected .releve-voting-preview__radio-mark { border-color: #cc6097; background: #cc6097; }
+.releve-voting-preview__portrait { display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; margin: 13px 0 18px; border: 1px solid #f0dce8; border-radius: 50%; background: radial-gradient(circle at top, #fff5fa, #f7e7f0); color: #c08aa7; }
+.releve-voting-preview__demo-label { color: #806780; font-size: 8px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+.releve-voting-preview__candidate > strong { margin-top: 9px; color: #6f4f73; font-size: 16px; font-weight: 750; line-height: 1.3; overflow-wrap: anywhere; }
+.releve-voting-preview__academy { margin-top: 6px; color: #806780; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.releve-voting-preview__piece { display: grid; gap: 6px; width: 100%; margin: 18px 0 0; padding: 14px 0; border-top: 1px solid #f3eaf2; }
+.releve-voting-preview__piece > span { color: #806780; font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.releve-voting-preview__piece b { color: #806780; font-size: 11px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.releve-voting-preview__candidate-action { display: flex; align-items: center; justify-content: space-between; align-self: stretch; gap: 8px; margin-top: auto; padding-top: 9px; color: #a4487e; font-size: 10px; font-weight: 700; }
+.releve-voting-preview__candidate.is-selected .releve-voting-preview__candidate-action { color: #ad3e78; }
+.releve-voting-preview__selection { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; padding: 19px 22px; border: 1px solid #e9dce6; border-radius: 14px; background: #fff; }
+.releve-voting-preview__selection > div { display: grid; gap: 6px; min-width: 0; }
+.releve-voting-preview__selection span { color: #806780; font-size: 8px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }
+.releve-voting-preview__selection strong { color: #88638b; font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.releve-voting-preview__selection small { color: #806780; font-size: 10px; overflow-wrap: anywhere; }
+.releve-voting-preview .releve-voting-preview__primary { flex-shrink: 0; border: 0; border-radius: 10px; background: linear-gradient(135deg, #db639e, #b64986); color: #fff; font-weight: 700; }
+.releve-voting-preview__confirmation, .releve-voting-preview__receipt { margin-top: 22px; padding: 26px; border: 1px solid #e6cedf; border-radius: 16px; background: #fff6fb; }
+.releve-voting-preview__confirmation h4, .releve-voting-preview__receipt h4 { margin: 0 0 12px; color: #86557d; font-size: 20px; font-weight: 750; letter-spacing: -.025em; }
+.releve-voting-preview__confirmation p, .releve-voting-preview__receipt p:not(.releve-voting-preview__eyebrow) { margin: 0; color: #806780; font-size: 13px; line-height: 1.8; }
+.releve-voting-preview__confirmation small, .releve-voting-preview__receipt small { display: block; margin-top: 12px; color: #806780; font-size: 10px; line-height: 1.7; }
+.releve-voting-preview__confirmation > div { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.releve-voting-preview__receipt { display: grid; justify-items: center; text-align: center; background: linear-gradient(145deg, #fffbfe, #f9edf6); }
+.releve-voting-preview__receipt > svg { margin-bottom: 14px; color: #bc6f9b; }
+.releve-voting-preview__receipt .releve-voting-preview__eyebrow { margin-bottom: 12px; }
+.releve-voting-preview__receipt > span { margin-top: 8px; color: #806780; font-size: 11px; }
+.releve-voting-preview__receipt button { margin-top: 20px; }
+.releve-voting-preview__vote-error { margin: 12px 0 0; color: #ae597d; font-size: 12px; }
+.releve-voting-preview__results { margin-top: 24px; padding: 24px; border: 1px dashed #dfcddd; border-radius: 15px; background: #fff; }
+.releve-voting-preview__results > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.releve-voting-preview__results h4 { margin: 7px 0 0; color: #8e6c91; font-size: 18px; font-weight: 700; letter-spacing: -.03em; }
+.releve-voting-preview__results header > strong { padding: 7px 10px; border-radius: 20px; background: #f7edf5; color: #806780; font-size: 10px; font-weight: 650; }
+.releve-voting-preview__results > p { margin: 14px 0 20px; color: #806780; font-size: 10px; line-height: 1.7; }
+.releve-voting-preview__results ul { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.releve-voting-preview__results li > div { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; }
+.releve-voting-preview__results li strong { color: #806780; font-size: 11px; font-weight: 600; }
+.releve-voting-preview__results li div > span { flex-shrink: 0; color: #806780; font-size: 10px; font-variant-numeric: tabular-nums; }
+.releve-voting-preview__result-bar { display: block; height: 5px; margin-top: 8px; overflow: hidden; border-radius: 4px; background: #f5edf4; }
+.releve-voting-preview__result-bar > span { display: block; height: 100%; border-radius: inherit; background: #d897bd; }
+.releve-voting-preview__footer { display: flex; justify-content: center; align-items: flex-start; gap: 8px; padding: 18px 28px; border-top: 1px solid #f0e4ee; background: #f9f3f8; color: #806780; }
+.releve-voting-preview__footer svg { flex-shrink: 0; }
+.releve-voting-preview__footer p { max-width: 600px; margin: 0; font-size: 9px; line-height: 1.8; }
+@media (max-width: 1100px) { .releve-voting-preview__candidates { grid-template-columns: repeat(2, minmax(0, 1fr)); } .releve-voting-preview__candidate:last-of-type:nth-of-type(3n+1) { grid-column: auto; } .releve-voting-preview__candidate:last-of-type:nth-of-type(odd) { grid-column: 1 / -1; } .releve-voting-preview__section-heading { align-items: flex-start; flex-direction: column; gap: 8px; } }
+@media (max-width: 650px) { .releve-voting-preview__private-bar { align-items: flex-start; padding: 14px; } .releve-voting-preview__private-bar small { display: block; width: 100%; line-height: 1.7; } .releve-voting-preview__controls { align-items: stretch; } .releve-voting-preview__controls label, .releve-voting-preview__controls > div { width: 100%; min-width: 0; } .releve-voting-preview__controls > div > button { flex: 1 1 130px; font-size: 10px; } .releve-voting-preview__intro { padding: 34px 18px 28px; gap: 14px; } .releve-voting-preview__intro h2 { font-size: 32px; } .releve-voting-preview__intro > p { font-size: 12px; } .releve-voting-preview__tabs { margin: 0 16px 24px; } .releve-voting-preview__tabs button { padding: 10px 8px; font-size: 11px; } .releve-voting-preview__panel { padding: 0 14px 22px; } .releve-voting-preview__section-heading h3 { font-size: 21px; } .releve-voting-preview__candidates { grid-template-columns: minmax(0, 1fr); } .releve-voting-preview__candidate:last-of-type:nth-of-type(odd) { grid-column: auto; } .releve-voting-preview__candidate { padding: 18px; } .releve-voting-preview__portrait { width: 78px; height: 78px; } .releve-voting-preview__candidate > strong { font-size: 18px; } .releve-voting-preview__demo-label { font-size: 9px; } .releve-voting-preview__academy, .releve-voting-preview__piece b, .releve-voting-preview__candidate-action { font-size: 11px; } .releve-voting-preview__selection { flex-direction: column; align-items: stretch; padding: 18px; } .releve-voting-preview__selection > button { width: 100%; } .releve-voting-preview__confirmation, .releve-voting-preview__receipt, .releve-voting-preview__results { padding: 20px 16px; } .releve-voting-preview__confirmation > div { flex-direction: column-reverse; align-items: stretch; } .releve-voting-preview__confirmation h4, .releve-voting-preview__receipt h4 { font-size: 21px; } .releve-voting-preview__footer { padding: 16px; } }
