@@ -1,9 +1,7 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, RefreshCw, Search } from "lucide-react";
-import { AdminPagination } from "./AdminPagination";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Building2, ChevronDown, Crown, MapPin, RefreshCw, Search, Trophy } from "lucide-react";
 import { normalizeAdminSearch } from "./adminNavigation";
 import { requestRegistrationApi } from "./registrationApi";
-import { useAdminPagination } from "./useAdminPagination";
 import { formatMexicoCityDateTime } from "../../utils/mexicoCityTime";
 import "./JudgingScoresPanel.css";
 
@@ -31,6 +29,7 @@ type ChoreographyScore = {
   id: string | number;
   name: string;
   academy: string;
+  state: string;
   genre: string;
   division: string;
   category: string;
@@ -44,7 +43,28 @@ type ChoreographyScore = {
   judges: JudgeScore[];
 };
 type EventsPayload = { events: JudgingEvent[]; fetchedAt: string };
-type ScoresPayload = { event: JudgingEvent; fetchedAt: string; warnings: string[]; rows: ChoreographyScore[] };
+type ReportStanding = {
+  routineId: string;
+  score: number | null;
+  placement: { rank: number | null; label: string; isFirstPlace: boolean; isParticipation: boolean } | null;
+};
+type ReportBlock = {
+  id: string;
+  name: string;
+  title: string;
+  isActive: boolean;
+  sections: { id: string; label: string; categories: { id: string; title: string; rows: ReportStanding[] }[] }[];
+  specialAwards: { id: string; title: string; displayValue: string; isAssigned: boolean; routineId: string | null }[];
+  counts: { disciplines: number; categories: number; scored: number; total: number };
+  topScore: { routineId: string; score: number } | null;
+};
+type ScoresPayload = {
+  event: JudgingEvent;
+  fetchedAt: string;
+  warnings: string[];
+  rows: ChoreographyScore[];
+  report: { title: string; subtitle: string; maximumScore: number; blocks: ReportBlock[] };
+};
 
 const statusLabels: Record<ScoreStatus, string> = {
   pending: "Pendiente",
@@ -56,6 +76,12 @@ const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2
 
 function scoreValue(value: number | null) {
   return value === null ? "Pendiente" : Number.isFinite(value) ? scoreFormatter.format(value) : "No disponible";
+}
+
+function reportScoreValue(value: number | null) {
+  return value === null ? "Pendiente" : Number.isFinite(value)
+    ? new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 }).format(value)
+    : "No disponible";
 }
 
 function disciplineName(value: string) {
@@ -108,6 +134,54 @@ function JudgeBreakdown({ judge }: { judge: JudgeScore }) {
   );
 }
 
+function filterReportSections(block: ReportBlock | null, rows: ChoreographyScore[], filters: { query: string; discipline: string; status: string }) {
+  const rowLookup = new Map(rows.map((row) => [String(row.id), row]));
+  const search = normalizeAdminSearch(filters.query);
+  return (block?.sections || []).map((section) => ({
+    ...section,
+    categories: section.categories.map((category) => ({
+      ...category,
+      rows: category.rows.flatMap((standing) => {
+        const row = rowLookup.get(String(standing.routineId));
+        if (!row) return [];
+        const text = normalizeAdminSearch(`${row.id} ${row.name} ${row.academy} ${row.state} ${row.division} ${row.category} ${row.level}`);
+        const matches = text.includes(search)
+          && (filters.discipline === "all" || section.id === filters.discipline)
+          && (filters.status === "all" || row.status === filters.status);
+        return matches ? [{ standing, row }] : [];
+      }),
+    })).filter((category) => category.rows.length > 0),
+  })).filter((section) => section.categories.length > 0);
+}
+
+function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded, onToggle }: {
+  standing: ReportStanding;
+  row: ChoreographyScore;
+  maximumScore: number;
+  eventId: string;
+  blockId: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const detailId = `judging-score-detail-${encodeURIComponent(eventId)}-${encodeURIComponent(blockId)}-${encodeURIComponent(String(row.id))}`;
+  return (
+    <article className={`judging-scores__entry${standing.placement?.isFirstPlace ? " is-first" : ""}`}>
+      <div className="judging-scores__standing">
+        <span className="judging-scores__participation">#{row.id}</span>
+        <div className="judging-scores__entry-info">
+          <h5>{row.name || "Coreografía sin nombre"}</h5>
+          <div className="judging-scores__info-pills"><span><Building2 aria-hidden="true" size={12} />{row.academy || "Sin academia"}</span><span><MapPin aria-hidden="true" size={12} />{row.state || "Sin estado"}</span></div>
+          <div className="judging-scores__progress"><span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span><small>{row.expectedJudges > 0 ? `${row.completedJudges}/${row.expectedJudges} jueces completos` : "Sin jueces asignados"}</small></div>
+        </div>
+        <div className="judging-scores__points"><strong>{reportScoreValue(standing.score)}</strong>{standing.score !== null ? <span>pts / {scoreValue(maximumScore)}</span> : null}</div>
+        <span className={`judging-scores__placement${standing.placement?.isParticipation ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}>{standing.placement?.label || "Pendiente"}</span>
+        <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar detalle" : "Ver jueces"}<ChevronDown aria-hidden="true" size={15} /></button>
+      </div>
+      {expanded ? <section id={detailId} className="judging-scores__detail" aria-label={`Puntuaciones de ${row.name || row.id}`}><h6>Detalle por juez · {blockLabel(row)}</h6>{row.judges.length ? <div className="judging-scores__judges">{row.judges.map((judge) => <JudgeBreakdown key={judge.id} judge={judge} />)}</div> : <p className="judging-scores__muted">Todavía no hay jueces asignados o evaluaciones disponibles para esta coreografía.</p>}</section> : null}
+    </article>
+  );
+}
+
 export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?: number; onUpdated?: (date: string) => void }) {
   const [events, setEvents] = useState<JudgingEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -119,7 +193,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
   const [scoresLoading, setScoresLoading] = useState(false);
   const [scoresError, setScoresError] = useState("");
   const [query, setQuery] = useState("");
-  const [blockFilter, setBlockFilter] = useState("all");
+  const [blockFilter, setBlockFilter] = useState("");
   const [disciplineFilter, setDisciplineFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedId, setExpandedId] = useState("");
@@ -129,7 +203,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
 
   useEffect(() => {
     setQuery("");
-    setBlockFilter("all");
+    setBlockFilter("");
     setDisciplineFilter("all");
     setStatusFilter("all");
     setExpandedId("");
@@ -180,10 +254,21 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
         if (controller.signal.aborted) return;
         if (!payload.event || payload.event.id !== eventId || typeof payload.fetchedAt !== "string" || !Array.isArray(payload.rows) || !Array.isArray(payload.warnings)
           || payload.rows.some((row) => !row || !Object.hasOwn(statusLabels, row.status) || !Array.isArray(row.judges)
-            || row.judges.some((judge) => !judge || !["pending", "partial", "complete"].includes(judge.status) || !Array.isArray(judge.criteria)))) {
+            || row.judges.some((judge) => !judge || !["pending", "partial", "complete"].includes(judge.status) || !Array.isArray(judge.criteria)))
+          || !payload.report || !Array.isArray(payload.report.blocks)
+          || payload.report.blocks.some((block) => !block || !Array.isArray(block.sections) || !Array.isArray(block.specialAwards) || !block.counts
+            || block.sections.some((section) => !section || !Array.isArray(section.categories)
+              || section.categories.some((category) => !category || !Array.isArray(category.rows))))) {
           throw new Error("No se pudieron leer las puntuaciones de este evento. Usa Actualizar para volver a intentar.");
         }
+        const rowIds = new Set(payload.rows.map((row) => String(row.id)));
+        if (payload.report.blocks.some((block) => block.sections.some((section) => section.categories.some((category) => category.rows.some((row) => !row || !rowIds.has(String(row.routineId))))))) {
+          throw new Error("El dictamen no coincide con las coreografías recibidas. Usa Actualizar para volver a intentar.");
+        }
         setSnapshot(payload);
+        setBlockFilter((selected) => payload.report.blocks.some((block) => block.id === selected)
+          ? selected
+          : (payload.report.blocks.find((block) => block.isActive) || payload.report.blocks[0])?.id || "");
         notifyUpdated.current?.(payload.fetchedAt);
       })
       .catch((error: unknown) => {
@@ -194,40 +279,34 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
   }, [eventId, eventRevision]);
 
   const current = snapshot?.event.id === eventId ? snapshot : null;
-  const rows = current?.rows || [];
-  const blocks = useMemo(() => {
-    const values = new Map<string, string>();
-    for (const row of rows) values.set(blockKey(row), blockLabel(row));
-    return [...values].sort((left, right) => left[1].localeCompare(right[1], "es", { numeric: true }));
-  }, [current]);
-  const disciplines = useMemo(() => [...new Set(rows.map((row) => row.genre))].sort((left, right) => disciplineName(left).localeCompare(disciplineName(right), "es")), [current]);
-  const filteredRows = useMemo(() => rows.filter((row) => {
-    const text = normalizeAdminSearch(`${row.id} ${row.name} ${row.academy}`);
-    return text.includes(normalizeAdminSearch(query))
-      && (blockFilter === "all" || blockKey(row) === blockFilter)
-      && (disciplineFilter === "all" || row.genre === disciplineFilter)
-      && (statusFilter === "all" || row.status === statusFilter);
-  }), [current, query, blockFilter, disciplineFilter, statusFilter]);
-  const pagination = useAdminPagination(filteredRows, `${eventId}|${query}|${blockFilter}|${disciplineFilter}|${statusFilter}`);
-  const counts = rows.reduce((total, row) => {
-    total[row.status] += 1;
-    total.completedJudges += row.completedJudges;
-    total.expectedJudges += row.expectedJudges;
-    return total;
-  }, { pending: 0, partial: 0, complete: 0, unavailable: 0, completedJudges: 0, expectedJudges: 0 });
+  const selectedBlock = current?.report.blocks.find((block) => block.id === blockFilter)
+    || current?.report.blocks.find((block) => block.isActive) || current?.report.blocks[0] || null;
+  const rowLookup = useMemo(() => new Map((current?.rows || []).map((row) => [String(row.id), row])), [current]);
+  const sections = useMemo(() => filterReportSections(selectedBlock, current?.rows || [], {
+    query, discipline: disciplineFilter, status: statusFilter,
+  }), [selectedBlock, current, query, disciplineFilter, statusFilter]);
+  const topRoutine = selectedBlock?.topScore ? rowLookup.get(String(selectedBlock.topScore.routineId)) : null;
+  const visibleCount = sections.reduce((total, section) => total + section.categories.reduce((sum, category) => sum + category.rows.length, 0), 0);
   const loading = eventsLoading || scoresLoading;
-  const hasFilters = Boolean(query.trim()) || blockFilter !== "all" || disciplineFilter !== "all" || statusFilter !== "all";
-  const resetFilters = () => { setQuery(""); setBlockFilter("all"); setDisciplineFilter("all"); setStatusFilter("all"); setExpandedId(""); };
+  const hasFilters = Boolean(query.trim()) || disciplineFilter !== "all" || statusFilter !== "all";
+  const resetFilters = () => { setQuery(""); setDisciplineFilter("all"); setStatusFilter("all"); setExpandedId(""); };
   const selectEvent = (id: string) => {
     scoreRequest.current?.abort();
     setSnapshot(null);
     setScoresError("");
+    setBlockFilter("");
     resetFilters();
     setEventId(id);
   };
+  useEffect(() => {
+    setQuery("");
+    setDisciplineFilter("all");
+    setStatusFilter("all");
+    setExpandedId("");
+  }, [selectedBlock?.id]);
 
   return (
-    <section className="judging-scores" aria-label="Puntuaciones por coreografía" aria-busy={loading}>
+    <section className="judging-scores" aria-label="Dictamen final por bloque" aria-busy={loading}>
       <div className="judging-scores__toolbar">
         <div>
           <p>Calificaciones de Levitate sincronizadas desde la app de jueceo.</p>
@@ -235,58 +314,61 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
         </div>
         <button disabled={loading} onClick={() => setRefreshRevision((value) => value + 1)} type="button"><RefreshCw aria-hidden="true" size={16} />Actualizar</button>
       </div>
-      <label className="judging-scores__event"><span>Evento</span><select value={eventId} disabled={eventsLoading || !events.length} onChange={(event) => selectEvent(event.target.value)}>
-        {!events.length ? <option value="">{eventsLoading ? "Cargando eventos…" : "Sin eventos disponibles"}</option> : null}
-        {events.map((event) => <option key={event.id} value={event.id}>{event.name}{event.sourceName ? ` · ${event.sourceName}` : ""}{event.isActive ? " · Activo" : ""}</option>)}
-      </select></label>
+      <div className="judging-scores__selectors">
+        <label><span>Evento</span><select value={eventId} disabled={eventsLoading || !events.length} onChange={(event) => selectEvent(event.target.value)}>
+          {!events.length ? <option value="">{eventsLoading ? "Cargando eventos…" : "Sin eventos disponibles"}</option> : null}
+          {events.map((event) => <option key={event.id} value={event.id}>{event.name}{event.sourceName ? ` · ${event.sourceName}` : ""}{event.isActive ? " · Activo" : ""}</option>)}
+        </select></label>
+        {current ? <label><span>Bloque de competencia</span><select value={selectedBlock?.id || ""} disabled={!current.report.blocks.length} onChange={(event) => { resetFilters(); setBlockFilter(event.target.value); }}>
+          {!current.report.blocks.length ? <option value="">Sin bloques disponibles</option> : null}
+          {current.report.blocks.map((block) => <option key={block.id} value={block.id}>{block.name || block.title}{block.isActive ? " · Activo" : ""}</option>)}
+        </select></label> : null}
+      </div>
       {eventsError || scoresError ? <p className="registration-admin-alert" role="alert">{eventsError || scoresError}</p> : null}
       {!eventsLoading && !eventsError && !events.length ? <p className="judging-scores__empty" role="status">Todavía no hay eventos de Levitate disponibles para consultar.</p> : null}
-      {current ? (
-        <>
-          {current.warnings.length ? <div className="judging-scores__warnings" role="status"><ul>{current.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div> : null}
-          <div className="judging-scores__stats">
-            <article><span>Coreografías</span><strong>{rows.length}</strong><small>{counts.completedJudges} de {counts.expectedJudges} evaluaciones completas</small></article>
-            <article><span>Completas</span><strong>{counts.complete}</strong><small>Todos los jueces terminaron</small></article>
-            <article><span>Incompletas</span><strong>{counts.partial}</strong><small>Faltan calificaciones</small></article>
-            <article><span>Pendientes</span><strong>{counts.pending}</strong><small>Sin evaluación completa</small></article>
-          </div>
-          {counts.unavailable ? <p className="judging-scores__muted" role="status">{counts.unavailable} {counts.unavailable === 1 ? "coreografía tiene información no disponible" : "coreografías tienen información no disponible"}. Revisa el detalle antes de interpretar sus puntuaciones.</p> : null}
-          <p className="judging-scores__scope">Consulta las calificaciones y comentarios de cada juez. Esta vista muestra el detalle registrado; no calcula un resultado general ni posiciones.</p>
-          <div className="judging-scores__filters" aria-label="Filtros de puntuaciones">
-            <label className="judging-scores__search"><span>Buscar coreografía</span><span><Search aria-hidden="true" size={17} /><input type="search" placeholder="Nombre, academia o ID…" value={query} onChange={(event) => { setQuery(event.target.value); setExpandedId(""); }} /></span></label>
-            <label><span>Bloque</span><select value={blockFilter} onChange={(event) => { setBlockFilter(event.target.value); setExpandedId(""); }}><option value="all">Todos</option>{blocks.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-            <label><span>Disciplina</span><select value={disciplineFilter} onChange={(event) => { setDisciplineFilter(event.target.value); setExpandedId(""); }}><option value="all">Todas</option>{disciplines.map((genre) => <option key={genre} value={genre}>{disciplineName(genre)}</option>)}</select></label>
-            <label><span>Estado</span><select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setExpandedId(""); }}><option value="all">Todos</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          </div>
-          {hasFilters ? <button className="judging-scores__clear" type="button" onClick={resetFilters}>Limpiar filtros</button> : null}
-          <div className="judging-scores__results">
-            <div className="judging-scores__table-scroll" role="region" aria-label="Listado de puntuaciones" tabIndex={0}>
-              <table className="judging-scores__table">
-                <thead><tr><th scope="col">Coreografía</th><th scope="col">Academia</th><th scope="col">Bloque</th><th scope="col">Disciplina</th><th scope="col">Estado</th><th scope="col">Jueces</th><th scope="col">Detalle</th></tr></thead>
-                <tbody>
-                  {pagination.visibleItems.map((row) => {
-                    const key = String(row.id);
-                    const expanded = expandedId === key;
-                    const detailId = `judging-score-detail-${encodeURIComponent(eventId)}-${encodeURIComponent(key)}`;
-                    return <Fragment key={key}>
-                      <tr className={expanded ? "is-expanded" : ""}>
-                        <th scope="row"><strong>{row.name || "Coreografía sin nombre"}</strong><small>ID {row.id}{[row.division, row.category, row.level].filter(Boolean).length ? ` · ${[row.division, row.category, row.level].filter(Boolean).join(" · ")}` : ""}</small></th>
-                        <td>{row.academy || "Sin academia"}</td><td>{blockLabel(row)}</td><td>{disciplineName(row.genre)}</td>
-                        <td><span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></td>
-                        <td>{row.expectedJudges > 0 ? <>{row.completedJudges}/{row.expectedJudges}<small>Completos</small></> : <span className="judging-scores__muted">Sin asignar</span>}</td>
-                        <td><button aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={() => setExpandedId(expanded ? "" : key)} type="button">{expanded ? "Cerrar" : "Ver detalle"}<ChevronDown aria-hidden="true" size={15} /></button></td>
-                      </tr>
-                      {expanded ? <tr className="judging-scores__detail-row"><td colSpan={7}><section id={detailId} className="judging-scores__detail" aria-label={`Puntuaciones de ${row.name || row.id}`}><h3>{row.name || `Coreografía ${row.id}`}</h3>{row.judges.length ? <div className="judging-scores__judges">{row.judges.map((judge) => <JudgeBreakdown key={judge.id} judge={judge} />)}</div> : <p className="judging-scores__muted">Todavía no hay jueces asignados o evaluaciones disponibles para esta coreografía.</p>}</section></td></tr> : null}
-                    </Fragment>;
-                  })}
-                </tbody>
-              </table>
-              {!filteredRows.length ? <p className="judging-scores__empty" role="status">{rows.length ? "No hay coreografías que coincidan con los filtros." : "Este evento todavía no tiene coreografías disponibles."}</p> : null}
+      {current ? <>
+        {current.warnings.length ? <div className="judging-scores__warnings" role="status"><ul>{current.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div> : null}
+        <header className="judging-scores__report-heading"><span>{selectedBlock?.title || selectedBlock?.name || "Resultados por bloque"}</span><h2>{current.report.title || "Dictamen final"}</h2>{current.report.subtitle ? <p>{current.report.subtitle}</p> : null}</header>
+        {selectedBlock ? <>
+          <div className="judging-scores__summary">
+            <div className="judging-scores__metrics">
+              <span><strong>{selectedBlock.counts.disciplines}</strong> disciplinas</span>
+              <span><strong>{selectedBlock.counts.categories}</strong> categorías</span>
+              <span><strong>{selectedBlock.counts.scored}/{selectedBlock.counts.total}</strong> con puntaje</span>
             </div>
-            <AdminPagination {...pagination} label="puntuaciones" itemLabel="coreografías" />
+            {selectedBlock.topScore && topRoutine ? <article className="judging-scores__top-score"><Crown aria-hidden="true" size={22} /><div><span>Mayor puntaje del bloque</span><strong>#{topRoutine.id} · {topRoutine.name}</strong><small>{topRoutine.academy || "Sin academia"}</small></div><b>{reportScoreValue(selectedBlock.topScore.score)}<small>pts</small></b></article> : null}
           </div>
-        </>
-      ) : !loading && scoresError ? <p className="judging-scores__muted">Usa Actualizar para volver a consultar las puntuaciones.</p> : null}
+          <p className="judging-scores__scope">Puntajes y posiciones calculados con las mismas reglas de la app de jueceo. Las evaluaciones pendientes se indican en cada coreografía.</p>
+          <div className="judging-scores__filters" aria-label="Filtros del dictamen">
+            <label className="judging-scores__search"><span>Buscar coreografía</span><span><Search aria-hidden="true" size={17} /><input type="search" placeholder="Nombre, academia, estado o ID…" value={query} onChange={(event) => { setQuery(event.target.value); setExpandedId(""); }} /></span></label>
+            <label><span>Disciplina</span><select value={disciplineFilter} onChange={(event) => { setDisciplineFilter(event.target.value); setExpandedId(""); }}><option value="all">Todas</option>{selectedBlock.sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}</select></label>
+            <label><span>Estado de evaluación</span><select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setExpandedId(""); }}><option value="all">Todos</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          </div>
+          {hasFilters ? <div className="judging-scores__filter-summary"><p role="status">{visibleCount} de {selectedBlock.counts.total} coreografías del bloque. Las posiciones conservan el dictamen completo.</p><button className="judging-scores__clear" type="button" onClick={resetFilters}>Limpiar filtros</button></div> : null}
+          <div className="judging-scores__sections">
+            {sections.map((section) => <section className="judging-scores__genre" key={section.id} aria-label={section.label}>
+              <header><div><span>Disciplina</span><h3>{section.label}</h3></div><strong>{section.categories.reduce((total, category) => total + category.rows.length, 0)} coreografías</strong></header>
+              <div className="judging-scores__categories">
+                {section.categories.map((category) => <section className="judging-scores__category" key={category.id} aria-label={category.title}>
+                  <header><h4>{category.title}</h4><span>{category.rows.length} {category.rows.length === 1 ? "coreografía" : "coreografías"}</span></header>
+                  <div className="judging-scores__standings">
+                    {category.rows.map(({ standing, row }) => <DictamenEntry
+                      key={String(row.id)} standing={standing} row={row} maximumScore={current.report.maximumScore}
+                      eventId={eventId} blockId={selectedBlock.id} expanded={expandedId === String(row.id)}
+                      onToggle={() => setExpandedId(expandedId === String(row.id) ? "" : String(row.id))}
+                    />)}
+                  </div>
+                </section>)}
+              </div>
+            </section>)}
+            {!sections.length ? <p className="judging-scores__empty" role="status">{hasFilters ? "No hay coreografías que coincidan con los filtros de este bloque." : "No hay resultados disponibles para mostrar en este bloque."}</p> : null}
+          </div>
+          {selectedBlock.specialAwards.length ? <section className="judging-scores__awards" aria-label="Premios especiales del bloque"><header><Trophy aria-hidden="true" size={22} /><div><h3>Premios especiales</h3><p>{selectedBlock.name || selectedBlock.title}</p></div></header><div className="judging-scores__awards-grid">{selectedBlock.specialAwards.map((award) => {
+            const routine = award.routineId === null ? null : rowLookup.get(String(award.routineId));
+            return <article className={award.isAssigned ? "" : "is-unassigned"} key={award.id}><span>{award.title}</span><strong>{award.displayValue || "Sin asignar"}</strong>{routine ? <small>{routine.academy || "Sin academia"} · {routine.state || "Sin estado"}</small> : null}</article>;
+          })}</div></section> : null}
+        </> : <p className="judging-scores__empty" role="status">Este evento todavía no tiene bloques de competencia disponibles.</p>}
+      </> : !loading && scoresError ? <p className="judging-scores__muted">Usa Actualizar para volver a consultar las puntuaciones.</p> : null}
     </section>
   );
 }

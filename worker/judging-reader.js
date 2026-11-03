@@ -6,13 +6,14 @@ const eventIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const eventColumns = "id,name,source_name,starts_at,is_active,event_type,competition_config,created_at";
 const tableColumns = {
   blocks: "event_id,block_id,name,title,sort_order,is_active",
-  routines: "event_id,routine_id,name,academy,genre,division,category,level,block_id,block,block_title,sort_order",
+  routines: "event_id,routine_id,name,academy,state,genre,division,category,level,block_id,block,block_title,sort_order",
   judges: "event_id,judge_id,name,role,sort_order,assigned_block_ids",
   criteria_templates: "event_id,template_id,genre,title,max_score,sort_order,template_version,applies_to",
   criteria: "event_id,template_id,criterion_id,section,label,max_score,sort_order,is_required",
   scores: "event_id,routine_id,judge_id,criterion_id,value,updated_at",
   penalties: "event_id,block_id,routine_id,judge_id,value,updated_at",
   feedback: "event_id,routine_id,judge_id,body,updated_at",
+  special_awards: "event_id,block_id,award,routine_id,manual_value",
 };
 const tableOrders = {
   blocks: "sort_order.asc,block_id.asc",
@@ -23,6 +24,7 @@ const tableOrders = {
   scores: "routine_id.asc,judge_id.asc,criterion_id.asc",
   penalties: "routine_id.asc,judge_id.asc",
   feedback: "routine_id.asc,judge_id.asc",
+  special_awards: "block_id.asc,award.asc",
 };
 
 function fail(code, message, statusCode = 503) {
@@ -131,5 +133,6 @@ export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
   return buildJudgingScoreSnapshot({
     event: events[0], blocks: data.blocks, routines: data.routines, judges: data.judges,
     templates: data.criteria_templates, criteria: data.criteria, scores: data.scores, penalties: data.penalties, feedback: data.feedback,
+    specialAwards: data.special_awards,
   }, new Date().toISOString());
 }

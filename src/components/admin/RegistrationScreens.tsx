@@ -11086,7 +11086,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
     headerDescription = "Bloques de competencia por disciplina y división";
   } else if (isScoresSection) {
     headerTitle = "Puntuaciones";
-    headerDescription = "Calificaciones de Levitate, por coreografía y juez";
+    headerDescription = "Dictamen final de Levitate por bloque";
   } else if (isMediaSection) {
     headerTitle = "Foto/Video";
     headerDescription = "Compras de paquetes de fotografía y video realizadas en tienda";

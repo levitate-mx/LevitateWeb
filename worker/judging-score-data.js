@@ -1,5 +1,7 @@
-// Read-only summaries of server-confirmed judging sheets. These totals belong
-// to individual judges; they are not an official cross-judge score or ranking.
+import { buildJudgingResultReport } from "./judging-result-report.js";
+
+// Server-confirmed judging sheets stay available alongside the per-block final
+// report derived with the new iOS application's configured official rules.
 const array = (value) => Array.isArray(value) ? value : [];
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
 const text = (value) => typeof value === "string" ? value.trim() : "";
@@ -26,17 +28,21 @@ function scopedRows(rows, eventId, table, warn) {
   return scoped;
 }
 
-function uniqueRows(rows, idFor, table, warn) {
+function uniqueRows(rows, idFor, table, warn, onAmbiguous = () => {}) {
   const result = new Map();
   const repeated = new Set();
   for (const row of rows) {
     const id = idFor(row);
     if (!id) {
+      onAmbiguous(row);
       warn(`Se omitieron filas de ${table} sin un identificador válido.`);
       continue;
     }
-    if (result.has(id)) repeated.add(id);
-    else result.set(id, row);
+    if (result.has(id)) {
+      repeated.add(id);
+      onAmbiguous(result.get(id));
+      onAmbiguous(row);
+    } else result.set(id, row);
   }
   // Do not silently pick a version of an ambiguous sheet or criterion.
   if (repeated.size) warn(`Hay identificadores repetidos en ${table}; los datos ambiguos se omitieron.`);
@@ -140,13 +146,18 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
   if (criterionRows.some((row) => !templates.has(text(row.template_id)))) {
     warn("Se omitieron criterios que no pertenecen a una plantilla del evento seleccionado.");
   }
+  const unavailableRoutineIds = new Set();
+  const ambiguousPenaltyKeys = new Set();
   const sheetRows = (table, idFor) => {
     const rows = scoped(table).filter((row) => {
       const known = routines.has(text(row.routine_id)) && allJudges.has(text(row.judge_id));
       if (!known) warn(`Se omitieron filas de ${table} que no pertenecen a una rutina y juez del evento seleccionado.`);
       return known;
     });
-    return uniqueRows(rows, idFor, table, warn);
+    return uniqueRows(rows, idFor, table, warn, (row) => {
+      if (table === "scores" || table === "penalties") unavailableRoutineIds.add(text(row.routine_id));
+      if (table === "penalties") ambiguousPenaltyKeys.add(key(text(row.routine_id), text(row.judge_id)));
+    });
   };
   const scoreRows = sheetRows("scores", (row) => {
     const criterionId = number(row.criterion_id);
@@ -176,6 +187,7 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
     const weightedCriteria = array(criteria).map((criterion) => ({ ...criterion, weight: criterionWeight(criterion, weights, warn) }));
     const weightedMaximum = weightedCriteria.reduce((sum, criterion) => sum + criterion.maximumScore * criterion.weight, 0);
     const invalidMaximum = !Number.isFinite(weightedMaximum);
+    const effectiveMaximum = weightedMaximum > 0 ? weightedMaximum : (number(template?.max_score) ?? 0);
     if (invalidMaximum) warn("La ponderación supera el rango numérico permitido; los subtotales afectados no están disponibles.");
     const unavailable = !criteria?.length || !expected.length || weightsInvalid || invalidMaximum
       || weightedCriteria.some((criterion) => criterion.weight === null);
@@ -199,6 +211,7 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
             recorded += 1;
           } else {
             invalidScore = true;
+            unavailableRoutineIds.add(routineId);
             warn("Hay notas inválidas o fuera del máximo del criterio; no se consideran hojas completas.");
           }
         }
@@ -207,12 +220,15 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
       recordedScores += recorded;
       const penaltyRow = penaltyRows.get(sheetKey);
       const rawPenalty = penaltyRow ? number(penaltyRow.value) : 0;
-      const invalidPenalty = rawPenalty === null || rawPenalty < -100 || rawPenalty > 0;
-      if (invalidPenalty) warn("Hay penalizaciones inválidas; los totales afectados no están disponibles.");
+      const invalidPenalty = ambiguousPenaltyKeys.has(sheetKey) || rawPenalty === null || rawPenalty < -100 || rawPenalty > 0;
+      if (invalidPenalty) {
+        unavailableRoutineIds.add(routineId);
+        warn("Hay penalizaciones inválidas; los totales afectados no están disponibles.");
+      }
       const penalty = invalidPenalty ? 0 : rawPenalty;
       const subtotal = recorded && !unavailable
         ? values.reduce((sum, value, index) => sum + (value.value ?? 0) * weightedCriteria[index].weight, 0) : null;
-      const maximumScore = unavailable ? null : weightedMaximum;
+      const maximumScore = unavailable ? null : effectiveMaximum;
       const total = subtotal !== null && !invalidPenalty ? Math.max(0, subtotal + penalty) : null;
       const complete = values.length > 0 && recorded === values.length && !invalidScore && !invalidPenalty && !unavailable;
       return {
@@ -222,7 +238,7 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
     });
     const completedJudges = judgeResults.filter((judge) => judge.status === "complete").length;
     return {
-      id: routineId, name: text(routine.name), academy: text(routine.academy), genre: text(routine.genre),
+      id: routineId, name: text(routine.name), academy: text(routine.academy), state: text(routine.state), genre: text(routine.genre),
       division: text(routine.division), category: text(routine.category), level: text(routine.level),
       blockId: text(routine.block_id) || text(block?.block_id), blockName: text(block?.name) || text(routine.block),
       status: unavailable ? "unavailable" : completedJudges === expected.length ? "complete"
@@ -233,12 +249,16 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
   if ([...scoreRows.keys()].some((scoreKey) => !usedScores.has(scoreKey))) {
     warn("Se omitieron notas que no corresponden a los criterios o jueces esperados de la rutina.");
   }
+  const report = buildJudgingResultReport({
+    event: sourceEvent, blocks: [...blocks.values()], routines: [...routines.values()], rows,
+    specialAwards: scoped("specialAwards"), unavailableRoutineIds,
+  }, warn);
   return {
     event: {
       id: eventId, name: text(sourceEvent.name), sourceName: text(sourceEvent.source_name),
       isActive: sourceEvent.is_active === true, startsAt: text(sourceEvent.starts_at) || null,
     },
     fetchedAt: fetchedAt instanceof Date ? fetchedAt.toISOString() : String(fetchedAt),
-    warnings: [...warnings], rows,
+    warnings: [...warnings], rows, report,
   };
 }

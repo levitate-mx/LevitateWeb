@@ -12,13 +12,14 @@ const env = {
 const allowedColumns = {
   events: 'id,name,source_name,starts_at,is_active,event_type,competition_config,created_at',
   blocks: 'event_id,block_id,name,title,sort_order,is_active',
-  routines: 'event_id,routine_id,name,academy,genre,division,category,level,block_id,block,block_title,sort_order',
+  routines: 'event_id,routine_id,name,academy,state,genre,division,category,level,block_id,block,block_title,sort_order',
   judges: 'event_id,judge_id,name,role,sort_order,assigned_block_ids',
   criteria_templates: 'event_id,template_id,genre,title,max_score,sort_order,template_version,applies_to',
   criteria: 'event_id,template_id,criterion_id,section,label,max_score,sort_order,is_required',
   scores: 'event_id,routine_id,judge_id,criterion_id,value,updated_at',
   penalties: 'event_id,block_id,routine_id,judge_id,value,updated_at',
   feedback: 'event_id,routine_id,judge_id,body,updated_at',
+  special_awards: 'event_id,block_id,award,routine_id,manual_value',
 };
 
 function event(id = eventId) {
@@ -29,12 +30,12 @@ function scoreData(id = eventId, value = 8) {
   return {
     events: [event(id)],
     blocks: [{ event_id: id, block_id: 'b1', name: 'Bloque 1', sort_order: 1 }],
-    routines: [{ event_id: id, routine_id: 'r1', name: 'Pieza de prueba', genre: 'Jazz', block_id: 'b1' }],
+    routines: [{ event_id: id, routine_id: 'r1', name: 'Pieza de prueba', state: 'Estado de México', genre: 'Jazz', block_id: 'b1' }],
     judges: [{ event_id: id, judge_id: 'j1', name: 'Juez de prueba', role: 'judge', access_code: 'PRIVATE-CODE', photo: 'PRIVATE-PHOTO' }],
     criteria_templates: [{ event_id: id, template_id: 'jazz', genre: 'Jazz' }],
     criteria: [{ event_id: id, template_id: 'jazz', criterion_id: 1, label: 'Técnica', section: 'Arte', max_score: 10 }],
     scores: [{ event_id: id, routine_id: 'r1', judge_id: 'j1', criterion_id: 1, value }],
-    penalties: [], feedback: [],
+    penalties: [], feedback: [], special_awards: [],
   };
 }
 
@@ -143,6 +144,22 @@ test('judging score reads are isolated to one validated event and never expose j
     assert.doesNotMatch(url.searchParams.get('select'), /access_code|photo|password|token|\*/i);
   }
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE-CODE|PRIVATE-PHOTO|access_code|photo|sb_publishable_|supabase\.co/);
+});
+
+test('the block report reads state and assigned awards without exposing device metadata or another event', async () => {
+  const data = scoreData();
+  data.events[0].competition_config = { special_awards: [{ category: 'award_1', title: 'Vestuario', is_enabled: true }] };
+  data.special_awards = [
+    { event_id: eventId, block_id: 'b1', award: 'award_1', routine_id: 'r1', manual_value: 'Vestuario destacado', device_id: 'PRIVATE-DEVICE' },
+    { event_id: otherEventId, block_id: 'b1', award: 'award_1', routine_id: 'r1', manual_value: 'FOREIGN-AWARD' },
+  ];
+  const server = upstream(data);
+  const result = await getJudgingScores(env, eventId, server);
+  assert.equal(result.rows[0].state, 'Estado de México');
+  assert.equal(result.report.blocks[0].specialAwards[0].displayValue, 'Vestuario destacado');
+  assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].score, 120);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE-DEVICE|device_id|FOREIGN-AWARD/);
+  assert.ok(server.calls.some(({ url }) => url.pathname.endsWith('/special_awards')));
 });
 
 test('invalid event IDs cannot inject a REST filter or trigger an upstream request', async () => {

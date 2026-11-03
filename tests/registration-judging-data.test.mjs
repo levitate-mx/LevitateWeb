@@ -34,19 +34,20 @@ function freezeDeep(value) {
   return value;
 }
 
-test("judging snapshot returns exact per-judge sheets without a cross-judge score or official ranking", () => {
+test("judging snapshot preserves exact per-judge sheets alongside the separate block report", () => {
   const result = snapshot(fixture());
   assert.deepEqual(result.event, { id: eventId, name: "Levitate Noviembre", sourceName: "Programa.xlsx", isActive: true, startsAt: "2026-11-13" });
   assert.equal(result.fetchedAt, at);
   assert.deepEqual(result.warnings, []);
   assert.deepEqual(result.rows[0], {
-    id: "routine-1", name: "Vuelo", academy: "Academia Uno", genre: "Aro", division: "Teen", category: "Solo", level: "Intermedio",
+    id: "routine-1", name: "Vuelo", academy: "Academia Uno", state: "", genre: "Aro", division: "Teen", category: "Solo", level: "Intermedio",
     blockId: "block-1", blockName: "Bloque Aéreo", status: "complete", completedJudges: 1, expectedJudges: 1, recordedScores: 2,
     judges: [{ id: "judge-1", name: "Jueza Uno", status: "complete", subtotal: 12, penalty: -1, total: 11, maximumScore: 15,
       criteria: [{ id: 1, label: "Técnica", section: "Ejecución", value: 8, maximumScore: 10 },
         { id: 2, label: "Expresión", section: "Arte", value: 4, maximumScore: 5 }], feedback: "Buen trabajo." }],
   });
   for (const field of ["total", "aggregateTotal", "rank", "placement", "award"]) assert.equal(Object.hasOwn(result.rows[0], field), false);
+  assert.ok(Math.abs(result.report.blocks[0].sections[0].categories[0].rows[0].score - 110) < 1e-10);
 });
 
 test("recorded zero is complete data while an absent criterion remains null and incomplete", () => {

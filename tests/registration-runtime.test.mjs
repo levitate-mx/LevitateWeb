@@ -162,7 +162,7 @@ test('judging admin routes authenticate before upstream reads and never write to
     criteria_templates: [{ event_id: eventId, template_id: 'jazz', genre: 'Jazz' }],
     criteria: [{ event_id: eventId, template_id: 'jazz', criterion_id: 1, label: 'Técnica', section: 'Arte', max_score: 10 }],
     scores: [{ event_id: eventId, routine_id: 'r1', judge_id: 'j1', criterion_id: 1, value: 8 }],
-    penalties: [], feedback: [],
+    penalties: [], feedback: [], special_awards: [],
   };
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (input, options) => {
@@ -204,6 +204,10 @@ test('judging admin routes authenticate before upstream reads and never write to
     else {
       assert.equal(result.event.id, eventId);
       assert.equal(result.rows[0].judges[0].total, 8);
+      assert.equal(result.report.maximumScore, 150);
+      assert.equal(result.report.blocks.length, 1);
+      assert.equal(result.report.blocks[0].id, 'b1');
+      assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].score, 120);
     }
     assert.doesNotMatch(JSON.stringify(result), /sb_publishable_|supabase\.co/);
     assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),
