@@ -29,19 +29,25 @@ no como una lista vacía o puntuaciones de cero.
 
 ## Dictamen por bloque
 
-Se selecciona un evento verificado de Levitate y un bloque. La vista reproduce
-el dictamen de la app nueva de iOS: encabezados rosas por grupo, tarjetas por
-categoría, número de participación, coreografía, academia, estado, puntaje y
-posición. Conserva el detalle de criterios, penalización y comentarios de cada
-juez. Los filtros de búsqueda no vuelven a calcular posiciones: estas siempre
-se obtienen del bloque completo.
+Se selecciona un evento verificado de Levitate y un bloque. La vista está
+pensada para leer los resultados en voz alta: filas sencillas con número de
+participación, coreografía, academia, puntaje y lugar, con tipografía grande y
+alto contraste. Las categorías conservan su agrupación. Los datos de cada
+juez quedan en el detalle desplegable y la búsqueda y los filtros, en un
+control secundario. Se quitaron las explicaciones técnicas, la hora de
+consulta y las tarjetas de métricas de la lectura principal.
 
-Las reglas se portaron de `Packages/JueceoCore/Sources/JueceoCore/ScoringEngine.swift`,
+La sección sigue protegida para administradores. Este cambio facilita la
+lectura ante el público; no publica las puntuaciones ni habilita acceso anónimo.
+
+El cálculo del puntaje se portó de `Packages/JueceoCore/Sources/JueceoCore/ScoringEngine.swift`,
 `AppModels.swift`, `CompetitionBranding.swift`, y del método `result(for:)` de
 `JudgingStore.swift` y `DictamenBuilder` de `Views/DictamenView.swift` del proyecto
-iOS. Las pruebas incluyen resultados de referencia ejecutados con ese código
-Swift. La web consulta Supabase y calcula la presentación en el servidor; no
-invoca el paquete Swift desde el navegador.
+iOS. Las pruebas numéricas incluyen resultados de referencia ejecutados con
+ese código Swift. La presentación de lugares sigue la regla solicitada para
+la web y puede diferir de los umbrales de premiación de la app. La web consulta
+Supabase y calcula la presentación en el servidor; no invoca el paquete Swift
+desde el navegador.
 
 - El subtotal aplica las ponderaciones de criterios. El dictamen utiliza la
   agregación oficial del evento (promedio o suma), pesos de evaluadores,
@@ -51,19 +57,24 @@ invoca el paquete Swift desde el navegador.
   subtotal es mayor que cero; por defecto, las evaluaciones faltantes cuentan
   como cero en el dictamen. Esto es independiente del indicador de hoja
   completa: una hoja con todos sus criterios en cero sigue siendo completa.
-- Las posiciones se asignan por puntaje sin redondearlo. Los empates con
-  diferencia menor a 0.0001 comparten lugar, por ejemplo 1°, 1°, 3°.
-  `DictamenBuilder` no aplica los desempates de la pantalla de ranking. Como
-  en la app, las filas se presentan de menor a mayor puntaje, con el ganador
-  al final. Una categoría con una sola participación aplica los umbrales del
-  paquete, salvo que el evento los desactive.
-- El evento configura los campos de agrupación, cantidad de lugares,
-  alias de disciplinas, mejor puntaje y premios especiales. Las asignaciones
-  de premios se leen del servidor; esta vista no permite modificarlas.
+- Se asignan únicamente 1.º, 2.º y 3.º lugar por categoría; desde el cuarto
+  lugar se muestra **Participación**. Una categoría con una sola coreografía
+  evaluada recibe el primer lugar sin aplicar umbrales porcentuales. Los campos
+  `ranked_positions` y `use_solo_placement_thresholds` del evento no cambian
+  esta regla de la web.
+- Las posiciones utilizan el puntaje sin redondearlo. Los empates con
+  diferencia menor a 0.0001 comparten lugar, por ejemplo 1.º, 1.º, 3.º. Las
+  filas se presentan de menor a mayor puntaje dentro de su grupo, con el
+  ganador al final. Los filtros no vuelven a calcular lugares.
+- El evento configura los campos de agrupación, alias de disciplinas y
+  premios especiales. Las asignaciones de premios se leen del servidor;
+  esta vista no permite modificarlas.
 - Las notas ausentes se distinguen de una nota válida de cero en el detalle.
   Las hojas incompletas conservan su indicador; los datos inválidos o sin una
-  plantilla reconocida no reciben puntaje ni posición. Los cambios pendientes
-  de sincronizar en un dispositivo todavía no aparecen.
+  plantilla reconocida no reciben puntaje ni posición. Una coreografía sin
+  notas registradas se muestra pendiente y no recibe lugar; un cero evaluado
+  sí es una nota real. Los cambios pendientes de sincronizar en un dispositivo
+  todavía no aparecen.
 - El botón **Actualizar** vuelve a consultar eventos, notas y premios. No hay
   sondeo periódico ni consultas en segundo plano desde esta sección.
 

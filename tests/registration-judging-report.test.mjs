@@ -5,7 +5,9 @@ import { buildJudgingScoreSnapshot } from '../worker/judging-score-data.js';
 
 // Expected values were produced by compiling the native Swift sources, not by
 // calling the JavaScript report code. The fixture records each source SHA-256.
-// Swift is not needed to run this portable regression suite.
+// Swift is not needed to run this portable regression suite. Numeric scores,
+// grouping and ordering retain native parity; the new announcer podium policy
+// is verified separately instead of reusing the fixture's old placement rules.
 const native = JSON.parse(await readFile(new URL('./fixtures/judging-report-native-contract.json', import.meta.url), 'utf8'));
 const eventId = 'report-fixture-event';
 const at = '2026-11-02T18:00:00.000Z';
@@ -39,7 +41,7 @@ function close(actual, expected, context = '') {
   assert.ok(Math.abs(actual - expected) < 1e-10, `${context}: ${actual} differs from native Swift ${expected}`);
 }
 
-function compareSections(actual, expected) {
+function compareNativeGroupsAndScores(actual, expected) {
   assert.equal(actual.length, expected.length);
   actual.forEach((section, index) => {
     const wanted = expected[index];
@@ -52,10 +54,6 @@ function compareSections(actual, expected) {
       category.rows.forEach((item, rowIndex) => {
         const wantedRow = wantedCategory.rows[rowIndex];
         close(item.score, wantedRow.score, item.routineId);
-        assert.equal(item.placement.rank, wantedRow.rank);
-        assert.equal(item.placement.label, wantedRow.label);
-        assert.equal(item.placement.isFirstPlace, wantedRow.rank === 1);
-        assert.equal(item.placement.isParticipation, wantedRow.rank === null);
       });
     });
   });
@@ -80,13 +78,83 @@ for (const example of native.engine) {
 }
 
 for (const example of native.grouping) {
-  test(`Dictamen groups, order and placements match compiled Swift: ${example.name}`, () => {
+  test(`Dictamen groups, order and scores retain compiled Swift parity: ${example.name}`, () => {
     const result = buildJudgingScoreSnapshot(fixture(example.routines, { report: example.configuration }), at);
     assert.equal(result.report.blocks.length, 1);
-    compareSections(result.report.blocks[0].sections, example.expected);
+    compareNativeGroupsAndScores(result.report.blocks[0].sections, example.expected);
     assert.deepEqual(result.warnings, []);
   });
 }
+
+test('a category with one recorded result receives first place regardless of the former solo score thresholds', () => {
+  for (const score of [0, 1, 50, 100, 150]) {
+    for (const useThresholds of [true, false]) {
+      const result = buildJudgingScoreSnapshot(fixture([{ id: '1', score }], {
+        report: { use_solo_placement_thresholds: useThresholds },
+      }), at);
+      const entry = reportRows(result.report.blocks[0])[0];
+      close(entry.score, score);
+      assert.deepEqual(entry.placement, { rank: 1, label: '1.º lugar', isFirstPlace: true, isParticipation: false });
+    }
+  }
+});
+
+test('the announcer podium always stops at third place and labels every other recorded result as participation', () => {
+  for (const configuredPositions of [0, 1, 2, 3, 4, 20, 100]) {
+    const result = buildJudgingScoreSnapshot(fixture([
+      { id: '1', score: 130 }, { id: '2', score: 120 }, { id: '3', score: 110 },
+      { id: '4', score: 100 }, { id: '5', score: 90 },
+    ], { report: { ranked_positions: configuredPositions } }), at);
+    assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry.placement]), [
+      ['5', { rank: null, label: 'Participación', isFirstPlace: false, isParticipation: true }],
+      ['4', { rank: null, label: 'Participación', isFirstPlace: false, isParticipation: true }],
+      ['3', { rank: 3, label: '3.º lugar', isFirstPlace: false, isParticipation: false }],
+      ['2', { rank: 2, label: '2.º lugar', isFirstPlace: false, isParticipation: false }],
+      ['1', { rank: 1, label: '1.º lugar', isFirstPlace: true, isParticipation: false }],
+    ]);
+  }
+});
+
+test('each category retains an independent top-three podium and ascending score order inside its block', () => {
+  const result = buildJudgingScoreSnapshot(fixture([
+    { id: '1', score: 80, division: 'Teen' }, { id: '2', score: 90, division: 'Teen' },
+    { id: '3', score: 100, division: 'Teen' }, { id: '4', score: 110, division: 'Teen' },
+    { id: '5', score: 110, division: 'Baby' }, { id: '6', score: 120, division: 'Baby' },
+    { id: '7', score: 130, division: 'Baby' }, { id: '8', score: 140, division: 'Baby' },
+  ]), at);
+  const categories = result.report.blocks[0].sections[0].categories;
+  assert.equal(categories.length, 2);
+  for (const category of categories) {
+    assert.deepEqual(category.rows.map(entry => entry.placement.rank), [null, 3, 2, 1]);
+    assert.equal(category.rows[0].placement.label, 'Participación');
+    assert.deepEqual(category.rows.map(entry => entry.score), [...category.rows.map(entry => entry.score)].sort((a, b) => a - b));
+  }
+});
+
+test('equal scores share competition ranks while ranks outside the top three remain participation', () => {
+  const result = buildJudgingScoreSnapshot(fixture([
+    { id: '2', score: 130 }, { id: '1', score: 130 }, { id: '4', score: 120 },
+    { id: '3', score: 120 }, { id: '5', score: 100 },
+  ]), at);
+  assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry.placement.rank, entry.placement.label]), [
+    ['5', null, 'Participación'], ['3', 3, '3.º lugar'], ['4', 3, '3.º lugar'], ['1', 1, '1.º lugar'], ['2', 1, '1.º lugar'],
+  ]);
+});
+
+test('no-note pending routines receive no invented places while explicitly recorded zero scores remain eligible', () => {
+  const data = fixture([{ id: '1' }, { id: '2', score: 0 }]);
+  let result = buildJudgingScoreSnapshot(data, at);
+  const entries = new Map(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry]));
+  assert.equal(result.rows.find(entry => entry.id === '1').status, 'pending');
+  assert.equal(entries.get('1').score, 0);
+  assert.equal(entries.get('1').placement, null);
+  assert.equal(result.rows.find(entry => entry.id === '2').status, 'complete');
+  assert.equal(entries.get('2').score, 0);
+  assert.equal(entries.get('2').placement.rank, 1);
+  data.scores = [];
+  result = buildJudgingScoreSnapshot(data, at);
+  assert.ok(reportRows(result.report.blocks[0]).every(entry => entry.score === 0 && entry.placement === null));
+});
 
 test('criterion and evaluator weighting compose before official normalization without altering the raw judge sheet', () => {
   const data = fixture([{ id: '1', score: 40 }], { maximum: 100,
@@ -119,11 +187,13 @@ test('legitimate incomplete sheets produce the native official score while retai
   const result = buildJudgingScoreSnapshot(data, at);
   assert.equal(result.rows[0].status, 'partial');
   close(reportRows(result.report.blocks[0])[0].score, 67.5, 'one missing judge contributes zero to the official denominator');
+  assert.equal(reportRows(result.report.blocks[0])[0].placement.rank, 1, 'a valid partial result with recorded notes remains eligible');
   assert.equal(result.report.blocks[0].counts.scored, 1);
   data.scores = [];
   const pending = buildJudgingScoreSnapshot(data, at);
   assert.equal(pending.rows[0].status, 'pending');
   assert.equal(reportRows(pending.report.blocks[0])[0].score, 0);
+  assert.equal(reportRows(pending.report.blocks[0])[0].placement, null);
   assert.equal(pending.report.blocks[0].counts.scored, 0);
 });
 

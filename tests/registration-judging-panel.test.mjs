@@ -129,8 +129,8 @@ test("dictamen cards show app score precision, position, academy and state with 
   assert.match(html, /Academia Águila/);
   assert.match(html, /Estado de México/);
   assert.match(html, />129.3</);
-  assert.match(html, /pts \/ 150/);
-  assert.match(html, />1°</);
+  assert.match(html, /Escala de 150 puntos/);
+  assert.match(html, />1\.º lugar</);
   assert.match(html, /aria-expanded="true"/);
   assert.match(html, /Subtotal registrado/);
   assert.match(html, /judging-score-detail-levitate-event-b1-3/);
@@ -142,7 +142,20 @@ test("unavailable dictamen cards do not invent zero points or a placement", () =
     expanded: false, onToggle() {},
   }));
   assert.match(html, /No disponible/);
-  assert.match(html, /Pendiente/);
+  assert.match(html, /Sin lugar asignado/);
   assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /pts \/ 150|>0<|>1°<|is-first|Subtotal registrado/);
+});
+
+test("the reading view distinguishes pending sheets from a real zero and spells out participation", () => {
+  const render = (standing, row) => renderToStaticMarkup(DictamenEntry({ standing, row, maximumScore: 150,
+    eventId: "levitate-event", blockId: "b1", expanded: false, onToggle() {},
+  }));
+  const pending = render({ routineId: "3", score: 0, placement: null }, choreography("3", { status: "pending", recordedScores: 0 }));
+  assert.match(pending, /Pendiente/);
+  assert.doesNotMatch(pending, />0<|[123]\.º lugar|jueces completos|Escala de/);
+  const zero = render({ routineId: "3", score: 0, placement: { rank: null, label: "PART.", isFirstPlace: false, isParticipation: true } }, choreography("3"));
+  assert.match(zero, />0</);
+  assert.match(zero, />Participación</);
+  assert.doesNotMatch(zero, /PART\.|jueces completos|Escala de/);
 });

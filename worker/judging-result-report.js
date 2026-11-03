@@ -1,4 +1,5 @@
-// Mirrors the new iOS DictamenBuilder and official CompetitionScoringEngine.
+// Official numeric scores follow the new iOS CompetitionScoringEngine. The web
+// announcer report keeps category groups and awards fixed first/second/third places.
 // This module only derives a report from already authorized, event-scoped data.
 const EPSILON = 0.0001;
 const MAXIMUM_SCORE = 150;
@@ -129,29 +130,23 @@ function categoryTitle(values) {
 }
 
 function placement(rank) {
-  return rank === null ? { rank: null, label: "PART.", isFirstPlace: false, isParticipation: true }
-    : { rank, label: `${rank}°`, isFirstPlace: rank === 1, isParticipation: false };
+  return rank === null ? { rank: null, label: "Participación", isFirstPlace: false, isParticipation: true }
+    : { rank, label: `${rank}.º lugar`, isFirstPlace: rank === 1, isParticipation: false };
 }
 
-function categoryRows(results, config) {
-  const valid = results.filter((item) => item.score !== null).sort((a, b) => Math.abs(a.score - b.score) < EPSILON
-    ? routineOrder(a.row, b.row) : b.score - a.score);
+function categoryRows(results) {
+  // Missing sheets may have a numeric zero under the official missing-score
+  // policy. They cannot receive a place until at least one note is recorded.
+  const eligible = results.filter((item) => item.score !== null && item.row.status !== "pending" && item.row.recordedScores > 0)
+    .sort((a, b) => Math.abs(a.score - b.score) < EPSILON ? routineOrder(a.row, b.row) : b.score - a.score);
   const byId = new Map();
-  if (valid.length === 1 && results.length === 1) {
-    const score = valid[0].score;
-    const rank = !config.soloThresholds ? (config.rankedPositions > 0 ? 1 : null)
-      : score >= MAXIMUM_SCORE * (181 / 210) ? 1 : score >= MAXIMUM_SCORE * (161 / 210) ? 2
-        : score >= MAXIMUM_SCORE * (141 / 210) ? 3 : null;
-    byId.set(valid[0].row.id, placement(rank));
-  } else {
-    let rank = 0;
-    let previous = null;
-    valid.forEach((item, index) => {
-      if (previous === null || Math.abs(item.score - previous) >= EPSILON) { rank = index + 1; previous = item.score; }
-      byId.set(item.row.id, placement(rank <= config.rankedPositions ? rank : null));
-    });
-  }
-  // iOS assigns places in descending order, then announces/displays low to high.
+  let rank = 0;
+  let previous = null;
+  eligible.forEach((item, index) => {
+    if (previous === null || Math.abs(item.score - previous) >= EPSILON) { rank = index + 1; previous = item.score; }
+    byId.set(item.row.id, placement(rank <= 3 ? rank : null));
+  });
+  // Assign places in descending order, then announce/display low to high.
   return [...results].sort((a, b) => {
     if (a.score === null || b.score === null) return a.score === b.score ? routineOrder(a.row, b.row) : a.score === null ? -1 : 1;
     return Math.abs(a.score - b.score) < EPSILON ? routineOrder(a.row, b.row) : a.score - b.score;
@@ -185,7 +180,7 @@ function sectionsFor(results, config) {
       const aNumber = a.items.reduce((min, item) => minimumNumber(item.row.id) < min ? minimumNumber(item.row.id) : min, 9223372036854775807n);
       const bNumber = b.items.reduce((min, item) => minimumNumber(item.row.id) < min ? minimumNumber(item.row.id) : min, 9223372036854775807n);
       return aNumber < bNumber ? -1 : aNumber > bNumber ? 1 : textOrder.compare(a.title, b.title);
-    }).map((category) => ({ id: category.id, title: category.title, rows: categoryRows(category.items, config) })),
+    }).map((category) => ({ id: category.id, title: category.title, rows: categoryRows(category.items) })),
   })).sort((a, b) => (customOrder ? genrePriority(a.label) - genrePriority(b.label) : 0) || textOrder.compare(a.label, b.label));
 }
 
@@ -244,10 +239,7 @@ export function buildJudgingResultReport(input, warn = () => {}) {
   const secondary = array(rawSecondary).map(reportField);
   const validGrouping = primary && Array.isArray(rawSecondary) && secondary.every(Boolean);
   if (!validGrouping) warn("La agrupación del dictamen no está disponible por una configuración inválida.");
-  const configuredRanked = option(rawReport, "rankedPositions", "ranked_positions", 3);
-  const rankedPositions = Number.isInteger(configuredRanked) ? Math.min(20, Math.max(0, configuredRanked)) : 3;
-  const config = { primary, secondary, rankedPositions,
-    soloThresholds: option(rawReport, "useSoloPlacementThresholds", "use_solo_placement_thresholds", true) !== false,
+  const config = { primary, secondary,
     danceAliases: option(rawReport, "useDanceGenreAliases", "use_dance_genre_aliases", true) !== false };
   const scoring = resolvedScoring(event, warn);
   const unavailable = input.unavailableRoutineIds ?? new Set();
