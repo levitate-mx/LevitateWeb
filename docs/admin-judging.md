@@ -30,9 +30,11 @@ no como una lista vacía o puntuaciones de cero.
 ## Dictamen por bloque
 
 Se selecciona un evento verificado de Levitate y un bloque. La vista está
-pensada para leer los resultados en voz alta: filas sencillas con número de
-participación, coreografía, academia, puntaje y lugar, con tipografía grande y
-alto contraste. Las categorías conservan su agrupación. Los datos de cada
+pensada para leer los resultados en voz alta: puntaje primero, luego la
+coreografía y la academia, y el lugar al extremo derecho. Se conserva la
+tipografía grande, el alto contraste y los acentos rosados de Levitate. El
+número de participación ya no se muestra en las filas. Las categorías conservan
+su agrupación. Los datos de cada
 juez quedan en el detalle desplegable y la búsqueda y los filtros, en un
 control secundario. Se quitaron las explicaciones técnicas, la hora de
 consulta y las tarjetas de métricas de la lectura principal.

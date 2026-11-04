@@ -172,15 +172,14 @@ function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded
   return (
     <article className={`judging-scores__entry${standing.placement?.isFirstPlace ? " is-first" : ""}`}>
       <div className="judging-scores__standing">
-        <span className="judging-scores__participation">#{row.id}</span>
+        <div className={`judging-scores__points${isNumericScore ? "" : " is-text"}`}><span>Puntaje</span><strong>{scoreText}</strong></div>
         <div className="judging-scores__entry-info">
           <h5>{row.name || "Coreografía sin nombre"}</h5>
           <p className="judging-scores__academy">{row.academy || "Sin academia"}</p>
           {row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
+          <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button>
         </div>
-        <div className={`judging-scores__points${isNumericScore ? "" : " is-text"}`}><span>Puntaje</span><strong>{scoreText}</strong></div>
         <div className={`judging-scores__placement${standing.placement?.isParticipation ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{standing.placement === null ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>
-        <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button>
       </div>
       {expanded ? <section id={detailId} className="judging-scores__detail" aria-label={`Puntuaciones de ${row.name || row.id}`}><h6>Detalle por juez · {blockLabel(row)}</h6><p className="judging-scores__detail-progress">{statusLabels[row.status]} · {row.expectedJudges > 0 ? `${row.completedJudges}/${row.expectedJudges} jueces completos` : "Sin jueces asignados"} · Escala de {scoreValue(maximumScore)} puntos{row.state ? ` · ${row.state}` : ""}</p>{row.judges.length ? <div className="judging-scores__judges">{row.judges.map((judge) => <JudgeBreakdown key={judge.id} judge={judge} />)}</div> : <p className="judging-scores__muted">Todavía no hay jueces asignados o evaluaciones disponibles para esta coreografía.</p>}</section> : null}
     </article>

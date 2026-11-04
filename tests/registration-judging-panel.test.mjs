@@ -115,7 +115,7 @@ test("dictamen filters preserve the complete block's places and server announcem
   assert.equal(filterReportSections(null, rows, { query: "", discipline: "all", status: "all" }).length, 0);
 });
 
-test("dictamen cards show app score precision, position, academy and state with expandable judge sheets", () => {
+test("dictamen reading rows lead with the score, end with the place and retain expandable judge sheets", () => {
   assert.equal(reportScoreValue(129.285714285), "129.3");
   assert.equal(reportScoreValue(0), "0");
   assert.equal(reportScoreValue(null), "Pendiente");
@@ -124,7 +124,9 @@ test("dictamen cards show app score precision, position, academy and state with 
     eventId: "levitate-event", blockId: "b1", expanded: true, onToggle() {},
   }));
   assert.match(html, /judging-scores__entry is-first/);
-  assert.match(html, /#3/);
+  assert.doesNotMatch(html, />#3</);
+  assert.ok(html.indexOf('judging-scores__points') < html.indexOf('judging-scores__entry-info'));
+  assert.ok(html.indexOf('judging-scores__entry-info') < html.indexOf('judging-scores__placement'));
   assert.match(html, /Vuelo &lt;final&gt;/);
   assert.match(html, /Academia Águila/);
   assert.match(html, /Estado de México/);
