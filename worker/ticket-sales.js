@@ -1,5 +1,6 @@
 import ticketEvent from "../shared/ticket-event.json" with { type: "json" };
 import { getRegistrationEventTicketSpecs, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
+import { getAccessCoverage, getAccessSessionsForEvent } from "./ticket-access.js";
 
 // One row per paid order, not one copy of its JSON per ticket. Original ticket
 // numbers retain their positions when another ticket in that order is cancelled.
@@ -27,7 +28,7 @@ export async function getTicketSalesSummary(db, eventId = ticketEvent.eventId) {
     throw error;
   }
   const catalog = stored ? JSON.parse(stored.metadata_json) : ticketEvent;
-  const blocks = catalog.blocks.map((block) => ({
+  const blocks = getAccessSessionsForEvent(catalog, eventId).map((block) => ({
     id: block.id, label: block.label, dayId: block.dayId, date: block.date,
     total: 0, single: 0, day: 0, full: 0,
   }));
@@ -40,7 +41,12 @@ export async function getTicketSalesSummary(db, eventId = ticketEvent.eventId) {
     for (const ticketNumber of JSON.parse(order.ticket_numbers)) {
       uniqueTickets += 1;
       const spec = specs[Number(ticketNumber) - 1];
-      const coverage = spec?.eventId === eventId ? getRegistrationTicketCoverage(spec, catalog) : [];
+      const originalCoverage = spec?.eventId === eventId ? getRegistrationTicketCoverage(spec, catalog) : [];
+      // Order line items retain their original financial block IDs. A merged
+      // session counts each QR once, while Single 4 covers both parts.
+      const coverage = [...new Set(eventId === ticketEvent.eventId
+        ? getAccessCoverage(originalCoverage)
+        : originalCoverage)].filter((id) => byBlock.has(id));
       if (!coverage.length) {
         unassignedTickets += 1;
         continue;

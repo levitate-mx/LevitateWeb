@@ -129,6 +129,26 @@ const createdTables = {
     },
     constraints: ["UNIQUE (event_id, ticket_id)"],
   },
+  registration_ticket_access_scans: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      event_id: "TEXT NOT NULL REFERENCES registration_attendance_events(id) ON DELETE RESTRICT",
+      ticket_id: "TEXT NOT NULL",
+      access_session_id: "TEXT NOT NULL",
+      pass_type: "TEXT NOT NULL CHECK (pass_type IN ('block', 'day', 'full'))",
+      day_id: "TEXT",
+      source_block_id: "TEXT",
+      device_id: "TEXT",
+      device_name: "TEXT NOT NULL",
+      actor_type: "TEXT NOT NULL CHECK (actor_type IN ('scanner', 'admin'))",
+      actor_id: "TEXT",
+      coverage_json: "TEXT NOT NULL",
+      admitted_at: "TEXT NOT NULL DEFAULT (datetime('now'))",
+    },
+    // This unique index already covers event-ticket lookups and event-wide
+    // report reads; a second event-ticket or event-session index is unnecessary.
+    constraints: ["UNIQUE (event_id, ticket_id, access_session_id)"],
+  },
   registration_attendance_blocks: {
     columns: {
       event_id: "TEXT NOT NULL REFERENCES registration_attendance_events(id) ON DELETE RESTRICT",

@@ -9,6 +9,8 @@ import worker from '../worker/index.js';
 import { prepareRegistrationSchema } from '../scripts/lib/registration-schema.mjs';
 import ticketEvent from '../shared/ticket-event.json' with { type: 'json' };
 
+const scannerAccessIds = ['bloque-1', 'bloque-2-3', 'bloque-4a', 'bloque-4b', 'bloque-5', 'bloque-6', 'bloque-7'];
+
 // A real SQLite database catches missing columns, constraints, joins, and writes;
 // this adapter only supplies D1's async result shape. No network/database service
 // is contacted by these tests.
@@ -1003,10 +1005,10 @@ test('ticket scanner block catalog is available only to activated devices and ac
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'scanner-catalog-admin', { role: 'admin' });
   const scanner = await activateTicketScanner(f, admin);
-  const expectedBlocks = ticketEvent.blocks;
-  assert.deepEqual(scanner.blocks, expectedBlocks);
+  assert.deepEqual(scanner.blocks.map(block => block.id), scannerAccessIds);
+  assert.deepEqual(scanner.blocks.slice(0, 4).map(block => block.date), Array(4).fill('2026-11-14'));
   const { json: current } = await f.request('/scanner/me', { headers: scanner.headers });
-  assert.deepEqual(current.blocks, expectedBlocks);
+  assert.deepEqual(current.blocks, scanner.blocks);
   assert.equal(current.device.id, scanner.device.id);
   await f.request('/scanner/me', { status: 401 });
   await f.request('/scanner/ticket/scan', { method: 'POST', body: { qrPayload: 'LEVITATE:TICKET:LV-AAAA-BBBB', blockId: 'bloque-1' }, status: 401 });
@@ -1034,7 +1036,7 @@ test('attendance summaries authenticate before reads and return seven zero count
     assert.deepEqual(attendance.blocks.slice(0, 4).map(block => block.dayId), Array(4).fill('sabado-14'));
     assert.deepEqual(attendance.blocks.slice(4).map(block => block.dayId), Array(3).fill('domingo-15'));
   }
-  assert.ok(f.db.runtimeQueries.slice(readsStart).every(sql => /^\s*SELECT/.test(sql)), 'polling must not write last_seen_at or counters');
+  assert.ok(f.db.runtimeQueries.slice(readsStart).every(sql => /^\s*(?:SELECT|WITH)/.test(sql)), 'polling must not write last_seen_at or counters');
   await f.request('/scanner/attendance?eventId=missing-event', { headers: scanner.headers, status: 404 });
   f.db.sqlite.prepare("UPDATE registration_scanner_devices SET status = 'revoked' WHERE id = ?").run(scanner.device.id);
   await f.request('/scanner/attendance', { headers: scanner.headers, status: 401 });
@@ -1273,7 +1275,7 @@ test('atomic admission rolls back all counters and ticket usage on failure, then
   await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie, status: 500,
     body: { qrPayload: ticket.qrPayload, blockId: 'bloque-1' } });
   assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(ticket.id).status, 'active');
-  for (const table of ['registration_ticket_admissions', 'registration_attendance_blocks', 'registration_attendance_events']) {
+  for (const table of ['registration_ticket_access_scans', 'registration_ticket_admissions', 'registration_attendance_blocks', 'registration_attendance_events']) {
     assert.equal(f.db.sqlite.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get().total, 0);
   }
   const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
@@ -1288,7 +1290,7 @@ test('accepted admissions remain accepted if the subsequent summary or device te
   const admin = await seedAcademy(f, 'attendance-accessory-failure', { role: 'admin' });
   const scanner = await activateTicketScanner(f, admin);
   const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 2 }]);
-  for (const [index, failure] of [/FROM registration_attendance_events AS event/, /SET last_scan_at/].entries()) {
+  for (const [index, failure] of [/WITH selected_event AS/, /SET last_scan_at/].entries()) {
     f.db.failQuery = failure;
     const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
       body: { qrPayload: order.tickets[index].qrPayload, blockId: 'bloque-1' } });
@@ -1557,18 +1559,239 @@ test('ticket scanner allows exactly one admission when two devices scan the same
   const secondScanner = await activateTicketScanner(f, admin, 'Puerta dos');
   const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-4', quantity: 1 }]);
   const results = await Promise.all([firstScanner, secondScanner].map(scanner => f.request('/scanner/ticket/scan', {
-    method: 'POST', headers: scanner.headers, body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-4' },
+    method: 'POST', headers: scanner.headers, body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-4a' },
   })));
   assert.equal(results.filter(result => result.json.admitted).length, 1);
   assert.deepEqual(results.map(result => result.json.reason).sort(), ['accepted', 'already_used']);
   const duplicate = results.find(result => result.json.reason === 'already_used').json;
-  assert.match(duplicate.message, /Boleto por bloque/);
-  assert.match(duplicate.message, /Bloque 4/);
+  assert.match(duplicate.message, /ya fue validado en Bloque 4A/);
   assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id).status, 'used');
   assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_ticket_admissions').get().total, 1);
   const { json: { attendance } } = await f.request('/scanner/attendance', { headers: secondScanner.headers });
   assert.equal(attendance.uniqueAdmissions, 1);
-  assert.deepEqual(attendance.blocks.map(block => block.total), [0, 0, 0, 1, 0, 0, 0]);
+  assert.deepEqual(attendance.blocks.map(block => block.total), [0, 0, 1, 0, 0, 0, 0]);
+});
+
+test('merged entry accepts original blocks 2 and 3 and normalizes cached scanner selections', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-merged', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin);
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-2', quantity: 2 },
+    { productId: 'block', optionId: 'bloque-3', quantity: 2 },
+    { productId: 'day', optionId: 'sabado-14', quantity: 1 },
+    { productId: 'full', quantity: 1 },
+  ]);
+  const originalTickets = f.db.sqlite.prepare('SELECT id, ticket_code, qr_payload FROM registration_event_tickets ORDER BY id').all();
+  for (const [index, ticket] of order.tickets.entries()) {
+    const { json } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, blockId: ['bloque-2-3', 'bloque-3', 'bloque-2', 'bloque-2-3', 'bloque-2', 'bloque-3'][index] } });
+    assert.equal(json.admitted, true);
+    assert.equal(json.firstRedemption, true);
+    const { json: duplicate } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, blockId: 'bloque-2-3' } });
+    assert.equal(duplicate.reason, 'already_used');
+  }
+  assert.ok(f.db.sqlite.prepare('SELECT access_session_id FROM registration_ticket_access_scans').all()
+    .every(row => row.access_session_id === 'bloque-2-3'));
+  const { json: { sales } } = await f.request('/admin/ticket-sales-summary', { cookie: admin.cookie });
+  const { json: { attendance } } = await f.request('/admin/attendance', { cookie: admin.cookie });
+  assert.equal(sales.uniqueTickets, 6);
+  assert.equal(attendance.uniqueAdmissions, 6);
+  for (const report of [sales, attendance]) {
+    assert.deepEqual(report.blocks.map(block => block.id), scannerAccessIds);
+    assert.deepEqual(report.blocks.map(block => block.total), [2, 6, 2, 2, 1, 1, 1]);
+    assert.deepEqual(report.blocks[1], { ...report.blocks[1], single: 4, day: 1, full: 1 });
+  }
+  assert.deepEqual(f.db.sqlite.prepare('SELECT id, ticket_code, qr_payload FROM registration_event_tickets ORDER BY id').all(), originalTickets);
+  assert.equal(f.db.sqlite.prepare('SELECT line_items_json FROM registration_shop_orders WHERE id = ?').get(order.id).line_items_json, JSON.stringify(order.lineItems));
+});
+
+test('block 4 QR validates once per part in either order and preserves the first admission', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-split', { role: 'admin' });
+  const scanner = await activateTicketScanner(f, admin, 'Puerta primera');
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-4', quantity: 2 }]);
+  const { json: ambiguous } = await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+    body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-4' } });
+  assert.equal(ambiguous.admitted, false);
+  assert.match(ambiguous.message, /4A.*4B|4a.*4b/);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_access_scans').get().n, 0);
+  for (const [index, ticket] of order.tickets.entries()) {
+    const parts = index ? ['bloque-4b', 'bloque-4a'] : ['bloque-4a', 'bloque-4b'];
+    const scan = async blockId => (await f.request('/scanner/ticket/scan', { method: 'POST', headers: scanner.headers,
+      body: { qrPayload: ticket.qrPayload, blockId } })).json;
+    const first = await scan(parts[0]);
+    assert.equal(first.admitted, true);
+    assert.equal(first.firstRedemption, true);
+    const initialTicket = f.db.sqlite.prepare('SELECT * FROM registration_event_tickets WHERE id = ?').get(ticket.id);
+    const canonical = f.db.sqlite.prepare('SELECT * FROM registration_ticket_admissions WHERE ticket_id = ?').get(ticket.id);
+    const counters = f.db.sqlite.prepare('SELECT * FROM registration_attendance_blocks ORDER BY block_id').all();
+    assert.equal((await scan(parts[0])).reason, 'already_used');
+    const second = await scan(parts[1]);
+    assert.equal(second.admitted, true);
+    assert.equal(second.firstRedemption, false);
+    assert.equal(second.ticket.usedAt, first.ticket.usedAt);
+    assert.equal(second.ticket.usedBy, first.ticket.usedBy);
+    assert.equal((await scan(parts[1])).reason, 'already_used');
+    assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_event_tickets WHERE id = ?').get(ticket.id), initialTicket);
+    assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_ticket_admissions WHERE ticket_id = ?').get(ticket.id), canonical);
+    assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_attendance_blocks ORDER BY block_id').all(), counters);
+  }
+  const { json: { attendance } } = await f.request('/admin/attendance', { cookie: admin.cookie });
+  assert.equal(attendance.uniqueAdmissions, 2);
+  assert.deepEqual(attendance.blocks.map(block => block.total), [0, 0, 2, 2, 0, 0, 0]);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_access_scans').get().n, 4);
+});
+
+test('Day and Full keep one wristband while allowing each split part once', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-split-wristband', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'day', optionId: 'sabado-14', quantity: 2 }, { productId: 'full', quantity: 2 },
+    { productId: 'day', optionId: 'domingo-15', quantity: 1 },
+  ]);
+  for (const [index, ticket] of order.tickets.slice(0, 4).entries()) {
+    const sequence = index % 2 ? ['bloque-4b', 'bloque-4a'] : ['bloque-1', 'bloque-4a', 'bloque-4b'];
+    for (const [part, blockId] of sequence.entries()) {
+      const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+        body: { qrPayload: ticket.qrPayload, blockId } });
+      assert.equal(json.admitted, true);
+      assert.equal(json.firstRedemption, part === 0);
+      assert.match(json.message, /brazalete/i);
+      if (part) assert.match(json.message, /no.*(?:otro|nuevo|segundo)|sin.*(?:otro|nuevo|segundo)/i);
+    }
+    for (const blockId of ['bloque-4a', 'bloque-4b', 'bloque-2-3']) {
+      const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+        body: { qrPayload: ticket.qrPayload, blockId } });
+      assert.equal(json.reason, 'already_used');
+    }
+  }
+  const { json: wrongDay } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: order.tickets[4].qrPayload, blockId: 'bloque-4a' } });
+  assert.equal(wrongDay.reason, 'wrong_day');
+  const { json: { attendance } } = await f.request('/admin/attendance', { cookie: admin.cookie });
+  assert.equal(attendance.uniqueAdmissions, 4);
+  assert.deepEqual(attendance.blocks.map(block => block.total), [4, 4, 4, 4, 2, 2, 2]);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_admissions').get().n, 4);
+});
+
+test('simultaneous split parts admit twice with one first redemption and retain original ticket timestamps', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-distinct-concurrency', { role: 'admin' });
+  const scanners = await Promise.all(['Primera', 'Segunda'].map(name => activateTicketScanner(f, admin, name)));
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-4', quantity: 1 },
+    { productId: 'day', optionId: 'sabado-14', quantity: 1 }, { productId: 'full', quantity: 1 },
+  ]);
+  for (const ticket of order.tickets) {
+    const results = await Promise.all(scanners.map((scanner, index) => f.request('/scanner/ticket/scan', {
+      method: 'POST', headers: scanner.headers, body: { qrPayload: ticket.qrPayload, blockId: index ? 'bloque-4b' : 'bloque-4a' },
+    })));
+    assert.ok(results.every(result => result.json.admitted));
+    assert.equal(results.filter(result => result.json.firstRedemption).length, 1);
+    assert.equal(new Set(results.map(result => result.json.ticket.usedAt)).size, 1);
+    assert.equal(new Set(results.map(result => result.json.ticket.usedBy)).size, 1);
+    assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_access_scans WHERE ticket_id = ?').get(ticket.id).n, 2);
+    assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_admissions WHERE ticket_id = ?').get(ticket.id).n, 1);
+  }
+  const { json: { attendance } } = await f.request('/admin/attendance', { cookie: admin.cookie });
+  assert.equal(attendance.uniqueAdmissions, 3);
+  assert.ok(attendance.blocks.every(block => block.total <= 3));
+  assert.deepEqual(attendance.blocks.map(block => block.total), [2, 2, 3, 3, 1, 1, 1]);
+});
+
+test('each admission write rolls back together and split retries preserve committed history', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-split-rollback', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-4', quantity: 6 }]);
+  const history = () => Object.fromEntries(['registration_ticket_access_scans', 'registration_ticket_admissions',
+    'registration_attendance_events', 'registration_attendance_blocks'].map(table => [table,
+    f.db.sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+  const scan = async (ticket, blockId, status = 200) => (await f.request('/admin/ticket/scan', {
+    method: 'POST', cookie: admin.cookie, status, body: { qrPayload: ticket.qrPayload, blockId },
+  })).json;
+  for (const [writeIndex, ticket] of order.tickets.entries()) {
+    const originalHistory = history();
+    f.db.failBatchAt = writeIndex;
+    await scan(ticket, 'bloque-4a', 500);
+    assert.deepEqual(history(), originalHistory);
+    assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(ticket.id).status, 'active');
+    assert.equal((await scan(ticket, 'bloque-4a')).firstRedemption, true);
+    const firstHistory = history();
+    const firstTicket = f.db.sqlite.prepare('SELECT * FROM registration_event_tickets WHERE id = ?').get(ticket.id);
+    f.db.failBatchAt = writeIndex;
+    await scan(ticket, 'bloque-4b', 500);
+    assert.deepEqual(history(), firstHistory);
+    assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_event_tickets WHERE id = ?').get(ticket.id), firstTicket);
+    const retry = await scan(ticket, 'bloque-4b');
+    assert.equal(retry.admitted, true);
+    assert.equal(retry.firstRedemption, false);
+    assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_event_tickets WHERE id = ?').get(ticket.id), firstTicket);
+  }
+});
+
+test('a normal entry racing a split entry issues only one wristband', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-mixed-race', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'day', optionId: 'sabado-14', quantity: 2 }, { productId: 'full', quantity: 2 },
+  ]);
+  for (const [index, ticket] of order.tickets.entries()) {
+    const parts = index % 2 ? ['bloque-4a', 'bloque-2-3'] : ['bloque-2-3', 'bloque-4a'];
+    const results = await Promise.all(parts.map(blockId => f.request('/admin/ticket/scan', {
+      method: 'POST', cookie: admin.cookie, body: { qrPayload: ticket.qrPayload, blockId },
+    })));
+    assert.equal(results.filter(result => result.json.firstRedemption).length, 1);
+    assert.equal(results[parts.indexOf('bloque-4a')].json.admitted, true);
+    assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_admissions WHERE ticket_id = ?').get(ticket.id).n, 1);
+  }
+});
+
+test('an atomic ticket position change cannot use the entitlement read before the change', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-position-race', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [
+    { productId: 'block', optionId: 'bloque-4', quantity: 1 },
+    { productId: 'block', optionId: 'bloque-5', quantity: 1 },
+  ]);
+  f.db.sqlite.prepare('DELETE FROM registration_event_tickets WHERE id = ?').run(order.tickets[1].id);
+  f.db.beforeBatch = () => {
+    f.db.beforeBatch = null;
+    f.db.sqlite.prepare('UPDATE registration_event_tickets SET ticket_number = 2 WHERE id = ?').run(order.tickets[0].id);
+  };
+  const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-4a' } });
+  assert.equal(json.admitted, false);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_ticket_access_scans').get().n, 0);
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_event_tickets WHERE id = ?').get(order.tickets[0].id).status, 'active');
+});
+
+test('split retries cannot reopen legacy consumed tickets or bypass a cancellation, payment reversal or order correction', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-split-guards', { role: 'admin' });
+  const order = await createPaidTicketOrder(f, admin, [{ productId: 'block', optionId: 'bloque-4', quantity: 4 }]);
+  const scan = async (ticket, blockId) => (await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
+    body: { qrPayload: ticket.qrPayload, blockId } })).json;
+  for (const ticket of order.tickets) assert.equal((await scan(ticket, 'bloque-4a')).admitted, true);
+  const [legacy, cancelled, untrusted, changed] = order.tickets;
+  f.db.sqlite.prepare("UPDATE registration_ticket_admissions SET scanned_block_id = 'bloque-4' WHERE ticket_id = ?").run(legacy.id);
+  f.db.sqlite.prepare('DELETE FROM registration_ticket_access_scans WHERE ticket_id = ?').run(legacy.id);
+  f.db.sqlite.prepare("UPDATE registration_event_tickets SET status = 'cancelled' WHERE id = ?").run(cancelled.id);
+  f.db.sqlite.prepare('DELETE FROM registration_ticket_access_scans WHERE ticket_id = ?').run(untrusted.id);
+  f.db.sqlite.prepare('DELETE FROM registration_ticket_admissions WHERE ticket_id = ?').run(untrusted.id);
+  for (const ticket of [legacy, cancelled, untrusted]) {
+    for (const blockId of ['bloque-4a', 'bloque-4b']) assert.equal((await scan(ticket, blockId)).admitted, false);
+  }
+  f.db.sqlite.prepare("UPDATE registration_shop_orders SET status = 'rejected' WHERE id = ?").run(order.id);
+  assert.equal((await scan(changed, 'bloque-4b')).admitted, false);
+  f.db.sqlite.prepare("UPDATE registration_shop_orders SET status = 'paid' WHERE id = ?").run(order.id);
+  f.db.beforeBatch = () => {
+    f.db.beforeBatch = null;
+    f.db.sqlite.prepare("UPDATE registration_shop_orders SET line_items_json = '[]' WHERE id = ?").run(order.id);
+  };
+  assert.equal((await scan(changed, 'bloque-4b')).admitted, false);
+  assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) AS n FROM registration_ticket_access_scans WHERE access_session_id = 'bloque-4b'").get().n, 0);
 });
 
 test('ticket scanner still rejects used QR codes when original ticket details or source order are missing', async t => {

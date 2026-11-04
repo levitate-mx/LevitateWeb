@@ -6,6 +6,7 @@ import { planRegistrationSchema, prepareRegistrationSchema } from "../scripts/li
 import { main } from "../scripts/prepare-registration-db.mjs";
 
 const baseSchema = readFileSync(new URL("../db/registration_d1_schema.sql", import.meta.url), "utf8");
+const accessScanMigration = readFileSync(new URL("../db/registration_ticket_access_scans.sql", import.meta.url), "utf8");
 const removableColumns = {
   registration_academies: ["origin_type", "origin_state", "origin_country"],
   registration_users: ["role"],
@@ -22,6 +23,10 @@ function removeColumns(schema, table, columns) {
     for (const column of columns) statement = statement.replace(new RegExp(`^  ${column} .+\\n`, "m"), "");
     return statement;
   });
+}
+
+function withoutAccessScans(schema = baseSchema) {
+  return schema.replace(/CREATE TABLE IF NOT EXISTS registration_ticket_access_scans \([\s\S]*?\n\);\n/, "");
 }
 
 function legacySchema({ venue = false } = {}) {
@@ -150,6 +155,7 @@ test("attendance preparation preserves legacy QR codes and never fabricates past
     .replace(/^CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_event_sales.*\n/m, "");
   const { db, sqlite, writes } = fixture(t, oldSchema);
   sqlite.exec(`
+    DROP TABLE registration_ticket_access_scans;
     DROP TABLE registration_ticket_admissions;
     DROP TABLE registration_attendance_blocks;
     DROP TABLE registration_attendance_events;
@@ -159,7 +165,7 @@ test("attendance preparation preserves legacy QR codes and never fabricates past
   `);
   const before = rows(sqlite, "registration_event_tickets");
   const plan = await planRegistrationSchema(db);
-  assert.equal(plan.steps.length, 5);
+  assert.equal(plan.steps.length, 6);
   assert.deepEqual(writes, []);
   await prepareRegistrationSchema(db, { apply: true });
   for (const [index, ticket] of rows(sqlite, "registration_event_tickets").entries()) {
@@ -167,11 +173,118 @@ test("attendance preparation preserves legacy QR codes and never fabricates past
     const { event_id, ...existingFields } = ticket;
     assert.deepEqual(existingFields, before[index]);
   }
-  for (const table of ["registration_ticket_admissions", "registration_attendance_events", "registration_attendance_blocks"]) {
+  for (const table of ["registration_ticket_admissions", "registration_ticket_access_scans", "registration_attendance_events", "registration_attendance_blocks"]) {
     assert.equal(sqlite.prepare(`SELECT COUNT(*) AS total FROM ${table}`).get().total, 0);
   }
   assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
-  assert.equal(writes.length, 5);
+  assert.equal(writes.length, 6);
+});
+
+for (const migration of ["prepare", "standalone"]) {
+  test(`operational access ${migration} migration preserves original QR admissions and never invents past session scans`, async t => {
+    const { db, sqlite, writes } = fixture(t, withoutAccessScans());
+    seed(sqlite);
+    sqlite.exec(`
+      INSERT INTO registration_event_tickets
+        (id,source_order_type,source_order_id,ticket_code,ticket_number,ticket_label,qr_payload,status,used_at,used_by)
+        VALUES ('used-ticket','registration','order-1','UNCHANGED-QR',1,'Single pass · Bloque 4',
+          'LEVITATE:TICKET:UNCHANGED-QR','used','2026-11-01 12:00:00','Puerta anterior');
+      INSERT INTO registration_attendance_events(id,name,venue,metadata_json,unique_admissions)
+        VALUES ('history-event','Evento histórico','edomex','{"blocks":[]}',1);
+      INSERT INTO registration_ticket_admissions
+        (id,event_id,ticket_id,pass_type,scanned_block_id,device_name,actor_type,coverage_json,admitted_at)
+        VALUES ('legacy-admission','history-event','used-ticket','block','4','Puerta anterior','scanner','["4"]','2026-11-01 12:00:00');
+      INSERT INTO registration_attendance_blocks(event_id,block_id,total,single_count)
+        VALUES ('history-event','4',1,1);
+    `);
+    const tracked = ["registration_event_tickets", "registration_ticket_admissions", "registration_attendance_events", "registration_inscription_orders"];
+    const before = Object.fromEntries(tracked.map(table => [table, rows(sqlite, table)]));
+    const countersBefore = sqlite.prepare("SELECT * FROM registration_attendance_blocks ORDER BY event_id,block_id").all();
+    const admissionDefinition = sqlite.prepare("SELECT sql FROM sqlite_schema WHERE name = 'registration_ticket_admissions'").get().sql;
+    const plan = await planRegistrationSchema(db);
+    assert.equal(plan.steps.length, 1);
+    assert.match(plan.steps[0].sql, /^CREATE TABLE IF NOT EXISTS registration_ticket_access_scans\b/);
+    assert.deepEqual(writes, [], "schema check must not mutate attendance");
+    if (migration === "prepare") await prepareRegistrationSchema(db, { apply: true });
+    else sqlite.exec(accessScanMigration);
+    const canonicalAccessSql = baseSchema.match(/CREATE TABLE IF NOT EXISTS registration_ticket_access_scans \([\s\S]*?\n\);/)[0];
+    const actualAccessSql = sqlite.prepare("SELECT sql FROM sqlite_schema WHERE name = 'registration_ticket_access_scans'").get().sql;
+    const normalizedSql = sql => sql.replace(/IF NOT EXISTS /g, '').replace(/;$/, '').replace(/\s+/g, ' ').trim();
+    assert.equal(normalizedSql(actualAccessSql), normalizedSql(canonicalAccessSql),
+      'the standalone, canonical and prepared ledger definitions must have identical constraints');
+    assert.deepEqual(Object.fromEntries(tracked.map(table => [table, rows(sqlite, table)])), before);
+    assert.deepEqual(sqlite.prepare("SELECT * FROM registration_attendance_blocks ORDER BY event_id,block_id").all(), countersBefore);
+    assert.equal(sqlite.prepare("SELECT sql FROM sqlite_schema WHERE name = 'registration_ticket_admissions'").get().sql, admissionDefinition);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM registration_ticket_access_scans").get().count, 0,
+      "a historical used QR does not prove that it entered either operational part");
+    assert.deepEqual((await planRegistrationSchema(db)).steps, []);
+    const beforeRecheck = sqlite.prepare("SELECT total_changes() AS count").get().count;
+    assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+    sqlite.exec(accessScanMigration);
+    assert.equal(sqlite.prepare("SELECT total_changes() AS count").get().count, beforeRecheck);
+    assert.ok(writes.every(sql => /^CREATE\b/i.test(sql.trim())), "this upgrade is additive and has no data writes");
+  });
+}
+
+test("operational access ledger allows two parts on one QR and uniquely guards each event-ticket-session", t => {
+  const { sqlite } = fixture(t);
+  sqlite.exec(`INSERT INTO registration_attendance_events(id,name,venue,metadata_json)
+    VALUES ('event-one','Evento uno','edomex','{}'),('event-two','Evento dos','edomex','{}');`);
+  const insert = sqlite.prepare(`INSERT INTO registration_ticket_access_scans
+    (id,event_id,ticket_id,access_session_id,pass_type,device_name,actor_type,coverage_json)
+    VALUES (?,?,?,?,?,?,?,?)`);
+  insert.run('scan-a','event-one','one-qr','4a','block','Puerta A','scanner','["4a"]');
+  insert.run('scan-b','event-one','one-qr','4b','block','Puerta B','admin','["4b"]');
+  assert.throws(() => insert.run('duplicate-a','event-one','one-qr','4a','block','Otro dispositivo','scanner','["4a"]'), /UNIQUE constraint/);
+  insert.run('another-event','event-two','one-qr','4a','day','Puerta A','scanner','["4a","4b"]');
+  insert.run('another-ticket','event-one','another-qr','4a','full','Puerta A','scanner','["4a","4b"]');
+  const scans = rows(sqlite, 'registration_ticket_access_scans');
+  assert.equal(scans.length, 4);
+  assert.deepEqual(scans.filter(scan => scan.event_id === 'event-one' && scan.ticket_id === 'one-qr')
+    .map(scan => [scan.access_session_id, JSON.parse(scan.coverage_json)]), [['4a', ['4a']], ['4b', ['4b']]]);
+  assert.ok(scans.every(scan => typeof scan.admitted_at === 'string' && scan.admitted_at.length > 0));
+  assert.ok(scans.every(scan => scan.day_id === null && scan.source_block_id === null && scan.device_id === null && scan.actor_id === null));
+  for (const pass of ['single', 'unknown', '']) {
+    assert.throws(() => insert.run(`bad-pass-${pass}`,'event-one','one-qr','invalid',pass,'Puerta','scanner','[]'), /CHECK constraint/);
+  }
+  assert.throws(() => insert.run('bad-actor','event-one','one-qr','invalid','block','Puerta','student','[]'), /CHECK constraint/);
+  assert.throws(() => insert.run('missing-ticket','event-one',null,'invalid','block','Puerta','scanner','[]'), /NOT NULL constraint/);
+  assert.throws(() => insert.run('missing-session','event-one','one-qr',null,'block','Puerta','scanner','[]'), /NOT NULL constraint/);
+  assert.throws(() => insert.run('missing-event','nonexistent-event','one-qr','invalid','block','Puerta','scanner','[]'), /FOREIGN KEY constraint/);
+  assert.throws(() => sqlite.prepare("DELETE FROM registration_attendance_events WHERE id = ?").run('event-two'), /FOREIGN KEY constraint/);
+
+  const foreignKeys = sqlite.prepare('PRAGMA foreign_key_list(registration_ticket_access_scans)').all();
+  assert.equal(foreignKeys.length, 1);
+  assert.equal(foreignKeys[0].table, 'registration_attendance_events');
+  assert.equal(foreignKeys[0].on_delete, 'RESTRICT');
+  const indexes = sqlite.prepare('PRAGMA index_list(registration_ticket_access_scans)').all();
+  const unique = indexes.find(index => index.origin === 'u');
+  assert.ok(unique);
+  assert.deepEqual(sqlite.prepare(`PRAGMA index_info(${unique.name})`).all().map(column => column.name), ['event_id', 'ticket_id', 'access_session_id']);
+  assert.equal(indexes.filter(index => index.origin === 'c').length, 0, 'the unique prefix covers event-ticket lookups without a redundant secondary index');
+});
+
+test("operational access history survives later ticket deletion without changing canonical admission uniqueness", t => {
+  const { sqlite } = fixture(t);
+  seed(sqlite);
+  sqlite.exec(`
+    INSERT INTO registration_attendance_events(id,name,venue,metadata_json) VALUES ('history-event','Evento','edomex','{}');
+    INSERT INTO registration_event_tickets(id,source_order_type,source_order_id,ticket_code,ticket_number,ticket_label,qr_payload,status)
+      VALUES ('ticket-to-correct','registration','order-1','PRESERVE-HISTORY',1,'Single pass','LEVITATE:TICKET:PRESERVE-HISTORY','used');
+    INSERT INTO registration_ticket_admissions(id,event_id,ticket_id,pass_type,scanned_block_id,device_name,actor_type,coverage_json)
+      VALUES ('admission','history-event','ticket-to-correct','block','4','Puerta','scanner','["4"]');
+    INSERT INTO registration_ticket_access_scans(id,event_id,ticket_id,access_session_id,pass_type,source_block_id,device_name,actor_type,coverage_json)
+      VALUES ('access-a','history-event','ticket-to-correct','4a','block','4','Puerta A','scanner','["4a"]'),
+        ('access-b','history-event','ticket-to-correct','4b','block','4','Puerta B','scanner','["4b"]');
+  `);
+  const admissionsBefore = rows(sqlite, 'registration_ticket_admissions');
+  const accessBefore = rows(sqlite, 'registration_ticket_access_scans');
+  sqlite.prepare('DELETE FROM registration_event_tickets WHERE id = ?').run('ticket-to-correct');
+  assert.deepEqual(rows(sqlite, 'registration_ticket_admissions'), admissionsBefore);
+  assert.deepEqual(rows(sqlite, 'registration_ticket_access_scans'), accessBefore);
+  assert.throws(() => sqlite.exec(`INSERT INTO registration_ticket_admissions
+    (id,event_id,ticket_id,pass_type,scanned_block_id,device_name,actor_type,coverage_json)
+    VALUES ('duplicate-canonical','history-event','ticket-to-correct','block','4','Puerta','scanner','["4"]')`), /UNIQUE constraint/);
 });
 
 test("sales index preparation preserves tickets and adds the event covering index once", async t => {

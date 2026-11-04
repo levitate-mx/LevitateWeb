@@ -2,6 +2,7 @@ import registrationPolicyDefaults from "../shared/registration-policy.json" with
 import { resolveRegistrationPolicy } from "../shared/registration-policy.js";
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
+import { accessSessions, resolveAccessSession, getAccessCoverage, isSplitAccessSession, isAmbiguousAccessSession } from "./ticket-access.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getJudgingEvents, getJudgingScores } from "./judging-reader.js";
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
@@ -2465,7 +2466,7 @@ async function handleRegistrationScannerActivate(request, env) {
           name: deviceName,
         },
         deviceToken,
-        blocks: registrationTicketBlocks,
+        blocks: accessSessions,
       },
       201,
     );
@@ -2479,7 +2480,7 @@ async function handleRegistrationScannerMe(request, env) {
     assertMethod(request, ["GET"]);
 
     const device = await requireRegistrationScannerDevice(request, getDb(env));
-    return sendJson({ device: serializeRegistrationScannerDevice(device), blocks: registrationTicketBlocks });
+    return sendJson({ device: serializeRegistrationScannerDevice(device), blocks: accessSessions });
   } catch (error) {
     return sendRegistrationError(error);
   }
@@ -2519,165 +2520,129 @@ async function handleRegistrationScannerTicketScan(request, env) {
 
 async function scanRegistrationEventTicket(db, { blockId, eventId, ticketCode, usedBy, device, actorId }) {
   const ticket = await getRegistrationEventTicketByCode(db, ticketCode);
-
   if (!ticket) {
-    return {
-      admitted: false,
-      reason: "not_found",
-      valid: false,
-      message: "El QR no corresponde a un boleto de Levitate.",
-    };
+    return { admitted: false, reason: "not_found", valid: false, message: "El QR no corresponde a un boleto de Levitate." };
   }
-
   if (ticket.status === "cancelled") {
-    return {
-      admitted: false,
-      reason: "cancelled",
-      valid: false,
-      message: "Este boleto fue cancelado.",
-      ticket: serializeRegistrationEventTicket(ticket),
-    };
+    return { admitted: false, reason: "cancelled", valid: false, message: "Este boleto fue cancelado.",
+      ticket: serializeRegistrationEventTicket(ticket) };
   }
 
-  const orderTable = ticket.source_order_type === "shop"
-    ? "registration_shop_orders"
-    : "registration_inscription_orders";
-  const order = await db.prepare(`SELECT * FROM ${orderTable} WHERE id = ? LIMIT 1`)
-    .bind(ticket.source_order_id)
-    .first();
+  const orderTable = ticket.source_order_type === "shop" ? "registration_shop_orders" : "registration_inscription_orders";
+  const order = await db.prepare(`SELECT * FROM ${orderTable} WHERE id = ? LIMIT 1`).bind(ticket.source_order_id).first();
+  // Resolve every entitlement from the immutable order positions, not from a
+  // printed label or an access-session ID supplied by the scanner.
+  const ticketSpec = order ? getRegistrationEventTicketSpecs(order)[Number(ticket.ticket_number) - 1] : null;
+  const selectedId = optionalString(blockId);
+  const accessSession = resolveAccessSession(selectedId);
+  if (isAmbiguousAccessSession(selectedId)) {
+    return { admitted: false, reason: "ambiguous_block", valid: true,
+      message: "El Bloque 4 ahora está dividido en Bloque 4A y Bloque 4B. Recarga el escáner y selecciona la parte correspondiente. No se registró ningún acceso en este intento.",
+      ticket: serializeRegistrationEventTicket(ticket) };
+  }
 
-  // Ticket numbers follow the original order lines and quantities. Resolve the
-  // entitlement even for a used QR so the operator sees which pass it was.
-  const ticketSpec = order
-    ? getRegistrationEventTicketSpecs(order)[Number(ticket.ticket_number) - 1]
-    : null;
-
+  let savedAdmission = null;
+  let savedSpec = ticketSpec;
   if (ticket.status === "used") {
-    const savedAdmission = await db.prepare(`
-      SELECT admission.pass_type, admission.coverage_json, event.metadata_json
+    savedAdmission = await db.prepare(`
+      SELECT admission.pass_type, admission.scanned_block_id, admission.coverage_json, event.metadata_json
       FROM registration_ticket_admissions AS admission
       INNER JOIN registration_attendance_events AS event ON event.id = admission.event_id
       WHERE admission.event_id = ? AND admission.ticket_id = ? LIMIT 1
     `).bind(ticket.event_id, ticket.id).first();
-    const savedSpec = savedAdmission ? {
-      passType: savedAdmission.pass_type,
-      block: JSON.parse(savedAdmission.metadata_json).blocks.find((block) => block.id === JSON.parse(savedAdmission.coverage_json)[0]),
-    } : ticketSpec;
-    return {
-      admitted: false,
-      reason: "already_used",
-      valid: true,
-      message: getRegistrationUsedTicketMessage(savedSpec),
-      ticket: serializeRegistrationEventTicket(ticket),
-    };
+    let savedCoverage = [];
+    let savedCatalog = null;
+    try { savedCoverage = JSON.parse(savedAdmission?.coverage_json || "[]"); } catch { /* Fail closed for invalid historic coverage. */ }
+    try { savedCatalog = JSON.parse(savedAdmission?.metadata_json || "null"); } catch { /* Keep the current display fallback. */ }
+    if (!Array.isArray(savedCoverage)) savedCoverage = [];
+    if (savedAdmission) {
+      savedSpec = { passType: savedAdmission.pass_type,
+        block: savedCatalog?.blocks?.find((block) => block.id === savedCoverage[0]) || ticketSpec?.block };
+    }
+    const splitRetry = isSplitAccessSession(accessSession) && savedAdmission
+      && savedAdmission.scanned_block_id !== "bloque-4" && savedCoverage.includes("bloque-4")
+      && savedAdmission.pass_type === ticketSpec?.passType;
+    if (!splitRetry) {
+      return { admitted: false, reason: "already_used", valid: true, message: getRegistrationUsedTicketMessage(savedSpec),
+        firstRedemption: false, ticket: serializeRegistrationEventTicket(ticket) };
+    }
   }
 
   if (!order || order.status !== "paid") {
-    return {
-      admitted: false,
-      reason: "payment_not_approved",
-      valid: false,
-      message: "El pago de este boleto no está aprobado. Consulta con administración.",
-      ticket: serializeRegistrationEventTicket(ticket),
-    };
+    return { admitted: false, reason: "payment_not_approved", valid: false,
+      message: "El pago de este boleto no está aprobado. Consulta con administración.", ticket: serializeRegistrationEventTicket(ticket) };
   }
-
   if (!ticketSpec?.passType) {
-    return {
-      admitted: false,
-      reason: "ticket_details_missing",
-      valid: false,
-      message: "No se pudo identificar el tipo de boleto. Consulta con administración.",
-      ticket: serializeRegistrationEventTicket(ticket),
-    };
+    return { admitted: false, reason: "ticket_details_missing", valid: false,
+      message: "No se pudo identificar el tipo de boleto. Consulta con administración.", ticket: serializeRegistrationEventTicket(ticket) };
   }
-
   if (ticket.event_id !== ticketEvent.eventId || ticketSpec.eventId !== ticket.event_id || (eventId && eventId !== ticketEvent.eventId)) {
     return { admitted: false, reason: "wrong_event", valid: true,
-      message: "Este boleto no corresponde al evento actual del escáner. Consulta con administración.",
-      ticket: serializeRegistrationEventTicket(ticket) };
+      message: "Este boleto no corresponde al evento actual del escáner. Consulta con administración.", ticket: serializeRegistrationEventTicket(ticket) };
   }
-
   if (ticketSpec.passType === "day" && !ticketSpec.day) {
     return { admitted: false, reason: "ticket_day_unknown", valid: false,
-      message: "Este Day pass no tiene un día válido registrado. Consulta con administración antes de ingresar.",
-      ticket: serializeRegistrationEventTicket(ticket) };
+      message: "Este Day pass no tiene un día válido registrado. Consulta con administración antes de ingresar.", ticket: serializeRegistrationEventTicket(ticket) };
   }
-
-  const selectedBlockId = optionalString(blockId);
-  const selectedBlock = registrationTicketBlocks.find((block) => block.id === selectedBlockId);
-  if (!selectedBlock) {
-    return { admitted: false, reason: selectedBlockId ? "invalid_block" : "block_required", valid: true,
-      message: "Selecciona el bloque actual en el escáner antes de validar este boleto.",
-      ticket: serializeRegistrationEventTicket(ticket) };
+  if (!accessSession) {
+    return { admitted: false, reason: selectedId ? "invalid_block" : "block_required", valid: true,
+      message: "Selecciona el bloque actual en el escáner antes de validar este boleto.", ticket: serializeRegistrationEventTicket(ticket) };
   }
-
-  if (ticketSpec.passType === "day" && ticketSpec.day.id !== selectedBlock.dayId) {
+  if (ticketSpec.passType === "day" && ticketSpec.day.id !== accessSession.dayId) {
     return { admitted: false, reason: "wrong_day", valid: true,
       message: `Este Day pass corresponde a ${ticketSpec.day.label}. Selecciona un bloque de ese día. El boleto sigue disponible.`,
       ticket: serializeRegistrationEventTicket(ticket) };
   }
-
-  if (ticketSpec.passType === "block") {
-    if (!ticketSpec.block) {
-      return {
-        admitted: false,
-        reason: "ticket_block_unknown",
-        valid: false,
-        message: "Este boleto no tiene un bloque válido registrado. Consulta con administración.",
-        ticket: serializeRegistrationEventTicket(ticket),
-      };
-    }
-
-    if (selectedBlock.id !== ticketSpec.block.id) {
-      return {
-        admitted: false,
-        reason: "wrong_block",
-        valid: true,
-        message: `Este boleto corresponde al ${ticketSpec.block.label}. El escáner está en ${selectedBlock.label}. El boleto sigue disponible.`,
-        ticket: serializeRegistrationEventTicket(ticket),
-      };
-    }
+  if (ticketSpec.passType === "block" && !ticketSpec.block) {
+    return { admitted: false, reason: "ticket_block_unknown", valid: false,
+      message: "Este boleto no tiene un bloque válido registrado. Consulta con administración.", ticket: serializeRegistrationEventTicket(ticket) };
+  }
+  const coverage = getRegistrationTicketCoverage(ticketSpec);
+  if (!getAccessCoverage(coverage).includes(accessSession.id)) {
+    return { admitted: false, reason: "wrong_block", valid: true,
+      message: `Este boleto corresponde a ${ticketSpec.block?.label || ticketSpec.day?.label || "otro acceso"}. El escáner está en ${accessSession.label}. El boleto sigue disponible.`,
+      ticket: serializeRegistrationEventTicket(ticket) };
   }
 
-  const coverage = getRegistrationTicketCoverage(ticketSpec);
   const admission = await recordTicketAdmission(db, {
     ticket, order, orderTable, passType: ticketSpec.passType,
-    dayId: ticketSpec.passType === "full" ? null : selectedBlock.dayId,
-    blockId: selectedBlock.id, coverage, usedBy, device, actorId,
+    dayId: ticketSpec.passType === "full" ? null : accessSession.dayId,
+    accessSession, coverage, usedBy, device, actorId,
   });
   if (!admission.admitted) {
     const updatedTicket = await getRegistrationEventTicketByCode(db, ticketCode);
-    const alreadyUsed = updatedTicket?.status === "used";
     const cancelled = updatedTicket?.status === "cancelled";
-    const currentOrder = alreadyUsed || cancelled ? null : await db.prepare(`SELECT status, line_items_json FROM ${orderTable} WHERE id = ?`)
+    const currentOrder = cancelled ? null : await db.prepare(`SELECT status, line_items_json FROM ${orderTable} WHERE id = ?`)
       .bind(ticket.source_order_id).first();
     const changed = currentOrder?.status === "paid" && currentOrder.line_items_json !== order.line_items_json;
-
-    return {
-      admitted: false,
-      reason: alreadyUsed ? "already_used" : cancelled ? "cancelled" : changed ? "ticket_changed" : "payment_not_approved",
-      valid: alreadyUsed,
-      message: alreadyUsed
-        ? getRegistrationUsedTicketMessage(ticketSpec)
-        : cancelled ? "Este boleto fue cancelado." : changed ? "Los datos del boleto cambiaron durante la validación. Escanea de nuevo." : "El pago de este boleto no está aprobado. Consulta con administración.",
-      ticket: updatedTicket ? serializeRegistrationEventTicket(updatedTicket) : null,
-    };
+    const paymentNotApproved = !cancelled && currentOrder?.status !== "paid";
+    const alreadyUsed = updatedTicket?.status === "used" && !changed && !paymentNotApproved;
+    const reason = cancelled ? "cancelled" : changed ? "ticket_changed" : paymentNotApproved ? "payment_not_approved" : alreadyUsed ? "already_used" : "payment_not_approved";
+    return { admitted: false, reason, valid: alreadyUsed, firstRedemption: false,
+      message: cancelled ? "Este boleto fue cancelado." : changed ? "Los datos del boleto cambiaron durante la validación. Escanea de nuevo."
+        : alreadyUsed ? isSplitAccessSession(accessSession)
+          ? `Este QR ya fue validado en ${accessSession.label}. No entregues otro brazalete.`
+          : getRegistrationUsedTicketMessage(savedSpec || ticketSpec)
+        : "El pago de este boleto no está aprobado. Consulta con administración.",
+      ticket: updatedTicket ? serializeRegistrationEventTicket(updatedTicket) : null };
   }
 
-  return {
-    admitted: true,
-    reason: "accepted",
-    valid: true,
-    message: ticketSpec.passType === "day"
-      ? "Day pass válido. Entrega el brazalete del día indicado en el boleto. QR canjeado; no puede volver a utilizarse."
-      : ticketSpec.passType === "full"
-        ? "Full pass válido. Entrega el brazalete Full pass. QR canjeado; no puede volver a utilizarse."
-        : `Boleto válido para ${ticketSpec.block.label}. Acceso registrado.`,
-    ticket: serializeRegistrationEventTicket({
-      ...ticket, status: "used", used_at: admission.admittedAt, used_by: usedBy, updated_at: admission.admittedAt,
-    }),
-  };
+  let message;
+  if (!admission.firstRedemption) {
+    message = `Acceso válido para ${accessSession.label}. Este QR ya fue canjeado: no entregues otro brazalete.`;
+  } else if (ticketSpec.passType === "day" || ticketSpec.passType === "full") {
+    const label = ticketSpec.passType === "day" ? "Day pass" : "Full pass";
+    message = `${label} válido. Entrega un solo brazalete ${ticketSpec.passType === "day" ? "del día indicado en el boleto" : "Full pass"}.`
+      + (coverage.includes("bloque-4") ? " El mismo QR puede validarse una vez en Bloque 4A y una vez en Bloque 4B; no entregues otro brazalete."
+        : " QR canjeado; no puede volver a utilizarse.");
+  } else {
+    message = `Boleto válido para ${accessSession.label}. Acceso registrado.`
+      + (isSplitAccessSession(accessSession) ? " El mismo QR puede validarse una vez en la otra parte del Bloque 4." : "");
+  }
+  return { admitted: true, reason: "accepted", valid: true, firstRedemption: admission.firstRedemption,
+    accessSessionId: accessSession.id, message,
+    ticket: serializeRegistrationEventTicket({ ...ticket, status: "used", used_at: admission.usedAt,
+      used_by: admission.usedBy, updated_at: admission.updatedAt }) };
 }
 
 function getRegistrationUsedTicketMessage(ticketSpec) {

@@ -8,13 +8,27 @@ Aplicación Android para validar los boletos QR en la entrada de los eventos Lev
 2. En el primer inicio la app se activa automáticamente en segundo plano.
 3. Al iniciar una sesión nueva, el operador selecciona explícitamente el bloque que está ingresando. Las opciones se obtienen del servidor; no hay un bloque predeterminado.
 4. La cámara y el ingreso manual se habilitan después de seleccionar un bloque. El bloque actual permanece visible y puede cambiarse entre lecturas.
-5. Los boletos por bloque sólo se aceptan en el bloque seleccionado. Un bloque incorrecto se rechaza sin consumir el boleto.
+5. Los boletos por bloque sólo se aceptan en las entradas que cubre su compra. Una entrada incorrecta se rechaza sin consumir el boleto.
 6. Los pases Día y Full se canjean una sola vez por su pulsera. La pantalla verde indica el canje que debe realizar el operador.
-7. Todos los QR son de un solo uso: el servidor valida y marca cada boleto como usado en una única operación. Un segundo intento con el mismo QR se rechaza, incluso desde otro teléfono.
+7. El primer canje del QR se registra una sola vez. En Estado de México, el acceso al bloque 4 permite además una validación en 4A y otra en 4B. Repetir la misma parte se rechaza, incluso desde otro teléfono.
 
 La selección de bloque no puede cambiar durante una validación o un reintento. Cada reintento conserva el bloque de la lectura original. Después de cerrar el resultado o cancelar la lectura se puede elegir otro bloque.
 
 La app nunca admite un boleto sin conexión. En ese caso muestra `SIN CONEXIÓN / NO ADMITIR` y permite reintentar.
+
+## Entradas de Estado de México · noviembre de 2026
+
+El selector muestra **1, 2 y 3, 4A, 4B, 5, 6 y 7**. La entrada conjunta de 2 y 3
+acepta los Single pass comprados para cualquiera de esos dos bloques. Los boletos
+del bloque 4 permiten usar el mismo QR una vez en 4A y una vez en 4B, en cualquier
+orden. Los Day del sábado y Full también permiten validar cada parte; sólo su
+primer canje entrega brazalete. Leer el mensaje de cada resultado verde.
+
+Los QR emitidos, las compras y el primer canje se conservan. No se necesita otro
+APK: **cerrar completamente la app y volver a abrirla**, conservando sus datos,
+para recuperar el selector nuevo. Si una app abierta conserva “Bloque 4”, el
+servidor pide seleccionar 4A o 4B y no consume el boleto. Las selecciones antiguas
+2 o 3 se reconocen como la entrada conjunta.
 
 ## Ocupación por ventas y QR canjeados (1.2.0)
 
@@ -30,8 +44,10 @@ Una consulta trae todos los bloques, así que cambiar de bloque reutiliza sus da
 Las ventas pueden disminuir al cancelar compras; no son un contador acumulativo.
 
 **QR canjeados atribuidos** sigue separado como dato secundario. Son datos globales
-del servidor para todos los teléfonos. Tanto para ventas como para accesos, Single
-se atribuye a su bloque, Day a los bloques de su día y Full a todos los del evento.
+del servidor para todos los teléfonos. Day se atribuye a las entradas de su día y
+Full a todas las del evento. Un Single del bloque 4 cuenta como vendido en ambas
+partes; sus QR canjeados se atribuyen a cada parte cuando se valida en ella. En la
+entrada 2 y 3 cada QR se cuenta una sola vez.
 Sumar los bloques no equivale a personas únicas y no mide butacas físicamente ocupadas.
 **QR únicos canjeados** cuenta cada boleto usado una sola vez.
 

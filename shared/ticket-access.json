@@ -1,0 +1,83 @@
+{
+  "eventId": "edomex-2026-otono",
+  "sessions": [
+    {
+      "id": "bloque-1",
+      "label": "Bloque 1",
+      "dayId": "sabado-14",
+      "date": "2026-11-14",
+      "detail": "14 noviembre · Baby + Petite",
+      "sourceBlockIds": [
+        "bloque-1"
+      ]
+    },
+    {
+      "id": "bloque-2-3",
+      "label": "Bloques 2 y 3",
+      "dayId": "sabado-14",
+      "date": "2026-11-14",
+      "detail": "14 noviembre · Junior + Teen + Senior + Legacy + Relevé",
+      "sourceBlockIds": [
+        "bloque-2",
+        "bloque-3"
+      ]
+    },
+    {
+      "id": "bloque-4a",
+      "label": "Bloque 4A",
+      "dayId": "sabado-14",
+      "date": "2026-11-14",
+      "detail": "14 noviembre · Primera parte del Bloque 4",
+      "sourceBlockIds": [
+        "bloque-4"
+      ]
+    },
+    {
+      "id": "bloque-4b",
+      "label": "Bloque 4B",
+      "dayId": "sabado-14",
+      "date": "2026-11-14",
+      "detail": "14 noviembre · Segunda parte del Bloque 4",
+      "sourceBlockIds": [
+        "bloque-4"
+      ]
+    },
+    {
+      "id": "bloque-5",
+      "label": "Bloque 5",
+      "dayId": "domingo-15",
+      "date": "2026-11-15",
+      "detail": "15 noviembre · Junior",
+      "sourceBlockIds": [
+        "bloque-5"
+      ]
+    },
+    {
+      "id": "bloque-6",
+      "label": "Bloque 6",
+      "dayId": "domingo-15",
+      "date": "2026-11-15",
+      "detail": "15 noviembre · Teen + Legacy",
+      "sourceBlockIds": [
+        "bloque-6"
+      ]
+    },
+    {
+      "id": "bloque-7",
+      "label": "Bloque 7",
+      "dayId": "domingo-15",
+      "date": "2026-11-15",
+      "detail": "15 noviembre · Seniors + Relevé",
+      "sourceBlockIds": [
+        "bloque-7"
+      ]
+    }
+  ],
+  "aliases": {
+    "bloque-2": "bloque-2-3",
+    "bloque-3": "bloque-2-3"
+  },
+  "ambiguousSessionIds": [
+    "bloque-4"
+  ]
+}

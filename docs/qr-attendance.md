@@ -8,16 +8,25 @@ sin escanear y no se registran salidas.
 ## Reglas
 
 - Cada boleto individual suma al aceptarse su QR por primera vez.
-- Single pass: suma uno al bloque comprado.
-- Day pass del sábado: suma uno a cada bloque del 1 al 4.
+- En Estado de México, las entradas operativas son 1, 2 y 3 (conjunta), 4A, 4B,
+  5, 6 y 7. Conservan las fechas originales.
+- Single pass de 2 o 3: entra por la entrada conjunta, un canje total.
+- Single pass del 4: un escaneo en 4A y otro en 4B, en cualquier orden. Las ventas
+  incluyen ambas partes; la asistencia se atribuye a cada parte al validarla.
+- Los demás Single pass suman uno al bloque comprado.
+- Day pass del sábado: suma uno a 1, 2 y 3, 4A y 4B.
 - Day pass del domingo: suma uno a cada bloque del 5 al 7.
 - Full pass: suma uno a cada uno de los siete bloques.
-- Un QR repetido, rechazado, impago, cancelado o presentado en un bloque/día
-  incompatible no suma. Un Full pass representa un solo QR único, aunque sume en
+- Los Day del sábado y Full pueden validar una vez en 4A y una vez en 4B, aunque
+  hayan hecho su primer canje en otra entrada. Se entrega un solo brazalete.
+- Un QR repetido en una misma parte, rechazado, impago, cancelado o presentado en
+  un bloque/día incompatible no suma. Un Full pass representa un solo QR único, aunque sume en
   siete bloques. No sumar los totales de bloques para obtener personas únicas.
 
-El catálogo de evento, días y bloques se comparte entre la tienda y el servidor en
-`shared/ticket-event.json`. Para otra edición debe usarse un nuevo `eventId`;
+El catálogo financiero de evento, días y bloques se conserva en
+`shared/ticket-event.json`. La correspondencia de entradas está separada en
+`shared/ticket-access.json`: no cambia los productos comprados ni los QR emitidos.
+Para otra edición debe usarse un nuevo `eventId`;
 no se debe reutilizar el identificador de un evento finalizado.
 
 ## Persistencia
@@ -30,16 +39,22 @@ Cloudflare D1 guarda:
 - `registration_attendance_events`: nombre y catálogo histórico del evento, y
   cantidad de QR únicos canjeados.
 - `registration_attendance_blocks`: total y desglose Single/Day/Full por bloque.
+- `registration_ticket_access_scans`: escaneos por entrada operativa, con unicidad
+  por evento, QR y entrada. No sustituye ni reescribe el primer canje.
 
 El canje, el ingreso y los contadores se escriben en una misma transacción D1.
-La restricción única por evento y boleto evita duplicados entre dispositivos y
-reintentos. El resumen consulta contadores agregados, sin recorrer todas las
-órdenes ni reconstruir los ingresos en cada actualización.
+La restricción única por evento y boleto conserva un solo primer canje, y la
+unicidad por entrada evita escanear dos veces una misma parte, incluso entre
+dispositivos. La asistencia del evento actual une los registros de ingreso y
+deduplica cada QR por entrada en una sola consulta consistente. No consulta
+órdenes ni boletos actuales. Los eventos históricos conservan su catálogo y
+contadores originales.
 
 El historial se conserva si después se elimina una orden o se cambia su pago.
 Los registros no guardan nombres, CURP ni contactos de compradores. Los boletos
 usados antes de esta funcionalidad no se vuelven a admitir ni se convierten en
-ingresos históricos inventados. Un Day pass antiguo sin día definido requiere
+ingresos históricos inventados. Un canje anterior registrado en el antiguo bloque
+4 cubre ambas partes y sigue consumido. Un Day pass antiguo sin día definido requiere
 corrección administrativa antes de admitirse.
 
 ## Consulta y aplicación
@@ -88,11 +103,14 @@ evento. Ante un error se conserva el último dato disponible con su fecha.
 
 ## Publicación
 
-1. Ejecutar las pruebas de registro, compilar la web y probar/compilar Android.
-2. Ejecutar `npm run db:prepare:registration` antes de publicar el Worker. La
-   preparación añade el identificador de evento a los boletos existentes y las
-   tres tablas; no reinicia ni consume boletos.
+1. Ejecutar las pruebas de registro y compilar la web. El APK existente acepta
+   identificadores de entrada dinámicos y los mensajes del servidor.
+2. En una instalación que ya tiene asistencia, aplicar únicamente la migración
+   `db/registration_ticket_access_scans.sql` antes de publicar el Worker. Sólo
+   crea la tabla nueva; no modifica filas existentes ni genera escaneos inferidos.
 3. Publicar el Worker y verificar que los endpoints exigen autenticación.
+4. Cerrar completamente y volver a abrir Levitate Entrada, sin desinstalar ni
+   borrar datos, para recuperar el catálogo nuevo desde `/scanner/me`.
 4. Distribuir el APK con la misma firma e identificador que la instalación
    existente. Instalar como actualización, sin desinstalar ni borrar los datos,
    para conservar la vinculación del teléfono.
