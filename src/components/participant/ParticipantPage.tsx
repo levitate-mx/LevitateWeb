@@ -650,7 +650,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                   verificada en <br />
                   <em>esta edición.</em>
                 </h3>
-                <p>El documento oficial vincula tu nombre verificado y tu acceso personal con el reconocimiento de Levitate MX.</p>
                 <div className="participant-diploma-action">
                   <button
                     type="button"
@@ -670,11 +669,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 <p className="participant-download-message" role="status">
                   {downloadMessage}
                 </p>
-                {preview && (
-                  <p className="participant-demo-note">
-                    Vista autenticada de ejemplo. El documento contiene datos ilustrativos.
-                  </p>
-                )}
               </div>
             </div>
           </div>

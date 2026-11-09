@@ -105,6 +105,7 @@ test("the public demo and its punctuation alias stay isolated from the private a
 
 test("the portal moves directly from its hero to the three detail chapters", () => {
   assert.doesNotMatch(source, /ParticipantSummary|Todo en un vistazo|participant-chapter-nav/);
+  assert.doesNotMatch(source, /El documento oficial vincula|Vista autenticada de ejemplo/);
   assert.match(source, /id="tu-diploma"/);
   assert.match(source, /id="tu-jueceo"/);
   assert.match(source, /id="tus-fotos"/);
