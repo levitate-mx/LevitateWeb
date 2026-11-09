@@ -170,7 +170,7 @@ type RegistrationSession = {
     name: string;
     username: string;
     email: string;
-    role?: "academy" | "admin";
+    role?: "academy" | "admin" | "judge";
     emailConfirmedAt?: string | null;
   };
   academy: {
@@ -5366,6 +5366,10 @@ function isUnauthorizedRegistrationError(error: unknown) {
 }
 
 function redirectRegistrationAdmin(session: RegistrationSession | RegistrationBootstrap) {
+  if (session.user.role === "judge" && typeof window !== "undefined") {
+    window.location.replace("/jueceo/app/");
+    return true;
+  }
   if (session.user.role !== "admin" || typeof window === "undefined") {
     return false;
   }
@@ -13161,7 +13165,7 @@ export function LevitateStudentRegistrationRoute() {
 export function LevitateAuthRoute() {
   const handleAuthenticated = (session: RegistrationSession | RegistrationBootstrap) => {
     if (typeof window !== "undefined") {
-      window.location.replace(session.user.role === "admin" ? "/admin/dashboard" : "/registro/academias");
+      window.location.replace(session.user.role === "judge" ? "/jueceo/app/" : session.user.role === "admin" ? "/admin/dashboard" : "/registro/academias");
     }
   };
 

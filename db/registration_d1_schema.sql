@@ -22,9 +22,21 @@ CREATE TABLE IF NOT EXISTS registration_users (
   password_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
   role TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin')),
+  is_judge INTEGER NOT NULL DEFAULT 0 CHECK (is_judge IN (0, 1)),
   email_confirmed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_judge_assignments (
+  user_id TEXT NOT NULL REFERENCES registration_users(id) ON DELETE CASCADE,
+  event_id TEXT NOT NULL,
+  judge_id TEXT NOT NULL,
+  block_ids_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(block_ids_json) AND json_type(block_ids_json) = 'array'),
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, event_id),
+  UNIQUE (event_id, judge_id)
 );
 
 CREATE TABLE IF NOT EXISTS registration_media_drive_settings (
