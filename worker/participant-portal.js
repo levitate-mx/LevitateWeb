@@ -124,23 +124,32 @@ function portalResult(row, event, adminPreview) {
   if ((!adminPreview && (!event.published || row.status !== "published")) || !row.result_json) return pendingResult();
   try { const result = normalizePortalResult(parsed(row.result_json)); return result ? { status: "published", ...result } : pendingResult(); } catch { return pendingResult(); }
 }
-async function me(db, request) {
+async function me(db, env, request) {
   const grant = await session(db, request);
   const requested = new URL(request.url).searchParams.get("eventId");
   if (requested && requested !== grant.event_id) fault("portal_event_not_found", "No se encontró la edición.", 404);
-  return json(await participantData(db, grant.participant_id, grant.event_id));
+  return json(await participantData(db, env, grant.participant_id, grant.event_id));
 }
 // The preview flag is supplied only by the authenticated admin route. Participant
 // requests always derive both IDs from their grant and use publication checks.
-async function participantData(db, participantId, eventId, adminPreview = false) {
+async function participantData(db, env, participantId, eventId, adminPreview = false) {
   const participant = await participantById(db, participantId);
   const event = await eventById(db, eventId);
   const link = adminPreview ? adminAssetUrl : assetUrl;
-  const rows = await all(db, `SELECT r.*, d.title, d.genre, d.subgenre, d.category, d.level, p.division
-    FROM participant_portal_routines r JOIN registration_dances d ON d.id = r.dance_id
-    JOIN registration_dance_participants dp ON dp.dance_id = d.id
+  // Registration has a venue but no edition field. Never infer that a future
+  // edition at the same venue should inherit the current registration roster.
+  const registrationEvents = typeof env.PARTICIPANT_REGISTRATION_EVENT_IDS === "string"
+    ? env.PARTICIPANT_REGISTRATION_EVENT_IDS.split(",").map((value) => value.trim()).filter(Boolean) : [];
+  const registrationFallback = registrationEvents.includes(event.id);
+  // Registration membership already identifies the participant's presentations.
+  // An edition-specific curated record adds results/assets; its absence should
+  // not hide the registered presentation or create records during this GET.
+  const rows = await all(db, `SELECT r.*, d.id AS registration_dance_id, d.title, d.genre, d.subgenre, d.category, d.level, p.division
+    FROM registration_dance_participants dp JOIN registration_dances d ON d.id = dp.dance_id
     JOIN registration_participants p ON p.id = dp.participant_id
-    WHERE r.event_id = ? AND dp.participant_id = ? ORDER BY d.title, r.id`, event.id, participant.id);
+    LEFT JOIN participant_portal_routines r ON r.dance_id = d.id AND r.event_id = ?
+    WHERE dp.participant_id = ? AND (r.id IS NOT NULL OR (? = 1 AND d.venue = ?))
+    ORDER BY d.title, d.id`, event.id, participant.id, registrationFallback ? 1 : 0, event.venue);
   const assets = adminPreview || event.published ? await all(db, `SELECT a.* FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
@@ -160,7 +169,7 @@ async function participantData(db, participantId, eventId, adminPreview = false)
       const judging = visible ? parsed(row.judging_json) : null;
       const sheet = visible ? assets.find((asset) => asset.routine_id === row.id && asset.kind === "judge_sheet") : null;
       const photos = visible && (adminPreview || row.photos_published) ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo") : [];
-      return { id: row.id, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division: row.division, level: row.level,
+      return { id: row.id || `registration:${row.registration_dance_id}`, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division: row.division, level: row.level,
         result: portalResult(row, event, adminPreview),
         judging: { status: judging || sheet ? "available" : "pending", judges: judging?.judges || [], ...(sheet ? { assetId: sheet.id, url: link(sheet.id) } : {}) },
         photos: { status: photos.length ? "available" : "pending", count: photos.length,
@@ -392,7 +401,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin } = {
         : await requireAdmin(request,env,db);
       if (request.method === "GET") {
         if (url.searchParams.has("assetId")) return await serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true);
-        if (url.searchParams.get("preview") === "1") return json(await participantData(db,
+        if (url.searchParams.get("preview") === "1") return json(await participantData(db,env,
           str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true));
         return await adminList(db,request);
       }
@@ -417,7 +426,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin } = {
       if (token) await db.prepare("DELETE FROM participant_portal_sessions WHERE token_hash=?").bind(await hash(token)).run();
       return json({ok:true},200,{"set-cookie":cookie("",true)});
     }
-    if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,request); }
+    if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,env,request); }
     const assetMatch=path.match(/^\/api\/participant\/assets\/([a-zA-Z0-9_-]{8,100})$/);
     if (assetMatch) { method(request,["GET"]); return await serveAsset(db,env,request,assetMatch[1]); }
     return json({error:{code:"portal_not_found",message:"No se encontró esta página."}},404);

@@ -40,7 +40,7 @@ async function fixture(t) {
       VALUES('dance-a','academy','Vuelo','aereo','tela','solo','intermedio','edomex'),('dance-b','academy','Otra rutina','aereo','aro','solo','intermedio','edomex');
     INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-a'),('dance-b','person-b');`);
   for(const actor of ['admin','academy-user'])db.sqlite.prepare("INSERT INTO registration_sessions(id,user_id,session_token_hash,expires_at) VALUES(?,?,?,datetime('now','+1 day'))").run(actor,actor,await digest(actor+'-session'));
-  const env={DB:db,PARTICIPANT_MEDIA:bucket};
+  const env={DB:db,PARTICIPANT_MEDIA:bucket,PARTICIPANT_REGISTRATION_EVENT_IDS:'test-event'};
   async function request(path,{method='GET',body,cookie,origin,expected=200,rawBody,extraHeaders={}}={}){
     const response=await worker.fetch(new Request('https://levitate.test'+path,{method,
       headers:{...(cookie?{cookie}:{}),...(body!==undefined?{'content-type':'application/json'}:{}),...(origin?{origin}:{}),...extraHeaders},
@@ -76,7 +76,8 @@ test('private portal requires its own QR grant and actual admin session; no CURP
   assert.match(grant.entryUrl,/^\/mi-levitate#access=/);
   const stored=db.sqlite.prepare('SELECT token_hash FROM participant_portal_access').get();assert.notEqual(stored.token_hash,grant.token);
   const {data,headers:responseHeaders}=await request('/api/participant/me',{cookie});
-  assert.equal(data.participant.name,'Mariana Prueba');assert.equal(data.diploma.status,'pending');assert.deepEqual(data.routines,[]);
+  assert.equal(data.participant.name,'Mariana Prueba');assert.equal(data.diploma.status,'pending');
+  assert.equal(data.routines.length,1);assert.equal(data.routines[0].id,'registration:dance-a');assert.equal(data.routines[0].result.status,'pending');
   assert.doesNotMatch(JSON.stringify(data),/PRUA|folio|token_hash/);assert.equal(responseHeaders.get('cache-control'),'private, no-store');
   await request('/api/participant/me?eventId=another-event',{cookie,expected:404});
   await request('/api/participant/access/exchange',{method:'POST',body:{token:grant.token},origin:'https://evil.test',expected:403});
@@ -118,7 +119,8 @@ test('asset bytes require event, album, asset publication AND matching membershi
   const image=await request('/api/participant/assets/'+assetId,{cookie:a.cookie});assert.equal(image.data.length,12);assert.equal(image.headers.get('content-type'),'image/png');
   await request('/api/participant/assets/'+assetId+'?download=1',{cookie:a.cookie,expected:403});
   let me=await request('/api/participant/me',{cookie:a.cookie});assert.equal(me.data.routines[0].photos.count,1);assert.equal(me.data.routines[0].photos.items[0].downloadUrl,undefined);
-  me=await request('/api/participant/me',{cookie:b.cookie});assert.equal(me.data.routines.length,0);
+  me=await request('/api/participant/me',{cookie:b.cookie});assert.equal(me.data.routines.length,1);
+  assert.equal(me.data.routines[0].id,'registration:dance-b');assert.equal(me.data.routines[0].photos.count,0);
   await admin({action:'event.upsert',event:{id:'test-event',title:'Levitate',season:'Otoño 2026',venue:'edomex',published:false}});
   await request('/api/participant/assets/'+assetId,{cookie:a.cookie,expected:404});
 });
@@ -175,12 +177,14 @@ test('group members inherit one routine gallery and losing membership immediatel
   await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
   await admin({action:'routine.publish',routineId:saved.data.routineId});
   for(const cookie of [a.cookie,b.cookie]) {
-    const me=await request('/api/participant/me',{cookie});assert.equal(me.data.routines.length,1);assert.equal(me.data.routines[0].photos.items[0].id,photo.data.assetId);
+    const me=await request('/api/participant/me',{cookie});
+    assert.equal(me.data.routines.find(routine=>routine.id===saved.data.routineId).photos.items[0].id,photo.data.assetId);
     await request('/api/participant/assets/'+photo.data.assetId,{cookie});
   }
   db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-b'").run();
   await request('/api/participant/assets/'+photo.data.assetId,{cookie:b.cookie,expected:404});
-  const me=await request('/api/participant/me',{cookie:b.cookie});assert.equal(me.data.routines.length,0);
+  const me=await request('/api/participant/me',{cookie:b.cookie});assert.equal(me.data.routines.length,1);
+  assert.equal(me.data.routines[0].id,'registration:dance-b');assert.equal(me.data.routines[0].photos.count,0);
 });
 
 test('admin searches and pages large event metadata without reading every asset by default',async t=>{
@@ -324,14 +328,14 @@ test('admin preview uses current participant IDs and group membership, independe
   for(const participantId of ['person-a','person-b']) {
     const preview=await request(previewPath(participantId),{cookie:adminCookie});
     assert.equal(preview.data.participant.id,participantId);
-    assert.equal(preview.data.routines.length,1);assert.equal(preview.data.routines[0].photos.items[0].id,photo.data.assetId);
+    assert.equal(preview.data.routines.find(routine=>routine.id===saved.data.routineId).photos.items[0].id,photo.data.assetId);
   }
   await request('/api/participant/me?preview=1',{cookie:a.cookie,expected:401});
   await request('/api/participant/me?preview=1',{cookie:b.cookie,expected:401});
   assert.equal(totalChanges(db),before,'admin preview never reactivates participant grants');
   db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-b'").run();
   const removed=await request(previewPath('person-b'),{cookie:adminCookie});
-  assert.deepEqual(removed.data.routines,[],'same name and old grant do not provide membership');
+  assert.deepEqual(removed.data.routines.map(routine=>routine.id),['registration:dance-b'],'same name and old grant do not provide membership in the shared routine');
 });
 
 test('public asset authentication happens before reading asset metadata or R2',async t=>{
@@ -343,4 +347,119 @@ test('public asset authentication happens before reading asset metadata or R2',a
     assert.equal(reads,0);
     assert.ok(db.queries.every(sql=>!sql.includes('participant_portal_assets')),'no asset-table query before a valid participant session');
   }
+});
+
+test('QR grants identify current registered presentations before portal curation without generating records',async t=>{
+  const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
+  await admin({action:'event.upsert',event:{id:'test-event',title:'Edición sin publicar',season:'Otoño 2026',venue:'edomex',published:false}});
+  db.sqlite.exec(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue)
+    VALUES('dance-a-extra','academy','Vuelo','motion','jazz','solo',NULL,'edomex'),
+      ('dance-other-venue','academy','Otra sede propia','aereo','tela','solo','intermedio','puebla');
+    INSERT INTO registration_dance_participants(dance_id,participant_id)
+      VALUES('dance-a-extra','person-a'),('dance-other-venue','person-a');
+    UPDATE registration_dances SET title='Vuelo' WHERE id='dance-b';
+    INSERT INTO registration_academies(id,name,contact_name,email)
+      VALUES('other-academy','Otra academia ficticia','Responsable ficticio','other@example.test');
+    INSERT INTO registration_participants(id,academy_id,full_name,curp,division,shirt_size)
+      VALUES('other-registration','other-academy','Mariana Prueba','PRUA000000MXXAAA00','teen','s');
+    INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','other-registration');`);
+  const before=totalChanges(db);
+  const {data}=await request('/api/participant/me?participantId=other-registration&preview=1',{cookie});
+  assert.equal(data.participant.id,'person-a');
+  assert.equal(data.participant.name,'Mariana Prueba');
+  assert.deepEqual(data.routines.map(routine=>routine.id),['registration:dance-a','registration:dance-a-extra']);
+  for(const routine of data.routines) {
+    assert.equal(routine.eventId,'test-event');assert.equal(routine.title,'Vuelo');
+    assert.deepEqual(routine.result,{status:'pending',score:null,maxScore:null,medal:null,directCompetition:false,eligibleCount:null,place:null});
+    assert.deepEqual(routine.judging,{status:'pending',judges:[]});
+    assert.deepEqual(routine.photos,{status:'pending',count:0,items:[]});
+  }
+  assert.deepEqual(data.diploma,{status:'pending',assetId:null,url:null});
+  const preview=await request(previewPath(),{cookie:adminCookie});
+  assert.equal(preview.data.adminPreview,true);
+  assert.deepEqual(preview.data.routines,data.routines);
+  assert.equal(totalChanges(db),before,'fallback projections are SELECT-only, even for an unpublished edition');
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_routines').get().count,0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_assets').get().count,0);
+  db.sqlite.prepare("UPDATE registration_dances SET title='Título actualizado' WHERE id='dance-a'").run();
+  const renamed=await request('/api/participant/me',{cookie});
+  assert.ok(renamed.data.routines.some(routine=>routine.id==='registration:dance-a'&&routine.title==='Título actualizado'),'fallback IDs never depend on mutable names');
+});
+
+test('curated edition records override registration fallback without duplicating routines or weakening publication',async t=>{
+  const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
+  db.sqlite.exec(`INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a');`);
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),judging,photosPublished:true});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'curated.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  let response=await request('/api/participant/me',{cookie});
+  assert.equal(response.data.routines.length,2);
+  let curated=response.data.routines.find(routine=>routine.id===saved.data.routineId);
+  assert.ok(curated);assert.equal(curated.result.status,'pending');assert.equal(curated.photos.count,0);
+  assert.ok(!response.data.routines.some(routine=>routine.id==='registration:dance-a'));
+  assert.equal(response.data.routines.find(routine=>routine.id==='registration:dance-b').result.status,'pending');
+  await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
+  await admin({action:'routine.publish',routineId:saved.data.routineId});
+  const before=totalChanges(db);
+  response=await request('/api/participant/me',{cookie});
+  curated=response.data.routines.find(routine=>routine.id===saved.data.routineId);
+  assert.equal(curated.result.score,138.5);assert.equal(curated.judging.judges[0].feedback,judging.judges[0].feedback);
+  assert.equal(curated.photos.items[0].id,photo.data.assetId);
+  assert.equal(response.data.routines.find(routine=>routine.id==='registration:dance-b').photos.count,0);
+  assert.equal(totalChanges(db),before);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_routines').get().count,1);
+  db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-a'").run();
+  const removed=await request('/api/participant/me',{cookie});
+  assert.deepEqual(removed.data.routines.map(routine=>routine.id),['registration:dance-b']);
+  await request('/api/participant/assets/'+photo.data.assetId,{cookie,expected:404});
+});
+
+test('registration fallback never borrows results or private assets from another edition of the same routine',async t=>{
+  const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
+  await admin({action:'event.upsert',event:{id:'other-edition',title:'Otra edición ficticia',season:'Otra temporada',venue:'edomex',published:true}});
+  const saved=await admin({action:'routine.save',eventId:'other-edition',danceId:'dance-a',result:result(),judging,photosPublished:true});
+  const photo=await admin({action:'asset.upload',eventId:'other-edition',kind:'photo',routineId:saved.data.routineId,fileName:'other-edition.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
+  await admin({action:'routine.publish',routineId:saved.data.routineId});
+  const before=totalChanges(db);
+  const response=await request('/api/participant/me',{cookie});
+  assert.equal(response.data.routines.length,1);
+  assert.equal(response.data.routines[0].id,'registration:dance-a');
+  assert.equal(response.data.routines[0].result.status,'pending');
+  assert.equal(response.data.routines[0].judging.status,'pending');
+  assert.equal(response.data.routines[0].photos.count,0);
+  assert.doesNotMatch(JSON.stringify(response.data),/Observación privada|other-edition/);
+  assert.equal(totalChanges(db),before);
+  await request('/api/participant/assets/'+photo.data.assetId,{cookie,expected:404});
+});
+
+test('registration fallback requires an explicitly configured edition while curated records work without it',async t=>{
+  const {db,env,request,admin,access}=await fixture(t);const current=await access();
+  delete env.PARTICIPANT_REGISTRATION_EVENT_IDS;
+  let response=await request('/api/participant/me',{cookie:current.cookie});
+  assert.deepEqual(response.data.routines,[],'absent configuration fails closed even for the current edition');
+  env.PARTICIPANT_REGISTRATION_EVENT_IDS=' test-event , , test-event ';
+  response=await request('/api/participant/me',{cookie:current.cookie});
+  assert.equal(response.data.routines[0].id,'registration:dance-a');
+  await admin({action:'event.upsert',event:{id:'future-edition',title:'Edición futura ficticia',season:'Otra temporada',venue:'edomex',published:false}});
+  const grant=await admin({action:'access.create',eventId:'future-edition',participantId:'person-a'});
+  const exchange=await request('/api/participant/access/exchange',{method:'POST',body:{token:grant.data.token}});
+  const futureCookie=exchange.headers.get('set-cookie').split(';')[0];
+  db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a')").run();
+  let before=totalChanges(db);
+  response=await request('/api/participant/me',{cookie:futureCookie});
+  assert.deepEqual(response.data.routines,[],'the same venue never authorizes fallback into an unconfigured future edition');
+  const preview=await request(previewPath('person-a','future-edition'),{cookie:adminCookie});
+  assert.deepEqual(preview.data.routines,[],'admin preview uses the same explicit edition boundary');
+  assert.equal(totalChanges(db),before);
+  const curated=await admin({action:'routine.save',eventId:'future-edition',danceId:'dance-a',result:result(),judging,photosPublished:false});
+  before=totalChanges(db);
+  response=await request('/api/participant/me',{cookie:futureCookie});
+  assert.deepEqual(response.data.routines.map(routine=>routine.id),[curated.data.routineId]);
+  assert.equal(response.data.routines[0].result.status,'pending','curation does not bypass publication');
+  const curatedPreview=await request(previewPath('person-a','future-edition'),{cookie:adminCookie});
+  assert.equal(curatedPreview.data.routines[0].result.score,138.5,'explicitly curated data remains reviewable without registration fallback');
+  assert.equal(totalChanges(db),before);
+  env.PARTICIPANT_REGISTRATION_EVENT_IDS='test-event, future-edition, test-event';
+  response=await request('/api/participant/me',{cookie:futureCookie});
+  assert.deepEqual(new Set(response.data.routines.map(routine=>routine.id)),new Set([curated.data.routineId,'registration:dance-b']));
 });

@@ -335,9 +335,32 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
   const eventRequest = useRef<AbortController | null>(null);
+  const accessNavigation = useRef(0);
+
+  useEffect(() => {
+    if (preview || isInternalPreview) return;
+    const openNewLink = () => {
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      if (!fragment.has("access") && !fragment.has("token")) return;
+      ++accessNavigation.current;
+      eventRequest.current?.abort();
+      setData(null);
+      setSelectedRoutineId(null);
+      setJudgeOpen(false);
+      setPhotoIndex(null);
+      setChangingEvent(false);
+      setError("");
+      setPhase("loading");
+      setAttempt((value) => value + 1);
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    };
+    window.addEventListener("hashchange", openNewLink);
+    return () => window.removeEventListener("hashchange", openNewLink);
+  }, [preview, isInternalPreview]);
 
   useEffect(() => {
     let active = true;
+    const navigation = accessNavigation.current;
     const controller = new AbortController();
     document.title = "Mi Levitate — Levitate MX";
     setPhase("loading");
@@ -352,14 +375,14 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       );
     load
       .then((response) => {
-        if (!active) return;
+        if (!active || navigation !== accessNavigation.current) return;
         setData(response);
         setError("");
         setSelectedRoutineId(response.routines[0]?.id || null);
         setPhase("ready");
       })
       .catch((cause: unknown) => {
-        if (!active) return;
+        if (!active || navigation !== accessNavigation.current) return;
         if (cause instanceof ParticipantApiError && [401, 403, 404, 410].includes(cause.status)) {
           setError(
             isInternalPreview ? "Inicia sesión como administrador para revisar este participante."

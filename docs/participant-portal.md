@@ -10,11 +10,15 @@ Cada presentación conserva su puntaje y escala, medalla, hoja de jueceo y galer
 
 El diploma pertenece al participante y la edición. La galería y el jueceo pertenecen a la presentación: los integrantes de una pieza grupal reciben el mismo álbum sin duplicar archivos.
 
+Los accesos emitidos identifican al participante por su ID de registro. Para las ediciones configuradas explícitamente en `PARTICIPANT_REGISTRATION_EVENT_IDS`, el portal consulta sus pertenencias a coreografías de la sede aunque todavía no exista una ficha editorial. Estas presentaciones mantienen un ID estable `registration:<danceId>` y muestran el material pendiente; cuando existe una ficha de la edición, se conserva su ID, evaluación y publicación. La consulta no crea registros. Una edición futura de la misma sede no hereda esta asociación salvo configuración explícita.
+
+El acceso acepta una comilla final o un par de comillas concordantes que puedan acompañar una celda CSV copiada. La clave sigue exigiendo sus 43 caracteres exactos: no se recortan caracteres internos ni se vuelve a decodificar. El fragmento se retira antes de solicitar datos. Si se abre otro acceso en la misma pestaña, el portal oculta el perfil anterior y vuelve a identificar a la persona; los canjes se realizan en orden para impedir cruces de sesiones.
+
 El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y dos imágenes de archivo identificadas como tales, una de ellas desenfocada como archivo derivado. El enlace con punto final `/mi-levitate/demo.` funciona como alias de la misma demo. Ninguna variante consulta Drive, acepta accesos privados ni abre una sesión real. En desarrollo también puede abrirse con `/mi-levitate?preview=1`. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
 
 ## Resumen, Drive y revisión interna
 
-El resumen inicial reúne diploma, jueceo y fotografías. El diploma pertenece a la edición; el jueceo y hasta dos miniaturas del resumen cambian con la presentación seleccionada. Los estados se calculan a partir de los archivos y resultados disponibles, no de que Drive esté conectado. Una carpeta de Drive vinculada no equivale a un álbum cargado o publicado.
+El portal presenta diploma, jueceo y fotografías en sus respectivas secciones. El diploma pertenece a la edición; los selectores de presentación sincronizan el jueceo y el álbum. Los estados se calculan a partir de los archivos y resultados disponibles, no de que Drive esté conectado. Una carpeta de Drive vinculada no equivale a un álbum cargado o publicado.
 
 `/admin/foto-video` conserva las compras y la conexión de Drive, y enlaza a la gestión de Mi Levitate. `/admin/mi-levitate` reutiliza el mismo panel de conexión, permite seleccionar la edición y el participante, y abre **Revisar su resumen de Mi Levitate**. La navegación administrativa incluye una entrada directa a Mi Levitate.
 

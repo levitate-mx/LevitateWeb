@@ -16,6 +16,7 @@
   "vars": {
     "TICKET_SALES_PAUSED": "false",
     "REGISTRATION_PAUSED_VENUES": "edomex",
+    "PARTICIPANT_REGISTRATION_EVENT_IDS": "edomex-2026-otono",
     "JUDGING_SUPABASE_URL": "https://twazfaytgmgeyqeopgut.supabase.co",
     "JUDGING_LEVITATE_EVENT_IDS": "25cf168b-4bf1-423f-b2c2-42897d3f8110"
   },

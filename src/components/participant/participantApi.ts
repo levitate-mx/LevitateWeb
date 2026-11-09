@@ -37,12 +37,45 @@ export async function participantRequest<T>(path: string, init: RequestInit = {}
 }
 
 let initialSessionRequest: Promise<ParticipantPortalData> | null = null;
+let pendingAccess: string | null = null;
+
+function normalizeParticipantAccess(value: string | null): string {
+  const candidate = value?.trim() || "";
+  const valid = /^[A-Za-z0-9_-]{43}$/;
+  if (valid.test(candidate)) return candidate;
+  // Copying a quoted CSV cell or message can leave its closing quote in the hash.
+  // Remove only a single known wrapper; the token itself must remain exactly intact.
+  for (const [opening, closing] of [["\"", "\""], ["'", "'"], ["“", "”"], ["‘", "’"]]) {
+    if (candidate.startsWith(opening) && candidate.endsWith(closing) && valid.test(candidate.slice(1, -1))) {
+      return candidate.slice(1, -1);
+    }
+    if (candidate.endsWith(closing) && valid.test(candidate.slice(0, -1))) return candidate.slice(0, -1);
+  }
+  throw new ParticipantApiError(401, "invalid_access", "El enlace personal no es válido. Abre de nuevo el enlace completo.");
+}
+
+function cacheSessionRequest(operation: Promise<ParticipantPortalData>, access: string | null) {
+  const request = operation.finally(() => {
+    if (initialSessionRequest === request) {
+      initialSessionRequest = null;
+      pendingAccess = null;
+    }
+  });
+  pendingAccess = access;
+  initialSessionRequest = request;
+  return request;
+}
+
+function rejectParticipantAccess(error: unknown): Promise<ParticipantPortalData> {
+  const previous = initialSessionRequest;
+  const rejection = previous ? previous.catch(() => undefined).then(() => { throw error; }) : Promise.reject(error);
+  // A second StrictMode mount must share this rejection instead of opening an old cookie.
+  return cacheSessionRequest(rejection, null);
+}
 
 export function openParticipantSession(): Promise<ParticipantPortalData> {
-  if (initialSessionRequest) return initialSessionRequest;
   const fragment = new URLSearchParams(window.location.hash.slice(1));
   const hasAccess = fragment.has("access") || fragment.has("token");
-  const access = fragment.get("access") ?? fragment.get("token");
   // Remove the private access link before a request, an image, or another navigation.
   if (hasAccess)
     window.history.replaceState(
@@ -50,20 +83,31 @@ export function openParticipantSession(): Promise<ParticipantPortalData> {
       "",
       window.location.pathname + window.location.search,
     );
-  initialSessionRequest = (async () => {
+
+  let access: string | null = null;
+  if (hasAccess) {
+    const values = [...fragment.values()];
+    if (values.length !== 1) {
+      return rejectParticipantAccess(new ParticipantApiError(401, "invalid_access", "El enlace personal no es válido. Abre de nuevo el enlace completo."));
+    }
+    try { access = normalizeParticipantAccess(fragment.get("access") ?? fragment.get("token")); }
+    catch (error) { return rejectParticipantAccess(error); }
+  }
+  if (initialSessionRequest && (!hasAccess || access === pendingAccess)) return initialSessionRequest;
+
+  const previous = initialSessionRequest;
+  const open = async () => {
     if (hasAccess) {
-      if (!access?.trim())
-        throw new ParticipantApiError(401, "invalid_access", "El enlace no es válido.");
       await participantRequest("/api/participant/access/exchange", {
         method: "POST",
         body: JSON.stringify({ token: access }),
       });
     }
     return participantRequest<ParticipantPortalData>("/api/participant/me");
-  })().finally(() => {
-    initialSessionRequest = null;
-  });
-  return initialSessionRequest;
+  };
+  // StrictMode mounts share the pending request. A different personal link waits
+  // for the earlier exchange so that their session cookies cannot finish out of order.
+  return cacheSessionRequest(previous ? previous.catch(() => undefined).then(open) : open(), access);
 }
 
 export function participantAssetUrl(
