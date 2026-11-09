@@ -110,6 +110,20 @@ test("the portal moves directly from its hero to the three detail chapters", () 
   assert.match(source, /id="tus-fotos"/);
 });
 
+test("the photo chapter sells the media package with exactly two cross-routine previews", () => {
+  const galleryStart = source.indexOf('className="participant-chapter participant-gallery"');
+  const galleryEnd = source.indexOf('className="participant-community"', galleryStart);
+  const gallery = source.slice(galleryStart, galleryEnd);
+
+  assert.ok(galleryStart >= 0 && galleryEnd > galleryStart);
+  assert.doesNotMatch(gallery, /ParticipantRoutineSelector/);
+  assert.match(source, /\.flatMap\(\(routineItem\).*\.slice\(0, 2\)/s);
+  assert.doesNotMatch(source, /photoLimit|Ver más fotografías/);
+  assert.match(gallery, /href="\/tienda\/foto-video"/);
+  assert.match(gallery, /¿Ya adquiriste tu paquete\?/);
+  assert.match(gallery, /5 a 10 días hábiles/);
+});
+
 test("an unauthorized internal preview directs administrators to login without requesting a participant QR", () => {
   const html = renderToStaticMarkup(createElement(helpers.PortalState, {
     mode: "access", internalPreview: true, message: "Inicia sesión como administrador para revisar este participante.", onRetry() {},

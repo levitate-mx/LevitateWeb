@@ -319,7 +319,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [eventError, setEventError] = useState("");
   const [judgeOpen, setJudgeOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
-  const [photoLimit, setPhotoLimit] = useState(20);
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
   const eventRequest = useRef<AbortController | null>(null);
@@ -394,13 +393,27 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const event = data?.events.find((item) => item.id === data.selectedEventId);
   const photos = useMemo(
     () =>
-      (routine?.photos.items || []).flatMap((photo) => {
-        const previewUrl = isInternalPreview ? participantAdminAssetUrl(photo.previewUrl) : participantAssetUrl(photo.previewUrl, preview);
-        return previewUrl
-          ? [{ ...photo, previewUrl, downloadUrl: isInternalPreview ? participantAdminAssetUrl(photo.downloadUrl) : participantAssetUrl(photo.downloadUrl, preview) }]
-          : [];
-      }),
-    [routine, preview, isInternalPreview],
+      (data?.routines || [])
+        .flatMap((routineItem) =>
+          routineItem.photos.items.flatMap((photo) => {
+            const previewUrl = isInternalPreview
+              ? participantAdminAssetUrl(photo.previewUrl)
+              : participantAssetUrl(photo.previewUrl, preview);
+            return previewUrl
+              ? [{
+                  ...photo,
+                  previewUrl,
+                  routineId: routineItem.id,
+                  routineTitle: routineItem.title,
+                  downloadUrl: isInternalPreview
+                    ? participantAdminAssetUrl(photo.downloadUrl)
+                    : participantAssetUrl(photo.downloadUrl, preview),
+                }]
+              : [];
+          }),
+        )
+        .slice(0, 2),
+    [data?.routines, preview, isInternalPreview],
   );
 
   useEffect(() => {
@@ -426,7 +439,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     setSelectedRoutineId(id);
     setJudgeOpen(false);
     setPhotoIndex(null);
-    setPhotoLimit(20);
     setDownloadMessage("");
   }
 
@@ -812,25 +824,35 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 Tus fotos<span>.</span>
               </h2>
             </header>
-            <ParticipantRoutineSelector
-              routines={data.routines}
-              selectedId={routine?.id || ""}
-              disabled={changingEvent}
-              onSelect={selectRoutine}
-              context="tus fotos"
-              label={registrationLabel}
-            />
+            <div className="participant-gallery__offer" data-participant-reveal>
+              <div>
+                <h3>Revive tu paso por el escenario.</h3>
+                <p>
+                  Adquiere tu paquete de fotografía y video y conserva cada momento de tu
+                  participación en Levitate.
+                </p>
+              </div>
+              <a
+                className="participant-button participant-button--ivory participant-gallery__shop"
+                href="/tienda/foto-video"
+              >
+                Adquirir mi paquete
+                <ArrowUpRight size={18} aria-hidden="true" />
+              </a>
+            </div>
+            <p className="participant-gallery__delivery">
+              <strong>¿Ya adquiriste tu paquete?</strong>{" "}
+              Espera a que te envíen tu acceso (5 a 10 días hábiles).
+            </p>
             {changingEvent ? (
               <p className="participant-status-copy" role="status">
                 Abriendo las imágenes de esta edición…
               </p>
-            ) : routine ? (
+            ) : photos.length > 0 ? (
               <>
                 <div className="participant-gallery__album">
-                  <h3>{routine.title}</h3>
-                  <span>
-                    {photos.length > 0 ? `${photos.length} fotografías` : "Álbum por publicar"}
-                  </span>
+                  <h3>Vista previa</h3>
+                  <span>{photos.length} fotografías de muestra</span>
                 </div>
                 {preview && (
                   <p className="participant-demo-note">
@@ -838,50 +860,28 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                     corresponden a Mariana López Torres.
                   </p>
                 )}
-                {photos.length > 0 ? (
-                  <>
-                    <div className="participant-gallery__grid" data-participant-reveal>
-                      {photos.slice(0, photoLimit).map((photo, index) => (
-                        <button
-                          className="participant-gallery__photo"
-                          type="button"
-                          key={photo.id}
-                          aria-label={`Abrir fotografía ${index + 1} de ${photos.length}${photo.caption ? `. ${photo.caption}` : ""}`}
-                          onClick={() => setPhotoIndex(index)}
-                        >
-                          <PhotoImage photo={photo} />
-                          <span className="participant-gallery__photo-overlay">
-                            <span>{String(index + 1).padStart(2, "0")}</span>
-                            <Maximize2 size={19} aria-hidden="true" />
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    {photos.length > photoLimit && (
-                      <button
-                        type="button"
-                        className="participant-text-button participant-gallery__more"
-                        onClick={() => setPhotoLimit((limit) => limit + 20)}
-                      >
-                        Ver más fotografías
-                        <ArrowDown size={18} aria-hidden="true" />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="participant-gallery__pending">
-                    <p>Tu momento sigue aquí.</p>
-                    <span>
-                      Las fotografías de esta presentación aparecerán en este álbum cuando se
-                      publiquen.
-                    </span>
-                  </div>
-                )}
+                <div className="participant-gallery__grid" data-participant-reveal>
+                  {photos.map((photo, index) => (
+                    <button
+                      className="participant-gallery__photo"
+                      type="button"
+                      key={`${photo.routineId}:${photo.id}`}
+                      aria-label={`Abrir fotografía ${index + 1} de ${photos.length}${photo.caption ? `. ${photo.caption}` : ""}`}
+                      onClick={() => setPhotoIndex(index)}
+                    >
+                      <PhotoImage photo={photo} />
+                      <span className="participant-gallery__photo-overlay">
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <Maximize2 size={19} aria-hidden="true" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </>
             ) : (
               <div className="participant-gallery__pending">
-                <p>Cada escenario deja una historia.</p>
-                <span>Las imágenes de tus presentaciones estarán aquí.</span>
+                <p>Muy pronto podrás ver un adelanto.</p>
+                <span>Las dos fotografías de muestra aparecerán aquí cuando estén disponibles.</span>
               </div>
             )}
           </div>
@@ -952,7 +952,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
             )}
           </div>
           <div className="participant-lightbox__caption">
-            <p>{activePhoto.caption || routine?.title}</p>
+            <p>{activePhoto.caption || activePhoto.routineTitle}</p>
             {activePhoto.downloadUrl && (
               <a
                 className="participant-text-button"
