@@ -234,6 +234,7 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
       return {
         id: judgeId, name: text(judge.name), status: complete ? "complete" : attemptedScore ? "partial" : "pending",
         subtotal, penalty, total, maximumScore, criteria: values, feedback: text(feedbackRows.get(sheetKey)?.body),
+        sheetMaximumScore: number(template?.max_score) > 0 ? number(template.max_score) : null,
       };
     });
     const completedJudges = judgeResults.filter((judge) => judge.status === "complete").length;

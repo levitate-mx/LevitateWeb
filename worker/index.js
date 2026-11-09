@@ -4,7 +4,7 @@ import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { accessSessions, resolveAccessSession, getAccessCoverage, isSplitAccessSession, isAmbiguousAccessSession } from "./ticket-access.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
-import { getJudgingEvents, getJudgingScores } from "./judging-reader.js";
+import { getJudgingEvents, getJudgingScores, getJudgingRoutineDirectory, getJudgingSheets } from "./judging-reader.js";
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
@@ -392,6 +392,9 @@ export default {
       return handleParticipantPortal(request, env, {
         requireAdmin: requireRegistrationAdmin,
         getMediaStore: (options) => getParticipantMediaStorage(env, options),
+        getJudgingSnapshot: (eventId, options) => getJudgingSheets(env, eventId, options),
+        getJudgingEventList: () => getJudgingEvents(env),
+        getJudgingDirectory: (eventId) => getJudgingRoutineDirectory(env, eventId),
       });
     }
 

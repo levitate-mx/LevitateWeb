@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS participant_portal_access (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   revoked_at TEXT
 );
+CREATE TABLE IF NOT EXISTS participant_portal_judging_sources (
+  event_id TEXT PRIMARY KEY REFERENCES participant_portal_events(id) ON DELETE CASCADE,
+  source_event_id TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+  updated_by TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_participant_portal_access_person ON participant_portal_access(participant_id,event_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_participant_portal_access_active ON participant_portal_access(participant_id,event_id) WHERE active = 1;
 CREATE TABLE IF NOT EXISTS participant_portal_sessions (

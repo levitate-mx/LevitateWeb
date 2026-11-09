@@ -1502,8 +1502,8 @@ function toProgramUpper(value: unknown) {
   return String(value ?? "").toLocaleUpperCase("es-MX");
 }
 
-function toProgramHtmlValue(value: unknown) {
-  return toProgramUpper(value)
+function toProgramHtmlValue(value: unknown, preserveCase = false) {
+  return (preserveCase ? String(value ?? "") : toProgramUpper(value))
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -5295,14 +5295,15 @@ function getProgramMusicDurationLabel(row: ProgramRow) {
 }
 
 function downloadProgramXls(blocks: ProgramBlock[]) {
+  let routineNumber = 0;
   const rows = blocks.flatMap((block) => {
     const includeLevel = isAerialProgramBlock(block);
-    const headers = [...getProgramHeaders(includeLevel), "DURACIÓN CANCIÓN (MM:SS)"];
+    const headers = [...getProgramHeaders(includeLevel), "DURACIÓN CANCIÓN (MM:SS)", "ID", "ID INSCRIPCIÓN"];
 
     return [
       `<tr><td colspan="${headers.length}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
       `<tr>${headers.map((header) => `<th>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
-      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel), getProgramMusicDurationLabel(row)].map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}</tr>`),
+      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel), getProgramMusicDurationLabel(row), String(++routineNumber)].map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}<td>${toProgramHtmlValue(row.danceId, true)}</td></tr>`),
     ];
   });
   const worksheet = `<!doctype html>

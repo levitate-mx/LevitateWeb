@@ -112,26 +112,82 @@ export async function getJudgingEvents(env, { fetcher = fetch } = {}) {
   return { events: events.filter(event => allowedIds.has(event.id) && isVisibleEvent(event)).map(mapEvent), fetchedAt: new Date().toISOString() };
 }
 
-export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
+function allowedEventId(env, eventId) {
   if (typeof eventId !== "string" || !eventIdPattern.test(eventId)) {
     fail("judging_invalid_event", "Selecciona un evento válido de JueceoCore.", 400);
   }
   eventId = eventId.toLowerCase();
   const allowedIds = levitateEventIds(env);
   if (!allowedIds.has(eventId)) fail("judging_event_not_found", "No se encontró el evento de Levitate seleccionado.", 404);
-  const config = configuration(env);
+  return eventId;
+}
+
+async function readEvent(config, eventId, fetcher, columns = eventColumns) {
   const events = await readRows(config, "events", {
-    select: eventColumns, id: `eq.${eventId}`, or: "(event_type.is.null,event_type.eq.event)", order: "id.asc",
+    select: columns, id: `eq.${eventId}`, or: "(event_type.is.null,event_type.eq.event)", order: "id.asc",
   }, fetcher);
   if (events.length !== 1 || events[0].id !== eventId || !isVisibleEvent(events[0])) {
     fail("judging_event_not_found", "No se encontró el evento de Levitate seleccionado.", 404);
   }
+  return events[0];
+}
+
+// Programme association needs identities, not an entire evaluation snapshot.
+// Keep the same event guards while avoiding scores, judges and criteria reads.
+export async function getJudgingRoutineDirectory(env, eventId, { fetcher = fetch } = {}) {
+  eventId = allowedEventId(env, eventId);
+  const config = configuration(env);
+  const event = await readEvent(config, eventId, fetcher, "id,name,event_type");
+  const routines = await readRows(config, "routines", {
+    select: "event_id,routine_id,name,academy", event_id: `eq.${eventId}`, order: tableOrders.routines,
+  }, fetcher);
+  const ids = new Set();
+  const rows = routines.map(row => {
+    const id = typeof row.routine_id === "string" ? row.routine_id.trim() : "";
+    if (row.event_id !== eventId || !id || ids.has(id)) {
+      fail("judging_invalid_response", "No pudimos comprobar las identidades del programa de JueceoCore.", 502);
+    }
+    ids.add(id);
+    return { id, name: typeof row.name === "string" ? row.name.trim() : "", academy: typeof row.academy === "string" ? row.academy.trim() : "" };
+  });
+  return { event: { id: eventId, name: typeof event.name === "string" ? event.name.trim() : "" }, rows };
+}
+
+// A participant needs only their own sheets. Do not download or calculate a
+// whole event's evaluations on every QR visit, especially on Workers Free.
+export async function getJudgingSheets(env, eventId, { routineIds, fetcher = fetch } = {}) {
+  eventId = allowedEventId(env,eventId);
+  if (!Array.isArray(routineIds) || !routineIds.length || routineIds.length>50
+    || routineIds.some(id=>typeof id!=="string" || !/^[A-Za-z0-9_-]{1,100}$/.test(id))) {
+    fail("judging_invalid_routine","No pudimos identificar las hojas de esta presentación.",400);
+  }
+  const filter=`in.(${[...new Set(routineIds)].join(",")})`;
+  const config=configuration(env), event=await readEvent(config,eventId,fetcher);
+  const scopedTables=new Set(["routines","scores","penalties","feedback"]);
+  const entries=await Promise.all(Object.entries(tableColumns).filter(([table])=>table!=="special_awards")
+    .map(async([table,columns])=>[table,await readRows(config,table,{
+      select:columns,event_id:`eq.${eventId}`,order:tableOrders[table],...(scopedTables.has(table)?{routine_id:filter}:{}),
+    },fetcher)]));
+  const data=Object.fromEntries(entries);
+  // Validate the upstream scope as well as requesting it, before projecting.
+  for(const table of scopedTables) if(data[table].some(row=>row.event_id!==eventId || !routineIds.includes(row.routine_id))) {
+    fail("judging_invalid_response","No pudimos verificar las hojas de esta presentación.",502);
+  }
+  return buildJudgingScoreSnapshot({event,blocks:data.blocks,routines:data.routines,judges:data.judges,
+    templates:data.criteria_templates,criteria:data.criteria,scores:data.scores,penalties:data.penalties,
+    feedback:data.feedback,specialAwards:[]},new Date().toISOString());
+}
+
+export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
+  eventId = allowedEventId(env, eventId);
+  const config = configuration(env);
+  const event = await readEvent(config, eventId, fetcher);
   const entries = await Promise.all(Object.entries(tableColumns).map(async ([table, columns]) => [table,
     await readRows(config, table, { select: columns, event_id: `eq.${eventId}`, order: tableOrders[table] }, fetcher),
   ]));
   const data = Object.fromEntries(entries);
   return buildJudgingScoreSnapshot({
-    event: events[0], blocks: data.blocks, routines: data.routines, judges: data.judges,
+    event, blocks: data.blocks, routines: data.routines, judges: data.judges,
     templates: data.criteria_templates, criteria: data.criteria, scores: data.scores, penalties: data.penalties, feedback: data.feedback,
     specialAwards: data.special_awards,
   }, new Date().toISOString());

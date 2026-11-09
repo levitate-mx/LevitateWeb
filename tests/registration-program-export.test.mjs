@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
+import { parseParticipantJudgingProgram } from "../shared/participant-judging-program.js";
 
 const source = await readFile(new URL("../src/components/admin/RegistrationScreens.tsx", import.meta.url), "utf8");
 const syntax = ts.createSourceFile("RegistrationScreens.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -47,7 +48,7 @@ function environment() {
 
 function dance(overrides = {}) {
   return {
-    id: "dance-1", title: "Pieza", academyName: "Academia", category: "solo", division: "junior",
+    id: "dance-01", title: "Pieza", academyName: "Academia", category: "solo", division: "junior",
     genre: "motion", subgenre: "jazz", level: null, venue: "edomex", participants: [{ fullName: "Persona" }],
     choreographers: [{ fullName: "Docente" }], blockId: 1, blockTitle: "BLOQUE 1: MOTION", ...overrides,
   };
@@ -57,7 +58,7 @@ test("the generated program XLS includes each song duration and preserves Motion
   const app = environment();
   const input = [
     dance({ title: "Aérea <brillante>", genre: "aereo", blockId: 2, blockTitle: "BLOQUE 2: AERIAL", level: "intermedio", musicUpload: { durationSeconds: 179.6 } }),
-    dance({ id: "dance-2", title: "Jazz & luz", musicUpload: { durationSeconds: 127.2 } }),
+    dance({ id: "dance-02", title: "Jazz & luz", musicUpload: { durationSeconds: 127.2 } }),
   ];
   const before = structuredClone(input);
   const rows = app.buildProgramRows(input);
@@ -70,12 +71,16 @@ test("the generated program XLS includes each song duration and preserves Motion
   assert.equal(app.blobs[0].type, "application/vnd.ms-excel;charset=utf-8");
   assert.equal(app.downloads[0].download, "levitate-programa.xls");
   assert.equal((html.match(/DURACIÓN CANCIÓN \(MM:SS\)/g) || []).length, 2);
-  assert.match(html, /colspan="9"[^>]*>BLOQUE 1: MOTION/);
-  assert.match(html, /colspan="10"[^>]*>BLOQUE 2: AERIAL/);
-  assert.match(html, /JAZZ &amp; LUZ<\/td>[\s\S]*?<td>02:07<\/td><\/tr>/);
-  assert.match(html, /AÉREA &lt;BRILLANTE&gt;<\/td>[\s\S]*?<td>03:00<\/td><\/tr>/);
+  assert.match(html, /colspan="11"[^>]*>BLOQUE 1: MOTION/);
+  assert.match(html, /colspan="12"[^>]*>BLOQUE 2: AERIAL/);
+  assert.match(html, /JAZZ &amp; LUZ<\/td>[\s\S]*?<td>02:07<\/td><td>1<\/td><td>dance-02<\/td><\/tr>/);
+  assert.match(html, /AÉREA &lt;BRILLANTE&gt;<\/td>[\s\S]*?<td>03:00<\/td><td>2<\/td><td>dance-01<\/td><\/tr>/);
   const dataRows = [...html.matchAll(/<tr>(<td>.*?)<\/tr>/gs)].map((match) => match[1]);
-  assert.deepEqual(dataRows.map((row) => (row.match(/<td>/g) || []).length), [9, 10]);
+  assert.deepEqual(dataRows.map((row) => (row.match(/<td>/g) || []).length), [11, 12]);
+  assert.deepEqual(parseParticipantJudgingProgram(html), [
+    { danceId: "dance-02", sourceRoutineId: "1" },
+    { danceId: "dance-01", sourceRoutineId: "2" },
+  ], "the same file links exact registration identifiers while retaining numeric app routine IDs");
   assert.deepEqual(input, before, "export must not alter registrations or music metadata");
 });
 

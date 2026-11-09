@@ -17,6 +17,30 @@ export interface ParticipantJudge {
   feedback: string | null;
 }
 
+export interface ParticipantJudgingPdfDescriptor {
+  eventTitle: string;
+  routine: {
+    id: string;
+    title: string;
+    academy: string;
+    genre: string;
+    category: string;
+    division: string;
+    level: string;
+    block: string;
+  };
+  judges: {
+    id: string;
+    name: string;
+    status: "pending" | "partial" | "complete";
+    criteria: { id: number; label: string; section: string; value: number | null; maximumScore: number }[];
+    penalty: number;
+    feedback: string;
+    sheetMaximumScore?: number;
+  }[];
+  preview: boolean;
+}
+
 export interface ParticipantRoutine {
   id: string;
   title: string;
@@ -38,6 +62,9 @@ export interface ParticipantRoutine {
   judging: {
     status: "pending" | "available";
     judges: ParticipantJudge[];
+    source?: "jueceocore";
+    sourceStatus?: "available" | "unavailable" | "unlinked" | "pending";
+    pdf?: ParticipantJudgingPdfDescriptor;
     assetId?: string | null;
     url?: string | null;
   };

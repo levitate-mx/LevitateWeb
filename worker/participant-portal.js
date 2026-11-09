@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./participant-photo.js";
 import { prepareParticipantDemoPhoto } from "./participant-demo-media.js";
+import { enrichParticipantJudging } from "./participant-judging.js";
 
 const cookieName = "levitate_participant_session";
 const sessionSeconds = 60 * 60 * 24 * 7;
@@ -129,15 +130,15 @@ function portalResult(row, event, adminPreview) {
   if ((!adminPreview && (!event.published || row.status !== "published")) || !row.result_json) return pendingResult();
   try { const result = normalizePortalResult(parsed(row.result_json)); return result ? { status: "published", ...result } : pendingResult(); } catch { return pendingResult(); }
 }
-async function me(db, env, request) {
+async function me(db, env, request, getJudgingSnapshot) {
   const grant = await session(db, request);
   const requested = new URL(request.url).searchParams.get("eventId");
   if (requested && requested !== grant.event_id) fault("portal_event_not_found", "No se encontró la edición.", 404);
-  return json(await participantData(db, env, grant.participant_id, grant.event_id));
+  return json(await participantData(db, env, grant.participant_id, grant.event_id, false, getJudgingSnapshot));
 }
 // The preview flag is supplied only by the authenticated admin route. Participant
 // requests always derive both IDs from their grant and use publication checks.
-async function participantData(db, env, participantId, eventId, adminPreview = false) {
+async function participantData(db, env, participantId, eventId, adminPreview = false, getJudgingSnapshot) {
   const participant = await participantById(db, participantId);
   const event = await eventById(db, eventId);
   const link = adminPreview ? adminAssetUrl : assetUrl;
@@ -165,7 +166,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
     WHERE d.participant_id = ? AND d.event_id = ? ${adminPreview ? "" : "AND d.published = 1 AND a.published = 1"}
       AND a.kind = 'diploma' AND a.participant_id = d.participant_id AND a.event_id = d.event_id`, participant.id, event.id);
   const diplomaAvailable = Boolean((adminPreview || event.published) && document);
-  return { ...(adminPreview ? { adminPreview: true } : {}),
+  const data = { ...(adminPreview ? { adminPreview: true } : {}),
     participant: { id: participant.id, name: participant.full_name, academy: participant.academy_name },
     events: [{ id: event.id, title: event.title, season: event.season, venue: event.venue, startsAt: event.starts_at }], selectedEventId: event.id,
     diploma: diplomaAvailable ? { status: "available", assetId: document.asset_id, url: link(document.asset_id) } : { status: "pending", assetId: null, url: null },
@@ -180,6 +181,13 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
         photos: { status: photos.length ? "available" : "pending", count: photos.length,
           items: photos.map((asset) => ({ id: asset.id, previewUrl: link(asset.id), ...(asset.allow_download ? { downloadUrl: `${link(asset.id)}${adminPreview ? "&" : "?"}download=1` } : {}), width: asset.width, height: asset.height, caption: asset.caption })) } };
     }) };
+  if (getJudgingSnapshot) {
+    const source = await first(db, "SELECT source_event_id,enabled FROM participant_portal_judging_sources WHERE event_id=?", event.id);
+    return enrichParticipantJudging({ data, rows, event: { ...event, automatic_judging: source?.enabled === 1 }, adminPreview,
+      sourceEventId: source?.source_event_id,
+      getSnapshot: source && !source.enabled ? undefined : getJudgingSnapshot });
+  }
+  return data;
 }
 function photoFileName(name) {
   return `${name.replace(/\.[^.]+$/, "").slice(0, 190)}.jpg`;
@@ -333,8 +341,76 @@ function revisionStatement(db,{routineId,eventId,revision,action,snapshot,actorI
   return db.prepare(`INSERT INTO participant_portal_routine_revisions(id,routine_id,event_id,revision,action,snapshot_json,actor_id)
     VALUES(?,?,?,?,?,?,?)`).bind(id(),routineId,eventId,revision,action,JSON.stringify(snapshot),actorId || null);
 }
-async function adminAction(db, env, input, actorId, getMediaStore) {
+async function linkJudgingProgram(db, input, actorId, getJudgingSnapshot) {
+  const event = await eventById(db, str(input.eventId, "la edición", 100));
+  const sourceEventId = str(input.sourceEventId, "el evento de jueceo", 100);
+  if (!Array.isArray(input.links) || !input.links.length || input.links.length > 600) fault("portal_invalid_judging_links", "Selecciona un programa válido de hasta 600 coreografías.");
+  const danceIds = new Set(), sourceIds = new Set();
+  const links = input.links.map(value => {
+    const danceId = str(value?.danceId, "la coreografía", 100), sourceRoutineId = str(value?.sourceRoutineId, "la rutina de jueceo", 100);
+    if (danceIds.has(danceId) || sourceIds.has(sourceRoutineId)) fault("portal_invalid_judging_links", "El programa contiene coreografías o números duplicados.");
+    danceIds.add(danceId); sourceIds.add(sourceRoutineId);
+    return { danceId, sourceRoutineId };
+  });
+  if (!getJudgingSnapshot) fault("portal_judging_unavailable", "La conexión de jueceo no está disponible.", 503);
+  const snapshot = await getJudgingSnapshot(sourceEventId);
+  if (snapshot?.event?.id !== sourceEventId || !Array.isArray(snapshot.rows)) fault("portal_invalid_judging_links", "No se pudo comprobar el programa de jueceo.");
+  const dances = await all(db, `SELECT d.id,d.title,a.name AS academy FROM registration_dances d
+    JOIN registration_academies a ON a.id=d.academy_id WHERE d.venue=?`, event.venue);
+  const existing = await all(db, "SELECT * FROM participant_portal_routines WHERE event_id=?", event.id);
+  const source = await first(db, "SELECT source_event_id FROM participant_portal_judging_sources WHERE event_id=?", event.id);
+  if (source && source.source_event_id !== sourceEventId && existing.some(row => row.source_event_id)) fault("portal_judging_link_conflict", "Esta edición ya está vinculada a otro programa. Revisa la conexión antes de reemplazarla.", 409);
+  const comparable = value => String(value || "").normalize("NFD").replace(/\p{M}/gu, "").replace(/\s+/g, " ").trim().toUpperCase();
+  for (const link of links) {
+    const dance = dances.find(row => row.id === link.danceId), matching = snapshot.rows.filter(row => row.id === link.sourceRoutineId);
+    if (!dance || matching.length !== 1 || comparable(dance.title) !== comparable(matching[0].name) || comparable(dance.academy) !== comparable(matching[0].academy)) {
+      fault("portal_invalid_judging_links", "El programa no coincide con las coreografías de esta edición. Usa el mismo archivo que importaste en la aplicación.");
+    }
+    const current = existing.find(row => row.dance_id === link.danceId);
+    if ((current?.source_event_id && (current.source_event_id !== sourceEventId || current.source_routine_id !== link.sourceRoutineId))
+      || existing.some(row => row.dance_id !== link.danceId && row.source_event_id === sourceEventId && row.source_routine_id === link.sourceRoutineId)) {
+      fault("portal_judging_link_conflict", "Una coreografía ya tiene otra asociación de jueceo. No se modificó el programa.", 409);
+    }
+  }
+  // One atomic batch after every ID, ownership and source row has been checked.
+  // Link only; existing scores, drafts, photos, QR grants and source data stay intact.
+  const statements = [];
+  // D1 accepts at most 100 bound parameters per statement. Group associations
+  // into statements of 20 rows while preserving one atomic transaction.
+  for (let offset=0; offset<links.length; offset+=20) {
+    const group=links.slice(offset,offset+20);
+    statements.push(db.prepare(`INSERT INTO participant_portal_routines(id,event_id,dance_id,source_event_id,source_routine_id)
+      VALUES ${group.map(()=>"(?,?,?,?,?)").join(",")} ON CONFLICT(event_id,dance_id) DO UPDATE SET source_event_id=excluded.source_event_id,
+      source_routine_id=excluded.source_routine_id,updated_at=datetime('now')`)
+      .bind(...group.flatMap(link=>[existing.find(row=>row.dance_id===link.danceId)?.id || id(),event.id,link.danceId,sourceEventId,link.sourceRoutineId])));
+  }
+  statements.push(db.prepare(`INSERT INTO participant_portal_judging_sources(event_id,source_event_id,enabled,updated_by) VALUES(?,?,1,?)
+    ON CONFLICT(event_id) DO UPDATE SET source_event_id=excluded.source_event_id,enabled=1,updated_by=excluded.updated_by,updated_at=datetime('now')`)
+    .bind(event.id, sourceEventId, actorId || null));
+  await db.batch(statements);
+  return json({ ok: true, linked: links.length });
+}
+async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEventList, getJudgingDirectory) {
   switch (input.action) {
+    case "judging.program.link": return linkJudgingProgram(db,input,actorId,getJudgingDirectory);
+    case "judging.source.save": {
+      const event = await eventById(db, str(input.eventId, "la edición", 100));
+      const sourceEventId = str(input.sourceEventId, "el evento de jueceo", 100, true);
+      if (!sourceEventId) {
+        await db.prepare("UPDATE participant_portal_judging_sources SET enabled=0,updated_by=?,updated_at=datetime('now') WHERE event_id=?")
+          .bind(actorId || null, event.id).run();
+        return json({ ok: true });
+      }
+      if (!getJudgingEventList) fault("portal_judging_unavailable", "La conexión de jueceo no está disponible.", 503);
+      const available = await getJudgingEventList();
+      if (!available.events?.some(source => source.id === sourceEventId)) fault("portal_invalid_judging_source", "Selecciona un evento de Levitate disponible.");
+      const previousLinks = await first(db, "SELECT id FROM participant_portal_routines WHERE event_id=? AND source_event_id IS NOT NULL AND source_event_id<>? LIMIT 1", event.id, sourceEventId);
+      if (previousLinks) fault("portal_judging_link_conflict", "Esta edición tiene coreografías vinculadas a otro evento de jueceo.", 409);
+      await db.prepare(`INSERT INTO participant_portal_judging_sources(event_id,source_event_id,enabled,updated_by) VALUES(?,?,1,?)
+        ON CONFLICT(event_id) DO UPDATE SET source_event_id=excluded.source_event_id,enabled=1,updated_by=excluded.updated_by,updated_at=datetime('now')`)
+        .bind(event.id, sourceEventId, actorId || null).run();
+      return json({ ok: true });
+    }
     case "storage.prepare": {
       const storage = await resolveMediaStore(env, getMediaStore, { create: true });
       return json({ mediaStorage: storage.info || { provider: "configured", ready: true } });
@@ -437,7 +513,7 @@ async function adminAction(db, env, input, actorId, getMediaStore) {
     default: fault("portal_invalid_action","Selecciona una acción válida.");
   }
 }
-export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore } = {}) {
+export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore, getJudgingSnapshot, getJudgingEventList, getJudgingDirectory } = {}) {
   try {
     const db = env.DB;
     if (!db) fault("portal_unavailable","El portal no está disponible por el momento.",503);
@@ -449,16 +525,23 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
         ? await requireAdmin(request,env,db,{touchLastSeen:false})
         : await requireAdmin(request,env,db);
       if (request.method === "GET") {
+        if (url.searchParams.get("judging") === "1") {
+          const event = await eventById(db, str(url.searchParams.get("eventId"), "la edición", 100));
+          if (!getJudgingEventList) fault("portal_judging_unavailable", "La conexión de jueceo no está disponible.", 503);
+          const source = await first(db, "SELECT source_event_id,enabled FROM participant_portal_judging_sources WHERE event_id=?", event.id);
+          const available = await getJudgingEventList();
+          return json({ events: available.events, sourceEventId: source?.enabled ? source.source_event_id : "" });
+        }
         if (url.searchParams.has("assetId")) return await serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true,getMediaStore);
         if (url.searchParams.get("storage") === "1") {
           const storage = await resolveMediaStore(env,getMediaStore);
           return json({ mediaStorage: storage.info || { provider: "configured", ready: true } });
         }
         if (url.searchParams.get("preview") === "1") return json(await participantData(db,env,
-          str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true));
+          str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true,getJudgingSnapshot));
         return await adminList(db,request);
       }
-      return await adminAction(db,env,await body(request),admin?.session?.user?.id,getMediaStore);
+      return await adminAction(db,env,await body(request),admin?.session?.user?.id,getMediaStore,getJudgingEventList,getJudgingDirectory);
     }
     if (path === "/api/participant/access/exchange") {
       method(request,["POST"]);
@@ -479,7 +562,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
       if (token) await db.prepare("DELETE FROM participant_portal_sessions WHERE token_hash=?").bind(await hash(token)).run();
       return json({ok:true},200,{"set-cookie":cookie("",true)});
     }
-    if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,env,request); }
+    if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,env,request,getJudgingSnapshot); }
     const assetMatch=path.match(/^\/api\/participant\/assets\/([a-zA-Z0-9_-]{8,100})$/);
     if (assetMatch) { method(request,["GET"]); return await serveAsset(db,env,request,assetMatch[1],false,getMediaStore); }
     return json({error:{code:"portal_not_found",message:"No se encontró esta página."}},404);

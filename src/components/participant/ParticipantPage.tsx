@@ -28,6 +28,7 @@ import type {
   ParticipantPortalData,
 } from "./participantTypes";
 import { LevitateHeader } from "../home/LevitateHeader";
+import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
 import "./ParticipantPage.css";
 
 const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
@@ -172,6 +173,10 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
+  const [judgingDownloadBusy, setJudgingDownloadBusy] = useState(false);
+  const [judgingDownloadMessage, setJudgingDownloadMessage] = useState("");
+  const [judgingDownloadError, setJudgingDownloadError] = useState(false);
+  const judgingGeneration = useRef(0);
   const eventRequest = useRef<AbortController | null>(null);
   const accessNavigation = useRef(0);
 
@@ -181,6 +186,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       const fragment = new URLSearchParams(window.location.hash.slice(1));
       if (!fragment.has("access") && !fragment.has("token")) return;
       ++accessNavigation.current;
+      ++judgingGeneration.current;
       eventRequest.current?.abort();
       setData(null);
       setSelectedRoutineId(null);
@@ -234,6 +240,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       });
     return () => {
       active = false;
+      ++judgingGeneration.current;
       controller.abort();
       eventRequest.current?.abort();
     };
@@ -241,6 +248,13 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   const routine = data?.routines.find((item) => item.id === selectedRoutineId) || data?.routines[0];
   const event = data?.events.find((item) => item.id === data.selectedEventId);
+  useEffect(() => {
+    ++judgingGeneration.current;
+    setJudgingDownloadBusy(false);
+    setJudgingDownloadMessage("");
+    setJudgingDownloadError(false);
+    return () => { ++judgingGeneration.current; };
+  }, [data?.participant.id, data?.selectedEventId, selectedRoutineId, phase]);
   const photos = useMemo(
     () =>
       (data?.routines || [])
@@ -286,6 +300,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   }, [phase, selectedRoutineId, data?.selectedEventId]);
 
   function selectRoutine(id: string) {
+    ++judgingGeneration.current;
     setSelectedRoutineId(id);
     setPhotoIndex(null);
     setDownloadMessage("");
@@ -293,6 +308,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   async function selectEvent(eventId: string) {
     if (preview || eventId === data?.selectedEventId) return;
+    ++judgingGeneration.current;
+    setJudgingDownloadBusy(false);
     eventRequest.current?.abort();
     const controller = new AbortController();
     eventRequest.current = controller;
@@ -341,6 +358,38 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     }
   }
 
+  async function downloadJudgingSheets() {
+    const descriptor = routine?.judging.pdf;
+    if (judgingDownloadBusy || changingEvent || !descriptor || !descriptor.judges.length) return;
+    // The server enforces ownership and publication. Keep internal draft
+    // descriptors out of the participant download path as an additional guard.
+    if (!isInternalPreview && (descriptor.preview || routine.judging.status !== "available"
+      || descriptor.judges.some(judge => judge.status !== "complete"))) return;
+    const generation = ++judgingGeneration.current;
+    setJudgingDownloadBusy(true);
+    setJudgingDownloadMessage("");
+    setJudgingDownloadError(false);
+    try {
+      const { generateParticipantJudgingPdf } = await import("../../../shared/participant-judging-sheet.js");
+      if (generation !== judgingGeneration.current) return;
+      const bytes = await generateParticipantJudgingPdf({ ...descriptor, preview: isInternalPreview || descriptor.preview });
+      if (generation !== judgingGeneration.current) return;
+      const routineName = descriptor.routine.id.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 70);
+      startBrowserDownload(prepareBrowserDownload(
+        new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
+        `${isInternalPreview ? "revision-interna-" : ""}levitate-jueceo-${routineName}.pdf`,
+      ));
+      setJudgingDownloadMessage("Tus hojas de jueceo están listas. Revisa las descargas de tu navegador.");
+    } catch (cause) {
+      if (generation !== judgingGeneration.current) return;
+      setJudgingDownloadError(true);
+      setJudgingDownloadMessage(cause instanceof Error ? cause.message
+        : "No pudimos preparar tus hojas de jueceo. Intenta de nuevo.");
+    } finally {
+      if (generation === judgingGeneration.current) setJudgingDownloadBusy(false);
+    }
+  }
+
   if (phase !== "ready" || !data)
     return (
       <>
@@ -359,7 +408,12 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     data.diploma?.status === "available"
       ? isInternalPreview ? participantAdminAssetUrl(data.diploma.url) : participantAssetUrl(data.diploma.url, preview)
       : undefined;
-  const judgingPdf = isInternalPreview ? participantAdminAssetUrl(routine?.judging.url) : participantAssetUrl(routine?.judging.url, preview);
+  const generatedJudging = routine?.judging.pdf;
+  const canGenerateJudging = Boolean(generatedJudging?.judges.length && (isInternalPreview
+    || (!generatedJudging.preview && routine?.judging.status === "available"
+      && generatedJudging.judges.every(judge => judge.status === "complete"))));
+  const judgingPdf = generatedJudging ? undefined
+    : isInternalPreview ? participantAdminAssetUrl(routine?.judging.url) : participantAssetUrl(routine?.judging.url, preview);
   const published = routine?.result.status === "published";
   const result = routine?.result;
   const hasPlace = Boolean(
@@ -606,7 +660,18 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                   </div>
                 )}
                 <div className="participant-judge-access">
-                  {judgingPdf ? (
+                  {canGenerateJudging ? (
+                    <button
+                      type="button"
+                      className="participant-button participant-button--outline"
+                      disabled={judgingDownloadBusy || changingEvent}
+                      aria-busy={judgingDownloadBusy}
+                      onClick={() => void downloadJudgingSheets()}
+                    >
+                      {judgingDownloadBusy ? "Preparando tus hojas…" : "Descargar hojas de jueceo"}
+                      <ArrowDownToLine size={17} aria-hidden="true" />
+                    </button>
+                  ) : judgingPdf ? (
                     <a
                       className="participant-button participant-button--outline"
                       href={judgingPdf}
@@ -627,6 +692,20 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                     </button>
                   )}
                 </div>
+                {routine.judging.sourceStatus && !canGenerateJudging && !judgingPdf && (
+                  <p className="participant-status-copy" role="status">
+                    {routine.judging.sourceStatus === "unavailable"
+                      ? "Tu hoja de jueceo no está disponible en este momento. Vuelve a intentarlo más tarde."
+                      : isInternalPreview && routine.judging.sourceStatus === "unlinked"
+                        ? "Esta presentación todavía no tiene una evaluación vinculada."
+                        : "Tu hoja de jueceo estará disponible cuando se complete y publique la evaluación."}
+                  </p>
+                )}
+                {judgingDownloadMessage && (
+                  <p className="participant-status-copy" role={judgingDownloadError ? "alert" : "status"} aria-live="polite">
+                    {judgingDownloadMessage}
+                  </p>
+                )}
               </div>
             ) : (
               <div className="participant-pending">

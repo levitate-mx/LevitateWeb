@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RegistrationApiError, requestRegistrationApi } from '../admin/registrationApi';
 import { MediaDriveConnectionPanel } from '../admin/MediaDriveConnectionPanel';
 import { prepareParticipantPhoto } from './prepareParticipantPhoto';
+import { ParticipantJudgingProgram } from './ParticipantJudgingProgram';
 import './ParticipantAdminPage.css';
 
 type Event = { id: string; title: string; season: string; venue: string; startsAt: string; published: boolean };
@@ -12,6 +13,7 @@ type Pagination = { offset: number; limit: number; hasMore: boolean };
 type Data = { events: Event[]; participants: Person[]; routines: Routine[]; assets: Asset[]; pagination?: Pagination; routinePagination?: Pagination; assetPagination?: Pagination };
 type ResultForm = { score: string; maxScore: string; medal: string; directCompetition: boolean; eligibleCount: string; place: string };
 type MediaStorage = { ready: boolean; provider: string; accountEmail?: string; folderName?: string };
+type JudgingSource = { events: { id: string; name: string }[]; sourceEventId: string };
 const emptyResult: ResultForm = { score: '', maxScore: '', medal: 'participacion', directCompetition: false, eligibleCount: '1', place: '' };
 const endpoint = '/api/registration/admin/participant-portal';
 
@@ -54,6 +56,8 @@ export function ParticipantAdminPage() {
   const [authorized, setAuthorized] = useState(false);
   const [mediaStorage, setMediaStorage] = useState<MediaStorage | null>(null);
   const [storageMessage, setStorageMessage] = useState('');
+  const [judgingSource, setJudgingSource] = useState<JudgingSource>({ events: [], sourceEventId: '' });
+  const [judgingSourceMessage, setJudgingSourceMessage] = useState('');
   const latest = useRef(0);
   const latestAssets = useRef(0);
   const person = data.participants.find(row => row.id === personId);
@@ -100,6 +104,14 @@ export function ParticipantAdminPage() {
     });
     return () => { active = false; };
   }, [authorized]);
+  useEffect(() => {
+    let active = true;
+    setJudgingSource({ events: [], sourceEventId: '' }); setJudgingSourceMessage('');
+    if (authorized && eventId) api<JudgingSource>(`?judging=1&eventId=${encodeURIComponent(eventId)}`)
+      .then(value => { if (active) setJudgingSource(value); })
+      .catch(cause => { if (active) setJudgingSourceMessage(cause instanceof Error ? cause.message : 'No se pudo comprobar la conexión de jueceo.'); });
+    return () => { active = false; };
+  }, [authorized, eventId]);
   useEffect(() => {
     const current = data.events.find(row => row.id === eventId);
     if (current) setEventDraft(current);
@@ -170,6 +182,18 @@ export function ParticipantAdminPage() {
       </section>
       {eventId && <>
         <section className="pp-admin-section">
+          <h2>Hojas de jueceo automáticas</h2>
+          <p>Vincula una vez el evento de jueceo de esta edición. Las hojas se leen de la aplicación y se generan al descargarlas, sin cargar PDFs ni guardarlos en Drive.</p>
+          <label>Evento de jueceo<select value={judgingSource.sourceEventId} onChange={e => setJudgingSource({ ...judgingSource, sourceEventId: e.target.value })}>
+            <option value="">Sin vincular</option>{judgingSource.events.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
+          </select></label>
+          {judgingSourceMessage && <p role="status">{judgingSourceMessage}</p>}
+          <button onClick={() => perform(async () => { await api('', { action: 'judging.source.save', eventId, sourceEventId: judgingSource.sourceEventId }); }, 'Conexión de jueceo guardada. Los datos se consultarán automáticamente.')}>Guardar conexión de jueceo</button>
+          <p>La asociación utiliza la identidad de cada coreografía. Las evaluaciones incompletas permanecen pendientes y una edición oculta no muestra hojas a sus participantes.</p>
+          <ParticipantJudgingProgram eventId={eventId} sourceEventId={judgingSource.sourceEventId} disabled={busy}
+            onLinked={() => { void refresh().catch(reportError); }} />
+        </section>
+        <section className="pp-admin-section">
           <h2>02 / Participantes y diplomas</h2>
           <label>Buscar por nombre o academia<input value={search} onChange={e => { setSearch(e.target.value); setPersonOffset(0); }} placeholder="Escribe para buscar" /></label>
           <label>Participante<select value={personId} onChange={e => { setPersonId(e.target.value); setQr(''); setAssetOffset(0); }}><option value="">Seleccionar participante</option>{data.participants.map(p => <option key={p.id} value={p.id}>{p.name} · {p.academy}</option>)}</select></label>
@@ -207,12 +231,11 @@ export function ParticipantAdminPage() {
             <div className="pp-admin-fields"><label>Puntaje<input type="number" step="0.01" min="0" value={result.score} onChange={e => setResult({ ...result, score: e.target.value })} /></label><label>Puntaje máximo<input type="number" min="1" value={result.maxScore} onChange={e => setResult({ ...result, maxScore: e.target.value })} /></label><label>Medalla<select value={result.medal} onChange={e => setResult({ ...result, medal: e.target.value })}>{['oro', 'plata', 'bronce', 'participacion'].map(m => <option key={m}>{m}</option>)}</select></label><label className="pp-admin-check"><input type="checkbox" checked={result.directCompetition} onChange={e => setResult({ ...result, directCompetition: e.target.checked, place: '' })} />Competencia directa</label>
               {result.directCompetition && <><label>Presentaciones elegibles<input type="number" min="2" value={result.eligibleCount} onChange={e => setResult({ ...result, eligibleCount: e.target.value })} /></label><label>Lugar oficial<select value={result.place} onChange={e => setResult({ ...result, place: e.target.value })}><option value="">Sin lugar de podio</option><option value="1">1.er lugar</option><option value="2">2.º lugar</option><option value="3">3.er lugar</option></select></label></>}
             </div>
-            <details><summary>Hoja de jueceo · datos revisados</summary><p>Importa el objeto JSON aprobado con la lista de jueces, sus criterios y comentarios. También puedes cargar el PDF de la hoja.</p><textarea rows={10} aria-label="Datos de hoja de jueceo" value={judging} onChange={e => setJudging(e.target.value)} placeholder={'{"judges":[{"name":"Nombre del juez","score":0,"maxScore":50,"criteria":[],"feedback":""}]}'} /></details>
+            <p>Las hojas de jueceo se consultan automáticamente desde el evento vinculado. Usa la vista interna del participante para revisarlas antes de mostrar la edición.</p>
             <label className="pp-admin-check"><input type="checkbox" checked={photosPublished} onChange={e => setPhotosPublished(e.target.checked)} />Galería disponible al publicar esta presentación</label>
             <div className="pp-admin-actions"><button onClick={() => perform(async () => { await api('', routinePayload()); }, 'Borrador guardado. Los cambios aún no son visibles.')}>Guardar borrador</button><button disabled={!routine.id} onClick={() => perform(async () => { const saved = await api<{ routineId: string }>('', routinePayload()); await api('', { action: 'routine.publish', routineId: saved.routineId }); }, 'Presentación publicada para sus integrantes.')}>Publicar presentación</button>{routine.status === 'published' && <button onClick={() => perform(async () => { await api('', { action: 'routine.unpublish', routineId: routine.id }); }, 'Presentación retirada de los perfiles.')}>Retirar publicación</button>}</div>
-            {routine.id && <div className="pp-admin-uploads"><h3>Fotografías y hoja de jueceo</h3><p>Carga las fotos de una sola presentación. Sus integrantes recibirán el mismo álbum. Las vistas previas se preparan automáticamente con la marca de agua de Levitate. Recomendado: entre 10 y 20 fotografías.</p>
+            {routine.id && <div className="pp-admin-uploads"><h3>Fotografías</h3><p>Carga las fotos de una sola presentación. Sus integrantes recibirán el mismo álbum. Las vistas previas se preparan automáticamente con la marca de agua de Levitate. Recomendado: entre 10 y 20 fotografías.</p>
               <label>Vistas previas JPEG, PNG o WebP<input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) void perform(async () => { for (const file of files) await upload(file, 'photo', file.name); }, `${files.length} fotografías cargadas en borrador.`); }} /></label>
-              <label>Hoja de jueceo PDF<input type="file" accept="application/pdf" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void perform(async () => { await upload(file, 'judge_sheet', file.name); }, 'Hoja cargada en borrador.'); }} /></label>
               <ul className="pp-admin-assets">{assets.filter(a => a.routineId === routine.id).map(a => <li key={a.id}><a target="_blank" rel="noreferrer" href={`${endpoint}?assetId=${encodeURIComponent(a.id)}`}>Revisar {a.fileName || a.kind}</a><button onClick={() => perform(async () => { await api('', { action: 'asset.publish', assetId: a.id, published: !a.published }); }, a.published ? 'Archivo retirado.' : 'Archivo aprobado para publicación.')}>{a.published ? 'Retirar archivo' : 'Aprobar archivo'}</button></li>)}</ul>
             </div>}
           </>}

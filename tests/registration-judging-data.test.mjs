@@ -42,7 +42,7 @@ test("judging snapshot preserves exact per-judge sheets alongside the separate b
   assert.deepEqual(result.rows[0], {
     id: "routine-1", name: "Vuelo", academy: "Academia Uno", state: "", genre: "Aro", division: "Teen", category: "Solo", level: "Intermedio",
     blockId: "block-1", blockName: "Bloque Aéreo", status: "complete", completedJudges: 1, expectedJudges: 1, recordedScores: 2,
-    judges: [{ id: "judge-1", name: "Jueza Uno", status: "complete", subtotal: 12, penalty: -1, total: 11, maximumScore: 15,
+    judges: [{ id: "judge-1", name: "Jueza Uno", status: "complete", subtotal: 12, penalty: -1, total: 11, maximumScore: 15, sheetMaximumScore: 15,
       criteria: [{ id: 1, label: "Técnica", section: "Ejecución", value: 8, maximumScore: 10 },
         { id: 2, label: "Expresión", section: "Arte", value: 4, maximumScore: 5 }], feedback: "Buen trabajo." }],
   });

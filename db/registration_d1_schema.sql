@@ -590,6 +590,13 @@ CREATE TABLE IF NOT EXISTS participant_portal_events (
   published INTEGER NOT NULL DEFAULT 0 CHECK (published IN (0,1)),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS participant_portal_judging_sources (
+  event_id TEXT PRIMARY KEY REFERENCES participant_portal_events(id) ON DELETE CASCADE,
+  source_event_id TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+  updated_by TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS participant_portal_access (
   id TEXT PRIMARY KEY,
   participant_id TEXT NOT NULL REFERENCES registration_participants(id) ON DELETE CASCADE,

@@ -378,7 +378,7 @@ test('QR grants identify current registered presentations before portal curation
   for(const routine of data.routines) {
     assert.equal(routine.eventId,'test-event');assert.equal(routine.title,'Vuelo');
     assert.deepEqual(routine.result,{status:'pending',score:null,maxScore:null,medal:null,directCompetition:false,eligibleCount:null,place:null});
-    assert.deepEqual(routine.judging,{status:'pending',judges:[]});
+    assert.deepEqual(routine.judging,{status:'pending',judges:[],sourceStatus:'unlinked'});
     assert.deepEqual(routine.photos,{status:'pending',count:0,items:[]});
   }
   assert.deepEqual(data.diploma,{status:'pending',assetId:null,url:null});
@@ -571,4 +571,82 @@ test('archival demo preparation requires admin auth and never assigns files to r
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n,before.assets);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_routines').get().n,before.routines);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_access').get().n,before.accesses);
+});
+
+test('judging event binding is admin-only, validates the allowed source and disables without deletion',async t=>{
+  const {db,env,request}=await fixture(t);
+  await request('/api/registration/admin/participant-portal?judging=1&eventId=test-event',{expected:401});
+  await request('/api/registration/admin/participant-portal',{method:'POST',body:{action:'judging.source.save',eventId:'test-event',sourceEventId:'source-event'},expected:401});
+  let catalogReads=0;
+  const call=async(body,expected=200)=>{
+    const response=await handleParticipantPortal(new Request('https://levitate.test/api/registration/admin/participant-portal',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),env,{
+      requireAdmin:async()=>({session:{user:{id:'admin'}}}),
+      getJudgingEventList:async()=>{catalogReads++;return {events:[{id:'source-event',name:'Levitate prueba'}]};},
+    });
+    assert.equal(response.status,expected);return response.json();
+  };
+  await call({action:'judging.source.save',eventId:'test-event',sourceEventId:'foreign-event'},400);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_judging_sources').get().n,0);
+  await call({action:'judging.source.save',eventId:'test-event',sourceEventId:'source-event'});
+  assert.equal(catalogReads,2);
+  assert.deepEqual({...db.sqlite.prepare('SELECT source_event_id,enabled,updated_by FROM participant_portal_judging_sources').get()},
+    {source_event_id:'source-event',enabled:1,updated_by:'admin'});
+  await call({action:'judging.source.save',eventId:'test-event',sourceEventId:''});
+  assert.equal(catalogReads,2);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_judging_sources WHERE enabled=0').get().n,1);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_routines').get().n,0);
+});
+
+test('programme association validates exact IDs and metadata atomically without replacing results or files',async t=>{
+  const {db,env,admin}=await fixture(t);
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),judging,photosPublished:true});
+  const before={...db.sqlite.prepare('SELECT * FROM participant_portal_routines WHERE id=?').get(saved.data.routineId)};
+  const snapshot={event:{id:'source-event'},rows:[{id:'1',name:'Vuelo',academy:'Academia Prueba'},{id:'2',name:'Otra rutina',academy:'Academia Prueba'}]};
+  let reads=0;
+  const call=async(links,expected=200)=>{
+    const response=await handleParticipantPortal(new Request('https://levitate.test/api/registration/admin/participant-portal',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'judging.program.link',eventId:'test-event',sourceEventId:'source-event',links})}),env,{
+      requireAdmin:async()=>({session:{user:{id:'admin'}}}),getJudgingDirectory:async source=>{reads++;assert.equal(source,'source-event');return snapshot;},
+    });
+    assert.equal(response.status,expected,JSON.stringify(await response.clone().json()));return response.json();
+  };
+  await call([{danceId:'dance-a',sourceRoutineId:'2'},{danceId:'dance-b',sourceRoutineId:'1'}],400);
+  assert.equal(db.sqlite.prepare('SELECT source_event_id FROM participant_portal_routines WHERE id=?').get(saved.data.routineId).source_event_id,null);
+  await call([{danceId:'dance-a',sourceRoutineId:'1'},{danceId:'dance-a',sourceRoutineId:'2'}],400);
+  assert.equal(reads,1,'duplicate links fail before the source query');
+  const links=[{danceId:'dance-a',sourceRoutineId:'1'},{danceId:'dance-b',sourceRoutineId:'2'}];
+  assert.equal((await call(links)).linked,2);
+  const after={...db.sqlite.prepare('SELECT * FROM participant_portal_routines WHERE id=?').get(saved.data.routineId)};
+  for(const field of ['id','status','result_json','judging_json','photos_published','revision']) assert.equal(after[field],before[field]);
+  assert.equal(after.source_event_id,'source-event');assert.equal(after.source_routine_id,'1');
+  await call(links);
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_routines').get().n,2,'retry reuses associations');
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_assets').get().n,0);
+});
+
+test('automatic source sheets derive ownership from QR, need edition release and never access Drive',async t=>{
+  const {db,env,access,bucket}=await fixture(t);const {cookie}=await access();
+  db.sqlite.prepare('INSERT INTO participant_portal_judging_sources(event_id,source_event_id,enabled) VALUES(?,?,1)').run('test-event','source-event');
+  let reads=0;
+  const snapshot={event:{id:'source-event',name:'Levitate prueba'},rows:[{
+    id:'dance-a',name:'Vuelo',academy:'Academia Prueba',genre:'Tela',category:'Solo',division:'Teen',level:'Intermedio',blockName:'Bloque 1',
+    status:'complete',expectedJudges:1,judges:[{id:'judge-1',name:'Juez',status:'complete',penalty:-1,feedback:'Solo de esta coreografía.',
+      criteria:[{id:1,label:'Técnica',section:'Técnica',value:9,maximumScore:10}],sheetMaximumScore:10}],
+  },{id:'dance-b',name:'Privada de otra persona',status:'complete',judges:[]}]};
+  const call=async(headers={cookie},expected=200)=>{
+    const response=await handleParticipantPortal(new Request('https://levitate.test/api/participant/me',{headers}),env,{
+      getJudgingSnapshot:async()=>{reads++;return snapshot;},getMediaStore:async()=>{throw new Error('Drive must not be called');},
+    });assert.equal(response.status,expected);return response.json();
+  };
+  await call({},401);assert.equal(reads,0);
+  db.sqlite.prepare('UPDATE participant_portal_events SET published=0').run();
+  let data=await call();assert.equal(reads,0);assert.equal(data.routines[0].judging.status,'pending');
+  db.sqlite.prepare('UPDATE participant_portal_events SET published=1').run();
+  data=await call();assert.equal(data.routines[0].judging.pdf.judges[0].total,8);
+  assert.equal(data.routines[0].judging.pdf.preview,false);assert.equal(data.routines[0].judging.source,'jueceocore');
+  assert.doesNotMatch(JSON.stringify(data),/Privada de otra persona|google_drive|source-event/);
+  assert.equal(bucket.objects.size,0);assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_assets').get().n,0);
+  db.sqlite.prepare('UPDATE participant_portal_judging_sources SET enabled=0').run();
+  const previousReads=reads;data=await call();assert.equal(reads,previousReads);assert.equal(data.routines[0].judging.status,'pending');
 });
