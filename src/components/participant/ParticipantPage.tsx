@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ImageOff,
   LockKeyhole,
-  LogOut,
   Maximize2,
   Medal,
   FileText,
@@ -31,6 +30,7 @@ import type {
   ParticipantPortalData,
   ParticipantRoutine,
 } from "./participantTypes";
+import { LevitateHeader } from "../home/LevitateHeader";
 import "./ParticipantPage.css";
 
 const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
@@ -394,7 +394,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [photoLimit, setPhotoLimit] = useState(20);
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
-  const [loggingOut, setLoggingOut] = useState(false);
   const [activeChapter, setActiveChapter] = useState("tu-diploma");
   const eventRequest = useRef<AbortController | null>(null);
 
@@ -545,22 +544,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     }
   }
 
-  async function logout() {
-    if (loggingOut || isInternalPreview) return;
-    setLoggingOut(true);
-    try {
-      if (!preview) await participantRequest("/api/participant/logout", { method: "POST" });
-      setJudgeOpen(false);
-      setPhotoIndex(null);
-      setData(null);
-      setPhase("closed");
-    } catch {
-      setError("No pudimos cerrar la sesión. Intenta de nuevo.");
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-
   if (phase !== "ready" || !data)
     return (
       <>
@@ -604,22 +587,20 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         </div>
       )}
       {isInternalPreview && <InternalPreviewBanner />}
-      <section className="participant-hero" aria-labelledby="participant-name">
-        <header className="participant-header">
+      {!isInternalPreview && <LevitateHeader activeLabel="Inicio" useRootLinks variant="pill" />}
+      <section className={`participant-hero${isInternalPreview ? "" : " participant-hero--site-nav"}`} aria-labelledby="participant-name">
+        {isInternalPreview && <header className="participant-header">
           <a href="/" aria-label="Levitate MX, inicio" className="participant-brand">
             <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" width="1395" height="420" />
           </a>
           <div className="participant-header__right">
             <span>
               <LockKeyhole size={12} aria-hidden="true" />
-              {isInternalPreview ? "Vista interna" : "Tu espacio"}
+              Vista interna
             </span>
-            {isInternalPreview ? <a className="participant-header__admin-back" href="/admin/mi-levitate">Administración <ArrowLeft size={16} aria-hidden="true" /></a> : <button type="button" onClick={() => void logout()} disabled={loggingOut}>
-              {loggingOut ? "Cerrando…" : "Salir"}
-              <LogOut size={16} aria-hidden="true" />
-            </button>}
+            <a className="participant-header__admin-back" href="/admin/mi-levitate">Administración <ArrowLeft size={16} aria-hidden="true" /></a>
           </div>
-        </header>
+        </header>}
         {error && (
           <p className="participant-header__message" role="alert">
             {error}

@@ -81,6 +81,15 @@
   background: #101013;
 }
 
+.participant-hero--site-nav {
+  grid-template-rows: 1fr;
+  padding-top: clamp(96px, 10vw, 128px);
+}
+
+.participant-hero--site-nav .participant-hero__content {
+  grid-row: 1;
+}
+
 .participant-header {
   display: flex;
   align-items: center;
