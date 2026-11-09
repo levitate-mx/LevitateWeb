@@ -5,7 +5,14 @@ if (process.stdin.isTTY) process.stdin.setRawMode(true);
 console.log('Ready for judge verification credentials on stdin (input is hidden).');
 const input = await new Promise(resolve => {
   let text = '';
-  process.stdin.on('data', chunk => { text += chunk; if (text.includes('\n')) { process.stdin.pause(); resolve(text.split('\n')[0]); } });
+  process.stdin.on('data', chunk => {
+    if (String(chunk).includes('\u0003')) {
+      if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      process.exit(130);
+    }
+    text += chunk;
+    if (text.includes('\n')) { process.stdin.pause(); resolve(text.split('\n')[0]); }
+  });
   process.stdin.resume();
 });
 if (process.stdin.isTTY) process.stdin.setRawMode(false);
