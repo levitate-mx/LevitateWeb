@@ -97,7 +97,8 @@ test("the public demo and its punctuation alias stay isolated from the private a
   assert.equal(mode("/admin/mi-levitate/resumen", "?preview=1", false, true), "internal");
   assert.equal(mode("/mi-levitate", "?internalPreview=1", false, false), "participant");
   assert.equal(preview.routines[0].photos.items.length, 2);
-  assert.equal(preview.routines[0].photos.items[1].previewUrl, "/assets/participant-demo-photo-blurred.jpg");
+  assert.equal(preview.routines[0].photos.items[0].previewUrl, "/assets/participant-demo-photo-watermarked.jpg");
+  assert.equal(preview.routines[0].photos.items[1].previewUrl, "/assets/participant-demo-photo-blurred-watermarked.jpg");
   assert.match(preview.routines[0].photos.items[1].caption, /vista previa desenfocada/);
   assert.ok(preview.routines[0].photos.items.every(photo => photo.previewUrl.startsWith("/assets/") && !photo.downloadUrl));
   assert.equal(preview.routines[0].judging.url, "/assets/participant-demo-judge-sheet.pdf");

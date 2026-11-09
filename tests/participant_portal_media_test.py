@@ -60,6 +60,23 @@ class MediaPreviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicados"):
                 media.normalize_manifest({"version": 1, "eventId": "event-example", "dances": [dance, dance]}, root)
 
+    def test_upload_preparation_leaves_watermark_to_server_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            originals = root / "originals"
+            originals.mkdir()
+            Image.new("RGB", (800, 600), "navy").save(originals / "example.jpg")
+            manifest = root / "photos.json"
+            manifest.write_text(json.dumps({"version": 1, "eventId": "event-example", "dances": [
+                {"danceId": "dance-example", "directory": "originals"}]}))
+            output = root / "output"
+            assets = media.main(["--manifest", str(manifest), "--out", str(output), "--for-upload", "--apply"])
+            self.assertFalse(assets[0]["watermarked"])
+            self.assertTrue(assets[0]["watermarkOnUpload"])
+            with Image.open(output / assets[0]["file"]) as prepared:
+                # A flat source stays flat until the server adds the watermark.
+                self.assertLess(max(prepared.convert("L").getdata()), 30)
+
 
 if __name__ == "__main__":
     unittest.main()

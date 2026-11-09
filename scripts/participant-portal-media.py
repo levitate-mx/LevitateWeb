@@ -71,7 +71,7 @@ def load_font(size, requested=None):
     raise ValueError("No se encontró una fuente para la marca de agua. Especifica --font.")
 
 
-def make_preview(source, max_edge=1600, font_path=None):
+def make_preview(source, max_edge=1600, font_path=None, watermark=True):
     with Image.open(source) as original:
         profile = original.info.get("icc_profile")
         image = ImageOps.exif_transpose(original)
@@ -86,22 +86,23 @@ def make_preview(source, max_edge=1600, font_path=None):
         image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
         image = image.copy()
     width, height = image.size
-    font = load_font(max(14, round(min(width, height) * 0.043)), font_path)
-    label = "LEVITATE MX · VISTA PREVIA"
-    layer = Image.new("RGBA", (width * 2, height * 2))
-    drawing = ImageDraw.Draw(layer)
-    bounds = drawing.textbbox((0, 0), label, font=font)
-    label_width = bounds[2] - bounds[0]
-    step_x = label_width + max(24, width // 10)
-    step_y = max(55, height // 4)
-    for row, y in enumerate(range(0, height * 2, step_y)):
-        for x in range(-step_x, width * 2, step_x):
-            drawing.text((x + (step_x // 2 if row % 2 else 0), y), label, font=font,
-                         fill=(255, 255, 255, 102), stroke_width=1, stroke_fill=(0, 0, 0, 45))
-    layer = layer.rotate(24, resample=Image.Resampling.BICUBIC)
-    left, top = width // 2, height // 2
-    layer = layer.crop((left, top, left + width, top + height))
-    image = Image.alpha_composite(image.convert("RGBA"), layer).convert("RGB")
+    if watermark:
+        font = load_font(max(14, round(min(width, height) * 0.043)), font_path)
+        label = "LEVITATE MX · VISTA PREVIA"
+        layer = Image.new("RGBA", (width * 2, height * 2))
+        drawing = ImageDraw.Draw(layer)
+        bounds = drawing.textbbox((0, 0), label, font=font)
+        label_width = bounds[2] - bounds[0]
+        step_x = label_width + max(24, width // 10)
+        step_y = max(55, height // 4)
+        for row, y in enumerate(range(0, height * 2, step_y)):
+            for x in range(-step_x, width * 2, step_x):
+                drawing.text((x + (step_x // 2 if row % 2 else 0), y), label, font=font,
+                             fill=(255, 255, 255, 102), stroke_width=1, stroke_fill=(0, 0, 0, 45))
+        layer = layer.rotate(24, resample=Image.Resampling.BICUBIC)
+        left, top = width // 2, height // 2
+        layer = layer.crop((left, top, left + width, top + height))
+        image = Image.alpha_composite(image.convert("RGBA"), layer).convert("RGB")
     encoded = io.BytesIO()
     image.save(encoded, format="JPEG", quality=82, optimize=True, exif=b"")
     return encoded.getvalue(), width, height
@@ -115,6 +116,7 @@ def build_parser():
     parser.add_argument("--limit-per-dance", type=int, default=20)
     parser.add_argument("--max-edge", type=int, default=1600)
     parser.add_argument("--font", help="Fuente TTF/OTF opcional para la marca de agua.")
+    parser.add_argument("--for-upload", action="store_true", help="Prepara copias para cargar: el servidor agrega la marca obligatoria al recibirlas.")
     return parser
 
 
@@ -125,6 +127,8 @@ def main(arguments=None):
         parser.error("--limit-per-dance debe estar entre 1 y 20.")
     if not 320 <= args.max_edge <= 2000:
         parser.error("--max-edge debe estar entre 320 y 2000.")
+    if args.for_upload and args.max_edge > 1600:
+        parser.error("--for-upload admite un --max-edge de hasta 1600.")
     if args.apply and not args.out:
         parser.error("--apply requiere --out explícito.")
     manifest_path = Path(args.manifest).resolve()
@@ -149,14 +153,16 @@ def main(arguments=None):
             content = source_file.read_bytes()
             source_hash = hashlib.sha256(content).hexdigest()[:16]
             key = f"photo-{dance_key}-{index:02d}-{source_hash}"
-            preview, width, height = make_preview(io.BytesIO(content), args.max_edge, args.font)
+            preview, width, height = make_preview(io.BytesIO(content), args.max_edge, args.font,
+                                                 watermark=not args.for_upload)
             relative_file = Path("previews") / dance_key / f"{key}.jpg"
             if args.apply:
                 private_write(output_directory / relative_file, preview)
             assets.append({"key": key, "kind": "photo", "danceId": dance["danceId"],
                            "file": relative_file.as_posix(), "width": width, "height": height,
                            "caption": f"{dance['captionPrefix']} · {index:02d}",
-                           "watermarked": True, "allowDownload": False})
+                           "watermarked": not args.for_upload, "watermarkOnUpload": args.for_upload,
+                           "allowDownload": False})
     if args.apply:
         encoded = json.dumps({"version": 1, "eventId": manifest["eventId"], "assets": assets},
                              ensure_ascii=False, indent=2).encode()

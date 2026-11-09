@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import worker from '../worker/index.js';
 import { handleParticipantPortal } from '../worker/participant-portal.js';
+const photoSource = await readFile(new URL('./fixtures/participant-photo-source.png', import.meta.url));
 
 class PortalD1 {
   constructor() { this.sqlite = new DatabaseSync(':memory:'); this.queries = []; }
@@ -19,9 +20,9 @@ class PortalD1 {
   async batch(statements) { this.sqlite.exec('BEGIN');try {const result=statements.map(statement=>statement.sync());this.sqlite.exec('COMMIT');return result;}catch(error){this.sqlite.exec('ROLLBACK');throw error;} }
 }
 class Bucket {
-  constructor(){this.objects=new Map();}
-  async put(key,bytes){this.objects.set(key,new Uint8Array(bytes));}
-  async get(key){const bytes=this.objects.get(key);return bytes ? {body:bytes}:null;}
+  constructor(){this.objects=new Map();this.reads=[];}
+  async put(key,bytes,options={}){this.objects.set(key,{bytes:new Uint8Array(bytes),...options});}
+  async get(key){this.reads.push(key);const object=this.objects.get(key);return object ? {body:object.bytes,size:object.bytes.length,customMetadata:object.customMetadata}:null;}
   async delete(key){this.objects.delete(key);}
 }
 async function digest(value){return Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))).toString('hex');}
@@ -105,7 +106,7 @@ test('draft results and judging remain pending; publishing uses authoritative sc
 test('asset bytes require event, album, asset publication AND matching membership',async t=>{
   const {admin,request,access,db}=await fixture(t);const a=await access(),b=await access('person-b');
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),photosPublished:false});
-  const photo={action:'asset.upload',uploadId:'photo-upload-test',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.png',contentType:'image/png',base64Data:Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]).toString('base64'),width:1200,height:800};
+  const photo={action:'asset.upload',uploadId:'photo-upload-test',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.png',contentType:'image/png',base64Data:photoSource.toString('base64'),width:1200,height:800};
   const uploaded=await admin(photo);const assetId=uploaded.data.assetId;
   const retry=await admin(photo);assert.equal(retry.data.assetId,assetId);assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_assets').get().n,1);
   await request('/api/participant/assets/'+assetId,{cookie:a.cookie,expected:404});
@@ -116,7 +117,8 @@ test('asset bytes require event, album, asset publication AND matching membershi
   await admin({action:'routine.publish',routineId:saved.data.routineId});
   await request('/api/participant/assets/'+assetId,{expected:401});
   await request('/api/participant/assets/'+assetId,{cookie:b.cookie,expected:404});
-  const image=await request('/api/participant/assets/'+assetId,{cookie:a.cookie});assert.equal(image.data.length,12);assert.equal(image.headers.get('content-type'),'image/png');
+  const image=await request('/api/participant/assets/'+assetId,{cookie:a.cookie});assert.ok(image.data.length>100);assert.equal(image.headers.get('content-type'),'image/jpeg');
+  assert.notDeepEqual(image.data,new Uint8Array(photoSource));
   await request('/api/participant/assets/'+assetId+'?download=1',{cookie:a.cookie,expected:403});
   let me=await request('/api/participant/me',{cookie:a.cookie});assert.equal(me.data.routines[0].photos.count,1);assert.equal(me.data.routines[0].photos.items[0].downloadUrl,undefined);
   me=await request('/api/participant/me',{cookie:b.cookie});assert.equal(me.data.routines.length,1);
@@ -173,7 +175,7 @@ test('group members inherit one routine gallery and losing membership immediatel
   const {admin,request,access,db}=await fixture(t);const a=await access(),b=await access('person-b');
   db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')").run();
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),photosPublished:true});
-  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'group.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'group.jpg',contentType:'image/png',base64Data:photoSource.toString('base64')});
   await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
   await admin({action:'routine.publish',routineId:saved.data.routineId});
   for(const cookie of [a.cookie,b.cookie]) {
@@ -250,7 +252,7 @@ test('admin preview reads every draft without publishing it, regardless of all p
   const {db,bucket,request,admin,access}=await fixture(t);
   const participantAccess=await access();
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),judging,photosPublished:false});
-  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64'),width:1200,height:800,caption:'Vista revisable'});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/png',base64Data:photoSource.toString('base64'),width:1200,height:800,caption:'Vista revisable'});
   const sheet=await admin({action:'asset.upload',eventId:'test-event',kind:'judge_sheet',routineId:saved.data.routineId,fileName:'jueceo.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-fixture-sheet').toString('base64')});
   const diploma=await admin({action:'asset.upload',eventId:'test-event',kind:'diploma',participantId:'person-a',fileName:'diploma.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-fixture-diploma').toString('base64')});
   const sheetPreview=await request(`/api/registration/admin/participant-portal?assetId=${sheet.data.assetId}`,{cookie:adminCookie});
@@ -297,7 +299,7 @@ test('admin preview reads every draft without publishing it, regardless of all p
 test('admin preview requires no QR and draft bytes use the existing authenticated admin asset route',async t=>{
   const {db,request,admin}=await fixture(t);
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',photosPublished:false});
-  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64'),allowDownload:true});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/png',base64Data:photoSource.toString('base64'),allowDownload:true});
   const before=totalChanges(db);
   const preview=await request(previewPath(),{cookie:adminCookie});
   assert.equal(preview.data.adminPreview,true);assert.equal(preview.data.routines[0].result.status,'pending');
@@ -307,9 +309,11 @@ test('admin preview requires no QR and draft bytes use the existing authenticate
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_sessions').get().count,0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_routine_revisions').get().count,1);
   const bytes=await request(item.previewUrl,{cookie:adminCookie});
-  assert.deepEqual(bytes.data,new Uint8Array([255,216,255,0,0,0]));
+  assert.equal(bytes.headers.get('content-type'),'image/jpeg');
+  assert.notDeepEqual(bytes.data,new Uint8Array(photoSource));
   assert.equal(bytes.headers.get('content-disposition'),'inline; filename="preview.jpg"');
   const download=await request(item.downloadUrl,{cookie:adminCookie});
+  assert.deepEqual(download.data,bytes.data,'downloads also contain the marked derivative');
   assert.equal(download.headers.get('content-disposition'),'attachment; filename="preview.jpg"');
   await request(item.previewUrl,{expected:401});
   await request(item.previewUrl,{cookie:'levitate_registration_session=academy-user-session',expected:403});
@@ -323,7 +327,7 @@ test('admin preview uses current participant IDs and group membership, independe
   db.sqlite.prepare("UPDATE registration_participants SET full_name='Nombre compartido'").run();
   db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')").run();
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),photosPublished:false});
-  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'grupo.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'grupo.jpg',contentType:'image/png',base64Data:photoSource.toString('base64')});
   await admin({action:'access.revoke',accessId:a.grant.id});
   await admin({action:'access.revoke',accessId:b.grant.id});
   const before=totalChanges(db);
@@ -392,7 +396,7 @@ test('curated edition records override registration fallback without duplicating
   const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
   db.sqlite.exec(`INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a');`);
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),judging,photosPublished:true});
-  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'curated.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'curated.jpg',contentType:'image/png',base64Data:photoSource.toString('base64')});
   let response=await request('/api/participant/me',{cookie});
   assert.equal(response.data.routines.length,2);
   let curated=response.data.routines.find(routine=>routine.id===saved.data.routineId);
@@ -419,7 +423,7 @@ test('registration fallback never borrows results or private assets from another
   const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
   await admin({action:'event.upsert',event:{id:'other-edition',title:'Otra edición ficticia',season:'Otra temporada',venue:'edomex',published:true}});
   const saved=await admin({action:'routine.save',eventId:'other-edition',danceId:'dance-a',result:result(),judging,photosPublished:true});
-  const photo=await admin({action:'asset.upload',eventId:'other-edition',kind:'photo',routineId:saved.data.routineId,fileName:'other-edition.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  const photo=await admin({action:'asset.upload',eventId:'other-edition',kind:'photo',routineId:saved.data.routineId,fileName:'other-edition.jpg',contentType:'image/png',base64Data:photoSource.toString('base64')});
   await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
   await admin({action:'routine.publish',routineId:saved.data.routineId});
   const before=totalChanges(db);
@@ -464,4 +468,47 @@ test('registration fallback requires an explicitly configured edition while cura
   env.PARTICIPANT_REGISTRATION_EVENT_IDS='test-event, future-edition, test-event';
   response=await request('/api/participant/me',{cookie:futureCookie});
   assert.deepEqual(new Set(response.data.routines.map(routine=>routine.id)),new Set([curated.data.routineId,'registration:dance-b']));
+});
+
+test('every photo upload is converted by the server even when a client claims it is watermarked',async t=>{
+  const {admin,request,db,bucket}=await fixture(t);
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',photosPublished:true});
+  const input={action:'asset.upload',uploadId:'mandatory-watermark-photo',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,
+    fileName:'original.png',contentType:'image/png',base64Data:photoSource.toString('base64'),width:1,height:1,watermarked:true};
+  const uploaded=await admin(input);
+  const asset=db.sqlite.prepare('SELECT * FROM participant_portal_assets WHERE id=?').get(uploaded.data.assetId);
+  assert.equal(asset.content_type,'image/jpeg');assert.equal(asset.file_name,'original.jpg');
+  assert.equal(asset.width,512);assert.equal(asset.height,320);
+  const object=bucket.objects.get(asset.object_key);
+  assert.equal(object.customMetadata.watermarkVersion,'levitate-preview-v1');
+  assert.notDeepEqual(object.bytes,new Uint8Array(photoSource));
+  assert.equal(asset.byte_size,object.bytes.length);
+  const retry=await admin(input);assert.equal(retry.data.assetId,uploaded.data.assetId);assert.equal(bucket.objects.size,1);
+  const preview=await request(`/api/registration/admin/participant-portal?assetId=${uploaded.data.assetId}`,{cookie:adminCookie});
+  assert.deepEqual(preview.data,object.bytes);assert.equal(preview.headers.get('content-type'),'image/jpeg');
+  assert.equal(Number(preview.headers.get('content-length')),object.bytes.length);
+  await admin({...input,uploadId:'invalid-photo-source',base64Data:Buffer.from([137,80,78,71,13,10,26,10]).toString('base64')},400);
+  assert.equal(bucket.objects.size,1,'malformed photos must not be stored');
+});
+
+test('old private photos receive a cached watermark after authorization without changing the source or D1',async t=>{
+  const {admin,request,db,bucket,access}=await fixture(t);
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',photosPublished:true});
+  await admin({action:'routine.publish',routineId:saved.data.routineId});
+  const grant=await access();
+  const uploaded=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,
+    fileName:'legacy.png',contentType:'image/png',base64Data:photoSource.toString('base64')});
+  await admin({action:'asset.publish',assetId:uploaded.data.assetId,published:true});
+  const asset=db.sqlite.prepare('SELECT * FROM participant_portal_assets WHERE id=?').get(uploaded.data.assetId);
+  await bucket.put(asset.object_key,photoSource); // Simulate an upload saved before mandatory processing.
+  bucket.reads=[];
+  await request(`/api/participant/assets/${uploaded.data.assetId}`,{expected:401});
+  assert.equal(bucket.reads.length,0,'private storage is not read before authorization');
+  const before=totalChanges(db);
+  const first=await request(`/api/participant/assets/${uploaded.data.assetId}`,{cookie:grant.cookie});
+  assert.equal(first.headers.get('content-type'),'image/jpeg');assert.notDeepEqual(first.data,new Uint8Array(photoSource));
+  assert.deepEqual(bucket.objects.get(asset.object_key).bytes,new Uint8Array(photoSource),'preserve the private source');
+  assert.equal(bucket.objects.size,2,'save a separate reusable derivative');
+  const second=await request(`/api/participant/assets/${uploaded.data.assetId}`,{cookie:grant.cookie});
+  assert.deepEqual(second.data,first.data);assert.equal(bucket.objects.size,2);assert.equal(totalChanges(db),before);
 });

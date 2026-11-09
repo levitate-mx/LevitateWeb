@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RegistrationApiError, requestRegistrationApi } from '../admin/registrationApi';
 import { MediaDriveConnectionPanel } from '../admin/MediaDriveConnectionPanel';
+import { prepareParticipantPhoto } from './prepareParticipantPhoto';
 import './ParticipantAdminPage.css';
 
 type Event = { id: string; title: string; season: string; venue: string; startsAt: string; published: boolean };
@@ -105,7 +106,9 @@ export function ParticipantAdminPage() {
   const routinePayload = () => ({ action: 'routine.save', eventId, danceId, sourceEventId: routine?.sourceEventId || '', sourceRoutineId: routine?.sourceRoutineId || '', result: result.score === '' ? null : { score: Number(result.score), maxScore: Number(result.maxScore), medal: result.medal, directCompetition: result.directCompetition, eligibleCount: Number(result.eligibleCount), place: result.directCompetition && result.place ? Number(result.place) : null }, judging: judging.trim() ? JSON.parse(judging) : null, photosPublished });
   const upload = async (file: File | Blob, kind: string, fileName: string, participantId?: string) => {
     if (file.size > 12 * 1024 * 1024) throw new Error('Cada archivo debe pesar menos de 12 MB.');
-    return api<{ assetId: string }>('', { action: 'asset.upload', eventId, kind, fileName, contentType: file.type, base64Data: await fileData(file), ...(participantId ? { participantId } : { routineId: routine?.id }) });
+    const prepared = kind === 'photo' ? await prepareParticipantPhoto(file, fileName) : null;
+    const content = prepared?.blob || file;
+    return api<{ assetId: string }>('', { action: 'asset.upload', eventId, kind, fileName: prepared?.fileName || fileName, contentType: content.type, base64Data: await fileData(content), ...(prepared ? { width: prepared.width, height: prepared.height } : {}), ...(participantId ? { participantId } : { routineId: routine?.id }) });
   };
   const publishDiploma = (assetId: string) => perform(async () => {
     await api('', { action: 'asset.publish', assetId, published: true });
@@ -174,7 +177,7 @@ export function ParticipantAdminPage() {
             <details><summary>Hoja de jueceo · datos revisados</summary><p>Importa el objeto JSON aprobado con la lista de jueces, sus criterios y comentarios. También puedes cargar el PDF de la hoja.</p><textarea rows={10} aria-label="Datos de hoja de jueceo" value={judging} onChange={e => setJudging(e.target.value)} placeholder={'{"judges":[{"name":"Nombre del juez","score":0,"maxScore":50,"criteria":[],"feedback":""}]}'} /></details>
             <label className="pp-admin-check"><input type="checkbox" checked={photosPublished} onChange={e => setPhotosPublished(e.target.checked)} />Galería disponible al publicar esta presentación</label>
             <div className="pp-admin-actions"><button onClick={() => perform(async () => { await api('', routinePayload()); }, 'Borrador guardado. Los cambios aún no son visibles.')}>Guardar borrador</button><button disabled={!routine.id} onClick={() => perform(async () => { const saved = await api<{ routineId: string }>('', routinePayload()); await api('', { action: 'routine.publish', routineId: saved.routineId }); }, 'Presentación publicada para sus integrantes.')}>Publicar presentación</button>{routine.status === 'published' && <button onClick={() => perform(async () => { await api('', { action: 'routine.unpublish', routineId: routine.id }); }, 'Presentación retirada de los perfiles.')}>Retirar publicación</button>}</div>
-            {routine.id && <div className="pp-admin-uploads"><h3>Fotografías y hoja de jueceo</h3><p>Carga las vistas previas de una sola presentación. Sus integrantes recibirán el mismo álbum. Recomendado: entre 10 y 20 fotografías, con marca de agua.</p>
+            {routine.id && <div className="pp-admin-uploads"><h3>Fotografías y hoja de jueceo</h3><p>Carga las fotos de una sola presentación. Sus integrantes recibirán el mismo álbum. Las vistas previas se preparan automáticamente con la marca de agua de Levitate. Recomendado: entre 10 y 20 fotografías.</p>
               <label>Vistas previas JPEG, PNG o WebP<input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) void perform(async () => { for (const file of files) await upload(file, 'photo', file.name); }, `${files.length} fotografías cargadas en borrador.`); }} /></label>
               <label>Hoja de jueceo PDF<input type="file" accept="application/pdf" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void perform(async () => { await upload(file, 'judge_sheet', file.name); }, 'Hoja cargada en borrador.'); }} /></label>
               <ul className="pp-admin-assets">{assets.filter(a => a.routineId === routine.id).map(a => <li key={a.id}><a target="_blank" rel="noreferrer" href={`${endpoint}?assetId=${encodeURIComponent(a.id)}`}>Revisar {a.fileName || a.kind}</a><button onClick={() => perform(async () => { await api('', { action: 'asset.publish', assetId: a.id, published: !a.published }); }, a.published ? 'Archivo retirado.' : 'Archivo aprobado para publicación.')}>{a.published ? 'Retirar archivo' : 'Aprobar archivo'}</button></li>)}</ul>

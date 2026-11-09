@@ -88,8 +88,8 @@ export function normalizeManifest(value, directory = process.cwd()) {
     if (!["photo", "diploma", "judge_sheet"].includes(kind)) throw new Error("asset.kind desconocido.");
     const danceId = optionalText(asset.danceId, "asset.danceId", 100);
     const participantId = optionalText(asset.participantId, "asset.participantId", 100);
-    if (kind === "photo" && (!danceId || asset.watermarked !== true)) {
-      throw new Error("Las fotos requieren danceId y watermarked: true. Prepara las vistas con participant-portal-media.py.");
+    if (kind === "photo" && (!danceId || asset.watermarkOnUpload !== true || asset.watermarked === true)) {
+      throw new Error("Las fotos requieren danceId y watermarkOnUpload: true. Prepara copias con participant-portal-media.py --for-upload; el servidor agrega la marca de agua obligatoria.");
     }
     if (kind === "diploma" && !participantId) throw new Error("Un diploma requiere participantId.");
     if (kind === "judge_sheet" && !danceId) throw new Error("Una hoja de jueceo requiere danceId.");

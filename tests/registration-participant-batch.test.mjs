@@ -72,12 +72,14 @@ test("batch snapshots require approval and preserve the server's real scoring ru
   assert.throws(() => normalizeManifest(manifest), /--publish/);
 });
 
-test("batch requires assigned watermarked photos and matching diploma ownership", () => {
+test("batch requires assigned photos prepared for server watermarking and matching diploma ownership", () => {
   const manifest = sample();
   manifest.assets = [{ key: "photo-example", kind: "photo", file: "example.jpg", danceId: "dance-example" }];
-  assert.throws(() => normalizeManifest(manifest), /watermarked/);
-  manifest.assets[0].watermarked = true;
+  assert.throws(() => normalizeManifest(manifest), /watermarkOnUpload/);
+  manifest.assets[0].watermarkOnUpload = true;
   assert.equal(normalizeManifest(manifest).assets[0].allowDownload, false);
+  manifest.assets[0].watermarked = true;
+  assert.throws(() => normalizeManifest(manifest), /--for-upload/);
   manifest.assets = [{ key: "diploma-example", kind: "diploma", file: "example.pdf", participantId: "participant-example" }];
   manifest.documents = [{ assetKey: "diploma-example", participantId: "other-example" }];
   assert.throws(() => normalizeManifest(manifest), /mismo participante/);
@@ -238,7 +240,7 @@ test("batch stops photo publication if the existing album is disabled", async (t
   await fs.writeFile(file, Buffer.from([0xff, 0xd8, 0xff, 0, 0]));
   f.manifest.participants = [];
   f.manifest.routines = [];
-  f.manifest.assets = [{ key: "photo-example", kind: "photo", danceId: "dance-example", file, watermarked: true }];
+  f.manifest.assets = [{ key: "photo-example", kind: "photo", danceId: "dance-example", file, watermarkOnUpload: true }];
   await fs.writeFile(f.manifestFile, JSON.stringify(f.manifest));
   const transport = async (url, options) => {
     if (!options.method) return Response.json({ participants: [],

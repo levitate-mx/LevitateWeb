@@ -25,13 +25,19 @@ Para generar reconocimientos autenticados con el QR personal, añade `--diplomas
 Copia [el ejemplo de carpetas](examples/participant-portal-media.example.json) y asigna a cada `danceId` una carpeta de originales. El proceso selecciona hasta 20 JPEG, PNG o WebP por carpeta, ordenados por nombre. `--limit-per-dance 10` permite preparar diez. La asignación procede del manifiesto revisado.
 
 ```sh
-python3 scripts/participant-portal-media.py --manifest /ruta/privada/fotos.json
-python3 scripts/participant-portal-media.py --manifest /ruta/privada/fotos.json --out /ruta/privada/vistas --apply
+python3 scripts/participant-portal-media.py --manifest /ruta/privada/fotos.json --for-upload
+python3 scripts/participant-portal-media.py --manifest /ruta/privada/fotos.json --out /ruta/privada/vistas --for-upload --apply
 ```
 
-Las vistas son JPEG de hasta 1600 píxeles en su lado mayor, con marca de agua repetida y metadatos EXIF retirados. Se respeta la orientación de la foto. Los originales se conservan. `--max-edge` admite de 320 a 2000 y `--font` permite indicar una fuente local para la marca de agua.
+Las copias para cargar son JPEG de hasta 1600 píxeles en su lado mayor, con orientación corregida y metadatos EXIF retirados. `--for-upload` deja la marca de agua a cargo del servidor para aplicarla una sola vez. Los originales se conservan. El servidor genera y guarda una vista reducida con «LEVITATE MX · VISTA PREVIA» repetido en diagonal en cada foto, incluso si se carga directamente desde administración o la API. No admite desactivar este tratamiento mediante un parámetro del cliente.
 
-La salida `media-previews.json` incorpora `danceId`, dimensiones y rutas relativas de las vistas. Úsala en la validación y la carga del lote.
+La carga desde administración reduce las fotos automáticamente antes de enviarlas. El servidor admite copias preparadas de hasta 2 MB, valida las dimensiones reales antes de decodificar (máximo 2,56 millones de píxeles de entrada) y limita las vistas a 1600 píxeles de lado mayor. Usa procesamiento local en el Worker, sin un servicio externo de imágenes. Para archivos antiguos conserva el original privado y crea una copia con marca al primer acceso autorizado; las siguientes consultas reutilizan esa copia. Las fotos que no se puedan procesar muestran un error, sin entregar el archivo sin marca. Si un original antiguo supera esos límites o conserva orientación EXIF pendiente, debe prepararse de nuevo desde administración o con el procesador de lotes.
+
+Para generar solamente una muestra local con la marca ya incorporada, omite `--for-upload`. Ese manifiesto no se acepta como lote de carga para evitar superponer dos marcas. `--font` configura la fuente únicamente de esas muestras locales.
+
+Antes de habilitar las cargas reales, configura el bucket privado `PARTICIPANT_MEDIA` y verifica el presupuesto de CPU del Worker. El procesamiento WASM se ejecuta una vez por carga o por primera consulta de un archivo antiguo; las pruebas locales de vistas de 1600×1600 tardaron aproximadamente 166 ms, por encima de los 10 ms del plan Workers Free. Se necesita un plan de ejecución con presupuesto suficiente, como Workers Paid; este cambio no contrata servicios ni modifica la facturación. La demo usa archivos estáticos ya procesados y no consume ese procesamiento por consulta.
+
+La salida `media-previews.json` incorpora `danceId`, dimensiones, rutas relativas y `watermarkOnUpload: true`. Úsala en la validación y la carga del lote.
 
 ```sh
 node scripts/participant-portal-batch.mjs --manifest /ruta/privada/lote.json --media /ruta/privada/vistas/media-previews.json --diplomas
