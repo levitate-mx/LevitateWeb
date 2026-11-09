@@ -9,6 +9,8 @@ import { getReleveVotingPreview } from "./releve-voting-preview.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
 import { handleParticipantPortal } from "./participant-portal.js";
+import { getParticipantDriveStorage } from "./participant-drive-storage.js";
+import { serveParticipantDemoPhoto } from "./participant-demo-media.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
   getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
@@ -375,11 +377,22 @@ const registrationShopProducts = new Map([
 ]);
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, context) {
     const url = new URL(request.url);
 
+    if (url.pathname.startsWith("/media/mi-levitate-demo/")) {
+      return serveParticipantDemoPhoto(request, {
+        getMediaStore: () => getParticipantMediaStorage(env),
+        cache: typeof caches !== "undefined" ? caches.default : undefined,
+        waitUntil: context?.waitUntil?.bind(context),
+      });
+    }
+
     if (url.pathname.startsWith("/api/participant/") || url.pathname === "/api/registration/admin/participant-portal") {
-      return handleParticipantPortal(request, env, { requireAdmin: requireRegistrationAdmin });
+      return handleParticipantPortal(request, env, {
+        requireAdmin: requireRegistrationAdmin,
+        getMediaStore: (options) => getParticipantMediaStorage(env, options),
+      });
     }
 
     if (url.pathname === "/api/health") {
@@ -7481,6 +7494,20 @@ async function storeRegistrationMusicUpload({ dance, env, musicUpload, session }
     driveWebViewLink: driveFile.webViewLink || null,
     storageProvider: "google_drive",
   };
+}
+
+function getParticipantMediaStorage(env, options = {}) {
+  return getParticipantDriveStorage({
+    db: env.DB,
+    getConfig: () => getRegistrationDriveAuthConfig(env),
+    getAccessToken: (config, { signal } = {}) => getGoogleDriveAccessToken(config, {
+      authFailureCode: "portal_drive_auth_failed",
+      authFailureMessage: "No pudimos comprobar el acceso a Drive.",
+      signal,
+    }),
+    expectedEmail: env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL,
+    ...options,
+  });
 }
 
 function getRegistrationMusicDriveConfig(env) {

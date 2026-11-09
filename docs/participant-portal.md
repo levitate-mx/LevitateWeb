@@ -14,7 +14,7 @@ Los accesos emitidos identifican al participante por su ID de registro. Para las
 
 El acceso acepta una comilla final o un par de comillas concordantes que puedan acompañar una celda CSV copiada. La clave sigue exigiendo sus 43 caracteres exactos: no se recortan caracteres internos ni se vuelve a decodificar. El fragmento se retira antes de solicitar datos. Si se abre otro acceso en la misma pestaña, el portal oculta el perfil anterior y vuelve a identificar a la persona; los canjes se realizan en orden para impedir cruces de sesiones.
 
-El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y dos imágenes de archivo identificadas como tales, una de ellas desenfocada como archivo derivado. El enlace con punto final `/mi-levitate/demo.` funciona como alias de la misma demo. Ninguna variante consulta Drive, acepta accesos privados ni abre una sesión real. En desarrollo también puede abrirse con `/mi-levitate?preview=1`. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
+El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y dos imágenes de archivo identificadas como tales, una de ellas desenfocada como archivo derivado. Las imágenes se leen desde las copias privadas preparadas en Drive, mediante dos rutas fijas de demostración. El enlace con punto final `/mi-levitate/demo.` funciona como alias de la misma demo. Ninguna variante acepta accesos privados ni abre una sesión real. En desarrollo también puede abrirse con `/mi-levitate?preview=1`. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
 
 ## Resumen, Drive y revisión interna
 
@@ -24,17 +24,19 @@ Después de la portada, el espacio abre directamente el reconocimiento autentica
 
 La revisión usa `/admin/mi-levitate/resumen?eventId=…&participantId=…`. Esta página exige una sesión administrativa y solicita una proyección de lectura en `GET /api/registration/admin/participant-portal?preview=1&eventId=…&participantId=…`. El servidor devuelve la misma estructura del portal más `adminPreview: true`, con los borradores de esa persona y edición. Los archivos se consultan por el endpoint administrativo; las URLs públicas del participante mantienen sus controles de acceso y publicación.
 
-Abrir la revisión no genera QR, accesos o sesiones de participante, no modifica los borradores y no publica la edición. La vista interna no es un enlace de entrega ni debe imprimirse en las tarjetas PVC. El arte Aura de 54 × 85 mm tiene un QR de muestra; los accesos reales se emiten por el proceso aprobado de diplomas.
+Abrir la revisión no genera QR, accesos o sesiones de participante, no modifica los borradores y no publica la edición. La vista interna no es un enlace de entrega ni debe imprimirse en las tarjetas PVC. Los PVC personalizados utilizan los accesos individuales reales ya emitidos por el proceso aprobado de diplomas; activar fotografías conserva esos QR.
 
-Los originales permanecen en Drive. La vinculación de la carpeta está preparada, pero este cambio no importa automáticamente su contenido: las vistas previas se preparan y cargan mediante el flujo de archivos existente. Los enlaces de Drive, la cuenta conectada y sus identificadores se muestran únicamente en administración. El contrato actual de la galería incluye fotografías; no se anuncia un video disponible mientras no exista un archivo y una entrega de video implementados.
+Los originales permanecen en Drive. Vincular su carpeta no importa automáticamente el contenido: el operador selecciona las fotos de cada presentación. El navegador administrativo o el procesador local genera las copias reducidas con marca de agua antes de cargarlas. Esas copias se guardan en una carpeta privada independiente de música, originales y QRs. Las rutas autenticadas de Mi Levitate entregan los archivos; los participantes no reciben enlaces, credenciales ni permisos de Drive. La cuenta y la carpeta de almacenamiento se muestran únicamente en administración. El contrato actual de la galería incluye fotografías; no se anuncia un video disponible mientras no exista un archivo y una entrega de video implementados.
+
+La relación entre archivo, edición, coreografía y participantes se conserva en D1. Drive almacena los bytes; no se emparejan fotografías por nombre de archivo, nombre de persona o CURP. Las copias incluyen un registro de preparación `levitate-preview-v2`, con dimensiones e integridad. El servidor comprueba ese registro y la integridad del archivo antes de servirlo, sin procesar sus píxeles. Este registro previene cargas equivocadas o modificaciones del JPEG; no prueba por sí solo que los píxeles contengan una marca. La preparación pertenece al flujo de administradores autenticados y confiables, mediante el navegador o `participant-portal-media.py --for-upload`.
 
 ## Flujo para operar el evento
 
 1. Crear la edición en `/admin/mi-levitate`, inicialmente oculta.
 2. Vincular las presentaciones mediante su ID de inscripción; cuando exista fuente de jueceo, conservar su evento y rutina de origen. No emparejar personas o piezas solo por nombre.
 3. Importar y revisar los resultados oficiales: puntaje, máximo, medalla, competencia directa y lugar, si corresponde. Las observaciones se conservan por juez y criterio; puede adjuntarse la hoja PDF.
-4. Crear los accesos individuales y generar los diplomas por lote. Revisar los PDF antes de publicarlos; también se pueden cargar diplomas ya aprobados.
-5. Pedir al fotógrafo carpetas identificadas por presentación. Preparar 10–20 vistas previas JPEG con marca de agua por pieza, revisar el manifiesto y cargarlas una vez por álbum.
+4. Reutilizar los accesos individuales ya emitidos. Para una edición nueva, crear sus accesos y generar los diplomas por lote. Revisar los PDF antes de publicarlos; también se pueden cargar diplomas ya aprobados. La activación de fotografías no requiere reemplazar los QR actuales.
+5. Pedir al fotógrafo carpetas identificadas por presentación. Cargar 10–20 fotografías por pieza desde administración, o preparar el lote con `participant-portal-media.py --for-upload`. La computadora del operador genera las vistas con marca de agua antes de subirlas; cada álbum se carga una vez para sus integrantes.
 6. Aprobar los archivos, publicar la presentación y hacer visible la edición. Los documentos tienen su publicación independiente.
 7. Entregar cada QR al participante o su responsable. Un acceso puede revocarse o reemplazarse. Al reemplazarlo, el QR anterior deja de abrir el espacio.
 
@@ -47,27 +49,40 @@ El QR es una llave personal: quien lo tenga puede consultar ese espacio. Para co
 - Sesión privada por cookie; el enlace QR se intercambia por la sesión y desaparece del fragmento. Los tokens se guardan como hash.
 - Panel de edición, búsqueda y paginación de participantes, presentaciones y archivos.
 - Diplomas PDF carta con nombre, logo y QR; QR SVG individuales; importaciones y generación en lote.
-- Preparación local de vistas previas con marca de agua y sin metadatos EXIF.
+- Preparación automática de vistas previas JPEG con marca de agua y sin metadatos EXIF en el navegador administrativo; preparación equivalente mediante Pillow para las cargas en lote.
+- Almacenamiento de copias en Drive privado mediante la autorización existente de `musica.levitate@gmail.com`, con comprobación de cuenta, carpeta y cuota; la asociación de archivos permanece en D1.
+- Validación del JPEG preparado, su versión, dimensiones e integridad antes de aceptarlo o entregarlo. El Worker no ejecuta el procesamiento de imágenes durante las consultas.
 - Borradores, publicación, revocación, versiones de resultados y registro del administrador que los modificó.
 - Preparación aditiva del esquema, sin crear tablas durante peticiones de participantes.
 
-## Antes de activar producción
+## Configuración y activación
 
-1. Provisionar un bucket R2 **privado**, sin `r2.dev` ni dominio público para originales o documentos. Añadir su binding `PARTICIPANT_MEDIA` al Worker existente. Ejemplo de configuración (ajustar el nombre al bucket creado):
+La configuración usa `PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL = "musica.levitate@gmail.com"` y reutiliza la autorización existente de Google Drive. El perfil Ati de Chrome es independiente de la cuenta OAuth que almacena archivos de la web. El 9 de noviembre de 2026 se verificaron la cuenta y la cuota y se creó la carpeta **Mi Levitate · Vistas previas privadas** mediante la sesión administrativa normal. Esta ruta aprovecha el Drive, D1 y el plan gratuito del Worker actuales. No requiere contratar R2 ni Workers Paid ni activar ampliaciones de almacenamiento o facturación.
 
-```json
-"r2_buckets": [
-  { "binding": "PARTICIPANT_MEDIA", "bucket_name": "levitate-participant-media" }
-]
-```
+1. Confirmar que la autorización existente de Drive corresponde a `musica.levitate@gmail.com` y permite crear archivos de la aplicación. El servidor debe rechazar otra cuenta antes de crear o cargar material. Se reutilizan las credenciales descritas en [la conexión de Drive](media-drive-connection.md), sin enviarlas al navegador ni ampliar sus alcances automáticamente.
+2. Ejecutar las pruebas y compilar; desplegar mediante `npm run deploy`, conservando los secretos existentes. La aplicación puede mostrar el almacenamiento pendiente hasta preparar su carpeta; no debe simular una conexión lista ni publicar fotos de ejemplo en perfiles reales.
+3. Como administrador autenticado, usar **Preparar carpeta privada en Drive** en `/admin/mi-levitate`. La acción `storage.prepare` comprueba cuenta y cuota y crea o reutiliza una carpeta propia de la aplicación en la cuenta autorizada. Se mantiene separada de carpetas compartidas, música, originales y QRs; no se habilitan permisos públicos o de dominio. La aplicación descubre su referencia mediante `appProperties` de Drive, sin crear tablas ni alterar la configuración de música o de originales. `GET /api/registration/admin/participant-portal?storage=1` comprueba el estado sin crear la carpeta.
+4. El esquema aditivo de `db/registration_participant_portal.sql` ya está aplicado. La consulta de lectura del 9 de noviembre de 2026 encontró la edición real `edomex-2026-otono` oculta (`published = 0`), sin fichas editoriales ni archivos del portal. Conservar los 262 accesos emitidos, las inscripciones, resultados y relaciones actuales. Esta activación no requiere crear o reemplazar accesos ni crear otra base de datos.
+5. Ejecutar la comprobación interna de almacenamiento. Las copias de fotos deben llegar preparadas, medir hasta 1600 píxeles por lado y pesar como máximo 1 MB; los PDF admiten hasta 8 MB. El preparador ajusta calidad y tamaño automáticamente antes de cargar. El Worker valida y entrega archivos mediante su API autenticada, con operaciones acotadas para el plan actual. Drive conserva sus cuotas y espacio disponibles; una cuota agotada debe detener la operación, sin contratar ampliaciones automáticamente. Ver [el flujo de lotes](participant-portal-batch.md).
+6. Antes de publicar material real, revisar arte, nombres, correspondencias y resultados oficiales. La plantilla de reconocimientos conserva el arte de Otoño 2026 y rechaza nombres que no caben, sin truncar la identidad. **La integración de JueceoCore se reutiliza como consulta administrativa, pero este módulo no sincroniza automáticamente sus cambios.** Los datos se incorporan mediante una ficha o manifiesto revisado y conservan la aprobación explícita y las reglas de competencia directa.
 
-2. El esquema aditivo de `db/registration_participant_portal.sql` quedó aplicado el 9 de noviembre de 2026. Se comprobaron las siete tablas nuevas vacías y los registros previos sin cambios; no se crearon ediciones, accesos QR ni sesiones de participantes. El preparador general no se ejecutó contra producción en esta tarea.
-3. Revisar el arte final y los nombres. La plantilla incluida conserva el reconocimiento oficial de Otoño 2026 y superpone el nombre y la academia verificados, el sello de autenticación y el QR privado. Para nombres con glifos fuera de su cobertura usar un PDF aprobado o integrar una fuente Unicode. El generador rechaza textos que no caben en lugar de truncar la identidad.
-4. Importar las correspondencias reales y los resultados aprobados. **La integración actual de JueceoCore se reutiliza como fuente de consulta de administración, pero este módulo no sincroniza automáticamente sus cambios.** El portal recibe un registro revisado mediante el panel o manifiesto, con IDs de origen; una sincronización posterior debe conservar el paso de aprobación y la regla de competencia directa.
-5. Cargar las fotografías y documentos reales; comprobar un QR de prueba en escritorio y teléfono antes de emitir el lote.
-6. Desplegar el código y probar el control de acceso, la publicación y las descargas con una edición de prueba antes de hacerlo visible para todos.
+### Comprobación interna de almacenamiento
 
-Sin el binding de almacenamiento las consultas de datos siguen funcionando, pero cargar o descargar archivos devuelve una indisponibilidad explícita. No se ha simulado una conexión a fotografías o resultados reales.
+La comprobación inicial puede usar **Guardar fotos de la demo en Drive**. Esta acción administrativa copia únicamente las dos imágenes de archivo aprobadas de la demo. No crea fichas, eventos, accesos ni asociaciones a participantes. Sus rutas públicas `/media/mi-levitate-demo/foto-1.jpg` y `/media/mi-levitate-demo/foto-2.jpg` leen las copias privadas de Drive y verifican el hash, tamaño y dimensiones contra la lista fija incluida en el código. No aceptan otros archivos, IDs o consultas; los recursos de participantes reales conservan su autenticación. La caché de esta demo dura cinco minutos y está ligada al hash de cada imagen. La cabecera `X-Levitate-Media-Source: google-drive` permite verificar la fuente; no hay sustitución por archivos estáticos si Drive falla.
+
+El 9 de noviembre de 2026 se guardaron ambas copias desde la sesión administrativa del perfil Ati. Las dos rutas devolvieron JPEG desde `google-drive`, con los tamaños y hashes esperados; también se verificaron la galería y el visor en la web publicada. Las rutas desconocidas y los parámetros de archivo arbitrarios devolvieron 404. Esta prueba no creó ni publicó material de participantes reales.
+
+Para comprobar una galería personal adicional antes de publicar material real:
+
+Usar una sesión administrativa legítima y una edición separada, oculta y claramente identificada como prueba interna. Conservar el evento real, sus fichas y los accesos existentes sin modificaciones.
+
+1. Crear una edición interna con `published: false` y una ficha en borrador vinculada a una coreografía existente de la misma sede, con `result: null`, `judging: null` y `photosPublished: false`. Esta ficha pertenece únicamente a la edición interna; no llamar a `routine.save` sobre una ficha real, porque esa operación actualiza sus resultados y la devuelve a borrador.
+2. Cargar una única imagen de prueba identificada como «VERIFICACIÓN INTERNA · NO PUBLICAR», con `allowDownload: false` y un `uploadId` fijo para reutilizar la carga si se repite. No publicar el evento, la ficha ni el archivo y no emitir un acceso QR para esa edición.
+3. Revisar el archivo mediante la ruta administrativa autenticada y el resumen interno de un integrante de esa coreografía. Comprobar JPEG válido, orientación, tamaño, marca incorporada y metadatos retirados. Reintentar la misma carga y verificar que no se duplique.
+4. Comprobar que una solicitud sin sesión no recibe el archivo, y que un acceso de la edición real tampoco puede leer la imagen de prueba. La carpeta y los archivos de Drive deben conservar permisos restringidos; el perfil del participante recibe únicamente las rutas autenticadas de Mi Levitate. Verificar que los estados del evento real, las fichas, los resultados y los accesos coincidan con la lectura previa.
+5. Dejar los registros de comprobación ocultos y etiquetados como internos; no aprobarlos ni borrar registros o archivos existentes. Registrar sus identificadores y el resultado de la comprobación en un archivo privado de operación. Una prueba adicional de publicación visible debe usar material real revisado y tener alcance explícito.
+
+Mientras la cuenta o carpeta de almacenamiento no esté verificada, las consultas de datos siguen funcionando y las cargas o descargas de archivos devuelven una indisponibilidad explícita. Los archivos sin preparación válida o con integridad alterada se rechazan; no se entrega un original como sustituto. La demo identifica sus fotos como imágenes de archivo, independientes de la participante ficticia.
 
 ## Ejecución y validación
 
@@ -81,4 +96,4 @@ python3 -m unittest discover -s tests -p participant_portal_media_test.py
 
 Ver `docs/participant-portal-batch.md` para manifiestos, generación de diplomas y carga masiva. El modo de lote predeterminado solo valida; `--apply` escribe borradores y `--publish` publica explícitamente.
 
-Referencias primarias de la implementación: [D1 Worker API](https://developers.cloudflare.com/d1/worker-api/d1-database/), [R2 Worker API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/), [PDF-LIB](https://pdf-lib.js.org/docs/api/classes/pdfdocument).
+Referencias primarias de la implementación: [D1 Worker API](https://developers.cloudflare.com/d1/worker-api/d1-database/), [cargas de Google Drive](https://developers.google.com/workspace/drive/api/guides/manage-uploads), [descargas de Google Drive](https://developers.google.com/workspace/drive/api/guides/manage-downloads), [cuotas de Google Drive](https://developers.google.com/workspace/drive/api/guides/limits), [PDF-LIB](https://pdf-lib.js.org/docs/api/classes/pdfdocument).

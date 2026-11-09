@@ -1,9 +1,11 @@
-import { PHOTO_WATERMARK_VERSION, prepareParticipantPhoto } from "./participant-photo.js";
+import { Buffer } from "node:buffer";
+import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./participant-photo.js";
+import { prepareParticipantDemoPhoto } from "./participant-demo-media.js";
 
 const cookieName = "levitate_participant_session";
 const sessionSeconds = 60 * 60 * 24 * 7;
-const fileLimit = 12 * 1024 * 1024;
-const photoFileLimit = 2 * 1024 * 1024;
+const fileLimit = 8 * 1024 * 1024;
+const photoFileLimit = 1024 * 1024;
 const bodyLimit = 18 * 1024 * 1024;
 const venues = new Set(["cdmx", "puebla", "edomex", "veracruz"]);
 const medals = new Set(["oro", "plata", "bronce", "participacion"]);
@@ -182,28 +184,24 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
 function photoFileName(name) {
   return `${name.replace(/\.[^.]+$/, "").slice(0, 190)}.jpg`;
 }
-async function photoResponse(env, asset, object) {
-  if (object.customMetadata?.watermarkVersion === PHOTO_WATERMARK_VERSION) {
-    return { body: object.body, size: object.size ?? asset.byte_size };
-  }
-  // Older private uploads are converted only after the caller's access checks.
-  // Cache the derivative separately, preserving the original and keeping GETs
-  // read-only in D1. No unprocessed photo is ever returned as a fallback.
-  const key = `${asset.object_key}.${PHOTO_WATERMARK_VERSION}.jpg`;
-  const cached = await env.PARTICIPANT_MEDIA.get(key);
-  if (cached?.customMetadata?.watermarkVersion === PHOTO_WATERMARK_VERSION) {
-    return { body: cached.body, size: cached.size };
+async function resolveMediaStore(env, getMediaStore, options = {}) {
+  if (env.PARTICIPANT_MEDIA) return env.PARTICIPANT_MEDIA;
+  if (getMediaStore) return getMediaStore(options);
+  fault("portal_storage_unavailable", "Prepara el almacenamiento privado de Drive desde administración.", 503);
+}
+async function photoResponse(asset, object) {
+  if (object.customMetadata?.watermarkVersion !== PHOTO_WATERMARK_VERSION || object.size > photoFileLimit) {
+    fault("portal_photo_unprepared", "Esta foto debe prepararse de nuevo desde administración.", 409);
   }
   const source = new Uint8Array(await new Response(object.body).arrayBuffer());
   if (source.length > photoFileLimit) fault("portal_file_too_large", "La foto debe prepararse de nuevo desde administración.", 413);
-  const preview = await prepareParticipantPhoto(source);
-  await env.PARTICIPANT_MEDIA.put(key, preview.bytes, {
-    httpMetadata: { contentType: "image/jpeg" },
-    customMetadata: { watermarkVersion: PHOTO_WATERMARK_VERSION },
-  });
-  return { body: preview.bytes, size: preview.bytes.length };
+  const preview = await validatePreparedParticipantPhoto(source);
+  if (preview.sha256 !== asset.sha256 || preview.width !== asset.width || preview.height !== asset.height) {
+    fault("portal_photo_changed", "La foto guardada cambió. Vuelve a cargarla desde administración.", 409);
+  }
+  return { body: source, size: source.length };
 }
-async function serveAsset(db, env, request, assetId, admin = false) {
+async function serveAsset(db, env, request, assetId, admin = false, getMediaStore) {
   const grant = admin ? null : await session(db, request);
   const asset = await first(db, "SELECT * FROM participant_portal_assets WHERE id = ?", assetId);
   if (!admin) {
@@ -224,10 +222,10 @@ async function serveAsset(db, env, request, assetId, admin = false) {
     }
   }
   if (!asset) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
-  if (!env.PARTICIPANT_MEDIA) fault("portal_storage_unavailable", "Los archivos estarán disponibles próximamente.", 503);
-  const object = await env.PARTICIPANT_MEDIA.get(asset.object_key);
+  const storage = await resolveMediaStore(env, getMediaStore);
+  const object = await storage.get(asset.object_key);
   if (!object) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
-  const photo = asset.kind === "photo" ? await photoResponse(env, asset, object) : null;
+  const photo = asset.kind === "photo" ? await photoResponse(asset, object) : null;
   const disposition = asset.kind === "diploma" || new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline";
   return new Response(photo?.body ?? object.body, { headers: { ...headers, "content-type": photo ? "image/jpeg" : asset.content_type,
     "content-disposition": `${disposition}; filename="${(photo ? photoFileName(asset.file_name) : asset.file_name).replace(/[^a-zA-Z0-9._-]/g, "_")}"`, "content-length": String(photo?.size ?? asset.byte_size) } });
@@ -273,23 +271,25 @@ function detectType(bytes) {
   if (String.fromCharCode(...bytes.slice(0, 5)) === "%PDF-") return "application/pdf";
   return null;
 }
-async function uploadAsset(db, env, input) {
+async function uploadAsset(db, env, input, getMediaStore) {
   const event = await eventById(db, str(input.eventId, "la edición", 100));
   if (!assetKinds.has(input.kind)) fault("portal_invalid_asset", "Revisa el tipo de archivo.");
   const routine = input.kind !== "diploma" ? await routineById(db, str(input.routineId, "la participación", 100)) : null;
   const participant = input.kind === "diploma" ? await participantById(db, str(input.participantId, "el participante", 100)) : null;
   if (routine && routine.event_id !== event.id) fault("portal_invalid_asset", "El archivo no corresponde a esta edición.");
-  if (typeof input.base64Data !== "string" || input.base64Data.length > Math.ceil(fileLimit / 3) * 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(input.base64Data)) fault("portal_invalid_asset", "No pudimos leer el archivo.");
+  if (typeof input.base64Data !== "string" || input.base64Data.length > Math.ceil(fileLimit / 3) * 4 || input.base64Data.length % 4 !== 0) fault("portal_invalid_asset", "No pudimos leer el archivo.");
   if (input.kind === "photo" && input.base64Data.length > Math.ceil(photoFileLimit / 3) * 4) fault("portal_file_too_large", "Prepara la foto desde administración antes de cargarla.", 413);
   let bytes;
-  try { const raw = atob(input.base64Data); bytes = Uint8Array.from(raw, (character) => character.charCodeAt(0)); } catch { fault("portal_invalid_asset", "No pudimos leer el archivo."); }
-  if (!bytes.length || bytes.length > fileLimit) fault("portal_file_too_large", "El archivo debe pesar hasta 12 MB.", 413);
+  try { bytes = Buffer.from(input.base64Data, "base64"); } catch { fault("portal_invalid_asset", "No pudimos leer el archivo."); }
+  if (bytes.toString("base64") !== input.base64Data) fault("portal_invalid_asset", "No pudimos leer el archivo.");
+  if (!bytes.length || bytes.length > fileLimit) fault("portal_file_too_large", "El documento debe pesar hasta 8 MB.", 413);
   let type = detectType(bytes);
   if (type !== input.contentType || (input.kind === "photo" ? !type?.startsWith("image/") : type !== "application/pdf")) fault("portal_invalid_asset_type", "Usa JPEG, PNG o WebP para fotos y PDF para documentos.");
   let fileName = str(input.fileName, "el nombre del archivo", 200);
   const assetId = input.uploadId == null ? id() : str(input.uploadId, "la clave de carga", 100);
   if (!/^[a-zA-Z0-9_-]{8,100}$/.test(assetId)) fault("portal_invalid_asset", "Revisa la clave de carga.");
-  const digest = await hash(bytes);
+  const preparedPhoto = input.kind === "photo" ? await validatePreparedParticipantPhoto(bytes) : null;
+  const digest = preparedPhoto?.sha256 || await hash(bytes);
   const prior = await first(db, "SELECT * FROM participant_portal_assets WHERE id = ?", assetId);
   if (prior) {
     if (prior.sha256 !== digest || prior.event_id !== event.id || prior.kind !== input.kind || prior.routine_id !== (routine?.id || null) || prior.participant_id !== (participant?.id || null)) fault("portal_upload_conflict", "Esa clave corresponde a otro archivo.", 409);
@@ -299,30 +299,30 @@ async function uploadAsset(db, env, input) {
     const count = await first(db, "SELECT COUNT(*) AS count FROM participant_portal_assets WHERE routine_id = ? AND kind = 'photo'", routine.id);
     if (count.count >= 100) fault("portal_photo_limit", "Esta participación ya tiene el máximo de imágenes.");
   }
-  if (!env.PARTICIPANT_MEDIA) fault("portal_storage_unavailable", "Falta configurar el almacenamiento de archivos.", 503);
   let width = input.width == null ? null : input.width;
   let height = input.height == null ? null : input.height;
   if ([width, height].some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 50000))) fault("portal_invalid_asset", "Revisa las dimensiones del archivo.");
   if (input.kind === "photo") {
-    const preview = await prepareParticipantPhoto(bytes);
-    bytes = preview.bytes;
-    type = preview.contentType;
-    width = preview.width;
-    height = preview.height;
+    type = preparedPhoto.contentType;
+    width = preparedPhoto.width;
+    height = preparedPhoto.height;
     fileName = photoFileName(fileName);
   }
-  // The source digest remains the idempotency identity; only the marked JPEG
-  // derivative is stored and served. Client watermark claims are ignored.
-  const key = `participant-portal/${event.id}/${assetId}-${digest}${input.kind === "photo" ? `.${PHOTO_WATERMARK_VERSION}` : ""}`;
-  await env.PARTICIPANT_MEDIA.put(key, bytes, { httpMetadata: { contentType: type },
+  // Trusted administrators prepare marked copies in the browser or offline.
+  // The Worker checks their marker/hash and stores those exact immutable bytes.
+  const storage = await resolveMediaStore(env, getMediaStore);
+  const storageKey = `participant-portal/${event.id}/${assetId}-${digest}${input.kind === "photo" ? `.${PHOTO_WATERMARK_VERSION}` : ""}`;
+  const saved = await storage.put(storageKey, bytes, { verifiedSha256: digest, httpMetadata: { contentType: type },
     ...(input.kind === "photo" ? { customMetadata: { watermarkVersion: PHOTO_WATERMARK_VERSION } } : {}) });
+  const key = saved?.objectKey || storageKey;
   try {
     await db.prepare(`INSERT INTO participant_portal_assets(id,event_id,routine_id,participant_id,kind,object_key,file_name,content_type,sha256,byte_size,width,height,caption,allow_download)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(assetId,event.id,routine?.id || null,participant?.id || null,input.kind,key,fileName,type,digest,bytes.length,width,height,str(input.caption,"la descripción",500,true),bool(input.allowDownload) ? 1 : 0).run();
   } catch (error) {
     const stored = await first(db,"SELECT * FROM participant_portal_assets WHERE id=?",assetId);
     if (stored?.sha256 === digest && stored.event_id === event.id && stored.kind === input.kind && stored.routine_id === (routine?.id || null) && stored.participant_id === (participant?.id || null)) return json({assetId});
-    if (stored?.object_key !== key) await env.PARTICIPANT_MEDIA.delete(key);
+    // Keep recoverable Drive drafts on uncertain D1 writes; retries reuse them.
+    if (storage.info?.provider !== "google_drive" && stored?.object_key !== key) await storage.delete(key);
     if (stored) fault("portal_upload_conflict","Esa clave corresponde a otro archivo.",409);
     if (String(error?.message).includes("participant_portal_photo_limit")) fault("portal_photo_limit","Esta participación ya tiene el máximo de imágenes.");
     throw error;
@@ -333,8 +333,17 @@ function revisionStatement(db,{routineId,eventId,revision,action,snapshot,actorI
   return db.prepare(`INSERT INTO participant_portal_routine_revisions(id,routine_id,event_id,revision,action,snapshot_json,actor_id)
     VALUES(?,?,?,?,?,?,?)`).bind(id(),routineId,eventId,revision,action,JSON.stringify(snapshot),actorId || null);
 }
-async function adminAction(db, env, input, actorId) {
+async function adminAction(db, env, input, actorId, getMediaStore) {
   switch (input.action) {
+    case "storage.prepare": {
+      const storage = await resolveMediaStore(env, getMediaStore, { create: true });
+      return json({ mediaStorage: storage.info || { provider: "configured", ready: true } });
+    }
+    case "demo.photo.prepare":
+      return json(await prepareParticipantDemoPhoto(env, {
+        slot: input.slot,
+        getMediaStore: () => resolveMediaStore(env, getMediaStore),
+      }));
     case "event.upsert": {
       const event = input.event || {};
       const eventId = str(event.id, "la edición", 100);
@@ -408,7 +417,7 @@ async function adminAction(db, env, input, actorId) {
       ]);
       return json({ ok:true });
     }
-    case "asset.upload": return uploadAsset(db,env,input);
+    case "asset.upload": return uploadAsset(db,env,input,getMediaStore);
     case "asset.publish": {
       const asset = await first(db,"SELECT id FROM participant_portal_assets WHERE id=?",str(input.assetId,"el archivo",100));
       if (!asset) fault("portal_asset_not_found","No se encontró el archivo.",404);
@@ -428,7 +437,7 @@ async function adminAction(db, env, input, actorId) {
     default: fault("portal_invalid_action","Selecciona una acción válida.");
   }
 }
-export async function handleParticipantPortal(request, env, { requireAdmin } = {}) {
+export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore } = {}) {
   try {
     const db = env.DB;
     if (!db) fault("portal_unavailable","El portal no está disponible por el momento.",503);
@@ -440,12 +449,16 @@ export async function handleParticipantPortal(request, env, { requireAdmin } = {
         ? await requireAdmin(request,env,db,{touchLastSeen:false})
         : await requireAdmin(request,env,db);
       if (request.method === "GET") {
-        if (url.searchParams.has("assetId")) return await serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true);
+        if (url.searchParams.has("assetId")) return await serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true,getMediaStore);
+        if (url.searchParams.get("storage") === "1") {
+          const storage = await resolveMediaStore(env,getMediaStore);
+          return json({ mediaStorage: storage.info || { provider: "configured", ready: true } });
+        }
         if (url.searchParams.get("preview") === "1") return json(await participantData(db,env,
           str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true));
         return await adminList(db,request);
       }
-      return await adminAction(db,env,await body(request),admin?.session?.user?.id);
+      return await adminAction(db,env,await body(request),admin?.session?.user?.id,getMediaStore);
     }
     if (path === "/api/participant/access/exchange") {
       method(request,["POST"]);
@@ -468,7 +481,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin } = {
     }
     if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,env,request); }
     const assetMatch=path.match(/^\/api\/participant\/assets\/([a-zA-Z0-9_-]{8,100})$/);
-    if (assetMatch) { method(request,["GET"]); return await serveAsset(db,env,request,assetMatch[1]); }
+    if (assetMatch) { method(request,["GET"]); return await serveAsset(db,env,request,assetMatch[1],false,getMediaStore); }
     return json({error:{code:"portal_not_found",message:"No se encontró esta página."}},404);
   } catch (error) {
     const status=Number.isInteger(error?.statusCode) ? error.statusCode : 500;

@@ -11,6 +11,7 @@ type Asset = { id: string; kind: string; routineId?: string; participantId?: str
 type Pagination = { offset: number; limit: number; hasMore: boolean };
 type Data = { events: Event[]; participants: Person[]; routines: Routine[]; assets: Asset[]; pagination?: Pagination; routinePagination?: Pagination; assetPagination?: Pagination };
 type ResultForm = { score: string; maxScore: string; medal: string; directCompetition: boolean; eligibleCount: string; place: string };
+type MediaStorage = { ready: boolean; provider: string; accountEmail?: string; folderName?: string };
 const emptyResult: ResultForm = { score: '', maxScore: '', medal: 'participacion', directCompetition: false, eligibleCount: '1', place: '' };
 const endpoint = '/api/registration/admin/participant-portal';
 
@@ -51,6 +52,8 @@ export function ParticipantAdminPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [authorized, setAuthorized] = useState(false);
+  const [mediaStorage, setMediaStorage] = useState<MediaStorage | null>(null);
+  const [storageMessage, setStorageMessage] = useState('');
   const latest = useRef(0);
   const latestAssets = useRef(0);
   const person = data.participants.find(row => row.id === personId);
@@ -86,6 +89,18 @@ export function ParticipantAdminPage() {
   }, [eventId, search, personOffset, routineSearch, routineOffset]);
   useEffect(() => { refreshAssets().catch(reportError); }, [eventId, personId, routine?.id, assetOffset]);
   useEffect(() => {
+    if (!authorized) { setMediaStorage(null); return; }
+    let active = true;
+    api<{ mediaStorage: MediaStorage }>('?storage=1').then(response => {
+      if (active) { setMediaStorage(response.mediaStorage); setStorageMessage(''); }
+    }).catch(cause => {
+      if (!active) return;
+      if (cause instanceof RegistrationApiError && (cause.status === 401 || cause.status === 403)) reportError(cause);
+      else setStorageMessage(cause instanceof Error ? cause.message : 'Prepara la carpeta privada para cargar material.');
+    });
+    return () => { active = false; };
+  }, [authorized]);
+  useEffect(() => {
     const current = data.events.find(row => row.id === eventId);
     if (current) setEventDraft(current);
     setQr(''); setPersonId(''); setDanceId(''); setPersonOffset(0); setRoutineOffset(0); setAssetOffset(0);
@@ -106,6 +121,7 @@ export function ParticipantAdminPage() {
   const routinePayload = () => ({ action: 'routine.save', eventId, danceId, sourceEventId: routine?.sourceEventId || '', sourceRoutineId: routine?.sourceRoutineId || '', result: result.score === '' ? null : { score: Number(result.score), maxScore: Number(result.maxScore), medal: result.medal, directCompetition: result.directCompetition, eligibleCount: Number(result.eligibleCount), place: result.directCompetition && result.place ? Number(result.place) : null }, judging: judging.trim() ? JSON.parse(judging) : null, photosPublished });
   const upload = async (file: File | Blob, kind: string, fileName: string, participantId?: string) => {
     if (file.size > 12 * 1024 * 1024) throw new Error('Cada archivo debe pesar menos de 12 MB.');
+    if (kind !== 'photo' && file.size > 8 * 1024 * 1024) throw new Error('Los documentos deben pesar hasta 8 MB.');
     const prepared = kind === 'photo' ? await prepareParticipantPhoto(file, fileName) : null;
     const content = prepared?.blob || file;
     return api<{ assetId: string }>('', { action: 'asset.upload', eventId, kind, fileName: prepared?.fileName || fileName, contentType: content.type, base64Data: await fileData(content), ...(prepared ? { width: prepared.width, height: prepared.height } : {}), ...(participantId ? { participantId } : { routineId: routine?.id }) });
@@ -119,7 +135,24 @@ export function ParticipantAdminPage() {
     <header><a href="/admin">← Administración Levitate</a><nav aria-label="Herramientas de Mi Levitate"><a href="/admin/foto-video">Foto y video</a><a href="/mi-levitate/demo" target="_blank" rel="noreferrer">Ver resumen de ejemplo ↗</a></nav><span>MI LEVITATE / PUBLICACIÓN</span></header>
     <h1>Su experiencia.<br /><em>En tus manos.</em></h1>
     <p className="pp-admin-intro">Vincula cada presentación, revisa sus resultados y publica los documentos y fotografías de sus integrantes.</p>
-    {authorized && <section className="pp-admin-drive" aria-label="Drive y vistas previas de Mi Levitate"><MediaDriveConnectionPanel /><p>Drive conserva el material de foto y video. Vincular una carpeta no carga ni publica fotografías en los resúmenes: las vistas previas se revisan y aprueban en la presentación correspondiente.</p></section>}
+    {authorized && <section className="pp-admin-drive" aria-label="Drive y vistas previas de Mi Levitate"><MediaDriveConnectionPanel /><p>La carpeta de foto y video corresponde al respaldo de originales. Las vistas de Mi Levitate se guardan en la carpeta privada indicada abajo y se revisan y aprueban por presentación.</p></section>}
+    {authorized && <section className="pp-admin-section" aria-label="Vistas previas privadas en Drive">
+      <h2>Vistas previas privadas en Drive</h2>
+      <p>Se usa el espacio disponible de Drive para guardar las copias de Mi Levitate. Las fotos se preparan con marca de agua antes de subirlas y los originales se conservan.</p>
+      {mediaStorage?.ready && <p role="status">Carpeta lista: <strong>{mediaStorage.folderName || 'Mi Levitate'}</strong>{mediaStorage.accountEmail ? ` · ${mediaStorage.accountEmail}` : ''}.</p>}
+      {storageMessage && <p>{storageMessage}</p>}
+      <button disabled={busy} onClick={() => perform(async () => {
+        const response = await api<{ mediaStorage: MediaStorage }>('', { action: 'storage.prepare' });
+        setMediaStorage(response.mediaStorage); setStorageMessage('');
+      }, 'Carpeta privada de Drive verificada. Ya puedes cargar las vistas previas.')}>
+        {mediaStorage?.ready ? 'Comprobar carpeta privada' : 'Preparar carpeta privada en Drive'}
+      </button>
+      <button disabled={busy || !mediaStorage?.ready} onClick={() => perform(async () => {
+        for (const slot of ['foto-1', 'foto-2']) await api('', { action: 'demo.photo.prepare', slot });
+      }, 'Las dos fotos de ejemplo están guardadas en Drive y disponibles en la demo.')}>
+        Guardar fotos de la demo en Drive
+      </button>
+    </section>}
     {error && <div className="pp-admin-error" role="alert">{error} <a href="/login">Iniciar sesión</a></div>}
     {message && <p className="pp-admin-message" role="status">{message}</p>}
     <fieldset disabled={busy || !authorized}>

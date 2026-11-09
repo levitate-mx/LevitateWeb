@@ -61,6 +61,13 @@ test("public asset validation stays separate from authenticated administrator as
   assert.equal(participantAssetUrl("https://drive.google.com/file/d/example"), undefined);
   assert.equal(participantAssetUrl("/assets/example.jpg"), undefined);
   assert.equal(participantAssetUrl("/assets/example.jpg", true), "/assets/example.jpg");
+  for (const path of ["/media/mi-levitate-demo/foto-1.jpg", "/media/mi-levitate-demo/foto-2.jpg"]) {
+    assert.equal(participantAssetUrl(path), undefined);
+    assert.equal(participantAssetUrl(path, true), path);
+    assert.equal(participantAssetUrl(path + "?assetId=private", true), undefined);
+    assert.equal(participantAssetUrl(path + "#token", true), undefined);
+  }
+  assert.equal(participantAssetUrl("/media/mi-levitate-demo/foto-3.jpg", true), undefined);
 });
 
 test("admin preview requires the explicit server flag and the requested person and edition", async () => {
@@ -97,10 +104,10 @@ test("the public demo and its punctuation alias stay isolated from the private a
   assert.equal(mode("/admin/mi-levitate/resumen", "?preview=1", false, true), "internal");
   assert.equal(mode("/mi-levitate", "?internalPreview=1", false, false), "participant");
   assert.equal(preview.routines[0].photos.items.length, 2);
-  assert.equal(preview.routines[0].photos.items[0].previewUrl, "/assets/participant-demo-photo-watermarked.jpg");
-  assert.equal(preview.routines[0].photos.items[1].previewUrl, "/assets/participant-demo-photo-blurred-watermarked.jpg");
+  assert.equal(preview.routines[0].photos.items[0].previewUrl, "/media/mi-levitate-demo/foto-1.jpg");
+  assert.equal(preview.routines[0].photos.items[1].previewUrl, "/media/mi-levitate-demo/foto-2.jpg");
   assert.match(preview.routines[0].photos.items[1].caption, /vista previa desenfocada/);
-  assert.ok(preview.routines[0].photos.items.every(photo => photo.previewUrl.startsWith("/assets/") && !photo.downloadUrl));
+  assert.ok(preview.routines[0].photos.items.every(photo => photo.previewUrl.startsWith("/media/mi-levitate-demo/") && !photo.downloadUrl));
   assert.equal(preview.routines[0].judging.url, "/assets/participant-demo-judge-sheet.pdf");
 });
 

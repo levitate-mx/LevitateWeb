@@ -71,7 +71,6 @@
     "deploy": "npm run test:registration && npm run build && npm run db:prepare:registration && wrangler deploy"
   },
   "dependencies": {
-    "@cf-wasm/photon": "0.4.0",
     "@neondatabase/serverless": "^1.1.0",
     "exceljs": "4.4.0",
     "lucide-react": "^1.16.0",

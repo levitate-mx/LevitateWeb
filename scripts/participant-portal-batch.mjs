@@ -3,9 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizePortalJudging, normalizePortalResult } from "../worker/participant-portal.js";
+import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "../shared/participant-photo-watermark.js";
 
 const endpointPath = "/api/registration/admin/participant-portal";
-const maxFileBytes = 12 * 1024 * 1024;
+const maxFileBytes = 8 * 1024 * 1024;
+const maxPhotoBytes = 1024 * 1024;
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function text(value, label, max = 200) {
@@ -88,8 +90,8 @@ export function normalizeManifest(value, directory = process.cwd()) {
     if (!["photo", "diploma", "judge_sheet"].includes(kind)) throw new Error("asset.kind desconocido.");
     const danceId = optionalText(asset.danceId, "asset.danceId", 100);
     const participantId = optionalText(asset.participantId, "asset.participantId", 100);
-    if (kind === "photo" && (!danceId || asset.watermarkOnUpload !== true || asset.watermarked === true)) {
-      throw new Error("Las fotos requieren danceId y watermarkOnUpload: true. Prepara copias con participant-portal-media.py --for-upload; el servidor agrega la marca de agua obligatoria.");
+    if (kind === "photo" && (!danceId || asset.watermarked !== true || asset.watermarkVersion !== PHOTO_WATERMARK_VERSION)) {
+      throw new Error("Las fotos requieren danceId, watermarked: true y watermarkVersion vigente. Prepara los originales con participant-portal-media.py --for-upload.");
     }
     if (kind === "diploma" && !participantId) throw new Error("Un diploma requiere participantId.");
     if (kind === "judge_sheet" && !danceId) throw new Error("Una hoja de jueceo requiere danceId.");
@@ -99,6 +101,7 @@ export function normalizeManifest(value, directory = process.cwd()) {
     return { key: text(asset.key, "asset.key"), kind, danceId, participantId,
       file: path.resolve(directory, text(asset.file, "asset.file", 4096)),
       caption: optionalText(asset.caption, "asset.caption", 500),
+      ...(kind === "photo" ? { watermarked: true, watermarkVersion: PHOTO_WATERMARK_VERSION } : {}),
       width: asset.width === undefined ? undefined : number(asset.width, "asset.width"),
       height: asset.height === undefined ? undefined : number(asset.height, "asset.height"),
       allowDownload: boolean(asset.allowDownload, "asset.allowDownload", false) };
@@ -207,14 +210,23 @@ function fileType(bytes) {
 }
 
 async function inspectAsset(asset) {
+  const maximum = asset.kind === "photo" ? maxPhotoBytes : maxFileBytes;
+  const sizeMessage = asset.kind === "photo" ? "Una foto falta, está vacía o supera 1 MB." : "Un archivo falta, está vacío o supera 8 MB.";
   const stat = await fs.stat(asset.file).catch(() => null);
-  if (!stat?.isFile() || stat.size === 0 || stat.size > maxFileBytes) throw new Error("Un archivo falta, está vacío o supera 12 MB.");
+  if (!stat?.isFile() || stat.size === 0 || stat.size > maximum) throw new Error(sizeMessage);
   const bytes = await fs.readFile(asset.file);
-  if (!bytes.length || bytes.length > maxFileBytes) throw new Error("Un archivo está vacío o supera 12 MB.");
+  if (!bytes.length || bytes.length > maximum) throw new Error(sizeMessage);
   const [contentType, extension] = fileType(bytes);
-  if (asset.kind === "photo" && contentType === "application/pdf") throw new Error("Una foto debe ser JPEG, PNG o WebP.");
+  let prepared;
+  if (asset.kind === "photo") {
+    if (contentType !== "image/jpeg") throw new Error("Una foto para cargar debe ser el JPEG preparado con --for-upload.");
+    prepared = await validatePreparedParticipantPhoto(bytes);
+    if ((asset.width !== undefined && asset.width !== prepared.width) || (asset.height !== undefined && asset.height !== prepared.height)) {
+      throw new Error("Las dimensiones de una foto no coinciden con su manifiesto.");
+    }
+  }
   if (asset.kind !== "photo" && contentType !== "application/pdf") throw new Error("Los diplomas y hojas de jueceo requieren PDF.");
-  return { bytes, contentType, extension, contentHash: digest(bytes) };
+  return { bytes, contentType, extension, contentHash: digest(bytes), ...(prepared ? { width: prepared.width, height: prepared.height } : {}) };
 }
 
 async function readCookie(options) {
@@ -418,7 +430,8 @@ export async function main(argumentsList = process.argv.slice(2), { transport = 
       const uploadId = `batch-${digest(JSON.stringify([manifest.event.id, asset.key, asset.kind, asset.danceId, asset.participantId, file.contentHash])).slice(0, 56)}`;
       const payload = { eventId: manifest.event.id, kind: asset.kind, routineId, participantId: asset.participantId,
         fileName: `${fileId(asset.key)}.${file.extension}`, contentType: file.contentType, base64Data: file.bytes.toString("base64"),
-        width: asset.width, height: asset.height, caption: asset.caption, allowDownload: asset.allowDownload, uploadId };
+        width: file.width ?? asset.width, height: file.height ?? asset.height, caption: asset.caption, allowDownload: asset.allowDownload, uploadId,
+        ...(asset.kind === "photo" ? { watermarkVersion: PHOTO_WATERMARK_VERSION } : {}) };
       const response = await run(`asset:${asset.key}`, "asset.upload", payload);
       if (typeof response.assetId !== "string") throw new Error("La API no devolvió assetId.");
       assetIds.set(asset.key, response.assetId);

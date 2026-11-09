@@ -11,8 +11,8 @@ const pending: ParticipantRoutine["result"] = {
 };
 
 const archivalPhotos = [
-  { url: "/assets/participant-demo-photo-watermarked.jpg", width: 1066, height: 1600, caption: "Imagen de archivo de Levitate MX · Vista de ejemplo. No corresponde a esta participante." },
-  { url: "/assets/participant-demo-photo-blurred-watermarked.jpg", width: 720, height: 480, caption: "Imagen de archivo de Levitate MX · Ejemplo de vista previa desenfocada. No corresponde a esta participante." },
+  { url: "/media/mi-levitate-demo/foto-1.jpg", width: 1066, height: 1600, caption: "Imagen de archivo de Levitate MX · Vista de ejemplo. No corresponde a esta participante." },
+  { url: "/media/mi-levitate-demo/foto-2.jpg", width: 720, height: 480, caption: "Imagen de archivo de Levitate MX · Ejemplo de vista previa desenfocada. No corresponde a esta participante." },
 ].map((photo, index) => ({
   id: `archivo-${index}`,
   previewUrl: photo.url,

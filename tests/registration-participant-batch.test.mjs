@@ -4,9 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { main, normalizeBaseUrl, normalizeCookie, normalizeManifest, parseArgs, resolveEntryUrl, toPrivateCsv } from "../scripts/participant-portal-batch.mjs";
+import { PHOTO_WATERMARK_VERSION, addPreparedPhotoMarker } from "../shared/participant-photo-watermark.js";
 
 const baseUrl = "https://portal.example";
 const token = "a".repeat(43);
+const tinyJpeg = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgICRINDQoOFRIWFhUSFBQXGiEcFxgfGRQUHScdHyIjJSUlFhwpLCgkKyEkJST/2wBDAQYGBgkICREJCREkGBQYJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCT/wAARCAAYACADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDwCiiivpDjCiiigAooooAKKKKAP//Z", "base64");
+const preparedJpeg = await addPreparedPhotoMarker(tinyJpeg, 32, 24);
 const sample = () => ({ version: 1, event: { id: "event-example", title: "Edición de prueba", season: "Otoño", venue: "edomex", startsAt: "2026-11-14" },
   participants: [{ participantId: "participant-example", name: "Etiqueta local de ejemplo" }],
   routines: [{ danceId: "dance-example", approved: true, photosPublished: false,
@@ -72,14 +75,15 @@ test("batch snapshots require approval and preserve the server's real scoring ru
   assert.throws(() => normalizeManifest(manifest), /--publish/);
 });
 
-test("batch requires assigned photos prepared for server watermarking and matching diploma ownership", () => {
+test("batch requires assigned prepared photos with the current watermark version and matching diploma ownership", () => {
   const manifest = sample();
   manifest.assets = [{ key: "photo-example", kind: "photo", file: "example.jpg", danceId: "dance-example" }];
-  assert.throws(() => normalizeManifest(manifest), /watermarkOnUpload/);
-  manifest.assets[0].watermarkOnUpload = true;
-  assert.equal(normalizeManifest(manifest).assets[0].allowDownload, false);
+  assert.throws(() => normalizeManifest(manifest), /watermarkVersion/);
   manifest.assets[0].watermarked = true;
+  manifest.assets[0].watermarkVersion = "levitate-preview-v1";
   assert.throws(() => normalizeManifest(manifest), /--for-upload/);
+  manifest.assets[0].watermarkVersion = PHOTO_WATERMARK_VERSION;
+  assert.equal(normalizeManifest(manifest).assets[0].allowDownload, false);
   manifest.assets = [{ key: "diploma-example", kind: "diploma", file: "example.pdf", participantId: "participant-example" }];
   manifest.documents = [{ assetKey: "diploma-example", participantId: "other-example" }];
   assert.throws(() => normalizeManifest(manifest), /mismo participante/);
@@ -237,10 +241,10 @@ test("batch publishes the routine for a judge-sheet-only batch with scoped asset
 test("batch stops photo publication if the existing album is disabled", async (t) => {
   const f = await fixture(t);
   const file = path.join(f.directory, "preview-example.jpg");
-  await fs.writeFile(file, Buffer.from([0xff, 0xd8, 0xff, 0, 0]));
+  await fs.writeFile(file, preparedJpeg);
   f.manifest.participants = [];
   f.manifest.routines = [];
-  f.manifest.assets = [{ key: "photo-example", kind: "photo", danceId: "dance-example", file, watermarkOnUpload: true }];
+  f.manifest.assets = [{ key: "photo-example", kind: "photo", danceId: "dance-example", file, watermarked: true, watermarkVersion: PHOTO_WATERMARK_VERSION }];
   await fs.writeFile(f.manifestFile, JSON.stringify(f.manifest));
   const transport = async (url, options) => {
     if (!options.method) return Response.json({ participants: [],
@@ -249,4 +253,42 @@ test("batch stops photo publication if the existing album is disabled", async (t
   };
   await assert.rejects(f.run(["--apply", "--publish"], transport), /photosPublished desactivado/);
   assert.equal(f.actions.some((action) => action.action.endsWith(".publish") || action.action === "asset.upload"), false);
+});
+
+test("batch rejects unprepared, mismatched or oversized photos before contacting the API", async (t) => {
+  const f = await fixture(t);
+  const file = path.join(f.directory, "preview-example.jpg");
+  await fs.writeFile(file, tinyJpeg);
+  f.manifest.assets = [{ key: "photo-example", kind: "photo", danceId: "dance-example", file,
+    watermarked: true, watermarkVersion: PHOTO_WATERMARK_VERSION }];
+  await fs.writeFile(f.manifestFile, JSON.stringify(f.manifest));
+  let calls = 0;
+  const forbidden = () => { calls++; throw new Error("No API calls expected"); };
+  await assert.rejects(f.run(["--apply"], forbidden), /prepar|marca|JPEG/i);
+  assert.equal(calls, 0);
+  await fs.writeFile(file, preparedJpeg);
+  f.manifest.assets[0].width = 1;
+  await fs.writeFile(f.manifestFile, JSON.stringify(f.manifest));
+  await assert.rejects(f.run(["--apply"], forbidden), /dimensiones/);
+  assert.equal(calls, 0);
+  delete f.manifest.assets[0].width;
+  await fs.writeFile(file, Buffer.alloc(1024 * 1024 + 1));
+  await fs.writeFile(f.manifestFile, JSON.stringify(f.manifest));
+  await assert.rejects(f.run(["--apply"], forbidden), /supera 1 MB/);
+  assert.equal(calls, 0);
+});
+
+test("batch uploads the exact prepared JPEG with its verified dimensions", async (t) => {
+  const f = await fixture(t);
+  const file = path.join(f.directory, "preview-example.jpg");
+  await fs.writeFile(file, preparedJpeg);
+  f.manifest.assets = [{ key: "photo-example", kind: "photo", danceId: "dance-example", file,
+    watermarked: true, watermarkVersion: PHOTO_WATERMARK_VERSION }];
+  await fs.writeFile(f.manifestFile, JSON.stringify(f.manifest));
+  await f.run(["--apply"]);
+  const upload = f.actions.find(action => action.action === "asset.upload");
+  assert.equal(upload.contentType, "image/jpeg");
+  assert.equal(upload.watermarkVersion, PHOTO_WATERMARK_VERSION);
+  assert.equal(upload.width, 32); assert.equal(upload.height, 24);
+  assert.deepEqual(Buffer.from(upload.base64Data, "base64"), Buffer.from(preparedJpeg));
 });

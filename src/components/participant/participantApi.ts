@@ -119,6 +119,7 @@ export function participantAssetUrl(
     const url = new URL(value, window.location.origin);
     if (url.origin !== window.location.origin) return undefined;
     if (url.pathname.startsWith("/api/participant/assets/")) return url.pathname + url.search;
+    if (preview && /^\/media\/mi-levitate-demo\/foto-[12]\.jpg$/.test(url.pathname) && !url.search && !url.hash) return url.pathname;
     if (preview && url.pathname.startsWith("/assets/")) return url.pathname;
   } catch {
     /* An unavailable asset is shown as pending by the caller. */
