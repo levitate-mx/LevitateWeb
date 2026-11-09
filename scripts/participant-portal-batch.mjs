@@ -397,6 +397,7 @@ export async function main(argumentsList = process.argv.slice(2), { transport = 
       const { generateParticipantDiploma } = await import("../shared/participant-diploma.js");
       const logoBytes = await fs.readFile(path.join(rootDirectory, "public/assets/levitate-logo-mx.png"));
       const templateBytes = await fs.readFile(path.join(rootDirectory, "public/assets/participant-recognition-template.pdf"));
+      const unicodeFontBytes = await fs.readFile(path.join(rootDirectory, "public/assets/participant-recognition-unicode.ttf"));
       const diplomaDirectory = path.join(directory, "diplomas");
       await fs.mkdir(diplomaDirectory, { recursive: true, mode: 0o700 });
       await fs.chmod(diplomaDirectory, 0o700);
@@ -407,12 +408,12 @@ export async function main(argumentsList = process.argv.slice(2), { transport = 
         const input = { name: person.name, academy: person.academy, eventTitle: manifest.event.title, season: manifest.event.season,
           venue: manifest.diploma.venueLabel ?? manifest.event.venue, dateLabel: manifest.diploma.dateLabel ?? manifest.event.startsAt,
           entryUrl: access.entryUrl };
-        const fingerprint = digest(JSON.stringify({ input, logo: digest(logoBytes), template: digest(templateBytes) }));
+        const fingerprint = digest(JSON.stringify({ input, logo: digest(logoBytes), template: digest(templateBytes), unicodeFont: digest(unicodeFontBytes) }));
         const diplomaFile = path.join(diplomaDirectory, `${fileId(participant.participantId)}.pdf`);
         const previous = state.generatedDiplomas[participant.participantId];
         const exists = await fs.stat(diplomaFile).then((stat) => stat.isFile(), () => false);
         if (!exists || previous?.fingerprint !== fingerprint) {
-          await privateWrite(diplomaFile, await generateParticipantDiploma({ ...input, logoBytes, templateBytes }));
+          await privateWrite(diplomaFile, await generateParticipantDiploma({ ...input, logoBytes, templateBytes, unicodeFontBytes }));
           state.generatedDiplomas[participant.participantId] = { fingerprint };
           await saveState();
         }

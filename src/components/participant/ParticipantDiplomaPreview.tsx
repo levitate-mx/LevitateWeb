@@ -4,12 +4,14 @@ export function ParticipantDiplomaPreview({
   season,
   eventTitle,
   preview,
+  internalPreview = false,
 }: {
   name: string;
   academy: string;
   season: string;
   eventTitle: string;
   preview: boolean;
+  internalPreview?: boolean;
 }) {
   return (
     <div className="participant-diploma-stage" data-participant-reveal>
@@ -33,12 +35,12 @@ export function ParticipantDiplomaPreview({
           </div>
           <div className="participant-certificate__auth">
             <span aria-hidden="true">✓</span>
-            {preview ? "Ejemplo autenticado" : "Reconocimiento autenticado"}
+            {internalPreview ? "Vista interna · No publicado" : preview ? "Ejemplo autenticado" : "Reconocimiento autenticado"}
           </div>
         </div>
       </div>
       <span className="participant-diploma-stage__caption">
-        Reconocimiento autenticado · {season || eventTitle}
+        {internalPreview ? "Vista interna · No publicado" : "Reconocimiento autenticado"} · {season || eventTitle}
       </span>
     </div>
   );

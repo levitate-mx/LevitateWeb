@@ -267,7 +267,7 @@ test('participant sheets fetch only requested routine evaluations instead of the
   for(const {url} of server.calls){
     const table=url.pathname.split('/').at(-1);
     assert.notEqual(table,'special_awards','participant sheets do not need unrelated special awards');
-    if(['routines','scores','penalties','feedback'].includes(table)){
+    if(['scores','penalties','feedback'].includes(table)){
       assert.equal(url.searchParams.get('routine_id'),'in.(r1)');
       assert.equal(url.searchParams.get('event_id'),`eq.${eventId}`);
     }
@@ -285,6 +285,7 @@ test('sheet routine filters are bounded and cannot inject another PostgREST scop
 test('sheet reader rejects foreign routine or event rows even if upstream ignores its filter',async()=>{
   for(const table of ['routines','scores','penalties','feedback']){
     for(const mismatch of [{routine_id:'r2',event_id:eventId},{routine_id:'r1',event_id:otherEventId}]){
+      if(table==='routines'&&mismatch.event_id===eventId) continue; // Full metadata can contain peers; absent own ID stays unlinked.
       const data=scoreData(); data[table]=[{...(data[table][0]||{}),...mismatch}];
       const server=upstream(data);
       await assert.rejects(()=>getJudgingSheets(env,eventId,{routineIds:['r1'],fetcher:server.fetcher}),error=>error.code==='judging_invalid_response');

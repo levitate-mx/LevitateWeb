@@ -388,13 +388,13 @@ export default {
       });
     }
 
-    if (url.pathname.startsWith("/api/participant/") || url.pathname === "/api/registration/admin/participant-portal") {
+    if (url.pathname.startsWith("/api/participant/") || url.pathname === "/api/registration/admin/participant-portal" || url.pathname === "/api/integrations/jueceocore/program") {
       return handleParticipantPortal(request, env, {
         requireAdmin: requireRegistrationAdmin,
         getMediaStore: (options) => getParticipantMediaStorage(env, options),
         getJudgingSnapshot: (eventId, options) => getJudgingSheets(env, eventId, options),
         getJudgingEventList: () => getJudgingEvents(env),
-        getJudgingDirectory: (eventId) => getJudgingRoutineDirectory(env, eventId),
+        getJudgingDirectory: (eventId, options) => getJudgingRoutineDirectory(env, eventId, options),
       });
     }
 
