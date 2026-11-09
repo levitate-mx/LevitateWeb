@@ -293,7 +293,8 @@ function PortalState({
 
 export function ParticipantPage() {
   const preview =
-    import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "1";
+    /^\/mi-levitate\/demo\/?$/.test(window.location.pathname) ||
+    (import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "1");
   const [data, setData] = useState<ParticipantPortalData | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "access" | "error" | "closed">(
     "loading",

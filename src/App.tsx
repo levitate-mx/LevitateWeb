@@ -30,7 +30,7 @@ import { ParticipantAdminPage } from "./components/participant-admin/Participant
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
-  const participantMatch = window.location.pathname.match(/^\/mi-levitate\/?$/);
+  const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo)?\/?$/);
   const participantAdminMatch = window.location.pathname.match(/^\/admin\/mi-levitate\/?$/);
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);

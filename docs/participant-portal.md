@@ -10,7 +10,7 @@ Cada presentación conserva su puntaje y escala, medalla, hoja de jueceo y galer
 
 El diploma pertenece al participante y la edición. La galería y el jueceo pertenecen a la presentación: los integrantes de una pieza grupal reciben el mismo álbum sin duplicar archivos.
 
-El ejemplo local está en `/mi-levitate?preview=1`. Solo existe en desarrollo; usa datos ilustrativos y tres imágenes de archivo identificadas como tales. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
+El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y tres imágenes de archivo identificadas como tales, sin aceptar ni exponer accesos privados. En desarrollo también puede abrirse con `/mi-levitate?preview=1`. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
 
 ## Flujo para operar el evento
 
