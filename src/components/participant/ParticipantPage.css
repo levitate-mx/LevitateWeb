@@ -287,8 +287,7 @@
   scroll-margin-top: 20px;
 }
 
-.participant-experience > section,
-.participant-footer {
+.participant-experience > section {
   max-width: 1480px;
   margin-inline: auto;
 }
@@ -721,38 +720,6 @@
 .participant-gallery__pending > span {
   color: var(--participant-muted);
   font-size: 13px;
-}
-
-.participant-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  padding-block: 40px;
-  border-top: 1px solid var(--participant-line);
-}
-
-.participant-footer .participant-brand {
-  width: 125px;
-}
-
-.participant-footer .participant-brand img {
-  filter: brightness(0);
-}
-
-.participant-footer p,
-.participant-footer > span,
-.participant-footer > a:last-child {
-  color: var(--participant-muted);
-  font-size: 10px;
-  line-height: 1.6;
-}
-
-.participant-footer > a:last-child {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
 }
 
 .participant-entry {
@@ -1296,22 +1263,6 @@
     font-size: 11px;
     line-height: 1.7;
   }
-  .participant-footer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 24px 20px;
-    padding-block: 32px;
-  }
-  .participant-footer .participant-brand {
-    width: 110px;
-  }
-  .participant-footer > p {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-  .participant-footer > span {
-    text-align: right;
-  }
   .participant-dialog {
     width: calc(100% - 24px);
     max-height: calc(100dvh - 24px);
@@ -1417,20 +1368,6 @@
 .participant-chapter-heading {
   margin-bottom: 45px;
 }
-.participant-chapter-heading > .participant-eyebrow {
-  margin-bottom: 20px;
-  color: var(--participant-muted);
-}
-.participant-chapter-heading > .participant-eyebrow > span {
-  margin-right: 20px;
-  color: var(--participant-pink);
-}
-.participant-chapter-heading > div {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 35px;
-}
 .participant-chapter-heading h2 {
   font-size: clamp(2.8rem, 5.8vw, 5.5rem);
   font-weight: 560;
@@ -1439,11 +1376,6 @@
 }
 .participant-chapter-heading h2 > span {
   color: var(--participant-pink);
-}
-.participant-chapter-heading > div > p {
-  color: var(--participant-muted);
-  font-size: 14px;
-  line-height: 1.6;
 }
 .participant-diploma-layout {
   display: grid;
@@ -1665,10 +1597,6 @@
   background: #f4f1eb;
   color: #2a2928;
 }
-.participant-community .participant-eyebrow {
-  margin-bottom: 28px;
-  color: #76706d;
-}
 .participant-community h2 {
   font-size: clamp(3rem, 7.6vw, 7.3rem);
   font-weight: 560;
@@ -1687,10 +1615,6 @@
 }
 .participant-community p {
   font-size: 14px;
-}
-.participant-footer {
-  padding-inline: var(--container-pad);
-  max-width: 1504px;
 }
 .participant-is-visible {
   animation: participant-chapter-enter 600ms var(--ease-out) both;
@@ -1765,26 +1689,8 @@
   .participant-chapter-heading {
     margin-bottom: 30px;
   }
-  .participant-chapter-heading > .participant-eyebrow {
-    font-size: 8px;
-    margin-bottom: 18px;
-  }
-  .participant-chapter-heading > .participant-eyebrow > span {
-    margin-right: 13px;
-  }
   .participant-chapter-heading h2 {
     font-size: 43px;
-  }
-  .participant-chapter-heading > div {
-    align-items: start;
-    flex-direction: column;
-    gap: 18px;
-  }
-  .participant-chapter-heading > div > p {
-    font-size: 13px;
-  }
-  .participant-chapter-heading > div > p br {
-    display: none;
   }
   .participant-diploma-layout {
     grid-template-columns: minmax(0, 1fr);

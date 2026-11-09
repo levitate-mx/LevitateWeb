@@ -99,18 +99,6 @@ function personalName(name: string): [string, string] {
   return [words.slice(0, split).join(" "), words.slice(split).join(" ")];
 }
 
-function eventDate(value: string | null | undefined): string {
-  if (!value) return "";
-  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Mexico_City",
-  }).format(date);
-}
-
 function participantPageMode(pathname: string, search: string, internalPreview: boolean, development: boolean) {
   if (/^\/mi-levitate\/demo\.?\/?$/.test(pathname)) return "demo";
   if (internalPreview || /^\/admin\/mi-levitate\/resumen\/?$/.test(pathname)) return "internal";
@@ -617,9 +605,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         >
           <div className="participant-chapter__inner">
             <header className="participant-chapter-heading" data-participant-reveal>
-              <p className="participant-eyebrow">
-                <span>01</span> Para volver a este momento
-              </p>
               <h2 id="participant-diploma-title">
                 Tu diploma<span>.</span>
               </h2>
@@ -692,18 +677,9 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         >
           <div className="participant-chapter__inner">
             <header className="participant-chapter-heading" data-participant-reveal>
-              <p className="participant-eyebrow">
-                <span>02</span> Para seguir creciendo
-              </p>
-              <div>
-                <h2 id="participant-judging-title">
-                  Tu jueceo<span>.</span>
-                </h2>
-                <p>
-                  La mirada del jurado <br />
-                  sobre tu trabajo.
-                </p>
-              </div>
+              <h2 id="participant-judging-title">
+                Tu jueceo<span>.</span>
+              </h2>
             </header>
             <ParticipantRoutineSelector
               routines={data.routines}
@@ -832,18 +808,9 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         >
           <div className="participant-chapter__inner">
             <header className="participant-chapter-heading" data-participant-reveal>
-              <p className="participant-eyebrow">
-                <span>03</span> Para volver a sentirlo
-              </p>
-              <div>
-                <h2 id="participant-gallery-title">
-                  Tus fotos<span>.</span>
-                </h2>
-                <p>
-                  Así se vio tu momento <br />
-                  en el escenario.
-                </p>
-              </div>
+              <h2 id="participant-gallery-title">
+                Tus fotos<span>.</span>
+              </h2>
             </header>
             <ParticipantRoutineSelector
               routines={data.routines}
@@ -922,7 +889,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
         <section className="participant-community" aria-labelledby="participant-community-title">
           <div className="participant-chapter__inner" data-participant-reveal>
-            <p className="participant-eyebrow">De esta edición en adelante</p>
             <h2 id="participant-community-title">
               Ya eres parte
               <br />
@@ -930,28 +896,9 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
             </h2>
             <div>
               <p>Nos vemos en la próxima edición.</p>
-              <a className="participant-text-button" href="/sedes">
-                Lo que viene en Levitate
-                <ArrowUpRight size={19} aria-hidden="true" />
-              </a>
             </div>
           </div>
         </section>
-        <footer className="participant-footer">
-          <a className="participant-brand" href="/" aria-label="Levitate MX, inicio">
-            <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" width="1395" height="420" />
-          </a>
-          <p>
-            {[registrationLabel(event?.venue), eventDate(event?.startsAt)]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-          <span>{event?.season}</span>
-          <a href="/">
-            Volver a Levitate
-            <ArrowUpRight size={15} aria-hidden="true" />
-          </a>
-        </footer>
       </div>
 
       {judgeOpen && routine && (
