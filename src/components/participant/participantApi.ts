@@ -1,5 +1,5 @@
 import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
-import type { ParticipantPortalData } from "./participantTypes";
+import type { ParticipantAdminPreviewData, ParticipantPortalData } from "./participantTypes";
 
 export class ParticipantApiError extends Error {
   constructor(
@@ -80,6 +80,41 @@ export function participantAssetUrl(
     /* An unavailable asset is shown as pending by the caller. */
   }
   return undefined;
+}
+
+export async function openParticipantAdminPreview(search: string, signal?: AbortSignal): Promise<ParticipantAdminPreviewData> {
+  const query = new URLSearchParams(search);
+  const eventId = query.get("eventId")?.trim();
+  const participantId = query.get("participantId")?.trim();
+  if (!eventId || !participantId || eventId.length > 100 || participantId.length > 100) {
+    throw new ParticipantApiError(400, "invalid_admin_preview", "Selecciona una edición y un participante desde administración.");
+  }
+  const params = new URLSearchParams({ preview: "1", eventId, participantId });
+  const data = await participantRequest<ParticipantAdminPreviewData>(
+    `/api/registration/admin/participant-portal?${params}`, { signal },
+  );
+  if (data.adminPreview !== true || data.participant?.id !== participantId || data.selectedEventId !== eventId
+    || !Array.isArray(data.events) || !Array.isArray(data.routines)) {
+    throw new ParticipantApiError(502, "invalid_admin_preview", "No pudimos verificar la vista interna de este participante.");
+  }
+  return data;
+}
+
+export function participantAdminAssetUrl(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value, window.location.origin);
+    const assetId = url.searchParams.get("assetId");
+    const downloads = url.searchParams.getAll("download");
+    if (url.origin !== window.location.origin || url.pathname !== "/api/registration/admin/participant-portal"
+      || url.username || url.password || url.hash || !assetId || !/^[a-zA-Z0-9_-]{8,100}$/.test(assetId)
+      || url.searchParams.getAll("assetId").length !== 1 || downloads.length > 1
+      || (downloads.length === 1 && downloads[0] !== "1")
+      || [...url.searchParams.keys()].some(key => key !== "assetId" && key !== "download")) return undefined;
+    return `${url.pathname}?assetId=${encodeURIComponent(assetId)}${downloads.length ? "&download=1" : ""}`;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function downloadParticipantPdf(url: string, fileName: string): Promise<void> {

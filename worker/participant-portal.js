@@ -15,6 +15,7 @@ const str = (value, name, maximum = 300, optional = false) => {
 const bool = (value) => value === true;
 const parsed = (value) => { try { return JSON.parse(value); } catch { return null; } };
 const assetUrl = (id) => `/api/participant/assets/${encodeURIComponent(id)}`;
+const adminAssetUrl = (id) => `/api/registration/admin/participant-portal?assetId=${encodeURIComponent(id)}`;
 const headers = { "cache-control": "private, no-store", vary: "Cookie", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" };
 const json = (value, status = 200, extra = {}) => new Response(JSON.stringify(value), {
   status, headers: { ...headers, "content-type": "application/json; charset=utf-8", ...extra },
@@ -119,50 +120,57 @@ export function normalizePortalJudging(input) {
   }) };
 }
 function pendingResult() { return { status: "pending", score: null, maxScore: null, medal: null, directCompetition: false, eligibleCount: null, place: null }; }
-function publicResult(row, event) {
-  if (!event.published || row.status !== "published" || !row.result_json) return pendingResult();
+function portalResult(row, event, adminPreview) {
+  if ((!adminPreview && (!event.published || row.status !== "published")) || !row.result_json) return pendingResult();
   try { const result = normalizePortalResult(parsed(row.result_json)); return result ? { status: "published", ...result } : pendingResult(); } catch { return pendingResult(); }
 }
 async function me(db, request) {
   const grant = await session(db, request);
   const requested = new URL(request.url).searchParams.get("eventId");
   if (requested && requested !== grant.event_id) fault("portal_event_not_found", "No se encontró la edición.", 404);
-  const participant = await participantById(db, grant.participant_id);
-  const event = await eventById(db, grant.event_id);
+  return json(await participantData(db, grant.participant_id, grant.event_id));
+}
+// The preview flag is supplied only by the authenticated admin route. Participant
+// requests always derive both IDs from their grant and use publication checks.
+async function participantData(db, participantId, eventId, adminPreview = false) {
+  const participant = await participantById(db, participantId);
+  const event = await eventById(db, eventId);
+  const link = adminPreview ? adminAssetUrl : assetUrl;
   const rows = await all(db, `SELECT r.*, d.title, d.genre, d.subgenre, d.category, d.level, p.division
     FROM participant_portal_routines r JOIN registration_dances d ON d.id = r.dance_id
     JOIN registration_dance_participants dp ON dp.dance_id = d.id
     JOIN registration_participants p ON p.id = dp.participant_id
     WHERE r.event_id = ? AND dp.participant_id = ? ORDER BY d.title, r.id`, event.id, participant.id);
-  const assets = event.published ? await all(db, `SELECT a.* FROM participant_portal_assets a
+  const assets = adminPreview || event.published ? await all(db, `SELECT a.* FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
-    WHERE a.event_id = ? AND dp.participant_id = ? AND a.published = 1 AND r.status = 'published'
-      AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))`, event.id, participant.id) : [];
+    WHERE a.event_id = ? AND dp.participant_id = ?
+      ${adminPreview ? "AND a.kind IN ('judge_sheet','photo')" : "AND a.published = 1 AND r.status = 'published' AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))"}`, event.id, participant.id) : [];
   const document = await first(db, `SELECT d.asset_id FROM participant_portal_documents d
     JOIN participant_portal_assets a ON a.id = d.asset_id
-    WHERE d.participant_id = ? AND d.event_id = ? AND d.published = 1 AND a.published = 1
+    WHERE d.participant_id = ? AND d.event_id = ? ${adminPreview ? "" : "AND d.published = 1 AND a.published = 1"}
       AND a.kind = 'diploma' AND a.participant_id = d.participant_id AND a.event_id = d.event_id`, participant.id, event.id);
-  const diplomaAvailable = Boolean(event.published && document);
-  return json({ participant: { id: participant.id, name: participant.full_name, academy: participant.academy_name },
+  const diplomaAvailable = Boolean((adminPreview || event.published) && document);
+  return { ...(adminPreview ? { adminPreview: true } : {}),
+    participant: { id: participant.id, name: participant.full_name, academy: participant.academy_name },
     events: [{ id: event.id, title: event.title, season: event.season, venue: event.venue, startsAt: event.starts_at }], selectedEventId: event.id,
-    diploma: diplomaAvailable ? { status: "available", assetId: document.asset_id, url: assetUrl(document.asset_id) } : { status: "pending", assetId: null, url: null },
+    diploma: diplomaAvailable ? { status: "available", assetId: document.asset_id, url: link(document.asset_id) } : { status: "pending", assetId: null, url: null },
     routines: rows.map((row) => {
-      const visible = Boolean(event.published && row.status === "published");
+      const visible = Boolean(adminPreview || (event.published && row.status === "published"));
       const judging = visible ? parsed(row.judging_json) : null;
       const sheet = visible ? assets.find((asset) => asset.routine_id === row.id && asset.kind === "judge_sheet") : null;
-      const photos = visible && row.photos_published ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo") : [];
+      const photos = visible && (adminPreview || row.photos_published) ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo") : [];
       return { id: row.id, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division: row.division, level: row.level,
-        result: publicResult(row, event),
-        judging: { status: judging || sheet ? "available" : "pending", judges: judging?.judges || [], ...(sheet ? { assetId: sheet.id, url: assetUrl(sheet.id) } : {}) },
+        result: portalResult(row, event, adminPreview),
+        judging: { status: judging || sheet ? "available" : "pending", judges: judging?.judges || [], ...(sheet ? { assetId: sheet.id, url: link(sheet.id) } : {}) },
         photos: { status: photos.length ? "available" : "pending", count: photos.length,
-          items: photos.map((asset) => ({ id: asset.id, previewUrl: assetUrl(asset.id), ...(asset.allow_download ? { downloadUrl: `${assetUrl(asset.id)}?download=1` } : {}), width: asset.width, height: asset.height, caption: asset.caption })) } };
-    }) });
+          items: photos.map((asset) => ({ id: asset.id, previewUrl: link(asset.id), ...(asset.allow_download ? { downloadUrl: `${link(asset.id)}${adminPreview ? "&" : "?"}download=1` } : {}), width: asset.width, height: asset.height, caption: asset.caption })) } };
+    }) };
 }
 async function serveAsset(db, env, request, assetId, admin = false) {
+  const grant = admin ? null : await session(db, request);
   const asset = await first(db, "SELECT * FROM participant_portal_assets WHERE id = ?", assetId);
   if (!admin) {
-    const grant = await session(db, request);
     if (!asset || asset.event_id !== grant.event_id || !asset.published) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
     const event = await eventById(db, asset.event_id);
     if (!event.published) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
@@ -379,9 +387,15 @@ export async function handleParticipantPortal(request, env, { requireAdmin } = {
     if (path === "/api/registration/admin/participant-portal") {
       method(request,["GET","POST"]);
       if (!requireAdmin) fault("portal_admin_forbidden","Inicia sesión como administrador.",401);
-      const admin = await requireAdmin(request,env,db);
-      if (request.method === "GET") return await (url.searchParams.has("assetId")
-        ? serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true) : adminList(db,request));
+      const admin = request.method === "GET"
+        ? await requireAdmin(request,env,db,{touchLastSeen:false})
+        : await requireAdmin(request,env,db);
+      if (request.method === "GET") {
+        if (url.searchParams.has("assetId")) return await serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true);
+        if (url.searchParams.get("preview") === "1") return json(await participantData(db,
+          str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true));
+        return await adminList(db,request);
+      }
       return await adminAction(db,env,await body(request),admin?.session?.user?.id);
     }
     if (path === "/api/participant/access/exchange") {

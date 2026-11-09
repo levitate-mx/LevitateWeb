@@ -1,6 +1,6 @@
 # Mi Levitate · Experiencia de participante
 
-Implementación local en la rama `codex/participant-experience`. No está desplegada y no se modificó la base de producción.
+El ejemplo público muestra la experiencia con datos ilustrativos. El material real se administra como borrador y solo resulta visible para participantes después de su publicación explícita.
 
 ## Experiencia
 
@@ -10,7 +10,19 @@ Cada presentación conserva su puntaje y escala, medalla, hoja de jueceo y galer
 
 El diploma pertenece al participante y la edición. La galería y el jueceo pertenecen a la presentación: los integrantes de una pieza grupal reciben el mismo álbum sin duplicar archivos.
 
-El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y tres imágenes de archivo identificadas como tales, sin aceptar ni exponer accesos privados. En desarrollo también puede abrirse con `/mi-levitate?preview=1`. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
+El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y dos imágenes de archivo identificadas como tales, una de ellas desenfocada como archivo derivado. El enlace con punto final `/mi-levitate/demo.` funciona como alias de la misma demo. Ninguna variante consulta Drive, acepta accesos privados ni abre una sesión real. En desarrollo también puede abrirse con `/mi-levitate?preview=1`. La galería real admite el conjunto de fotografías cargadas; muestra las primeras 20 y permite continuar, con carga diferida y visor accesible.
+
+## Resumen, Drive y revisión interna
+
+El resumen inicial reúne diploma, jueceo y fotografías. El diploma pertenece a la edición; el jueceo y hasta dos miniaturas del resumen cambian con la presentación seleccionada. Los estados se calculan a partir de los archivos y resultados disponibles, no de que Drive esté conectado. Una carpeta de Drive vinculada no equivale a un álbum cargado o publicado.
+
+`/admin/foto-video` conserva las compras y la conexión de Drive, y enlaza a la gestión de Mi Levitate. `/admin/mi-levitate` reutiliza el mismo panel de conexión, permite seleccionar la edición y el participante, y abre **Revisar su resumen de Mi Levitate**. La navegación administrativa incluye una entrada directa a Mi Levitate.
+
+La revisión usa `/admin/mi-levitate/resumen?eventId=…&participantId=…`. Esta página exige una sesión administrativa y solicita una proyección de lectura en `GET /api/registration/admin/participant-portal?preview=1&eventId=…&participantId=…`. El servidor devuelve la misma estructura del portal más `adminPreview: true`, con los borradores de esa persona y edición. Los archivos se consultan por el endpoint administrativo; las URLs públicas del participante mantienen sus controles de acceso y publicación.
+
+Abrir la revisión no genera QR, accesos o sesiones de participante, no modifica los borradores y no publica la edición. La vista interna no es un enlace de entrega ni debe imprimirse en las tarjetas PVC. El arte Aura de 54 × 85 mm tiene un QR de muestra; los accesos reales se emiten por el proceso aprobado de diplomas.
+
+Los originales permanecen en Drive. La vinculación de la carpeta está preparada, pero este cambio no importa automáticamente su contenido: las vistas previas se preparan y cargan mediante el flujo de archivos existente. Los enlaces de Drive, la cuenta conectada y sus identificadores se muestran únicamente en administración. El contrato actual de la galería incluye fotografías; no se anuncia un video disponible mientras no exista un archivo y una entrega de video implementados.
 
 ## Flujo para operar el evento
 
@@ -45,7 +57,7 @@ El QR es una llave personal: quien lo tenga puede consultar ese espacio. Para co
 ]
 ```
 
-2. Aplicar `db/registration_participant_portal.sql` sobre la D1 de inscripciones después de revisar la migración. El preparador existente `scripts/prepare-registration-db.mjs` también incorpora estas adiciones; no se ejecutó contra producción en esta tarea.
+2. El esquema aditivo de `db/registration_participant_portal.sql` quedó aplicado el 9 de noviembre de 2026. Se comprobaron las siete tablas nuevas vacías y los registros previos sin cambios; no se crearon ediciones, accesos QR ni sesiones de participantes. El preparador general no se ejecutó contra producción en esta tarea.
 3. Revisar el arte final del diploma y los nombres. La plantilla incluida es una base funcional con fuentes latinas; para nombres con glifos fuera de su cobertura usar un PDF aprobado o integrar una fuente Unicode. El generador rechaza textos que no caben en lugar de truncar la identidad.
 4. Importar las correspondencias reales y los resultados aprobados. **La integración actual de JueceoCore se reutiliza como fuente de consulta de administración, pero este módulo no sincroniza automáticamente sus cambios.** El portal recibe un registro revisado mediante el panel o manifiesto, con IDs de origen; una sincronización posterior debe conservar el paso de aprobación y la regla de competencia directa.
 5. Cargar las fotografías y documentos reales; comprobar un QR de prueba en escritorio y teléfono antes de emitir el lote.

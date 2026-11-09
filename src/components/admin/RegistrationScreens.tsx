@@ -147,6 +147,7 @@ type RegistrationAdminDashboardNavItem = {
   label: string;
   icon: LucideIcon;
   section?: RegistrationAdminDashboardSection;
+  href?: string;
 };
 
 type FieldOption = {
@@ -706,6 +707,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Operación", label: "Boletos", icon: Ticket, section: "tickets" },
   { group: "Operación", label: "Workshops", icon: GraduationCap, section: "workshops" },
   { group: "Operación", label: "Foto y video", icon: Camera, section: "media" },
+  { group: "Operación", label: "Mi Levitate", icon: FileText, href: "/admin/mi-levitate" },
   { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
   { group: "Operación", label: "Puntuaciones", icon: BadgeCheck, section: "scores" },
   { group: "Pruebas", label: "Votación Relevé", icon: Trophy, section: "releveVoting" },
@@ -11140,9 +11142,13 @@ export function LevitateRegistrationAdminPaymentsRoute({
                     <button
                       aria-current={isActive ? "page" : undefined}
                       className={isActive ? "is-active" : ""}
-                      disabled={!item.section}
+                      disabled={!item.section && !item.href}
                       key={item.label}
                       onClick={() => {
+                        if (item.href) {
+                          window.location.assign(item.href);
+                          return;
+                        }
                         if (item.section) {
                           handleSectionChange(item.section);
                         }
@@ -11529,6 +11535,19 @@ export function LevitateRegistrationAdminPaymentsRoute({
         ) : isMediaSection ? (
           <>
             <MediaDriveConnectionPanel />
+            <section className="media-drive-connection" aria-label="Resumen de participantes en Mi Levitate">
+              <header className="media-drive-connection__header">
+                <div className="media-drive-connection__heading">
+                  <FileText aria-hidden="true" size={23} />
+                  <div>
+                    <h2>El material, en su resumen de Mi Levitate</h2>
+                    <p>Organiza diploma, jueceo y vistas previas por participante y presentación.</p>
+                  </div>
+                </div>
+                <a className="registration-admin-export" href="/admin/mi-levitate">Administrar Mi Levitate <ArrowUpRight aria-hidden="true" size={16} /></a>
+              </header>
+              <p className="media-drive-connection__account">Revisa el resumen individual desde administración antes de publicar el material. <a href="/mi-levitate/demo" target="_blank" rel="noreferrer">Ver el ejemplo con datos ilustrativos ↗</a></p>
+            </section>
             <section className="registration-admin-summary registration-admin-summary--media" aria-label="Resumen de foto y video">
               <article>
                 <span>Compras</span>

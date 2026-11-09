@@ -30,8 +30,9 @@ import { ParticipantAdminPage } from "./components/participant-admin/Participant
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
-  const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo)?\/?$/);
+  const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo\.?)?\/?$/);
   const participantAdminMatch = window.location.pathname.match(/^\/admin\/mi-levitate\/?$/);
+  const participantAdminPreviewMatch = window.location.pathname.match(/^\/admin\/mi-levitate\/resumen\/?$/);
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
@@ -63,6 +64,10 @@ export default function App() {
 
   if (participantMatch) {
     return <ParticipantPage />;
+  }
+
+  if (participantAdminPreviewMatch) {
+    return <ParticipantPage internalPreview />;
   }
 
   if (participantAdminMatch) {

@@ -55,3 +55,7 @@ export interface ParticipantPortalData {
   diploma: { status: "pending" | "available"; assetId: string | null; url: string | null } | null;
   routines: ParticipantRoutine[];
 }
+
+export interface ParticipantAdminPreviewData extends ParticipantPortalData {
+  adminPreview: true;
+}

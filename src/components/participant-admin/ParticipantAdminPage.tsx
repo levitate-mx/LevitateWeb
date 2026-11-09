@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { requestRegistrationApi } from '../admin/registrationApi';
+import { RegistrationApiError, requestRegistrationApi } from '../admin/registrationApi';
+import { MediaDriveConnectionPanel } from '../admin/MediaDriveConnectionPanel';
 import './ParticipantAdminPage.css';
 
 type Event = { id: string; title: string; season: string; venue: string; startsAt: string; published: boolean };
@@ -48,15 +49,26 @@ export function ParticipantAdminPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
   const latest = useRef(0);
   const latestAssets = useRef(0);
   const person = data.participants.find(row => row.id === personId);
   const routine = data.routines.find(row => row.danceId === danceId);
   const edition = data.events.find(row => row.id === eventId);
+  const reportError = (cause: unknown) => {
+    if (cause instanceof RegistrationApiError && (cause.status === 401 || cause.status === 403)) {
+      ++latest.current; ++latestAssets.current;
+      setAuthorized(false);
+      setData({ events: [], participants: [], routines: [], assets: [] });
+      setAssets([]); setAssetPagination(undefined); setQr('');
+      setPersonId(''); setDanceId('');
+    }
+    setError(cause instanceof Error ? cause.message : 'No se pudo completar la solicitud.');
+  };
   const refresh = async (query = search, selectedEvent = eventId) => {
     const sequence = ++latest.current;
     const response = await api<Data>(`?eventId=${encodeURIComponent(selectedEvent)}&q=${encodeURIComponent(query)}&offset=${personOffset}&routineQ=${encodeURIComponent(routineSearch)}&routineOffset=${routineOffset}`);
-    if (sequence === latest.current) setData(response);
+    if (sequence === latest.current) { setData(response); setAuthorized(true); }
   };
   const refreshAssets = async () => {
     const sequence = ++latestAssets.current;
@@ -68,10 +80,10 @@ export function ParticipantAdminPage() {
     if (sequence === latestAssets.current) { setAssets(response.assets); setAssetPagination(response.assetPagination); }
   };
   useEffect(() => {
-    const timer = setTimeout(() => { refresh().catch(e => setError(e.message)); }, 220);
+    const timer = setTimeout(() => { refresh().catch(reportError); }, 220);
     return () => clearTimeout(timer);
   }, [eventId, search, personOffset, routineSearch, routineOffset]);
-  useEffect(() => { refreshAssets().catch(e => setError(e.message)); }, [eventId, personId, routine?.id, assetOffset]);
+  useEffect(() => { refreshAssets().catch(reportError); }, [eventId, personId, routine?.id, assetOffset]);
   useEffect(() => {
     const current = data.events.find(row => row.id === eventId);
     if (current) setEventDraft(current);
@@ -87,7 +99,7 @@ export function ParticipantAdminPage() {
   const perform = async (work: () => Promise<void>, success: string) => {
     setBusy(true); setError(''); setMessage('');
     try { await work(); await refresh(); await refreshAssets(); setMessage(success); }
-    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo completar la solicitud.'); }
+    catch (e) { reportError(e); }
     finally { setBusy(false); }
   };
   const routinePayload = () => ({ action: 'routine.save', eventId, danceId, sourceEventId: routine?.sourceEventId || '', sourceRoutineId: routine?.sourceRoutineId || '', result: result.score === '' ? null : { score: Number(result.score), maxScore: Number(result.maxScore), medal: result.medal, directCompetition: result.directCompetition, eligibleCount: Number(result.eligibleCount), place: result.directCompetition && result.place ? Number(result.place) : null }, judging: judging.trim() ? JSON.parse(judging) : null, photosPublished });
@@ -101,12 +113,13 @@ export function ParticipantAdminPage() {
   }, 'Diploma publicado.');
 
   return <main className="pp-admin">
-    <header><a href="/admin">← Administración Levitate</a><span>MI LEVITATE / PUBLICACIÓN</span></header>
+    <header><a href="/admin">← Administración Levitate</a><nav aria-label="Herramientas de Mi Levitate"><a href="/admin/foto-video">Foto y video</a><a href="/mi-levitate/demo" target="_blank" rel="noreferrer">Ver resumen de ejemplo ↗</a></nav><span>MI LEVITATE / PUBLICACIÓN</span></header>
     <h1>Su experiencia.<br /><em>En tus manos.</em></h1>
     <p className="pp-admin-intro">Vincula cada presentación, revisa sus resultados y publica los documentos y fotografías de sus integrantes.</p>
+    {authorized && <section className="pp-admin-drive" aria-label="Drive y vistas previas de Mi Levitate"><MediaDriveConnectionPanel /><p>Drive conserva el material de foto y video. Vincular una carpeta no carga ni publica fotografías en los resúmenes: las vistas previas se revisan y aprueban en la presentación correspondiente.</p></section>}
     {error && <div className="pp-admin-error" role="alert">{error} <a href="/login">Iniciar sesión</a></div>}
     {message && <p className="pp-admin-message" role="status">{message}</p>}
-    <fieldset disabled={busy}>
+    <fieldset disabled={busy || !authorized}>
       <section className="pp-admin-section">
         <h2>01 / Edición</h2>
         <label>Edición<select value={eventId} onChange={e => setEventId(e.target.value)}><option value="">Seleccionar edición</option>{data.events.map(event => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
@@ -127,6 +140,8 @@ export function ParticipantAdminPage() {
           <div className="pp-admin-actions"><button disabled={personOffset === 0} onClick={() => { setPersonOffset(Math.max(0, personOffset - 100)); setPersonId(''); }}>Anterior</button><span>Participantes · página {Math.floor(personOffset / 100) + 1}</span><button disabled={!data.pagination?.hasMore} onClick={() => { setPersonOffset(personOffset + 100); setPersonId(''); }}>Siguientes</button></div>
           {person && <div className="pp-admin-person">
             <h3>{person.name}</h3><p>{person.academy}</p>
+            <div className="pp-admin-actions"><a className="pp-admin-preview-link" href={`/admin/mi-levitate/resumen?${new URLSearchParams({ eventId, participantId: person.id })}`} target="_blank" rel="noreferrer">Revisar su resumen de Mi Levitate ↗</a></div>
+            <p>Vista interna con los borradores y archivos de esta persona. Abrirla no genera un acceso ni publica contenido.</p>
             <div className="pp-admin-actions"><button onClick={() => perform(async () => { const value = await api<{ entryUrl: string }>('', { action: 'access.create', eventId, participantId: personId, rotate: person.accesses?.some(a => a.active && a.eventId === eventId) || false }); setQr(new URL(value.entryUrl, location.origin).href); }, 'Acceso individual creado. Guarda su QR antes de salir.')}>{person.accesses?.some(a => a.active && a.eventId === eventId) ? 'Reemplazar acceso y generar nuevo QR' : 'Crear enlace y QR individual'}</button>
               <button disabled={!qr} onClick={() => perform(async () => {
                 const { generateParticipantDiploma } = await import('../../../shared/participant-diploma.js');

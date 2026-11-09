@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import worker from '../worker/index.js';
+import { handleParticipantPortal } from '../worker/participant-portal.js';
 
 class PortalD1 {
-  constructor() { this.sqlite = new DatabaseSync(':memory:'); }
+  constructor() { this.sqlite = new DatabaseSync(':memory:'); this.queries = []; }
   prepare(sql) {
+    this.queries.push(sql);
     assert.doesNotMatch(sql, /^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i, 'No schema mutation in HTTP handlers');
     const statement=this.sqlite.prepare(sql); let args=[];
     const query={bind(...values) {args=values;return query;},async first(){const row=statement.get(...args);return row ? {...row}:null;},
@@ -59,6 +61,9 @@ async function fixture(t) {
 }
 const result=(overrides={})=>({score:138.5,maxScore:150,medal:'oro',directCompetition:true,eligibleCount:4,place:1,...overrides});
 const judging={judges:[{name:'Juez de prueba',score:47,maxScore:50,criteria:[{label:'Técnica',score:47,maxScore:50}],feedback:'Observación privada de prueba.'}]};
+const previewPath=(participantId='person-a',eventId='test-event')=>`/api/registration/admin/participant-portal?preview=1&eventId=${encodeURIComponent(eventId)}&participantId=${encodeURIComponent(participantId)}`;
+const adminCookie='levitate_registration_session=admin-session';
+const totalChanges=(db)=>db.sqlite.prepare('SELECT total_changes() AS count').get().count;
 
 test('private portal requires its own QR grant and actual admin session; no CURP entry',async t=>{
   const {request,access,db}=await fixture(t);
@@ -209,4 +214,133 @@ test('approved result revisions preserve omitted judging crosswalks and require 
   await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',sourceEventId:'',sourceRoutineId:'',result:result()});
   routine=db.sqlite.prepare('SELECT source_event_id,source_routine_id FROM participant_portal_routines WHERE id=?').get(saved.data.routineId);
   assert.deepEqual({...routine},{source_event_id:null,source_routine_id:null});
+});
+
+test('admin preview authenticates before participant queries and GET does not touch session activity',async t=>{
+  let queries=0,calls=0;
+  const db={prepare(){queries+=1;throw new Error('participant data must not be read');}};
+  for(const suffix of ['?preview=1&eventId=missing&participantId=missing','?assetId=photo-fixture']) {
+    const response=await handleParticipantPortal(new Request('https://levitate.test/api/registration/admin/participant-portal'+suffix),{DB:db},{
+      requireAdmin:async (request,env,receivedDb,options)=>{
+        calls+=1;assert.equal(receivedDb,db);assert.deepEqual(options,{touchLastSeen:false});
+        throw Object.assign(new Error('Solo administración.'),{code:'registration_admin_forbidden',statusCode:403});
+      },
+    });
+    assert.equal(response.status,403);assert.equal(queries,0);
+  }
+  assert.equal(calls,2);
+  const {request}=await fixture(t);
+  await request(previewPath('missing','missing'),{expected:401});
+  await request(previewPath('missing','missing'),{cookie:'levitate_registration_session=academy-user-session',expected:403});
+  await request(previewPath('missing'),{cookie:adminCookie,expected:404});
+  await request(previewPath('person-a','missing'),{cookie:adminCookie,expected:404});
+  await request('/api/registration/admin/participant-portal?preview=1&eventId=test-event',{cookie:adminCookie,expected:400});
+  await request('/api/registration/admin/participant-portal?preview=1&participantId=person-a',{cookie:adminCookie,expected:400});
+  for(const value of ['0','true','false','2']) {
+    const response=await request('/api/registration/admin/participant-portal?preview='+value,{cookie:adminCookie});
+    assert.ok(Array.isArray(response.data.participants));assert.equal(response.data.adminPreview,undefined);
+  }
+});
+
+test('admin preview reads every draft without publishing it, regardless of all publication flags',async t=>{
+  const {db,bucket,request,admin,access}=await fixture(t);
+  const participantAccess=await access();
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),judging,photosPublished:false});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64'),width:1200,height:800,caption:'Vista revisable'});
+  const sheet=await admin({action:'asset.upload',eventId:'test-event',kind:'judge_sheet',routineId:saved.data.routineId,fileName:'jueceo.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-fixture-sheet').toString('base64')});
+  const diploma=await admin({action:'asset.upload',eventId:'test-event',kind:'diploma',participantId:'person-a',fileName:'diploma.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-fixture-diploma').toString('base64')});
+  await admin({action:'document.assign',eventId:'test-event',participantId:'person-a',assetId:diploma.data.assetId,published:false});
+  const storedObjects=bucket.objects.size;
+  for(let mask=0;mask<32;mask++) {
+    const eventPublished=Boolean(mask&1),routinePublished=Boolean(mask&2),photosPublished=Boolean(mask&4),assetsPublished=Boolean(mask&8),documentPublished=Boolean(mask&16);
+    db.sqlite.prepare('UPDATE participant_portal_events SET published=? WHERE id=?').run(Number(eventPublished),'test-event');
+    db.sqlite.prepare('UPDATE participant_portal_routines SET status=?,photos_published=? WHERE id=?').run(routinePublished?'published':'draft',Number(photosPublished),saved.data.routineId);
+    db.sqlite.prepare('UPDATE participant_portal_assets SET published=?').run(Number(assetsPublished));
+    db.sqlite.prepare('UPDATE participant_portal_documents SET published=?').run(Number(documentPublished));
+    const before=totalChanges(db);
+    const preview=await request(previewPath(),{cookie:adminCookie});
+    assert.equal(totalChanges(db),before,'preview GET must not write, including registration session activity');
+    assert.equal(preview.headers.get('set-cookie'),null);
+    assert.equal(preview.headers.get('cache-control'),'private, no-store');
+    assert.equal(preview.headers.get('vary'),'Cookie');
+    assert.equal(preview.data.adminPreview,true,'draft values are explicitly marked as an admin preview');
+    assert.equal(preview.data.participant.id,'person-a');
+    assert.equal(preview.data.diploma.assetId,diploma.data.assetId);
+    assert.equal(preview.data.diploma.url,`/api/registration/admin/participant-portal?assetId=${diploma.data.assetId}`);
+    const routine=preview.data.routines[0];
+    assert.equal(routine.result.score,138.5);assert.equal(routine.result.maxScore,150);assert.equal(routine.result.medal,'oro');
+    assert.deepEqual(routine.judging.judges,judging.judges);
+    assert.equal(routine.judging.url,`/api/registration/admin/participant-portal?assetId=${sheet.data.assetId}`);
+    assert.equal(routine.photos.count,1);assert.equal(routine.photos.items[0].id,photo.data.assetId);
+    assert.equal(routine.photos.items[0].previewUrl,`/api/registration/admin/participant-portal?assetId=${photo.data.assetId}`);
+    assert.equal(routine.photos.items[0].downloadUrl,undefined);
+    assert.doesNotMatch(JSON.stringify(preview.data),/PRUA|token_hash|object_key|sha256|drive_file|googleapis|drive\.google|\/api\/participant\/assets/);
+    const publicView=await request('/api/participant/me?preview=1&participantId=person-b&adminPreview=true',{cookie:participantAccess.cookie});
+    assert.equal(publicView.data.participant.id,'person-a','public IDs still come only from the QR grant');
+    assert.equal(publicView.data.adminPreview,undefined);
+    assert.equal(publicView.data.routines[0].result.score,eventPublished&&routinePublished?138.5:null);
+    assert.equal(publicView.data.routines[0].judging.status,eventPublished&&routinePublished?'available':'pending');
+    assert.equal(publicView.data.routines[0].photos.count,eventPublished&&routinePublished&&photosPublished&&assetsPublished?1:0);
+    assert.equal(publicView.data.diploma.status,eventPublished&&documentPublished&&assetsPublished?'available':'pending');
+    assert.doesNotMatch(JSON.stringify(publicView.data),/\/api\/registration\/admin|adminPreview|googleapis|drive\.google/);
+    assert.equal(totalChanges(db),before,'the participant query must not publish or create data either');
+  }
+  assert.equal(bucket.objects.size,storedObjects);
+});
+
+test('admin preview requires no QR and draft bytes use the existing authenticated admin asset route',async t=>{
+  const {db,request,admin}=await fixture(t);
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',photosPublished:false});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64'),allowDownload:true});
+  const before=totalChanges(db);
+  const preview=await request(previewPath(),{cookie:adminCookie});
+  assert.equal(preview.data.adminPreview,true);assert.equal(preview.data.routines[0].result.status,'pending');
+  const item=preview.data.routines[0].photos.items[0];
+  assert.equal(item.downloadUrl,`${item.previewUrl}&download=1`);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_access').get().count,0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_sessions').get().count,0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_routine_revisions').get().count,1);
+  const bytes=await request(item.previewUrl,{cookie:adminCookie});
+  assert.deepEqual(bytes.data,new Uint8Array([255,216,255,0,0,0]));
+  assert.equal(bytes.headers.get('content-disposition'),'inline; filename="preview.jpg"');
+  const download=await request(item.downloadUrl,{cookie:adminCookie});
+  assert.equal(download.headers.get('content-disposition'),'attachment; filename="preview.jpg"');
+  await request(item.previewUrl,{expected:401});
+  await request(item.previewUrl,{cookie:'levitate_registration_session=academy-user-session',expected:403});
+  await request('/api/participant/assets/'+photo.data.assetId+'?preview=1',{cookie:adminCookie,expected:401});
+  assert.equal(totalChanges(db),before,'no preview or asset GET may update session activity or data');
+});
+
+test('admin preview uses current participant IDs and group membership, independent of revoked QR grants',async t=>{
+  const {db,request,admin,access}=await fixture(t);
+  const a=await access(),b=await access('person-b');
+  db.sqlite.prepare("UPDATE registration_participants SET full_name='Nombre compartido'").run();
+  db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')").run();
+  const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),photosPublished:false});
+  const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'grupo.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64')});
+  await admin({action:'access.revoke',accessId:a.grant.id});
+  await admin({action:'access.revoke',accessId:b.grant.id});
+  const before=totalChanges(db);
+  for(const participantId of ['person-a','person-b']) {
+    const preview=await request(previewPath(participantId),{cookie:adminCookie});
+    assert.equal(preview.data.participant.id,participantId);
+    assert.equal(preview.data.routines.length,1);assert.equal(preview.data.routines[0].photos.items[0].id,photo.data.assetId);
+  }
+  await request('/api/participant/me?preview=1',{cookie:a.cookie,expected:401});
+  await request('/api/participant/me?preview=1',{cookie:b.cookie,expected:401});
+  assert.equal(totalChanges(db),before,'admin preview never reactivates participant grants');
+  db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-b'").run();
+  const removed=await request(previewPath('person-b'),{cookie:adminCookie});
+  assert.deepEqual(removed.data.routines,[],'same name and old grant do not provide membership');
+});
+
+test('public asset authentication happens before reading asset metadata or R2',async t=>{
+  const {db,bucket,request}=await fixture(t);
+  let reads=0;bucket.get=async()=>{reads+=1;throw new Error('unauthenticated R2 read');};
+  for(const cookie of [undefined,'levitate_participant_session='+'x'.repeat(43)]) {
+    db.queries.length=0;
+    await request('/api/participant/assets/private-photo-fixture?preview=1',{cookie,expected:401});
+    assert.equal(reads,0);
+    assert.ok(db.queries.every(sql=>!sql.includes('participant_portal_assets')),'no asset-table query before a valid participant session');
+  }
 });

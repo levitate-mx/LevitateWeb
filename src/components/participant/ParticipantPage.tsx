@@ -19,8 +19,10 @@ import { ParticipantDiplomaPreview } from "./ParticipantDiplomaPreview";
 import { ParticipantRoutineSelector } from "./ParticipantRoutineSelector";
 import {
   downloadParticipantPdf,
+  openParticipantAdminPreview,
   openParticipantSession,
   ParticipantApiError,
+  participantAdminAssetUrl,
   participantAssetUrl,
   participantRequest,
 } from "./participantApi";
@@ -109,6 +111,13 @@ function eventDate(value: string | null | undefined): string {
   }).format(date);
 }
 
+function participantPageMode(pathname: string, search: string, internalPreview: boolean, development: boolean) {
+  if (/^\/mi-levitate\/demo\.?\/?$/.test(pathname)) return "demo";
+  if (internalPreview || /^\/admin\/mi-levitate\/resumen\/?$/.test(pathname)) return "internal";
+  if (development && new URLSearchParams(search).get("preview") === "1") return "demo";
+  return "participant";
+}
+
 function PhotoImage({ photo, className }: { photo: ParticipantPhoto; className?: string }) {
   const [failed, setFailed] = useState(false);
   if (failed)
@@ -132,9 +141,80 @@ function PhotoImage({ photo, className }: { photo: ParticipantPhoto; className?:
   );
 }
 
+function ParticipantSummary({
+  data, routine, photos, diploma, judgingPdf, changingEvent, preview, onSelect,
+}: {
+  data: ParticipantPortalData;
+  routine: ParticipantRoutine | undefined;
+  photos: ParticipantPhoto[];
+  diploma: string | undefined;
+  judgingPdf: string | undefined;
+  changingEvent: boolean;
+  preview: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const judgingAvailable = routine?.judging.status === "available"
+    && (routine.judging.judges.length > 0 || Boolean(judgingPdf));
+  return (
+    <section className="participant-summary" aria-labelledby="participant-summary-title" aria-busy={changingEvent}>
+      <div className="participant-chapter__inner">
+        <header className="participant-summary__heading">
+          <p className="participant-eyebrow">Tu experiencia</p>
+          <h2 id="participant-summary-title">Todo en <span>un vistazo.</span></h2>
+          <p>Tu diploma de esta edición y el material de la presentación que elijas.</p>
+        </header>
+        <ParticipantRoutineSelector
+          routines={data.routines} selectedId={routine?.id || ""} disabled={changingEvent}
+          onSelect={onSelect} context="el resumen" label={registrationLabel}
+        />
+        <div className="participant-summary__cards" aria-live="polite">
+          <a className="participant-summary__card" href="#tu-diploma">
+            <span className="participant-eyebrow">01 / Por participante y edición</span>
+            <FileText size={26} aria-hidden="true" />
+            <h3>Tu diploma</h3>
+            <p>{changingEvent ? "Actualizando…" : diploma ? "Disponible para consultar" : "Por publicar"}</p>
+            <span className="participant-summary__action">Ir a tu diploma <ArrowUpRight size={17} aria-hidden="true" /></span>
+          </a>
+          <a className="participant-summary__card" href="#tu-jueceo">
+            <span className="participant-eyebrow">02 / {routine?.title || "Tu presentación"}</span>
+            <Medal size={26} aria-hidden="true" />
+            <h3>Tu jueceo</h3>
+            <p>{changingEvent ? "Actualizando…" : judgingAvailable ? "Hoja de jueceo disponible" : "En preparación"}</p>
+            <span className="participant-summary__action">Ir a tu jueceo <ArrowUpRight size={17} aria-hidden="true" /></span>
+          </a>
+          <a className="participant-summary__card participant-summary__card--photos" href="#tus-fotos">
+            <span className="participant-eyebrow">03 / {routine?.title || "Tu presentación"}</span>
+            {!changingEvent && photos.length > 0 ? (
+              <div className="participant-summary__photos">
+                {photos.slice(0, 2).map((photo) => <PhotoImage key={photo.id} photo={photo} />)}
+              </div>
+            ) : <ImageOff size={26} aria-hidden="true" />}
+            <h3>Tus fotos</h3>
+            <p>{changingEvent ? "Actualizando…" : photos.length > 0
+              ? `${photos.length} ${photos.length === 1 ? "foto" : "fotos"} ${preview ? "de ejemplo" : "disponibles"}`
+              : "Álbum por publicar"}</p>
+            <span className="participant-summary__action">Ir a tu álbum <ArrowUpRight size={17} aria-hidden="true" /></span>
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InternalPreviewBanner() {
+  return (
+    <div className="participant-preview-banner participant-preview-banner--internal">
+      <strong>Vista interna de administración</strong>
+      <span>Esta revisión no publica material ni crea un acceso de participante.</span>
+      <a href="/admin/mi-levitate">Volver a administración <ArrowLeft size={14} aria-hidden="true" /></a>
+    </div>
+  );
+}
+
 function JudgeSheet({
   routine,
   preview,
+  internalPreview = false,
   onDownload,
   busy,
   message,
@@ -142,12 +222,13 @@ function JudgeSheet({
 }: {
   routine: ParticipantRoutine;
   preview: boolean;
+  internalPreview?: boolean;
   onDownload: (url: string, kind: "diploma" | "jueceo") => void;
   busy: string | null;
   message: string;
   onClose: () => void;
 }) {
-  const pdf = participantAssetUrl(routine.judging.url, preview);
+  const pdf = internalPreview ? participantAdminAssetUrl(routine.judging.url) : participantAssetUrl(routine.judging.url, preview);
   return (
     <ParticipantDialog title="Hoja de jueceo" onClose={onClose} className="participant-judging">
       <div className="participant-judging__intro">
@@ -226,13 +307,16 @@ function PortalState({
   mode,
   message,
   onRetry,
+  internalPreview = false,
 }: {
   mode: "loading" | "access" | "error" | "closed";
   message?: string;
   onRetry: () => void;
+  internalPreview?: boolean;
 }) {
   return (
     <main className="participant-portal participant-entry">
+      {internalPreview && <InternalPreviewBanner />}
       <a href="/" aria-label="Levitate MX, inicio" className="participant-brand">
         <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
       </a>
@@ -264,8 +348,9 @@ function PortalState({
             ? "Estamos abriendo tus presentaciones."
             : mode === "closed"
               ? "Tu sesión se cerró correctamente."
-              : message ||
-                "Abre tu enlace personal o escanea tu QR para consultar tus presentaciones, resultados y recuerdos."}
+              : message || (internalPreview
+                ? "Selecciona una edición y un participante desde administración para revisar su resumen."
+                : "Abre tu enlace personal o escanea tu QR para consultar tus presentaciones, resultados y recuerdos.")}
         </p>
         {mode === "loading" && <span className="participant-loading-line" aria-hidden="true" />}
         {mode === "error" && (
@@ -278,8 +363,8 @@ function PortalState({
           </button>
         )}
         {mode !== "loading" && (
-          <a className="participant-entry__home" href="/">
-            Ir a Levitate MX <ArrowUpRight size={17} aria-hidden="true" />
+          <a className="participant-entry__home" href={internalPreview ? (mode === "access" ? "/login" : "/admin/mi-levitate") : "/"}>
+            {internalPreview ? (mode === "access" ? "Iniciar sesión como administrador" : "Volver a administración") : "Ir a Levitate MX"} <ArrowUpRight size={17} aria-hidden="true" />
           </a>
         )}
       </div>
@@ -291,10 +376,10 @@ function PortalState({
   );
 }
 
-export function ParticipantPage() {
-  const preview =
-    /^\/mi-levitate\/demo\/?$/.test(window.location.pathname) ||
-    (import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "1");
+export function ParticipantPage({ internalPreview = false }: { internalPreview?: boolean } = {}) {
+  const mode = participantPageMode(window.location.pathname, window.location.search, internalPreview, import.meta.env.DEV);
+  const preview = mode === "demo";
+  const isInternalPreview = mode === "internal";
   const [data, setData] = useState<ParticipantPortalData | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "access" | "error" | "closed">(
     "loading",
@@ -315,11 +400,12 @@ export function ParticipantPage() {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     document.title = "Mi Levitate — Levitate MX";
     setPhase("loading");
     const load = preview
       ? import("./participantPreview").then((module) => module.previewParticipantData)
-      : openParticipantSession();
+      : isInternalPreview ? openParticipantAdminPreview(window.location.search, controller.signal) : openParticipantSession();
     if (preview && window.location.hash)
       window.history.replaceState(
         window.history.state,
@@ -338,33 +424,34 @@ export function ParticipantPage() {
         if (!active) return;
         if (cause instanceof ParticipantApiError && [401, 403, 404, 410].includes(cause.status)) {
           setError(
-            "Abre tu enlace personal o escanea tu QR. Si el enlace venció, solicita uno nuevo a Levitate MX.",
+            isInternalPreview ? "Inicia sesión como administrador para revisar este participante."
+              : "Abre tu enlace personal o escanea tu QR. Si el enlace venció, solicita uno nuevo a Levitate MX.",
           );
           setPhase("access");
         } else {
-          setError(
-            "No pudimos abrir tu espacio en este momento. Revisa tu conexión e intenta de nuevo.",
-          );
+          setError(isInternalPreview && cause instanceof ParticipantApiError ? cause.message
+            : "No pudimos abrir tu espacio en este momento. Revisa tu conexión e intenta de nuevo.");
           setPhase("error");
         }
       });
     return () => {
       active = false;
+      controller.abort();
       eventRequest.current?.abort();
     };
-  }, [preview, attempt]);
+  }, [preview, isInternalPreview, attempt]);
 
   const routine = data?.routines.find((item) => item.id === selectedRoutineId) || data?.routines[0];
   const event = data?.events.find((item) => item.id === data.selectedEventId);
   const photos = useMemo(
     () =>
       (routine?.photos.items || []).flatMap((photo) => {
-        const previewUrl = participantAssetUrl(photo.previewUrl, preview);
+        const previewUrl = isInternalPreview ? participantAdminAssetUrl(photo.previewUrl) : participantAssetUrl(photo.previewUrl, preview);
         return previewUrl
-          ? [{ ...photo, previewUrl, downloadUrl: participantAssetUrl(photo.downloadUrl, preview) }]
+          ? [{ ...photo, previewUrl, downloadUrl: isInternalPreview ? participantAdminAssetUrl(photo.downloadUrl) : participantAssetUrl(photo.downloadUrl, preview) }]
           : [];
       }),
-    [routine, preview],
+    [routine, preview, isInternalPreview],
   );
 
   useEffect(() => {
@@ -418,7 +505,9 @@ export function ParticipantPage() {
     setPhotoIndex(null);
     setDownloadMessage("");
     try {
-      const response = await participantRequest<ParticipantPortalData>(
+      const response = isInternalPreview ? await openParticipantAdminPreview(
+        new URLSearchParams({ eventId, participantId: data!.participant.id }).toString(), controller.signal,
+      ) : await participantRequest<ParticipantPortalData>(
         `/api/participant/me?eventId=${encodeURIComponent(eventId)}`,
         { signal: controller.signal },
       );
@@ -429,7 +518,8 @@ export function ParticipantPage() {
       if (controller.signal.aborted) return;
       if (cause instanceof ParticipantApiError && cause.status === 401) {
         setData(null);
-        setError("Tu sesión terminó. Abre de nuevo tu enlace personal para continuar.");
+        setError(isInternalPreview ? "Inicia sesión como administrador para continuar la revisión."
+          : "Tu sesión terminó. Abre de nuevo tu enlace personal para continuar.");
         setPhase("access");
       } else setEventError("No pudimos abrir esta edición. Intenta seleccionarla de nuevo.");
     } finally {
@@ -456,7 +546,7 @@ export function ParticipantPage() {
   }
 
   async function logout() {
-    if (loggingOut) return;
+    if (loggingOut || isInternalPreview) return;
     setLoggingOut(true);
     try {
       if (!preview) await participantRequest("/api/participant/logout", { method: "POST" });
@@ -479,6 +569,7 @@ export function ParticipantPage() {
           mode={phase === "ready" ? "loading" : phase}
           message={error}
           onRetry={() => setAttempt((value) => value + 1)}
+          internalPreview={isInternalPreview}
         />
       </>
     );
@@ -486,8 +577,9 @@ export function ParticipantPage() {
   const [firstName, surname] = personalName(data.participant.name);
   const diploma =
     data.diploma?.status === "available"
-      ? participantAssetUrl(data.diploma.url, preview)
+      ? isInternalPreview ? participantAdminAssetUrl(data.diploma.url) : participantAssetUrl(data.diploma.url, preview)
       : undefined;
+  const judgingPdf = isInternalPreview ? participantAdminAssetUrl(routine?.judging.url) : participantAssetUrl(routine?.judging.url, preview);
   const published = routine?.result.status === "published";
   const result = routine?.result;
   const hasPlace = Boolean(
@@ -511,6 +603,7 @@ export function ParticipantPage() {
           Vista de ejemplo <span>Datos ilustrativos · Imágenes de archivo</span>
         </div>
       )}
+      {isInternalPreview && <InternalPreviewBanner />}
       <section className="participant-hero" aria-labelledby="participant-name">
         <header className="participant-header">
           <a href="/" aria-label="Levitate MX, inicio" className="participant-brand">
@@ -519,12 +612,12 @@ export function ParticipantPage() {
           <div className="participant-header__right">
             <span>
               <LockKeyhole size={12} aria-hidden="true" />
-              Tu espacio
+              {isInternalPreview ? "Vista interna" : "Tu espacio"}
             </span>
-            <button type="button" onClick={() => void logout()} disabled={loggingOut}>
+            {isInternalPreview ? <a className="participant-header__admin-back" href="/admin/mi-levitate">Administración <ArrowLeft size={16} aria-hidden="true" /></a> : <button type="button" onClick={() => void logout()} disabled={loggingOut}>
               {loggingOut ? "Cerrando…" : "Salir"}
               <LogOut size={16} aria-hidden="true" />
-            </button>
+            </button>}
           </div>
         </header>
         {error && (
@@ -605,6 +698,10 @@ export function ParticipantPage() {
       </nav>
 
       <div className="participant-experience">
+        <ParticipantSummary
+          data={data} routine={routine} photos={photos} diploma={diploma} judgingPdf={judgingPdf}
+          changingEvent={changingEvent} preview={preview} onSelect={selectRoutine}
+        />
         <section
           className="participant-chapter participant-diploma-chapter"
           id="tu-diploma"
@@ -739,7 +836,7 @@ export function ParticipantPage() {
                     </p>
                     <h3>{routine.title}</h3>
                   </div>
-                  <span>{published ? "Resultado publicado" : "En revisión"}</span>
+                  <span>{published ? (isInternalPreview ? "Resultado en revisión interna" : "Resultado publicado") : "En revisión"}</span>
                 </header>
                 {published && result ? (
                   <dl
@@ -957,6 +1054,7 @@ export function ParticipantPage() {
         <JudgeSheet
           routine={routine}
           preview={preview}
+          internalPreview={isInternalPreview}
           busy={downloadBusy}
           message={downloadMessage}
           onDownload={(url, kind) => void download(url, kind)}

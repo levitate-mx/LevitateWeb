@@ -11,16 +11,14 @@ const pending: ParticipantRoutine["result"] = {
 };
 
 const archivalPhotos = [
-  "/assets/media-shop-aerial-yellow-silks.jpg",
-  "/assets/media-shop-blue-group-stage.jpg",
-  "/assets/levitate-home-hero-poster.jpg",
-].map((previewUrl, index) => ({
+  { url: "/assets/media-shop-aerial-yellow-silks.jpg", caption: "Imagen de archivo de Levitate MX · Vista de ejemplo. No corresponde a esta participante." },
+  { url: "/assets/participant-demo-photo-blurred.jpg", caption: "Imagen de archivo de Levitate MX · Ejemplo de vista previa desenfocada. No corresponde a esta participante." },
+].map((photo, index) => ({
   id: `archivo-${index}`,
-  previewUrl,
+  previewUrl: photo.url,
   width: 800,
   height: 1000,
-  caption:
-    "Imagen de archivo de Levitate MX · Vista de ejemplo. No corresponde a esta participante.",
+  caption: photo.caption,
 }));
 
 export const previewParticipantData: ParticipantPortalData = {
