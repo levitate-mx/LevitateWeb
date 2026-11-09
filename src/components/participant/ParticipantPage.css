@@ -559,14 +559,6 @@
   padding-block: clamp(72px, 8vw, 130px) 80px;
 }
 
-.participant-demo-note {
-  max-width: 700px;
-  margin-bottom: 20px !important;
-  color: #8a345c;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
 .participant-gallery__grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1046,9 +1038,6 @@
   .participant-gallery__photo-overlay {
     padding: 12px;
   }
-  .participant-demo-note {
-    font-size: 10px;
-  }
   .participant-gallery__pending {
     padding-block: 40px;
   }
@@ -1262,9 +1251,7 @@
   font-style: normal;
 }
 .participant-diploma-copy
-  > p:not(.participant-document-status):not(.participant-demo-note):not(
-    .participant-download-message
-  ) {
+  > p:not(.participant-document-status):not(.participant-download-message) {
   max-width: 310px;
   margin-top: 24px;
   color: var(--participant-muted);
@@ -1362,27 +1349,6 @@
 .participant-gallery__delivery strong {
   color: #f4f1eb;
   font-weight: 600;
-}
-.participant-gallery__album {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24px;
-  margin: 0 0 25px;
-}
-.participant-gallery__album h3 {
-  font-size: 21px;
-  font-weight: 500;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
-}
-.participant-gallery__album > span {
-  flex-shrink: 0;
-  color: var(--participant-muted);
-  font-size: 10px;
-}
-.participant-gallery .participant-demo-note {
-  color: #d798b7;
 }
 .participant-gallery__photo {
   background: #2b282c;
@@ -1511,9 +1477,7 @@
     display: none;
   }
   .participant-diploma-copy
-    > p:not(.participant-document-status):not(.participant-demo-note):not(
-      .participant-download-message
-    ) {
+    > p:not(.participant-document-status):not(.participant-download-message) {
     margin-top: 18px;
     max-width: 100%;
   }
@@ -1531,15 +1495,6 @@
   .participant-judge-access .participant-button {
     min-width: 0;
     width: 100%;
-  }
-  .participant-gallery__album {
-    align-items: start;
-    flex-direction: column;
-    gap: 9px;
-    margin-bottom: 24px;
-  }
-  .participant-gallery__album h3 {
-    font-size: 22px;
   }
   .participant-gallery__offer {
     grid-template-columns: minmax(0, 1fr);

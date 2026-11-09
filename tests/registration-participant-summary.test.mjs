@@ -123,6 +123,11 @@ test("the photo chapter sells the media package with exactly two cross-routine p
   assert.match(gallery, /href="\/tienda\/foto-video"/);
   assert.match(gallery, /¿Ya adquiriste tu paquete\?/);
   assert.match(gallery, /5 a 10 días hábiles/);
+  assert.doesNotMatch(gallery, /Vista previa|Vista de ejemplo con imágenes/);
+  assert.doesNotMatch(
+    gallery,
+    /<span>\{photos\.length\} fotografías de muestra<\/span>/,
+  );
 });
 
 test("the judging chapter uses the choreography title as its dropdown and opens only the PDF", () => {

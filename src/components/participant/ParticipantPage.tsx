@@ -682,16 +682,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
               </p>
             ) : photos.length > 0 ? (
               <>
-                <div className="participant-gallery__album">
-                  <h3>Vista previa</h3>
-                  <span>{photos.length} fotografías de muestra</span>
-                </div>
-                {preview && (
-                  <p className="participant-demo-note">
-                    Vista de ejemplo con imágenes del archivo de Levitate MX. Estas fotografías no
-                    corresponden a Mariana López Torres.
-                  </p>
-                )}
                 <div className="participant-gallery__grid" data-participant-reveal>
                   {photos.map((photo, index) => (
                     <button
