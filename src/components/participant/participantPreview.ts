@@ -55,6 +55,7 @@ export const previewParticipantData: ParticipantPortalData = {
       },
       judging: {
         status: "available",
+        url: "/assets/participant-demo-judge-sheet.pdf",
         judges: [142, 143, 142.5].map((score, index) => ({
           name: `Jurado de ejemplo ${index + 1}`,
           score,

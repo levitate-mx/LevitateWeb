@@ -35,10 +35,9 @@ function api(fetch = () => { throw new Error("unexpected network request"); }) {
 }
 const preview = evaluate(previewSource).previewParticipantData;
 const syntax = ts.createSourceFile("ParticipantPage.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ["participantPageMode", "registrationLabel", "PhotoImage", "PortalState", "InternalPreviewBanner"];
+const names = ["participantPageMode", "PhotoImage", "PortalState", "InternalPreviewBanner"];
 const declarations = syntax.statements.filter(node =>
   (ts.isFunctionDeclaration(node) && names.includes(node.name?.text))
-  || (ts.isVariableStatement(node) && node.declarationList.declarations.some(entry => entry.name.getText(syntax) === "registrationLabels")),
 ).map(node => node.getText(syntax));
 const helpers = evaluate(`${declarations.join("\n")}\nexports.helpers = { ${names.join(",")} };`, {
   ...icons, useState,
@@ -101,6 +100,7 @@ test("the public demo and its punctuation alias stay isolated from the private a
   assert.equal(preview.routines[0].photos.items[1].previewUrl, "/assets/participant-demo-photo-blurred.jpg");
   assert.match(preview.routines[0].photos.items[1].caption, /vista previa desenfocada/);
   assert.ok(preview.routines[0].photos.items.every(photo => photo.previewUrl.startsWith("/assets/") && !photo.downloadUrl));
+  assert.equal(preview.routines[0].judging.url, "/assets/participant-demo-judge-sheet.pdf");
 });
 
 test("the portal moves directly from its hero to the three detail chapters", () => {
@@ -123,6 +123,21 @@ test("the photo chapter sells the media package with exactly two cross-routine p
   assert.match(gallery, /href="\/tienda\/foto-video"/);
   assert.match(gallery, /¿Ya adquiriste tu paquete\?/);
   assert.match(gallery, /5 a 10 días hábiles/);
+});
+
+test("the judging chapter uses the choreography title as its dropdown and opens only the PDF", () => {
+  const judgingStart = source.indexOf('className="participant-chapter participant-judging-chapter"');
+  const judgingEnd = source.indexOf('className="participant-chapter participant-gallery"', judgingStart);
+  const judgingChapter = source.slice(judgingStart, judgingEnd);
+
+  assert.ok(judgingStart >= 0 && judgingEnd > judgingStart);
+  assert.doesNotMatch(judgingChapter, /ParticipantRoutineSelector|Resultado publicado|Los puntajes y comentarios|FileText/);
+  assert.match(judgingChapter, /aria-label="Seleccionar coreografía para tu jueceo"/);
+  assert.match(judgingChapter, /href=\{judgingPdf\}/);
+  assert.match(judgingChapter, /target="_blank"/);
+  assert.match(judgingChapter, /Abrir hoja de jueceo/);
+  assert.match(judgingChapter, /"1er"/);
+  assert.doesNotMatch(source, /JudgeSheet|judgeOpen/);
 });
 
 test("an unauthorized internal preview directs administrators to login without requesting a participant QR", () => {

@@ -200,7 +200,7 @@ async function serveAsset(db, env, request, assetId, admin = false) {
   if (!env.PARTICIPANT_MEDIA) fault("portal_storage_unavailable", "Los archivos estarán disponibles próximamente.", 503);
   const object = await env.PARTICIPANT_MEDIA.get(asset.object_key);
   if (!object) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
-  const disposition = asset.kind !== "photo" || new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline";
+  const disposition = asset.kind === "diploma" || new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline";
   return new Response(object.body, { headers: { ...headers, "content-type": asset.content_type,
     "content-disposition": `${disposition}; filename="${asset.file_name.replace(/[^a-zA-Z0-9._-]/g, "_")}"`, "content-length": String(asset.byte_size) } });
 }

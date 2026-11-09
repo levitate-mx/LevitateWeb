@@ -10,12 +10,10 @@ import {
   LockKeyhole,
   Maximize2,
   Medal,
-  FileText,
   Check,
 } from "lucide-react";
 import { ParticipantDialog } from "./ParticipantDialog";
 import { ParticipantDiplomaPreview } from "./ParticipantDiplomaPreview";
-import { ParticipantRoutineSelector } from "./ParticipantRoutineSelector";
 import {
   downloadParticipantPdf,
   openParticipantAdminPreview,
@@ -28,66 +26,12 @@ import {
 import type {
   ParticipantPhoto,
   ParticipantPortalData,
-  ParticipantRoutine,
 } from "./participantTypes";
 import { LevitateHeader } from "../home/LevitateHeader";
 import "./ParticipantPage.css";
 
 const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
 const medalNames = { oro: "Oro", plata: "Plata", bronce: "Bronce", participacion: "Participación" };
-const registrationLabels: Record<string, string> = {
-  aereo: "Aerial",
-  aerial: "Aerial",
-  motion: "Motion",
-  aro: "Aro",
-  tela: "Tela",
-  open_trapecio: "Open · Trapecio",
-  open_cuna: "Open · Cuna",
-  open_luna: "Open · Luna",
-  open_esfera: "Open · Esfera",
-  open_pole_aereo: "Open · Pole aéreo",
-  open_suspension_capilar: "Open · Suspensión capilar",
-  open_otro: "Open · Otro",
-  acrojazz: "Acrojazz",
-  ballet: "Ballet",
-  belly_dance: "Belly dance",
-  contemporaneo: "Contemporáneo",
-  folklore: "Folklore",
-  jazz: "Jazz",
-  lirico: "Lírico",
-  open_motion: "Open · Motion",
-  urbanos: "Urbanos",
-  solo: "Solo",
-  duo: "Dúo",
-  dueto: "Dueto",
-  trio: "Trío",
-  grupo: "Grupo",
-  dupla_1_aparato: "Dupla · 1 aparato",
-  duo_2_aparatos: "Dúo · 2 aparatos",
-  terna_1_aparato: "Terna · 1 aparato",
-  trio_3_aparatos: "Trío · 3 aparatos",
-  baby: "Baby",
-  petite: "Petite",
-  junior: "Junior",
-  teen: "Teen",
-  senior: "Senior",
-  legacy: "Legacy",
-  releve: "Relevé",
-  principiante: "Principiante",
-  intermedio: "Intermedio",
-  avanzado: "Avanzado",
-  edomex: "Estado de México",
-  estado_de_mexico: "Estado de México",
-  "estado-de-mexico": "Estado de México",
-  cdmx: "Ciudad de México",
-  puebla: "Puebla",
-  veracruz: "Veracruz",
-};
-
-function registrationLabel(value: string | null | undefined): string {
-  if (!value) return "";
-  return registrationLabels[value.toLowerCase()] || value.replace(/[_-]+/g, " ");
-}
 
 function score(value: number | null): string {
   return value !== null && Number.isFinite(value) ? scoreFormatter.format(value) : "—";
@@ -136,98 +80,6 @@ function InternalPreviewBanner() {
       <span>Esta revisión no publica material ni crea un acceso de participante.</span>
       <a href="/admin/mi-levitate">Volver a administración <ArrowLeft size={14} aria-hidden="true" /></a>
     </div>
-  );
-}
-
-function JudgeSheet({
-  routine,
-  preview,
-  internalPreview = false,
-  onDownload,
-  busy,
-  message,
-  onClose,
-}: {
-  routine: ParticipantRoutine;
-  preview: boolean;
-  internalPreview?: boolean;
-  onDownload: (url: string, kind: "diploma" | "jueceo") => void;
-  busy: string | null;
-  message: string;
-  onClose: () => void;
-}) {
-  const pdf = internalPreview ? participantAdminAssetUrl(routine.judging.url) : participantAssetUrl(routine.judging.url, preview);
-  return (
-    <ParticipantDialog title="Hoja de jueceo" onClose={onClose} className="participant-judging">
-      <div className="participant-judging__intro">
-        <p className="participant-eyebrow">Tu presentación</p>
-        <h3>{routine.title}</h3>
-        {preview && (
-          <p className="participant-demo-note">
-            Vista de ejemplo. Estos puntajes y comentarios son ilustrativos.
-          </p>
-        )}
-        {pdf && (
-          <button
-            type="button"
-            className="participant-text-button"
-            disabled={Boolean(busy)}
-            onClick={() => onDownload(pdf, "jueceo")}
-          >
-            <ArrowDownToLine size={17} aria-hidden="true" />
-            {busy === "jueceo" ? "Preparando documento…" : "Descargar hoja de jueceo"}
-          </button>
-        )}
-        {message && (
-          <p className="participant-download-message" role="status">
-            {message}
-          </p>
-        )}
-      </div>
-      {routine.judging.judges.length === 0 && (
-        <p className="participant-status-copy">
-          La hoja está disponible en el documento de esta presentación.
-        </p>
-      )}
-      {routine.judging.judges.map((judge, index) => (
-        <section className="participant-judge" key={`${judge.name}-${index}`}>
-          <header>
-            <h3>{judge.name}</h3>
-            <p>
-              {score(judge.score)}
-              {judge.maxScore !== null && <span> / {score(judge.maxScore)}</span>}
-            </p>
-          </header>
-          {judge.criteria.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Criterio</th>
-                  <th scope="col">Puntaje</th>
-                </tr>
-              </thead>
-              <tbody>
-                {judge.criteria.map((criterion, criterionIndex) => (
-                  <tr key={`${criterion.label}-${criterionIndex}`}>
-                    <th scope="row">{criterion.label}</th>
-                    <td>
-                      {score(criterion.score)}
-                      {criterion.maxScore !== null && <span> / {score(criterion.maxScore)}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {judge.feedback && (
-            <div className="participant-judge__feedback">
-              <p className="participant-eyebrow">Comentarios</p>
-              <p>{judge.feedback}</p>
-            </div>
-          )}
-        </section>
-      ))}
-    </ParticipantDialog>
   );
 }
 
@@ -317,7 +169,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
   const [changingEvent, setChangingEvent] = useState(false);
   const [eventError, setEventError] = useState("");
-  const [judgeOpen, setJudgeOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
@@ -333,7 +184,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       eventRequest.current?.abort();
       setData(null);
       setSelectedRoutineId(null);
-      setJudgeOpen(false);
       setPhotoIndex(null);
       setChangingEvent(false);
       setError("");
@@ -437,7 +287,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   function selectRoutine(id: string) {
     setSelectedRoutineId(id);
-    setJudgeOpen(false);
     setPhotoIndex(null);
     setDownloadMessage("");
   }
@@ -449,7 +298,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     eventRequest.current = controller;
     setChangingEvent(true);
     setEventError("");
-    setJudgeOpen(false);
     setPhotoIndex(null);
     setDownloadMessage("");
     try {
@@ -687,14 +535,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 Tu jueceo<span>.</span>
               </h2>
             </header>
-            <ParticipantRoutineSelector
-              routines={data.routines}
-              selectedId={routine?.id || ""}
-              disabled={changingEvent}
-              onSelect={selectRoutine}
-              context="tu jueceo"
-              label={registrationLabel}
-            />
             {changingEvent ? (
               <p className="participant-status-copy" role="status">
                 Abriendo tus presentaciones de esta edición…
@@ -707,22 +547,21 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 data-participant-reveal
               >
                 <header className="participant-selected__heading">
-                  <div>
-                    <p className="participant-eyebrow">
-                      {[
-                        routine.genre,
-                        routine.subgenre,
-                        routine.category,
-                        routine.division,
-                        routine.level,
-                      ]
-                        .map(registrationLabel)
-                        .filter(Boolean)
-                        .join(" / ")}
-                    </p>
-                    <h3>{routine.title}</h3>
-                  </div>
-                  <span>{published ? (isInternalPreview ? "Resultado en revisión interna" : "Resultado publicado") : "En revisión"}</span>
+                  <label className="participant-routine-dropdown">
+                    <select
+                      aria-label="Seleccionar coreografía para tu jueceo"
+                      value={routine.id}
+                      disabled={changingEvent}
+                      onChange={(change) => selectRoutine(change.target.value)}
+                    >
+                      {data.routines.map((routineOption) => (
+                        <option key={routineOption.id} value={routineOption.id}>
+                          {routineOption.title}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={28} aria-hidden="true" />
+                  </label>
                 </header>
                 {published && result ? (
                   <dl
@@ -748,11 +587,11 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                     {hasPlace && (
                       <div className="participant-results__place">
                         <dt>Competencia directa</dt>
-                        <dd>
-                          {result.place}
-                          <span>
-                            {result.place === 2 ? ".º" : ".er"} <small>lugar</small>
+                        <dd aria-label={`${result.place === 1 ? "Primer" : result.place === 2 ? "Segundo" : "Tercer"} lugar`}>
+                          <span className="participant-results__place-rank">
+                            {result.place === 1 ? "1er" : result.place === 2 ? "2do" : "3er"}
                           </span>
+                          <small>lugar</small>
                         </dd>
                       </div>
                     )}
@@ -767,27 +606,26 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                   </div>
                 )}
                 <div className="participant-judge-access">
-                  <FileText size={31} strokeWidth={1} aria-hidden="true" />
-                  <div>
-                    <h4>Tu hoja de jueceo</h4>
-                    <p>
-                      {routine.judging.status === "available"
-                        ? "Los puntajes y comentarios que acompañan tu presentación."
-                        : "La hoja de esta presentación está pendiente de publicación."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="participant-button participant-button--outline"
-                    disabled={routine.judging.status !== "available"}
-                    onClick={() => {
-                      setDownloadMessage("");
-                      setJudgeOpen(true);
-                    }}
-                  >
-                    {routine.judging.status === "available" ? "Ver hoja de jueceo" : "Próximamente"}
-                    <ArrowUpRight size={17} aria-hidden="true" />
-                  </button>
+                  {judgingPdf ? (
+                    <a
+                      className="participant-button participant-button--outline"
+                      href={judgingPdf}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Abrir hoja de jueceo
+                      <ArrowUpRight size={17} aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      className="participant-button participant-button--outline"
+                      disabled
+                    >
+                      Próximamente
+                      <ArrowUpRight size={17} aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -895,17 +733,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         </section>
       </div>
 
-      {judgeOpen && routine && (
-        <JudgeSheet
-          routine={routine}
-          preview={preview}
-          internalPreview={isInternalPreview}
-          busy={downloadBusy}
-          message={downloadMessage}
-          onDownload={(url, kind) => void download(url, kind)}
-          onClose={() => setJudgeOpen(false)}
-        />
-      )}
       {activePhoto && photoIndex !== null && (
         <ParticipantDialog
           title={`Fotografía ${photoIndex + 1} de ${photos.length}`}

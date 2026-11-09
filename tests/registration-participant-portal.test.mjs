@@ -253,6 +253,8 @@ test('admin preview reads every draft without publishing it, regardless of all p
   const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'preview.jpg',contentType:'image/jpeg',base64Data:Buffer.from([255,216,255,0,0,0]).toString('base64'),width:1200,height:800,caption:'Vista revisable'});
   const sheet=await admin({action:'asset.upload',eventId:'test-event',kind:'judge_sheet',routineId:saved.data.routineId,fileName:'jueceo.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-fixture-sheet').toString('base64')});
   const diploma=await admin({action:'asset.upload',eventId:'test-event',kind:'diploma',participantId:'person-a',fileName:'diploma.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-fixture-diploma').toString('base64')});
+  const sheetPreview=await request(`/api/registration/admin/participant-portal?assetId=${sheet.data.assetId}`,{cookie:adminCookie});
+  assert.equal(sheetPreview.headers.get('content-disposition'),'inline; filename="jueceo.pdf"');
   await admin({action:'document.assign',eventId:'test-event',participantId:'person-a',assetId:diploma.data.assetId,published:false});
   const storedObjects=bucket.objects.size;
   for(let mask=0;mask<32;mask++) {
