@@ -10,7 +10,12 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/*",
-      "/media/mi-levitate-demo/*"
+      "/media/mi-levitate-demo/*",
+      "/jueceo",
+      "/jueceo/",
+      "/jueceo/app",
+      "/jueceo/app/",
+      "/jueceo/app/index.html"
     ],
     "not_found_handling": "single-page-application"
   },
@@ -20,7 +25,7 @@
     "PARTICIPANT_REGISTRATION_EVENT_IDS": "edomex-2026-otono",
     "PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL": "musica.levitate@gmail.com",
     "JUDGING_SUPABASE_URL": "https://twazfaytgmgeyqeopgut.supabase.co",
-    "JUDGING_LEVITATE_EVENT_IDS": "25cf168b-4bf1-423f-b2c2-42897d3f8110"
+    "JUDGING_LEVITATE_EVENT_IDS": "25cf168b-4bf1-423f-b2c2-42897d3f8110,ef1dc272-99d5-425e-b930-6f3959b7c8b2"
   },
   "d1_databases": [
     {

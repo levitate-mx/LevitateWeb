@@ -27,8 +27,10 @@ import { ShopPage } from "./components/shop/ShopPage";
 import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
 import { ParticipantPage } from "./components/participant/ParticipantPage";
 import { ParticipantAdminPage } from "./components/participant-admin/ParticipantAdminPage";
+import { JudgeWorkspaceEntry } from "./components/judging/JudgeWorkspaceEntry";
 
 export default function App() {
+  if (/^\/jueceo\/?$/.test(window.location.pathname)) return <JudgeWorkspaceEntry />;
   const searchParams = new URLSearchParams(window.location.search);
   const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo\.?)?\/?$/);
   const participantAdminMatch = window.location.pathname.match(/^\/admin\/mi-levitate\/?$/);

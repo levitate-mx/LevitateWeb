@@ -6,6 +6,8 @@ const workshopStatements = workshopMigration.match(/CREATE TABLE[\s\S]*?\n\);|CR
 const participantPortalMigration = readFileSync(new URL("../../db/registration_participant_portal.sql", import.meta.url), "utf8");
 const participantPortalStatements = participantPortalMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE TRIGGER[\s\S]*?\nEND;/g) || [];
 const managedStatements = [...workshopStatements, ...participantPortalStatements];
+const judgeMigration = readFileSync(new URL("../../db/registration_judge_workspace.sql", import.meta.url), "utf8");
+managedStatements.push(...(judgeMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE TABLE")).map((sql) => ({
   name: sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1],
   columns: [...sql.matchAll(/^  (\w+) (?:TEXT|INTEGER)\b/gm)].map((match) => match[1]),
@@ -24,6 +26,7 @@ const additions = {
   },
   registration_users: {
     role: "TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin'))",
+    is_judge: "INTEGER NOT NULL DEFAULT 0 CHECK (is_judge IN (0, 1))",
   },
   registration_participants: {
     is_international: "INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1))",

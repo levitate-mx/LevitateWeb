@@ -5,6 +5,7 @@ import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticke
 import { accessSessions, resolveAccessSession, getAccessCoverage, isSplitAccessSession, isAmbiguousAccessSession } from "./ticket-access.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getJudgingEvents, getJudgingScores, getJudgingRoutineDirectory, getJudgingSheets } from "./judging-reader.js";
+import { handleJudgeWorkspace } from "./judge-workspace.js";
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
@@ -146,7 +147,7 @@ const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanz
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
 const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const registrationUserRoles = new Set(["academy", "admin"]);
+const registrationUserRoles = new Set(["academy", "admin", "judge"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
@@ -379,6 +380,37 @@ const registrationShopProducts = new Map([
 export default {
   async fetch(request, env, context) {
     const url = new URL(request.url);
+
+    if (["/jueceo", "/jueceo/", "/jueceo/app", "/jueceo/app/", "/jueceo/app/index.html"].includes(url.pathname)) {
+      try {
+        const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+        if (session.user.role !== "judge") throwHttpError("judge_forbidden", "Esta cuenta no tiene acceso de juez.", 403);
+        if (["/jueceo", "/jueceo/", "/jueceo/app"].includes(url.pathname)) {
+          return new Response(null, { status: 302, headers: { location: "/jueceo/app/", "cache-control": "no-store, private" } });
+        }
+        const response = await env.ASSETS.fetch(request);
+        const headers = new Headers(response.headers);
+        headers.set("cache-control", "no-store, private");
+        headers.set("x-robots-tag", "noindex, nofollow");
+        return new Response(response.body, { status: response.status, headers });
+      } catch (error) {
+        if (error.statusCode === 401 || error.statusCode === 403) {
+          return new Response(null, { status: 302, headers: { location: "/login", "cache-control": "no-store, private" } });
+        }
+        return sendRegistrationError(error);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/registration/judge/")) {
+      try {
+        const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+        return await handleJudgeWorkspace(request, env, session);
+      } catch (error) {
+        const response = sendRegistrationError(error);
+        response.headers.set("cache-control", "no-store, private");
+        return response;
+      }
+    }
 
     if (url.pathname.startsWith("/media/mi-levitate-demo/")) {
       return serveParticipantDemoPhoto(request, {
@@ -3643,7 +3675,7 @@ async function getRegistrationStateFromRequest({ db, request, touchLastSeen = tr
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
-          registration_users.role AS user_role,
+          CASE WHEN registration_users.is_judge = 1 THEN 'judge' ELSE registration_users.role END AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
@@ -3839,7 +3871,7 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
-          registration_users.role AS user_role,
+          CASE WHEN registration_users.is_judge = 1 THEN 'judge' ELSE registration_users.role END AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,

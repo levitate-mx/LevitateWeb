@@ -1,5 +1,8 @@
 import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
 
+// The judge workspace applies its own authenticated write authorization.
+export { configuration as judgingConnection, readRows as readJudgingRows, allowedEventId as requireLevitateJudgingEvent };
+
 const pageSize = 1000;
 const maximumRows = 50000;
 const eventIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
