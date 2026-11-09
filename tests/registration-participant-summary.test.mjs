@@ -13,7 +13,6 @@ const readSource = path => readFile(new URL(path, import.meta.url), "utf8");
 const source = await readSource("../src/components/participant/ParticipantPage.tsx");
 const apiSource = await readSource("../src/components/participant/participantApi.ts");
 const previewSource = await readSource("../src/components/participant/participantPreview.ts");
-const selectorSource = await readSource("../src/components/participant/ParticipantRoutineSelector.tsx");
 function evaluate(code, globals = {}, imports = {}) {
   const scope = { exports: {}, Error, URLSearchParams, URL, AbortController, ...globals,
     require(name) {
@@ -35,15 +34,14 @@ function api(fetch = () => { throw new Error("unexpected network request"); }) {
   });
 }
 const preview = evaluate(previewSource).previewParticipantData;
-const selector = evaluate(selectorSource).ParticipantRoutineSelector;
 const syntax = ts.createSourceFile("ParticipantPage.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ["participantPageMode", "registrationLabel", "PhotoImage", "ParticipantSummary", "PortalState", "InternalPreviewBanner"];
+const names = ["participantPageMode", "registrationLabel", "PhotoImage", "PortalState", "InternalPreviewBanner"];
 const declarations = syntax.statements.filter(node =>
   (ts.isFunctionDeclaration(node) && names.includes(node.name?.text))
   || (ts.isVariableStatement(node) && node.declarationList.declarations.some(entry => entry.name.getText(syntax) === "registrationLabels")),
 ).map(node => node.getText(syntax));
 const helpers = evaluate(`${declarations.join("\n")}\nexports.helpers = { ${names.join(",")} };`, {
-  ...icons, useState, ParticipantRoutineSelector: selector,
+  ...icons, useState,
 }).helpers;
 
 test("public asset validation stays separate from authenticated administrator asset URLs", () => {
@@ -105,40 +103,11 @@ test("the public demo and its punctuation alias stay isolated from the private a
   assert.ok(preview.routines[0].photos.items.every(photo => photo.previewUrl.startsWith("/assets/") && !photo.downloadUrl));
 });
 
-function summary(routine, overrides = {}) {
-  return createElement(helpers.ParticipantSummary, {
-    data: preview, routine, photos: routine?.photos.items || [], diploma: "/assets/example.pdf", judgingPdf: undefined,
-    changingEvent: false, preview: true, onSelect() {}, ...overrides,
-  });
-}
-
-test("summary links to the existing chapters, limits previews to two and follows the selected presentation", () => {
-  const first = preview.routines[0];
-  const extra = { ...first.photos.items[0], id: "third-preview" };
-  const html = renderToStaticMarkup(summary(first, { photos: [...first.photos.items, extra] }));
-  assert.match(html, /href="#tu-diploma"/);
-  assert.match(html, /href="#tu-jueceo"/);
-  assert.match(html, /href="#tus-fotos"/);
-  assert.match(html, /Hoja de jueceo disponible/);
-  assert.match(html, /3 fotos de ejemplo/);
-  assert.equal((html.match(/<img /g) || []).length, 2);
-  assert.doesNotMatch(html, /third-preview|<video|Drive|Google/);
-  const pending = renderToStaticMarkup(summary(preview.routines[1]));
-  assert.match(pending, /En preparación/);
-  assert.match(pending, /Álbum por publicar/);
-  assert.match(pending, /02 \/ De raíz/);
-  assert.doesNotMatch(pending, /<img |Hoja de jueceo disponible|fotos de ejemplo/);
-  assert.match(pending, /Disponible para consultar/, "the edition diploma remains available when the routine changes");
-});
-
-test("summary preserves pending states without assets and hides old previews while changing editions", () => {
-  const pending = renderToStaticMarkup(summary(preview.routines[2], { diploma: undefined }));
-  assert.match(pending, /Por publicar/);
-  assert.match(pending, /En preparación/);
-  assert.match(pending, /Álbum por publicar/);
-  const switching = renderToStaticMarkup(summary(preview.routines[0], { changingEvent: true }));
-  assert.equal((switching.match(/Actualizando…/g) || []).length, 3);
-  assert.doesNotMatch(switching, /<img |fotos de ejemplo|Hoja de jueceo disponible/);
+test("the portal moves directly from its hero to the three detail chapters", () => {
+  assert.doesNotMatch(source, /ParticipantSummary|Todo en un vistazo|participant-chapter-nav/);
+  assert.match(source, /id="tu-diploma"/);
+  assert.match(source, /id="tu-jueceo"/);
+  assert.match(source, /id="tus-fotos"/);
 });
 
 test("an unauthorized internal preview directs administrators to login without requesting a participant QR", () => {

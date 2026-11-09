@@ -141,66 +141,6 @@ function PhotoImage({ photo, className }: { photo: ParticipantPhoto; className?:
   );
 }
 
-function ParticipantSummary({
-  data, routine, photos, diploma, judgingPdf, changingEvent, preview, onSelect,
-}: {
-  data: ParticipantPortalData;
-  routine: ParticipantRoutine | undefined;
-  photos: ParticipantPhoto[];
-  diploma: string | undefined;
-  judgingPdf: string | undefined;
-  changingEvent: boolean;
-  preview: boolean;
-  onSelect: (id: string) => void;
-}) {
-  const judgingAvailable = routine?.judging.status === "available"
-    && (routine.judging.judges.length > 0 || Boolean(judgingPdf));
-  return (
-    <section className="participant-summary" aria-labelledby="participant-summary-title" aria-busy={changingEvent}>
-      <div className="participant-chapter__inner">
-        <header className="participant-summary__heading">
-          <p className="participant-eyebrow">Tu experiencia</p>
-          <h2 id="participant-summary-title">Todo en <span>un vistazo.</span></h2>
-          <p>Tu diploma de esta edición y el material de la presentación que elijas.</p>
-        </header>
-        <ParticipantRoutineSelector
-          routines={data.routines} selectedId={routine?.id || ""} disabled={changingEvent}
-          onSelect={onSelect} context="el resumen" label={registrationLabel}
-        />
-        <div className="participant-summary__cards" aria-live="polite">
-          <a className="participant-summary__card" href="#tu-diploma">
-            <span className="participant-eyebrow">01 / Por participante y edición</span>
-            <FileText size={26} aria-hidden="true" />
-            <h3>Tu diploma</h3>
-            <p>{changingEvent ? "Actualizando…" : diploma ? "Disponible para consultar" : "Por publicar"}</p>
-            <span className="participant-summary__action">Ir a tu diploma <ArrowUpRight size={17} aria-hidden="true" /></span>
-          </a>
-          <a className="participant-summary__card" href="#tu-jueceo">
-            <span className="participant-eyebrow">02 / {routine?.title || "Tu presentación"}</span>
-            <Medal size={26} aria-hidden="true" />
-            <h3>Tu jueceo</h3>
-            <p>{changingEvent ? "Actualizando…" : judgingAvailable ? "Hoja de jueceo disponible" : "En preparación"}</p>
-            <span className="participant-summary__action">Ir a tu jueceo <ArrowUpRight size={17} aria-hidden="true" /></span>
-          </a>
-          <a className="participant-summary__card participant-summary__card--photos" href="#tus-fotos">
-            <span className="participant-eyebrow">03 / {routine?.title || "Tu presentación"}</span>
-            {!changingEvent && photos.length > 0 ? (
-              <div className="participant-summary__photos">
-                {photos.slice(0, 2).map((photo) => <PhotoImage key={photo.id} photo={photo} />)}
-              </div>
-            ) : <ImageOff size={26} aria-hidden="true" />}
-            <h3>Tus fotos</h3>
-            <p>{changingEvent ? "Actualizando…" : photos.length > 0
-              ? `${photos.length} ${photos.length === 1 ? "foto" : "fotos"} ${preview ? "de ejemplo" : "disponibles"}`
-              : "Álbum por publicar"}</p>
-            <span className="participant-summary__action">Ir a tu álbum <ArrowUpRight size={17} aria-hidden="true" /></span>
-          </a>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function InternalPreviewBanner() {
   return (
     <div className="participant-preview-banner participant-preview-banner--internal">
@@ -394,7 +334,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [photoLimit, setPhotoLimit] = useState(20);
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
-  const [activeChapter, setActiveChapter] = useState("tu-diploma");
   const eventRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -452,19 +391,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       }),
     [routine, preview, isInternalPreview],
   );
-
-  useEffect(() => {
-    if (phase !== "ready") return;
-    const sections = document.querySelectorAll<HTMLElement>("[data-participant-chapter]");
-    const chapters = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) if (entry.isIntersecting) setActiveChapter(entry.target.id);
-      },
-      { rootMargin: "-16% 0px -55% 0px", threshold: 0 },
-    );
-    sections.forEach((section) => chapters.observe(section));
-    return () => chapters.disconnect();
-  }, [phase, data?.selectedEventId]);
 
   useEffect(() => {
     if (phase !== "ready" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -658,31 +584,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         </div>
       </section>
 
-      <nav className="participant-chapter-nav" aria-label="Tu experiencia Levitate">
-        <div>
-          {[
-            { id: "tu-diploma", number: "01", label: "Tu diploma" },
-            { id: "tu-jueceo", number: "02", label: "Tu jueceo" },
-            { id: "tus-fotos", number: "03", label: "Tus fotos" },
-          ].map((chapter) => (
-            <a
-              href={`#${chapter.id}`}
-              key={chapter.id}
-              aria-current={activeChapter === chapter.id ? "location" : undefined}
-            >
-              <span>{chapter.number}</span>
-              {chapter.label}
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </a>
-          ))}
-        </div>
-      </nav>
-
       <div className="participant-experience">
-        <ParticipantSummary
-          data={data} routine={routine} photos={photos} diploma={diploma} judgingPdf={judgingPdf}
-          changingEvent={changingEvent} preview={preview} onSelect={selectRoutine}
-        />
         <section
           className="participant-chapter participant-diploma-chapter"
           id="tu-diploma"
