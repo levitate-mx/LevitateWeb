@@ -1464,146 +1464,60 @@
   width: min(100%, 340px);
   aspect-ratio: 17 / 22;
   container-type: inline-size;
-  background: #f9f6f1;
+  background: #fff0f6;
   color: #171717;
   box-shadow: 0 16px 45px rgba(48, 39, 31, 0.13);
   font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+.participant-certificate__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .participant-certificate__content {
   position: absolute;
   inset: 0;
 }
-.participant-certificate__edition {
+.participant-certificate__recipient--authenticated {
   position: absolute;
-  top: 6%;
-  right: 7%;
-  left: 7%;
-  display: flex;
-  align-items: center;
-  gap: 1.4cqw;
-  font-size: 1.45cqw;
-  text-transform: uppercase;
-}
-.participant-certificate__edition > span {
-  width: 5cqw;
-  height: 0.4cqw;
-  background: #dc0064;
-}
-.participant-certificate__edition > b {
-  margin-left: auto;
-  color: #dc0064;
-  font-size: 1.25cqw;
-}
-.participant-certificate__logo {
-  position: absolute;
-  top: 14%;
-  left: 28%;
-  width: 44%;
-  height: auto;
-  filter: brightness(0);
-}
-.participant-certificate__title {
-  position: absolute;
-  top: 28%;
-  right: 7%;
-  left: 7%;
+  top: 47%;
+  right: 8%;
+  left: 8%;
   text-align: center;
 }
-.participant-certificate__title > i {
+.participant-certificate__recipient--authenticated > strong {
   display: block;
-  color: #dc0064;
   font-family: Georgia, serif;
-  font-size: 8.2cqw;
-  font-weight: 400;
-  line-height: 1.2;
-}
-.participant-certificate__title > span {
-  display: block;
-  margin-top: 1.5cqw;
-  font-size: 2.7cqw;
-  letter-spacing: 0.08em;
-}
-.participant-certificate__recipient {
-  position: absolute;
-  top: 43%;
-  right: 10%;
-  left: 10%;
-  text-align: center;
-}
-.participant-certificate__recipient > span {
-  display: block;
-  font-size: 1.65cqw;
-}
-.participant-certificate__recipient > strong {
-  display: block;
-  margin-top: 3.2cqw;
-  font-family: Georgia, serif;
-  font-size: 7.1cqw;
+  font-size: clamp(13px, 6.6cqw, 24px);
   font-weight: 400;
   letter-spacing: -0.03em;
-  line-height: 1.12;
+  line-height: 1.05;
   overflow-wrap: anywhere;
 }
-.participant-certificate__recipient > small {
+.participant-certificate__recipient--authenticated > small {
   display: block;
-  margin-top: 2cqw;
-  font-size: 1.8cqw;
+  margin-top: 1.5cqw;
+  font-size: 1.65cqw;
   line-height: 1.4;
 }
-.participant-certificate__recognition {
+.participant-certificate__auth {
   position: absolute;
-  top: 61%;
-  right: 12%;
-  left: 12%;
-  text-align: center;
-}
-.participant-certificate__recognition > span {
-  display: block;
-  width: 12cqw;
-  height: 1px;
-  margin: 0 auto 4.3cqw;
-  background: #dc0064;
-}
-.participant-certificate__recognition > p {
-  font-size: 1.95cqw;
-  line-height: 1.5;
-}
-.participant-certificate__event {
-  position: absolute;
-  top: 72%;
-  right: 9%;
-  left: 9%;
-  display: grid;
-  gap: 1.3cqw;
-  text-align: center;
-}
-.participant-certificate__event > i {
-  margin-bottom: 0.7cqw;
-  color: #dc0064;
-  font-family: Georgia, serif;
-  font-size: 3.4cqw;
-}
-.participant-certificate__event > strong {
-  font-size: 1.6cqw;
-}
-.participant-certificate__event > span {
-  font-size: 1.45cqw;
-  line-height: 1.4;
-}
-.participant-certificate__signature {
-  position: absolute;
-  bottom: 8.5%;
-  left: 9%;
-  width: 35%;
-  font-size: 1.2cqw;
-  text-align: center;
-}
-.participant-certificate__signature > span {
-  display: block;
-  width: 100%;
-  height: 0.6px;
-  margin-bottom: 1.8cqw;
-  background: #171717;
+  top: 3.3%;
+  right: 3.8%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8cqw;
+  padding: 1.1cqw 1.5cqw;
+  border: 1px solid rgba(233, 0, 115, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 248, 251, 0.88);
+  color: #bd005d;
+  font-size: 1.3cqw;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .participant-diploma-stage__caption {
   position: absolute;

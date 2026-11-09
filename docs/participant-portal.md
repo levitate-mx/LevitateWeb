@@ -18,7 +18,7 @@ El ejemplo público está en `/mi-levitate/demo`; usa datos ilustrativos y dos i
 
 ## Resumen, Drive y revisión interna
 
-El portal presenta diploma, jueceo y fotografías en sus respectivas secciones. El diploma pertenece a la edición; los selectores de presentación sincronizan el jueceo y el álbum. Los estados se calculan a partir de los archivos y resultados disponibles, no de que Drive esté conectado. Una carpeta de Drive vinculada no equivale a un álbum cargado o publicado.
+Después de la portada, el espacio abre directamente el reconocimiento autenticado y continúa con jueceo y fotografías. El reconocimiento pertenece al participante y la edición; los selectores de presentación sincronizan el jueceo y el álbum. Los estados se calculan a partir de los archivos y resultados disponibles, no de que Drive esté conectado. Una carpeta de Drive vinculada no equivale a un álbum cargado o publicado.
 
 `/admin/foto-video` conserva las compras y la conexión de Drive, y enlaza a la gestión de Mi Levitate. `/admin/mi-levitate` reutiliza el mismo panel de conexión, permite seleccionar la edición y el participante, y abre **Revisar su resumen de Mi Levitate**. La navegación administrativa incluye una entrada directa a Mi Levitate.
 
@@ -62,7 +62,7 @@ El QR es una llave personal: quien lo tenga puede consultar ese espacio. Para co
 ```
 
 2. El esquema aditivo de `db/registration_participant_portal.sql` quedó aplicado el 9 de noviembre de 2026. Se comprobaron las siete tablas nuevas vacías y los registros previos sin cambios; no se crearon ediciones, accesos QR ni sesiones de participantes. El preparador general no se ejecutó contra producción en esta tarea.
-3. Revisar el arte final del diploma y los nombres. La plantilla incluida es una base funcional con fuentes latinas; para nombres con glifos fuera de su cobertura usar un PDF aprobado o integrar una fuente Unicode. El generador rechaza textos que no caben en lugar de truncar la identidad.
+3. Revisar el arte final y los nombres. La plantilla incluida conserva el reconocimiento oficial de Otoño 2026 y superpone el nombre y la academia verificados, el sello de autenticación y el QR privado. Para nombres con glifos fuera de su cobertura usar un PDF aprobado o integrar una fuente Unicode. El generador rechaza textos que no caben en lugar de truncar la identidad.
 4. Importar las correspondencias reales y los resultados aprobados. **La integración actual de JueceoCore se reutiliza como fuente de consulta de administración, pero este módulo no sincroniza automáticamente sus cambios.** El portal recibe un registro revisado mediante el panel o manifiesto, con IDs de origen; una sincronización posterior debe conservar el paso de aprobación y la regla de competencia directa.
 5. Cargar las fotografías y documentos reales; comprobar un QR de prueba en escritorio y teléfono antes de emitir el lote.
 6. Desplegar el código y probar el control de acceso, la publicación y las descargas con una edición de prueba antes de hacerlo visible para todos.

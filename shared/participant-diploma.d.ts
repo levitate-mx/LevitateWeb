@@ -7,6 +7,7 @@ export type ParticipantDiplomaOptions = {
   dateLabel?: string;
   entryUrl?: string;
   logoBytes?: Uint8Array | ArrayBuffer;
+  templateBytes?: Uint8Array | ArrayBuffer;
   preview?: boolean;
 };
 export function generateParticipantDiploma(options: ParticipantDiplomaOptions): Promise<Uint8Array>;

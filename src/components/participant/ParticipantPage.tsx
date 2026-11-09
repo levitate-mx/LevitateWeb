@@ -635,8 +635,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 academy={data.participant.academy}
                 season={event?.season || ""}
                 eventTitle={event?.title || "Levitate MX"}
-                venue={registrationLabel(event?.venue)}
-                date={eventDate(event?.startsAt)}
                 preview={preview}
               />
               <div className="participant-diploma-copy" data-participant-reveal>
@@ -644,18 +642,18 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                   {diploma ? (
                     <>
                       <Check size={15} aria-hidden="true" />
-                      Tu diploma está listo
+                      Reconocimiento autenticado y listo
                     </>
                   ) : (
-                    "Tu diploma está en preparación"
+                    "Tu reconocimiento está en preparación"
                   )}
                 </p>
                 <h3>
-                  El reconocimiento <br />
-                  de tu paso por <br />
+                  Tu participación, <br />
+                  verificada en <br />
                   <em>esta edición.</em>
                 </h3>
-                <p>Porque lo que compartiste en el escenario también merece quedarse contigo.</p>
+                <p>El documento oficial vincula tu nombre verificado y tu acceso personal con el reconocimiento de Levitate MX.</p>
                 <div className="participant-diploma-action">
                   <button
                     type="button"
@@ -664,20 +662,20 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                     onClick={() => diploma && void download(diploma, "diploma")}
                   >
                     {downloadBusy === "diploma"
-                      ? "Preparando diploma…"
+                      ? "Preparando reconocimiento…"
                       : diploma
-                        ? "Descargar diploma"
-                        : "Diploma en preparación"}
+                        ? "Descargar reconocimiento"
+                        : "Reconocimiento en preparación"}
                     <ArrowDownToLine size={19} aria-hidden="true" />
                   </button>
-                  <span>PDF · Tamaño carta · Personalizado para ti</span>
+                  <span>PDF autenticado · Tamaño carta · Personalizado para ti</span>
                 </div>
                 <p className="participant-download-message" role="status">
                   {downloadMessage}
                 </p>
                 {preview && (
                   <p className="participant-demo-note">
-                    Vista de ejemplo. El documento descargable contiene datos ilustrativos.
+                    Vista autenticada de ejemplo. El documento contiene datos ilustrativos.
                   </p>
                 )}
               </div>

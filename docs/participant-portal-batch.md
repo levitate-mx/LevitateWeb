@@ -18,7 +18,7 @@ Copia [el ejemplo del lote](examples/participant-portal-batch.example.json) a un
 node scripts/participant-portal-batch.mjs --manifest /ruta/privada/lote.json
 ```
 
-Para generar diplomas con el QR personal, añade `--diplomas`. La plantilla vectorial incluida sirve como base para revisión. Las etiquetas `diploma.dateLabel` y `diploma.venueLabel` permiten poner la fecha y sede completas aprobadas para esa edición. Los PDF generados se guardan con permisos privados y se cargan y asignan como borradores. El mismo lote puede incluir PDF con el arte final ya aprobado en `assets`, con `kind: "diploma"`, un `participantId` y su ruta `file`, más una entrada `documents` que vincule `participantId` con `assetKey`. Cada persona utiliza una de esas dos opciones.
+Para generar reconocimientos autenticados con el QR personal, añade `--diplomas`. La plantilla vectorial incluida conserva el arte oficial de Otoño 2026; el lote superpone el nombre y la academia del registro autenticado, el sello de autenticación y el QR privado. Las etiquetas `diploma.dateLabel` y `diploma.venueLabel` se conservan en el manifiesto para validar la edición, aunque la fecha y sede visibles pertenecen al arte aprobado. Los PDF generados se guardan con permisos privados y se cargan y asignan como borradores. El mismo lote puede incluir PDF con el arte final ya aprobado en `assets`, con `kind: "diploma"`, un `participantId` y su ruta `file`, más una entrada `documents` que vincule `participantId` con `assetKey`. Cada persona utiliza una de esas dos opciones.
 
 ## Preparar las fotos
 

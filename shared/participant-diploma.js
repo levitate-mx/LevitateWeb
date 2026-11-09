@@ -47,11 +47,52 @@ function fit(value, font, initialSize, minimumSize, width, maximumLines, label) 
 }
 
 /** A real, vector-text US-letter PDF. All values come from an approved issuance record. */
-export async function generateParticipantDiploma({ name, academy, eventTitle, season, venue, dateLabel, entryUrl, logoBytes, preview = false }) {
+export async function generateParticipantDiploma({ name, academy, eventTitle, season, venue, dateLabel, entryUrl, logoBytes, templateBytes, preview = false }) {
   if (!name?.trim() || !eventTitle?.trim()) throw new Error('El nombre y la edición son obligatorios.');
   if (entryUrl) {
     const url = new URL(entryUrl);
     if (!['https:', 'http:'].includes(url.protocol)) throw new Error('El enlace del QR no es válido.');
+  }
+  if (templateBytes) {
+    const pdf = await PDFDocument.load(templateBytes);
+    if (pdf.getPageCount() !== 1) throw new Error('La plantilla del reconocimiento debe tener una sola página.');
+    const page = pdf.getPage(0);
+    const { width, height } = page.getSize();
+    if (width !== 612 || height !== 792) throw new Error('La plantilla del reconocimiento debe ser tamaño carta vertical.');
+    const serif = await pdf.embedFont(StandardFonts.TimesRoman);
+    const sans = await pdf.embedFont(StandardFonts.Helvetica);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    try {
+      serif.encodeText(name);
+      for (const value of [academy, eventTitle, season, venue, dateLabel]) if (value) sans.encodeText(value);
+    } catch {
+      throw new Error('Esta plantilla necesita una fuente compatible con el nombre o los datos de la edición. Carga un reconocimiento aprobado para esta persona.');
+    }
+    const centered = (value, y, font, size, color = ink) => {
+      page.drawText(value, { x: (612 - font.widthOfTextAtSize(value, size)) / 2, y, font, size, color });
+    };
+    const fittedName = fit(name, serif, 29, 18, 470, 2, 'El nombre');
+    const nameStart = fittedName.lines.length === 1 ? 402 : 414;
+    fittedName.lines.forEach((line, index) => centered(line, nameStart - index * (fittedName.size + 3), serif, fittedName.size));
+    if (academy) {
+      const fittedAcademy = fit(academy, sans, 8, 7, 440, 1, 'La academia');
+      centered(fittedAcademy.lines[0], 372, sans, fittedAcademy.size, rgb(0.2, 0.17, 0.18));
+    }
+    const authenticatedLabel = preview ? 'EJEMPLO · AUTENTICADO' : 'AUTENTICADO';
+    page.drawText(authenticatedLabel, {
+      x: 498 - bold.widthOfTextAtSize(authenticatedLabel, 6.5), y: 748, font: bold, size: 6.5, color: pink,
+    });
+    if (entryUrl) {
+      const qr = await QRCode.toDataURL(entryUrl, { errorCorrectionLevel: 'M', margin: 2, width: 256, color: { dark: '#211b1e', light: '#fff8fb' } });
+      const qrImage = await pdf.embedPng(qr);
+      page.drawRectangle({ x: 278, y: 31, width: 56, height: 56, color: rgb(1, 0.973, 0.984) });
+      page.drawImage(qrImage, { x: 283, y: 36, width: 46, height: 46 });
+      centered('ACCESO PRIVADO · MI LEVITATE', 22, sans, 5.5, rgb(0.29, 0.23, 0.26));
+    }
+    pdf.setTitle(`Reconocimiento de participación autenticado · ${name}`);
+    pdf.setAuthor('Levitate MX');
+    pdf.setSubject(eventTitle);
+    return pdf.save();
   }
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Diploma de participación · ${name}`);

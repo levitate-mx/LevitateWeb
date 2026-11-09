@@ -146,7 +146,8 @@ export function ParticipantAdminPage() {
               <button disabled={!qr} onClick={() => perform(async () => {
                 const { generateParticipantDiploma } = await import('../../../shared/participant-diploma.js');
                 const logoBytes = await fetch('/assets/levitate-logo-mx.png').then(r => r.arrayBuffer());
-                const pdf = await generateParticipantDiploma({ name: person.name, academy: person.academy, eventTitle: edition?.title || '', season: edition?.season, venue: edition?.venue, dateLabel: edition?.startsAt?.slice(0, 10), entryUrl: qr || undefined, logoBytes });
+                const templateBytes = await fetch('/assets/participant-recognition-template.pdf').then(r => r.arrayBuffer());
+                const pdf = await generateParticipantDiploma({ name: person.name, academy: person.academy, eventTitle: edition?.title || '', season: edition?.season, venue: edition?.venue, dateLabel: edition?.startsAt?.slice(0, 10), entryUrl: qr || undefined, logoBytes, templateBytes });
                 const blob = new Blob([new Uint8Array(pdf)], { type: 'application/pdf' });
                 download(blob, `diploma-${person.id}.pdf`);
                 const asset = await upload(blob, 'diploma', `diploma-${person.id}.pdf`, person.id);
