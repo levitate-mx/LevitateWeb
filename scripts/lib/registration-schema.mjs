@@ -68,6 +68,16 @@ const proofColumns = {
 };
 
 const createdTables = {
+  registration_media_drive_settings: {
+    columns: {
+      key: "TEXT NOT NULL PRIMARY KEY CHECK (key = 'photo_video')",
+      folder_id: "TEXT NOT NULL CHECK (length(trim(folder_id)) > 0)",
+      folder_name: "TEXT NOT NULL CHECK (length(trim(folder_name)) > 0)",
+      drive_id: "TEXT CHECK (drive_id IS NULL OR length(trim(drive_id)) > 0)",
+      updated_by: "TEXT REFERENCES registration_users(id) ON DELETE SET NULL",
+      updated_at: timestamps.updated_at,
+    },
+  },
   // The public CURP flow establishes a student session before loading workshops.
   // Older deployments can have academy registration without these portal tables.
   registration_student_users: {

@@ -103,6 +103,7 @@ import { buildAdminWorkQueue, type AdminWorkQueueTarget } from "./adminWorkQueue
 import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
 import { JudgingScoresPanel } from "./JudgingScoresPanel";
 import { ReleveVotingPreview } from "./ReleveVotingPreview";
+import { MediaDriveConnectionPanel } from "./MediaDriveConnectionPanel";
 import { adminSectionPaths, getAdminSectionFromPath, type AdminSection } from "./adminNavigation";
 import { RegistrationApiError, requestRegistrationApi } from "./registrationApi";
 
@@ -11527,6 +11528,7 @@ export function LevitateRegistrationAdminPaymentsRoute({
           </>
         ) : isMediaSection ? (
           <>
+            <MediaDriveConnectionPanel />
             <section className="registration-admin-summary registration-admin-summary--media" aria-label="Resumen de foto y video">
               <article>
                 <span>Compras</span>

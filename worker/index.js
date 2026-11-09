@@ -6,6 +6,8 @@ import { accessSessions, resolveAccessSession, getAccessCoverage, isSplitAccessS
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getJudgingEvents, getJudgingScores } from "./judging-reader.js";
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
+import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
+import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
   getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
@@ -557,6 +559,10 @@ export default {
 
     if (url.pathname === "/api/registration/admin/releve-voting/preview") {
       return handleRegistrationAdminReleveVotingPreview(request, env);
+    }
+
+    if (url.pathname === "/api/registration/admin/media-drive/connection" || url.pathname === "/api/registration/admin/media-drive/folder") {
+      return handleRegistrationAdminMediaDrive(request, env);
     }
 
     if (url.pathname === "/api/registration/admin/participants") {
@@ -2139,6 +2145,54 @@ async function handleRegistrationAdminReleveVotingPreview(request, env) {
     assertMethod(request, ["GET"]);
     await requireRegistrationAdmin(request, env, getDb(env), { touchLastSeen: false });
     response = sendJson(getReleveVotingPreview());
+  } catch (error) {
+    response = sendRegistrationError(error);
+  }
+  response.headers.set("cache-control", "private, no-store");
+  response.headers.set("vary", "Cookie");
+  return response;
+}
+
+async function handleRegistrationAdminMediaDrive(request, env) {
+  let response;
+  try {
+    const linkingFolder = new URL(request.url).pathname.endsWith("/folder");
+    assertMethod(request, [linkingFolder ? "POST" : "GET"]);
+    const db = getDb(env);
+    const admin = await requireRegistrationAdmin(request, env, db, { touchLastSeen: false });
+    if (linkingFolder) {
+      const origin = request.headers.get("origin");
+      if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+        throwHttpError("media_drive_origin_invalid", "Vuelve al panel para vincular la carpeta.", 403);
+      }
+    }
+    const body = linkingFolder ? await readJsonBody(request) : null;
+    const folderId = linkingFolder
+      ? parseMediaDriveFolderId(requireString(body.folder, "folder"))
+      : (await readMediaDriveSettings(db))?.folderId || "";
+    const diagnostic = await getMediaDriveDiagnostic({
+      getConfig: () => getRegistrationDriveAuthConfig(env),
+      getAccessToken: (config, { signal }) => getGoogleDriveAccessToken(config, {
+        authFailureCode: "media_drive_auth_failed",
+        authFailureMessage: "No pudimos comprobar la conexión con Google Drive.",
+        signal,
+      }),
+      folderId,
+    });
+    if (linkingFolder) {
+      const { connection } = diagnostic;
+      if (connection.status !== "connected" || !connection.validated || connection.folder?.status !== "ready" || !connection.folder.validated) {
+        throwHttpError("media_drive_folder_not_validated",
+          connection.folder?.message || connection.message || "No se pudo verificar el acceso a esa carpeta.", 400);
+      }
+      await saveMediaDriveSettings(db, {
+        folderId: connection.folder.id,
+        folderName: connection.folder.name,
+        driveId: connection.folder.driveId,
+        updatedBy: admin.session.user.id,
+      });
+    }
+    response = sendJson(diagnostic);
   } catch (error) {
     response = sendRegistrationError(error);
   }
@@ -7426,6 +7480,17 @@ async function storeRegistrationMusicUpload({ dance, env, musicUpload, session }
 
 function getRegistrationMusicDriveConfig(env) {
   const folderId = optionalString(env.REGISTRATION_MUSIC_DRIVE_FOLDER_ID || env.GOOGLE_DRIVE_MUSIC_FOLDER_ID);
+  const authConfig = getRegistrationDriveAuthConfig(env);
+  if (!folderId && !authConfig) return null;
+  if (!folderId || !authConfig) {
+    throwHttpError("registration_music_drive_not_configured", "Faltan variables de Google Drive para subir música.", 500);
+  }
+  return { ...authConfig, folderId };
+}
+
+// Photo/video shares Google's existing authorization, while its folder is
+// selected independently. No credentials or music-folder IDs reach the browser.
+function getRegistrationDriveAuthConfig(env) {
   const oauthClientId = optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_ID || env.GMAIL_OAUTH_CLIENT_ID);
   const oauthClientSecret = optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET || env.GMAIL_OAUTH_CLIENT_SECRET);
   const oauthRefreshToken = optionalString(env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN);
@@ -7436,14 +7501,14 @@ function getRegistrationMusicDriveConfig(env) {
   );
   const clientEmail = optionalString(env.GOOGLE_DRIVE_CLIENT_EMAIL);
   const privateKey = optionalString(env.GOOGLE_DRIVE_PRIVATE_KEY);
-  const hasAnyDriveConfig = Boolean(folderId || hasAnyDriveOauthConfig || clientEmail || privateKey);
+  const hasAnyDriveConfig = Boolean(hasAnyDriveOauthConfig || clientEmail || privateKey);
 
   if (!hasAnyDriveConfig) {
     return null;
   }
 
   if (hasAnyDriveOauthConfig) {
-    if (!folderId || !oauthClientId || !oauthClientSecret || !oauthRefreshToken) {
+    if (!oauthClientId || !oauthClientSecret || !oauthRefreshToken) {
       throwHttpError(
         "registration_music_drive_not_configured",
         "Faltan variables de Google Drive OAuth para subir música.",
@@ -7455,12 +7520,11 @@ function getRegistrationMusicDriveConfig(env) {
       authType: "oauth_refresh_token",
       clientId: oauthClientId,
       clientSecret: oauthClientSecret,
-      folderId,
       refreshToken: oauthRefreshToken,
     };
   }
 
-  if (!folderId || !clientEmail || !privateKey) {
+  if (!clientEmail || !privateKey) {
     throwHttpError(
       "registration_music_drive_not_configured",
       "Faltan variables de Google Drive para subir música.",
@@ -7471,7 +7535,6 @@ function getRegistrationMusicDriveConfig(env) {
   return {
     authType: "service_account",
     clientEmail,
-    folderId,
     privateKey,
   };
 }
@@ -7540,24 +7603,30 @@ async function uploadRegistrationMusicToGoogleDrive({ config, dance, musicUpload
   return payload;
 }
 
-async function getGoogleDriveAccessToken(config) {
+async function getGoogleDriveAccessToken(config, {
+  authFailureCode = "registration_music_drive_auth_failed",
+  authFailureMessage = "No pudimos autenticar Google Drive.",
+  signal,
+} = {}) {
   if (config.authType === "oauth_refresh_token") {
     return getGoogleOAuthAccessToken({
-      authFailureCode: "registration_music_drive_auth_failed",
-      authFailureMessage: "No pudimos autenticar Google Drive.",
+      authFailureCode,
+      authFailureMessage,
       config,
+      signal,
     });
   }
 
   return getGoogleAccessToken({
-    authFailureCode: "registration_music_drive_auth_failed",
-    authFailureMessage: "No pudimos autenticar Google Drive.",
+    authFailureCode,
+    authFailureMessage,
     config,
     scope: registrationGoogleDriveScope,
+    signal,
   });
 }
 
-async function getGoogleOAuthAccessToken({ authFailureCode, authFailureMessage, config }) {
+async function getGoogleOAuthAccessToken({ authFailureCode, authFailureMessage, config, signal }) {
   const response = await fetch("https://oauth2.googleapis.com/token", {
     body: new URLSearchParams({
       client_id: config.clientId,
@@ -7569,12 +7638,12 @@ async function getGoogleOAuthAccessToken({ authFailureCode, authFailureMessage, 
       "content-type": "application/x-www-form-urlencoded",
     },
     method: "POST",
+    redirect: "manual",
+    signal,
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
     console.warn("Google OAuth auth failed", {
-      detail,
       status: response.status,
     });
     throwHttpError(authFailureCode, authFailureMessage, 502);
@@ -7589,7 +7658,7 @@ async function getGoogleOAuthAccessToken({ authFailureCode, authFailureMessage, 
   return payload.access_token;
 }
 
-async function getGoogleAccessToken({ authFailureCode, authFailureMessage, config, scope, subject = "" }) {
+async function getGoogleAccessToken({ authFailureCode, authFailureMessage, config, scope, subject = "", signal }) {
   const assertion = await createGoogleServiceAccountAssertion({ config, scope, subject });
   const response = await fetch("https://oauth2.googleapis.com/token", {
     body: new URLSearchParams({
@@ -7600,12 +7669,12 @@ async function getGoogleAccessToken({ authFailureCode, authFailureMessage, confi
       "content-type": "application/x-www-form-urlencoded",
     },
     method: "POST",
+    redirect: "manual",
+    signal,
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
     console.warn("Google auth failed", {
-      detail,
       scope,
       status: response.status,
       subject: subject || null,

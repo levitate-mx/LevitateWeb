@@ -115,7 +115,7 @@ async function fixture(t, { includeStudentSchema = false, workerUnderTest = work
       }), env);
       const json = await response.json();
       assert.equal(response.status, status, `${method} ${path}: ${JSON.stringify(json)}`);
-      return { json, cookie: response.headers.get('set-cookie')?.split(';')[0] };
+      return { json, headers: response.headers, cookie: response.headers.get('set-cookie')?.split(';')[0] };
     },
   };
 }
@@ -302,6 +302,191 @@ test('judging API missing configuration and upstream failures stay explicit, pri
   assert.doesNotMatch(JSON.stringify(body), /PRIVATE-JUDGING-KEY|supabase\.co|sb_publishable_/);
   assert.equal(calls, 1);
   assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)));
+});
+
+test('media Drive routes authenticate before reading configuration or contacting Google', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'media-drive-academy');
+  const admin = await seedAcademy(f, 'media-drive-auth-admin', { role: 'admin' });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw new Error('Must not contact Google'); });
+  const start = f.db.runtimeQueries.length;
+  for (const [path, method, body] of [
+    ['/admin/media-drive/connection', 'GET', undefined],
+    ['/admin/media-drive/folder', 'POST', { folder: 'folder_123456789' }],
+  ]) {
+    const anonymous = await f.request(path, { method, body, status: 401 });
+    assert.equal(anonymous.headers.get('cache-control'), 'private, no-store');
+    assert.equal(anonymous.headers.get('vary'), 'Cookie');
+    await f.request(path, { method, body, cookie: academy.cookie, status: 403 });
+    await f.request(path + '?adminToken=pretend-token', { method, body, status: 401 });
+  }
+  assert.equal(calls, 0);
+  assert.ok(f.db.runtimeQueries.slice(start).every(sql => !/registration_media_drive_settings/.test(sql)));
+  const empty = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(empty.json.connection.status, 'missing_configuration');
+  assert.equal(empty.json.connection.validated, false);
+  assert.equal(empty.json.connection.folder, null);
+  assert.equal(calls, 0);
+});
+
+function configureMediaDriveFixture(f) {
+  Object.assign(f.env, {
+    GOOGLE_DRIVE_OAUTH_CLIENT_ID: 'private-drive-client-id',
+    GOOGLE_DRIVE_OAUTH_CLIENT_SECRET: 'private-drive-client-secret',
+    GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: 'private-drive-refresh-token',
+    REGISTRATION_MUSIC_DRIVE_FOLDER_ID: 'existing_music_folder',
+  });
+}
+
+function mockMediaDrive(t, { folderResponse, tokenStatus = 200 } = {}) {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (input, options = {}) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    calls.push({ url, options });
+    if (url.href === 'https://oauth2.googleapis.com/token') {
+      assert.equal(options.method, 'POST');
+      assert.equal(options.redirect, 'manual');
+      assert.equal(options.body.get('grant_type'), 'refresh_token');
+      return Response.json(tokenStatus === 200 ? { access_token: 'private-drive-access-token' }
+        : { error: 'invalid_grant', error_description: 'private-provider-detail' }, { status: tokenStatus });
+    }
+    assert.equal(options.method, 'GET');
+    assert.equal(options.headers.authorization, 'Bearer private-drive-access-token');
+    assert.equal(options.redirect, 'manual');
+    if (url.pathname === '/drive/v3/about') return Response.json({
+      user: { displayName: 'Cuenta del evento', emailAddress: 'evento@example.test' }, storageQuota: { usage: '1000' },
+    });
+    if (url.pathname.startsWith('/drive/v3/files/')) {
+      assert.equal(url.searchParams.get('supportsAllDrives'), 'true');
+      return Response.json(folderResponse || { id: url.pathname.split('/').at(-1), name: 'Fotos y videos',
+        mimeType: 'application/vnd.google-apps.folder', trashed: false,
+        capabilities: { canListChildren: true, canAddChildren: false } });
+    }
+    throw new Error('Unexpected upstream URL');
+  });
+  return calls;
+}
+
+test('media Drive validates existing authorization and keeps the music folder separate', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'media-drive-check', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  const calls = mockMediaDrive(t);
+  const start = f.db.runtimeQueries.length;
+  const { json, headers } = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(json.connection.status, 'connected');
+  assert.equal(json.connection.validated, true);
+  assert.equal(json.connection.folder, null, 'photo/video must not inherit the music folder');
+  assert.equal(json.connection.account.emailAddress, 'evento@example.test');
+  assert.equal(json.connection.storage.limitBytes, null);
+  assert.equal(calls.length, 2);
+  assert.doesNotMatch(JSON.stringify(json), /private-drive-|existing_music_folder|clientSecret|refreshToken|Bearer|privateKey/);
+  assert.equal(headers.get('cache-control'), 'private, no-store');
+  assert.ok(f.db.runtimeQueries.slice(start).every(sql => /^\s*SELECT/.test(sql)), 'checking Drive cannot write session timestamps or configuration');
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_media_drive_settings').get().n, 0);
+});
+
+test('media Drive links only verified folders and preserves the last setting on errors', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'media-drive-link', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  const calls = mockMediaDrive(t);
+  const { json } = await f.request('/admin/media-drive/folder', { method: 'POST', cookie: admin.cookie,
+    headers: { origin: 'http://localhost' }, body: { folder: 'https://drive.google.com/drive/u/0/folders/photo_video_folder?usp=sharing' } });
+  assert.equal(json.connection.folder.status, 'ready');
+  assert.equal(json.connection.folder.canAddChildren, false, 'read-only folder access is sufficient to connect previews');
+  const stored = f.db.sqlite.prepare('SELECT * FROM registration_media_drive_settings').get();
+  assert.equal(stored.folder_id, 'photo_video_folder');
+  assert.equal(stored.updated_by, admin.userId);
+  assert.equal(f.env.REGISTRATION_MUSIC_DRIVE_FOLDER_ID, 'existing_music_folder');
+  const { json: checked } = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(checked.connection.folder.id, stored.folder_id);
+  const requestCount = calls.length;
+  for (const folder of ['https://example.test/drive/folders/steal_credentials', 'root', '  ', 'https://drive.google.com.evil.test/drive/folders/folder_fake']) {
+    await f.request('/admin/media-drive/folder', { method: 'POST', cookie: admin.cookie, body: { folder }, status: 400 });
+  }
+  assert.equal(calls.length, requestCount, 'invalid folder inputs never receive credentials');
+  await f.request('/admin/media-drive/folder', { method: 'POST', cookie: admin.cookie,
+    headers: { origin: 'https://other.example.test' }, body: { folder: 'photo_video_folder' }, status: 403 });
+  assert.equal(calls.length, requestCount);
+  assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_media_drive_settings').get(), stored);
+  assert.ok(calls.filter(call => call.url.hostname === 'www.googleapis.com').every(call => call.options.method === 'GET'));
+});
+
+test('media Drive does not persist inaccessible files or expose provider authentication errors', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'media-drive-invalid', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  const fixtureFetch = mockMediaDrive(t, { folderResponse: { id: 'photo_video_folder', name: 'Not a folder',
+    mimeType: 'image/jpeg', trashed: false, capabilities: { canListChildren: true, canAddChildren: true } } });
+  const invalid = await f.request('/admin/media-drive/folder', { method: 'POST', cookie: admin.cookie,
+    body: { folder: 'photo_video_folder' }, status: 400 });
+  assert.equal(invalid.json.error.code, 'media_drive_folder_not_validated');
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_media_drive_settings').get().n, 0);
+  assert.equal(fixtureFetch.length, 3);
+  t.mock.method(console, 'warn', () => {});
+  mockMediaDrive(t, { tokenStatus: 400 });
+  const { json } = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(json.connection.status, 'error');
+  assert.equal(json.connection.validated, false);
+  assert.doesNotMatch(JSON.stringify(json), /private-drive-|private-provider-detail|invalid_grant|refreshToken|clientSecret/);
+});
+
+test('media Drive never follows token redirects or logs provider response bodies', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'media-drive-redirect', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  const logs = [];
+  t.mock.method(console, 'warn', (...args) => logs.push(args));
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls++;
+    assert.equal(String(url), 'https://oauth2.googleapis.com/token');
+    assert.equal(options.redirect, 'manual');
+    return new Response('private-drive-refresh-token private-provider-detail', {
+      status: 307, headers: { location: 'https://untrusted.example.test/collect' },
+    });
+  });
+  const { json } = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(json.connection.status, 'error');
+  assert.equal(calls, 1);
+  assert.doesNotMatch(JSON.stringify({ json, logs }), /private-drive-|private-provider-detail|untrusted\.example/);
+});
+
+test('photo/video folder configuration cannot change the existing music upload destination', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'media-drive-music');
+  const { dance } = await createDance(f, academy);
+  configureMediaDriveFixture(f);
+  f.db.sqlite.prepare(`INSERT INTO registration_media_drive_settings(key,folder_id,folder_name)
+    VALUES ('photo_video','new_photo_video_folder','Fotos y videos')`).run();
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (input, options = {}) => {
+    const url = new URL(String(input));
+    calls.push(url.href);
+    if (url.href === 'https://oauth2.googleapis.com/token') {
+      assert.equal(options.body.get('client_id'), 'private-drive-client-id');
+      assert.equal(options.redirect, 'manual');
+      return Response.json({ access_token: 'private-drive-access-token' });
+    }
+    if (options.method === 'POST' && url.pathname === '/upload/drive/v3/files') {
+      assert.deepEqual(JSON.parse(options.body).parents, ['existing_music_folder']);
+      return new Response(null, { status: 200, headers: { location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=fixture' } });
+    }
+    if (options.method === 'PUT' && url.searchParams.get('upload_id') === 'fixture') {
+      return Response.json({ id: 'fixture-private-music-file', webViewLink: 'https://drive.google.com/file/d/fixture-private-music-file/view' });
+    }
+    throw new Error('Unexpected music upstream URL');
+  });
+  const { json } = await f.request('/music', { method: 'POST', cookie: academy.cookie,
+    body: { danceId: dance.id, fileName: 'vuelo.mp3', contentType: 'audio/mpeg',
+      dataUrl: 'data:audio/mpeg;base64,AQID', fileSize: 3, durationSeconds: 180 } });
+  assert.equal(json.musicUpload.storageProvider, 'google_drive');
+  assert.equal(calls.length, 3);
+  assert.equal(f.db.sqlite.prepare('SELECT drive_file_id FROM registration_music_uploads WHERE dance_id = ?').get(dance.id).drive_file_id, 'fixture-private-music-file');
+  assert.equal(f.db.sqlite.prepare("SELECT folder_id FROM registration_media_drive_settings WHERE key='photo_video'").get().folder_id, 'new_photo_video_folder');
+  assert.doesNotMatch(JSON.stringify(json), /private-drive-|fixture-private-music-file|drive\.google\.com/);
 });
 
 async function createPaidTicketOrder(f, admin, items) {
