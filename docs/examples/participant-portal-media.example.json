@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "eventId": "ejemplo-otono-2026-edomex",
+  "dances": [
+    {
+      "danceId": "coreografia-ejemplo-001",
+      "directory": "../../../fotos-privadas-de-ejemplo/coreografia-ejemplo-001",
+      "captionPrefix": "Presentación de ejemplo · Levitate MX"
+    }
+  ]
+}

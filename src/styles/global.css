@@ -42859,3 +42859,8 @@ button {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+/* Private participant identity follows the shared full-screen hero rhythm. */
+.participant-hero {
+  min-height: var(--levitate-hero-screen);
+}

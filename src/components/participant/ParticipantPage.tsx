@@ -1,0 +1,1022 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  ChevronDown,
+  ImageOff,
+  LockKeyhole,
+  LogOut,
+  Maximize2,
+  Medal,
+  FileText,
+  Check,
+} from "lucide-react";
+import { ParticipantDialog } from "./ParticipantDialog";
+import { ParticipantDiplomaPreview } from "./ParticipantDiplomaPreview";
+import { ParticipantRoutineSelector } from "./ParticipantRoutineSelector";
+import {
+  downloadParticipantPdf,
+  openParticipantSession,
+  ParticipantApiError,
+  participantAssetUrl,
+  participantRequest,
+} from "./participantApi";
+import type {
+  ParticipantPhoto,
+  ParticipantPortalData,
+  ParticipantRoutine,
+} from "./participantTypes";
+import "./ParticipantPage.css";
+
+const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
+const medalNames = { oro: "Oro", plata: "Plata", bronce: "Bronce", participacion: "Participación" };
+const registrationLabels: Record<string, string> = {
+  aereo: "Aerial",
+  aerial: "Aerial",
+  motion: "Motion",
+  aro: "Aro",
+  tela: "Tela",
+  open_trapecio: "Open · Trapecio",
+  open_cuna: "Open · Cuna",
+  open_luna: "Open · Luna",
+  open_esfera: "Open · Esfera",
+  open_pole_aereo: "Open · Pole aéreo",
+  open_suspension_capilar: "Open · Suspensión capilar",
+  open_otro: "Open · Otro",
+  acrojazz: "Acrojazz",
+  ballet: "Ballet",
+  belly_dance: "Belly dance",
+  contemporaneo: "Contemporáneo",
+  folklore: "Folklore",
+  jazz: "Jazz",
+  lirico: "Lírico",
+  open_motion: "Open · Motion",
+  urbanos: "Urbanos",
+  solo: "Solo",
+  duo: "Dúo",
+  dueto: "Dueto",
+  trio: "Trío",
+  grupo: "Grupo",
+  dupla_1_aparato: "Dupla · 1 aparato",
+  duo_2_aparatos: "Dúo · 2 aparatos",
+  terna_1_aparato: "Terna · 1 aparato",
+  trio_3_aparatos: "Trío · 3 aparatos",
+  baby: "Baby",
+  petite: "Petite",
+  junior: "Junior",
+  teen: "Teen",
+  senior: "Senior",
+  legacy: "Legacy",
+  releve: "Relevé",
+  principiante: "Principiante",
+  intermedio: "Intermedio",
+  avanzado: "Avanzado",
+  edomex: "Estado de México",
+  estado_de_mexico: "Estado de México",
+  "estado-de-mexico": "Estado de México",
+  cdmx: "Ciudad de México",
+  puebla: "Puebla",
+  veracruz: "Veracruz",
+};
+
+function registrationLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  return registrationLabels[value.toLowerCase()] || value.replace(/[_-]+/g, " ");
+}
+
+function score(value: number | null): string {
+  return value !== null && Number.isFinite(value) ? scoreFormatter.format(value) : "—";
+}
+
+function personalName(name: string): [string, string] {
+  const words = name.trim().split(/\s+/);
+  const split = words.length > 2 ? words.length - 2 : 1;
+  return [words.slice(0, split).join(" "), words.slice(split).join(" ")];
+}
+
+function eventDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Mexico_City",
+  }).format(date);
+}
+
+function PhotoImage({ photo, className }: { photo: ParticipantPhoto; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <span className="participant-photo-error">
+        <ImageOff size={25} aria-hidden="true" />
+        <span>No se pudo cargar esta foto.</span>
+      </span>
+    );
+  return (
+    <img
+      className={className}
+      src={photo.previewUrl}
+      alt={photo.caption || "Fotografía de la presentación"}
+      width={photo.width || undefined}
+      height={photo.height || undefined}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function JudgeSheet({
+  routine,
+  preview,
+  onDownload,
+  busy,
+  message,
+  onClose,
+}: {
+  routine: ParticipantRoutine;
+  preview: boolean;
+  onDownload: (url: string, kind: "diploma" | "jueceo") => void;
+  busy: string | null;
+  message: string;
+  onClose: () => void;
+}) {
+  const pdf = participantAssetUrl(routine.judging.url, preview);
+  return (
+    <ParticipantDialog title="Hoja de jueceo" onClose={onClose} className="participant-judging">
+      <div className="participant-judging__intro">
+        <p className="participant-eyebrow">Tu presentación</p>
+        <h3>{routine.title}</h3>
+        {preview && (
+          <p className="participant-demo-note">
+            Vista de ejemplo. Estos puntajes y comentarios son ilustrativos.
+          </p>
+        )}
+        {pdf && (
+          <button
+            type="button"
+            className="participant-text-button"
+            disabled={Boolean(busy)}
+            onClick={() => onDownload(pdf, "jueceo")}
+          >
+            <ArrowDownToLine size={17} aria-hidden="true" />
+            {busy === "jueceo" ? "Preparando documento…" : "Descargar hoja de jueceo"}
+          </button>
+        )}
+        {message && (
+          <p className="participant-download-message" role="status">
+            {message}
+          </p>
+        )}
+      </div>
+      {routine.judging.judges.length === 0 && (
+        <p className="participant-status-copy">
+          La hoja está disponible en el documento de esta presentación.
+        </p>
+      )}
+      {routine.judging.judges.map((judge, index) => (
+        <section className="participant-judge" key={`${judge.name}-${index}`}>
+          <header>
+            <h3>{judge.name}</h3>
+            <p>
+              {score(judge.score)}
+              {judge.maxScore !== null && <span> / {score(judge.maxScore)}</span>}
+            </p>
+          </header>
+          {judge.criteria.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Criterio</th>
+                  <th scope="col">Puntaje</th>
+                </tr>
+              </thead>
+              <tbody>
+                {judge.criteria.map((criterion, criterionIndex) => (
+                  <tr key={`${criterion.label}-${criterionIndex}`}>
+                    <th scope="row">{criterion.label}</th>
+                    <td>
+                      {score(criterion.score)}
+                      {criterion.maxScore !== null && <span> / {score(criterion.maxScore)}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {judge.feedback && (
+            <div className="participant-judge__feedback">
+              <p className="participant-eyebrow">Comentarios</p>
+              <p>{judge.feedback}</p>
+            </div>
+          )}
+        </section>
+      ))}
+    </ParticipantDialog>
+  );
+}
+
+function PortalState({
+  mode,
+  message,
+  onRetry,
+}: {
+  mode: "loading" | "access" | "error" | "closed";
+  message?: string;
+  onRetry: () => void;
+}) {
+  return (
+    <main className="participant-portal participant-entry">
+      <a href="/" aria-label="Levitate MX, inicio" className="participant-brand">
+        <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
+      </a>
+      <div className="participant-entry__content" aria-live="polite" aria-busy={mode === "loading"}>
+        <p className="participant-eyebrow">Mi Levitate</p>
+        <h1>
+          {mode === "loading" ? (
+            <>
+              Tu historia,
+              <br />
+              <em>en un instante.</em>
+            </>
+          ) : mode === "closed" ? (
+            <>
+              Nos vemos
+              <br />
+              <em>en el escenario.</em>
+            </>
+          ) : (
+            <>
+              Tu espacio.
+              <br />
+              <em>Tu Levitate.</em>
+            </>
+          )}
+        </h1>
+        <p>
+          {mode === "loading"
+            ? "Estamos abriendo tus presentaciones."
+            : mode === "closed"
+              ? "Tu sesión se cerró correctamente."
+              : message ||
+                "Abre tu enlace personal o escanea tu QR para consultar tus presentaciones, resultados y recuerdos."}
+        </p>
+        {mode === "loading" && <span className="participant-loading-line" aria-hidden="true" />}
+        {mode === "error" && (
+          <button
+            type="button"
+            className="participant-button participant-button--ivory"
+            onClick={onRetry}
+          >
+            Volver a intentar <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        )}
+        {mode !== "loading" && (
+          <a className="participant-entry__home" href="/">
+            Ir a Levitate MX <ArrowUpRight size={17} aria-hidden="true" />
+          </a>
+        )}
+      </div>
+      <p className="participant-entry__footer">
+        <LockKeyhole size={13} aria-hidden="true" />
+        Un espacio personal de Levitate MX.
+      </p>
+    </main>
+  );
+}
+
+export function ParticipantPage() {
+  const preview =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).get("preview") === "1";
+  const [data, setData] = useState<ParticipantPortalData | null>(null);
+  const [phase, setPhase] = useState<"loading" | "ready" | "access" | "error" | "closed">(
+    "loading",
+  );
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
+  const [changingEvent, setChangingEvent] = useState(false);
+  const [eventError, setEventError] = useState("");
+  const [judgeOpen, setJudgeOpen] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState<number | null>(null);
+  const [photoLimit, setPhotoLimit] = useState(20);
+  const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
+  const [downloadMessage, setDownloadMessage] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [activeChapter, setActiveChapter] = useState("tu-diploma");
+  const eventRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    document.title = "Mi Levitate — Levitate MX";
+    setPhase("loading");
+    const load = preview
+      ? import("./participantPreview").then((module) => module.previewParticipantData)
+      : openParticipantSession();
+    if (preview && window.location.hash)
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    load
+      .then((response) => {
+        if (!active) return;
+        setData(response);
+        setError("");
+        setSelectedRoutineId(response.routines[0]?.id || null);
+        setPhase("ready");
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        if (cause instanceof ParticipantApiError && [401, 403, 404, 410].includes(cause.status)) {
+          setError(
+            "Abre tu enlace personal o escanea tu QR. Si el enlace venció, solicita uno nuevo a Levitate MX.",
+          );
+          setPhase("access");
+        } else {
+          setError(
+            "No pudimos abrir tu espacio en este momento. Revisa tu conexión e intenta de nuevo.",
+          );
+          setPhase("error");
+        }
+      });
+    return () => {
+      active = false;
+      eventRequest.current?.abort();
+    };
+  }, [preview, attempt]);
+
+  const routine = data?.routines.find((item) => item.id === selectedRoutineId) || data?.routines[0];
+  const event = data?.events.find((item) => item.id === data.selectedEventId);
+  const photos = useMemo(
+    () =>
+      (routine?.photos.items || []).flatMap((photo) => {
+        const previewUrl = participantAssetUrl(photo.previewUrl, preview);
+        return previewUrl
+          ? [{ ...photo, previewUrl, downloadUrl: participantAssetUrl(photo.downloadUrl, preview) }]
+          : [];
+      }),
+    [routine, preview],
+  );
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const sections = document.querySelectorAll<HTMLElement>("[data-participant-chapter]");
+    const chapters = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) if (entry.isIntersecting) setActiveChapter(entry.target.id);
+      },
+      { rootMargin: "-16% 0px -55% 0px", threshold: 0 },
+    );
+    sections.forEach((section) => chapters.observe(section));
+    return () => chapters.disconnect();
+  }, [phase, data?.selectedEventId]);
+
+  useEffect(() => {
+    if (phase !== "ready" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const reveal = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("participant-is-visible");
+            reveal.unobserve(entry.target);
+          }
+        }
+      },
+      { threshold: 0.1 },
+    );
+    document
+      .querySelectorAll("[data-participant-reveal]")
+      .forEach((element) => reveal.observe(element));
+    return () => reveal.disconnect();
+  }, [phase, selectedRoutineId, data?.selectedEventId]);
+
+  function selectRoutine(id: string) {
+    setSelectedRoutineId(id);
+    setJudgeOpen(false);
+    setPhotoIndex(null);
+    setPhotoLimit(20);
+    setDownloadMessage("");
+  }
+
+  async function selectEvent(eventId: string) {
+    if (preview || eventId === data?.selectedEventId) return;
+    eventRequest.current?.abort();
+    const controller = new AbortController();
+    eventRequest.current = controller;
+    setChangingEvent(true);
+    setEventError("");
+    setJudgeOpen(false);
+    setPhotoIndex(null);
+    setDownloadMessage("");
+    try {
+      const response = await participantRequest<ParticipantPortalData>(
+        `/api/participant/me?eventId=${encodeURIComponent(eventId)}`,
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
+      setData(response);
+      selectRoutine(response.routines[0]?.id || "");
+    } catch (cause) {
+      if (controller.signal.aborted) return;
+      if (cause instanceof ParticipantApiError && cause.status === 401) {
+        setData(null);
+        setError("Tu sesión terminó. Abre de nuevo tu enlace personal para continuar.");
+        setPhase("access");
+      } else setEventError("No pudimos abrir esta edición. Intenta seleccionarla de nuevo.");
+    } finally {
+      if (!controller.signal.aborted) setChangingEvent(false);
+    }
+  }
+
+  async function download(url: string, kind: "diploma" | "jueceo") {
+    if (downloadBusy) return;
+    setDownloadBusy(kind);
+    setDownloadMessage("");
+    try {
+      await downloadParticipantPdf(url, `${preview ? "ejemplo-" : ""}levitate-${kind}.pdf`);
+      setDownloadMessage("Tu documento está listo. Revisa las descargas de tu navegador.");
+    } catch (cause) {
+      setDownloadMessage(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo descargar el documento. Intenta de nuevo.",
+      );
+    } finally {
+      setDownloadBusy(null);
+    }
+  }
+
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      if (!preview) await participantRequest("/api/participant/logout", { method: "POST" });
+      setJudgeOpen(false);
+      setPhotoIndex(null);
+      setData(null);
+      setPhase("closed");
+    } catch {
+      setError("No pudimos cerrar la sesión. Intenta de nuevo.");
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  if (phase !== "ready" || !data)
+    return (
+      <>
+        <meta name="robots" content="noindex,nofollow" />
+        <PortalState
+          mode={phase === "ready" ? "loading" : phase}
+          message={error}
+          onRetry={() => setAttempt((value) => value + 1)}
+        />
+      </>
+    );
+
+  const [firstName, surname] = personalName(data.participant.name);
+  const diploma =
+    data.diploma?.status === "available"
+      ? participantAssetUrl(data.diploma.url, preview)
+      : undefined;
+  const published = routine?.result.status === "published";
+  const result = routine?.result;
+  const hasPlace = Boolean(
+    published &&
+      result?.directCompetition &&
+      result.eligibleCount >= 2 &&
+      result.place &&
+      [1, 2, 3].includes(result.place),
+  );
+  const activePhoto = photoIndex !== null ? photos[photoIndex] : undefined;
+
+  return (
+    <main className="participant-portal">
+      <meta name="robots" content="noindex,nofollow" />
+      <meta name="referrer" content="same-origin" />
+      <a className="participant-skip" href="#tu-diploma">
+        Ir a mi diploma
+      </a>
+      {preview && (
+        <div className="participant-preview-banner">
+          Vista de ejemplo <span>Datos ilustrativos · Imágenes de archivo</span>
+        </div>
+      )}
+      <section className="participant-hero" aria-labelledby="participant-name">
+        <header className="participant-header">
+          <a href="/" aria-label="Levitate MX, inicio" className="participant-brand">
+            <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" width="1395" height="420" />
+          </a>
+          <div className="participant-header__right">
+            <span>
+              <LockKeyhole size={12} aria-hidden="true" />
+              Tu espacio
+            </span>
+            <button type="button" onClick={() => void logout()} disabled={loggingOut}>
+              {loggingOut ? "Cerrando…" : "Salir"}
+              <LogOut size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+        {error && (
+          <p className="participant-header__message" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="participant-hero__content">
+          <div className="participant-hero__intro">
+            <p className="participant-eyebrow">
+              Mi Levitate <span aria-hidden="true">/</span> {event?.season || event?.title}
+            </p>
+            <p>{data.participant.academy}</p>
+          </div>
+          <h1
+            className="participant-hero__name"
+            id="participant-name"
+            aria-label={data.participant.name}
+          >
+            <span aria-hidden="true">{firstName}</span>
+            {surname && <em aria-hidden="true">{surname}</em>}
+          </h1>
+          <div className="participant-hero__story">
+            <div>
+              <h2>El escenario fue tuyo.</h2>
+              <p>
+                Gracias por confiar tu talento a Levitate.
+                <br />
+                Esta edición también lleva tu nombre.
+              </p>
+            </div>
+            <a className="participant-button participant-button--hero" href="#tu-diploma">
+              Conserva este momento
+              <ArrowDown size={19} aria-hidden="true" />
+            </a>
+          </div>
+          {data.events.length > 1 && (
+            <label className="participant-event-switch">
+              <span className="participant-eyebrow">Tu edición</span>
+              <span className="participant-select-wrap">
+                <select
+                  aria-label="Seleccionar edición"
+                  value={data.selectedEventId}
+                  onChange={(change) => void selectEvent(change.target.value)}
+                  disabled={changingEvent}
+                >
+                  {data.events.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title} · {item.season}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" />
+              </span>
+            </label>
+          )}
+        </div>
+      </section>
+
+      <nav className="participant-chapter-nav" aria-label="Tu experiencia Levitate">
+        <div>
+          {[
+            { id: "tu-diploma", number: "01", label: "Tu diploma" },
+            { id: "tu-jueceo", number: "02", label: "Tu jueceo" },
+            { id: "tus-fotos", number: "03", label: "Tus fotos" },
+          ].map((chapter) => (
+            <a
+              href={`#${chapter.id}`}
+              key={chapter.id}
+              aria-current={activeChapter === chapter.id ? "location" : undefined}
+            >
+              <span>{chapter.number}</span>
+              {chapter.label}
+              <ArrowUpRight size={15} aria-hidden="true" />
+            </a>
+          ))}
+        </div>
+      </nav>
+
+      <div className="participant-experience">
+        <section
+          className="participant-chapter participant-diploma-chapter"
+          id="tu-diploma"
+          data-participant-chapter
+          aria-labelledby="participant-diploma-title"
+          aria-busy={changingEvent}
+        >
+          <div className="participant-chapter__inner">
+            <header className="participant-chapter-heading" data-participant-reveal>
+              <p className="participant-eyebrow">
+                <span>01</span> Para volver a este momento
+              </p>
+              <h2 id="participant-diploma-title">
+                Tu diploma<span>.</span>
+              </h2>
+            </header>
+            {eventError && (
+              <p className="participant-inline-message" role="alert">
+                {eventError}
+              </p>
+            )}
+            <div className="participant-diploma-layout">
+              <ParticipantDiplomaPreview
+                name={data.participant.name}
+                academy={data.participant.academy}
+                season={event?.season || ""}
+                eventTitle={event?.title || "Levitate MX"}
+                venue={registrationLabel(event?.venue)}
+                date={eventDate(event?.startsAt)}
+                preview={preview}
+              />
+              <div className="participant-diploma-copy" data-participant-reveal>
+                <p className="participant-document-status">
+                  {diploma ? (
+                    <>
+                      <Check size={15} aria-hidden="true" />
+                      Tu diploma está listo
+                    </>
+                  ) : (
+                    "Tu diploma está en preparación"
+                  )}
+                </p>
+                <h3>
+                  El reconocimiento <br />
+                  de tu paso por <br />
+                  <em>esta edición.</em>
+                </h3>
+                <p>Porque lo que compartiste en el escenario también merece quedarse contigo.</p>
+                <div className="participant-diploma-action">
+                  <button
+                    type="button"
+                    className="participant-button"
+                    disabled={!diploma || Boolean(downloadBusy) || changingEvent}
+                    onClick={() => diploma && void download(diploma, "diploma")}
+                  >
+                    {downloadBusy === "diploma"
+                      ? "Preparando diploma…"
+                      : diploma
+                        ? "Descargar diploma"
+                        : "Diploma en preparación"}
+                    <ArrowDownToLine size={19} aria-hidden="true" />
+                  </button>
+                  <span>PDF · Tamaño carta · Personalizado para ti</span>
+                </div>
+                <p className="participant-download-message" role="status">
+                  {downloadMessage}
+                </p>
+                {preview && (
+                  <p className="participant-demo-note">
+                    Vista de ejemplo. El documento descargable contiene datos ilustrativos.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          className="participant-chapter participant-judging-chapter"
+          id="tu-jueceo"
+          data-participant-chapter
+          aria-labelledby="participant-judging-title"
+          aria-busy={changingEvent}
+        >
+          <div className="participant-chapter__inner">
+            <header className="participant-chapter-heading" data-participant-reveal>
+              <p className="participant-eyebrow">
+                <span>02</span> Para seguir creciendo
+              </p>
+              <div>
+                <h2 id="participant-judging-title">
+                  Tu jueceo<span>.</span>
+                </h2>
+                <p>
+                  La mirada del jurado <br />
+                  sobre tu trabajo.
+                </p>
+              </div>
+            </header>
+            <ParticipantRoutineSelector
+              routines={data.routines}
+              selectedId={routine?.id || ""}
+              disabled={changingEvent}
+              onSelect={selectRoutine}
+              context="tu jueceo"
+              label={registrationLabel}
+            />
+            {changingEvent ? (
+              <p className="participant-status-copy" role="status">
+                Abriendo tus presentaciones de esta edición…
+              </p>
+            ) : routine ? (
+              <div
+                className="participant-selected"
+                aria-live="polite"
+                aria-atomic="false"
+                data-participant-reveal
+              >
+                <header className="participant-selected__heading">
+                  <div>
+                    <p className="participant-eyebrow">
+                      {[
+                        routine.genre,
+                        routine.subgenre,
+                        routine.category,
+                        routine.division,
+                        routine.level,
+                      ]
+                        .map(registrationLabel)
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </p>
+                    <h3>{routine.title}</h3>
+                  </div>
+                  <span>{published ? "Resultado publicado" : "En revisión"}</span>
+                </header>
+                {published && result ? (
+                  <dl
+                    className={`participant-results ${hasPlace ? "participant-results--ranked" : ""}`}
+                  >
+                    <div className="participant-results__score">
+                      <dt>Puntaje final</dt>
+                      <dd>
+                        {score(result.score)}
+                        {result.maxScore !== null && <small>/ {score(result.maxScore)}</small>}
+                      </dd>
+                    </div>
+                    <div
+                      className="participant-results__medal"
+                      data-medal={result.medal || "pending"}
+                    >
+                      <dt>Medalla</dt>
+                      <dd>
+                        <Medal size={30} strokeWidth={1} aria-hidden="true" />
+                        <span>{result.medal ? medalNames[result.medal] : "Por publicar"}</span>
+                      </dd>
+                    </div>
+                    {hasPlace && (
+                      <div className="participant-results__place">
+                        <dt>Competencia directa</dt>
+                        <dd>
+                          {result.place}
+                          <span>
+                            {result.place === 2 ? ".º" : ".er"} <small>lugar</small>
+                          </span>
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                ) : (
+                  <div className="participant-pending">
+                    <span aria-hidden="true">↗</span>
+                    <div>
+                      <h4>Resultados en revisión.</h4>
+                      <p>Tu puntaje y reconocimiento aparecerán aquí cuando se publiquen.</p>
+                    </div>
+                  </div>
+                )}
+                <div className="participant-judge-access">
+                  <FileText size={31} strokeWidth={1} aria-hidden="true" />
+                  <div>
+                    <h4>Tu hoja de jueceo</h4>
+                    <p>
+                      {routine.judging.status === "available"
+                        ? "Los puntajes y comentarios que acompañan tu presentación."
+                        : "La hoja de esta presentación está pendiente de publicación."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="participant-button participant-button--outline"
+                    disabled={routine.judging.status !== "available"}
+                    onClick={() => {
+                      setDownloadMessage("");
+                      setJudgeOpen(true);
+                    }}
+                  >
+                    {routine.judging.status === "available" ? "Ver hoja de jueceo" : "Próximamente"}
+                    <ArrowUpRight size={17} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="participant-pending">
+                <span aria-hidden="true">↗</span>
+                <div>
+                  <h3>Tu historia sigue aquí.</h3>
+                  <p>
+                    Las presentaciones de esta edición aparecerán en este espacio cuando estén
+                    disponibles.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section
+          className="participant-chapter participant-gallery"
+          id="tus-fotos"
+          data-participant-chapter
+          aria-labelledby="participant-gallery-title"
+          aria-busy={changingEvent}
+        >
+          <div className="participant-chapter__inner">
+            <header className="participant-chapter-heading" data-participant-reveal>
+              <p className="participant-eyebrow">
+                <span>03</span> Para volver a sentirlo
+              </p>
+              <div>
+                <h2 id="participant-gallery-title">
+                  Tus fotos<span>.</span>
+                </h2>
+                <p>
+                  Así se vio tu momento <br />
+                  en el escenario.
+                </p>
+              </div>
+            </header>
+            <ParticipantRoutineSelector
+              routines={data.routines}
+              selectedId={routine?.id || ""}
+              disabled={changingEvent}
+              onSelect={selectRoutine}
+              context="tus fotos"
+              label={registrationLabel}
+            />
+            {changingEvent ? (
+              <p className="participant-status-copy" role="status">
+                Abriendo las imágenes de esta edición…
+              </p>
+            ) : routine ? (
+              <>
+                <div className="participant-gallery__album">
+                  <h3>{routine.title}</h3>
+                  <span>
+                    {photos.length > 0 ? `${photos.length} fotografías` : "Álbum por publicar"}
+                  </span>
+                </div>
+                {preview && (
+                  <p className="participant-demo-note">
+                    Vista de ejemplo con imágenes del archivo de Levitate MX. Estas fotografías no
+                    corresponden a Mariana López Torres.
+                  </p>
+                )}
+                {photos.length > 0 ? (
+                  <>
+                    <div className="participant-gallery__grid" data-participant-reveal>
+                      {photos.slice(0, photoLimit).map((photo, index) => (
+                        <button
+                          className="participant-gallery__photo"
+                          type="button"
+                          key={photo.id}
+                          aria-label={`Abrir fotografía ${index + 1} de ${photos.length}${photo.caption ? `. ${photo.caption}` : ""}`}
+                          onClick={() => setPhotoIndex(index)}
+                        >
+                          <PhotoImage photo={photo} />
+                          <span className="participant-gallery__photo-overlay">
+                            <span>{String(index + 1).padStart(2, "0")}</span>
+                            <Maximize2 size={19} aria-hidden="true" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {photos.length > photoLimit && (
+                      <button
+                        type="button"
+                        className="participant-text-button participant-gallery__more"
+                        onClick={() => setPhotoLimit((limit) => limit + 20)}
+                      >
+                        Ver más fotografías
+                        <ArrowDown size={18} aria-hidden="true" />
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="participant-gallery__pending">
+                    <p>Tu momento sigue aquí.</p>
+                    <span>
+                      Las fotografías de esta presentación aparecerán en este álbum cuando se
+                      publiquen.
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="participant-gallery__pending">
+                <p>Cada escenario deja una historia.</p>
+                <span>Las imágenes de tus presentaciones estarán aquí.</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="participant-community" aria-labelledby="participant-community-title">
+          <div className="participant-chapter__inner" data-participant-reveal>
+            <p className="participant-eyebrow">De esta edición en adelante</p>
+            <h2 id="participant-community-title">
+              Ya eres parte
+              <br />
+              de <span>Levitate.</span>
+            </h2>
+            <div>
+              <p>Nos vemos en la próxima edición.</p>
+              <a className="participant-text-button" href="/sedes">
+                Lo que viene en Levitate
+                <ArrowUpRight size={19} aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+        </section>
+        <footer className="participant-footer">
+          <a className="participant-brand" href="/" aria-label="Levitate MX, inicio">
+            <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" width="1395" height="420" />
+          </a>
+          <p>
+            {[registrationLabel(event?.venue), eventDate(event?.startsAt)]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <span>{event?.season}</span>
+          <a href="/">
+            Volver a Levitate
+            <ArrowUpRight size={15} aria-hidden="true" />
+          </a>
+        </footer>
+      </div>
+
+      {judgeOpen && routine && (
+        <JudgeSheet
+          routine={routine}
+          preview={preview}
+          busy={downloadBusy}
+          message={downloadMessage}
+          onDownload={(url, kind) => void download(url, kind)}
+          onClose={() => setJudgeOpen(false)}
+        />
+      )}
+      {activePhoto && photoIndex !== null && (
+        <ParticipantDialog
+          title={`Fotografía ${photoIndex + 1} de ${photos.length}`}
+          className="participant-lightbox"
+          onClose={() => setPhotoIndex(null)}
+          onKeyDown={(key) => {
+            if (key.key === "ArrowRight") {
+              key.preventDefault();
+              setPhotoIndex((photoIndex + 1) % photos.length);
+            }
+            if (key.key === "ArrowLeft") {
+              key.preventDefault();
+              setPhotoIndex((photoIndex - 1 + photos.length) % photos.length);
+            }
+          }}
+        >
+          <div className="participant-lightbox__image">
+            <PhotoImage key={activePhoto.id} photo={activePhoto} />
+            {photos.length > 1 && (
+              <>
+                <button
+                  className="participant-icon-button participant-lightbox__previous"
+                  type="button"
+                  onClick={() => setPhotoIndex((photoIndex - 1 + photos.length) % photos.length)}
+                  aria-label="Fotografía anterior"
+                >
+                  <ArrowLeft size={24} aria-hidden="true" />
+                </button>
+                <button
+                  className="participant-icon-button participant-lightbox__next"
+                  type="button"
+                  onClick={() => setPhotoIndex((photoIndex + 1) % photos.length)}
+                  aria-label="Fotografía siguiente"
+                >
+                  <ArrowRight size={24} aria-hidden="true" />
+                </button>
+              </>
+            )}
+          </div>
+          <div className="participant-lightbox__caption">
+            <p>{activePhoto.caption || routine?.title}</p>
+            {activePhoto.downloadUrl && (
+              <a
+                className="participant-text-button"
+                href={activePhoto.downloadUrl}
+                download
+                target="_blank"
+                rel="noreferrer"
+              >
+                Descargar foto <ArrowDownToLine size={17} aria-hidden="true" />
+              </a>
+            )}
+          </div>
+        </ParticipantDialog>
+      )}
+    </main>
+  );
+}

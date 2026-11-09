@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 // Workshop DDL is shared with its explicit migration, including capacity triggers.
 const workshopMigration = readFileSync(new URL("../../db/registration_workshops.sql", import.meta.url), "utf8");
 const workshopStatements = workshopMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE TRIGGER[\s\S]*?\nEND;/g) || [];
-const workshopTables = workshopStatements.filter((sql) => sql.startsWith("CREATE TABLE")).map((sql) => ({
+const participantPortalMigration = readFileSync(new URL("../../db/registration_participant_portal.sql", import.meta.url), "utf8");
+const participantPortalStatements = participantPortalMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE TRIGGER[\s\S]*?\nEND;/g) || [];
+const managedStatements = [...workshopStatements, ...participantPortalStatements];
+const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE TABLE")).map((sql) => ({
   name: sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1],
   columns: [...sql.matchAll(/^  (\w+) (?:TEXT|INTEGER)\b/gm)].map((match) => match[1]),
 }));
@@ -272,7 +275,7 @@ const indexes = [
 
 /** Adapter: read(sqlStatements) returns one array of rows per statement; write(sqlStatements) applies a batch. */
 export async function planRegistrationSchema(db) {
-  const tableNames = [...new Set([...Object.keys(prerequisites), ...Object.keys(createdTables), ...workshopTables.map((table) => table.name)])];
+  const tableNames = [...new Set([...Object.keys(prerequisites), ...Object.keys(createdTables), ...managedTables.map((table) => table.name)])];
   const [objects, ...columnResults] = await db.read([
     "SELECT name, type, tbl_name FROM sqlite_schema WHERE type IN ('table', 'index', 'trigger')",
     ...tableNames.map((name) => `PRAGMA table_info(${name})`),
@@ -298,7 +301,7 @@ export async function planRegistrationSchema(db) {
       }
     }
   }
-  for (const table of workshopTables) {
+  for (const table of managedTables) {
     if (!tables.has(table.name)) continue;
     for (const column of table.columns) {
       if (!columns.get(table.name).has(column)) errors.push(`Missing prerequisite column ${table.name}.${column}.`);
@@ -350,7 +353,7 @@ export async function planRegistrationSchema(db) {
       steps.push({ description: `Create ${name}`, sql: `CREATE ${unique ? `${unique} ` : ""}INDEX IF NOT EXISTS ${name} ON ${table}(${column})${where ? ` ${where}` : ""}` });
     }
   }
-  for (const sql of workshopStatements) {
+  for (const sql of managedStatements) {
     const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) IF NOT EXISTS (\w+)/);
     const existing = objects.find((row) => row.name === name);
     if (existing && existing.type !== type.toLowerCase()) throw new Error(`Unexpected schema object ${name}. No changes applied.`);

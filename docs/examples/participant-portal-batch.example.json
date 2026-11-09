@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "event": {
+    "id": "ejemplo-otono-2026-edomex",
+    "title": "Levitate MX · Edición de ejemplo",
+    "season": "Otoño 2026",
+    "venue": "edomex",
+    "startsAt": "2026-11-14"
+  },
+  "diploma": {
+    "dateLabel": "14 y 15 de noviembre de 2026",
+    "venueLabel": "Gran Recinto · Tlalnepantla, Estado de México"
+  },
+  "participants": [
+    { "participantId": "participante-ejemplo-001", "name": "Participante de ejemplo" }
+  ],
+  "routines": [
+    {
+      "danceId": "coreografia-ejemplo-001",
+      "sourceEventId": "evento-jueceo-ejemplo",
+      "sourceRoutineId": "rutina-jueceo-ejemplo-001",
+      "approved": true,
+      "photosPublished": true,
+      "result": {
+        "score": 92.5,
+        "maxScore": 100,
+        "medal": "oro",
+        "directCompetition": true,
+        "eligibleCount": 3,
+        "place": 1
+      },
+      "judging": {
+        "judges": [
+          {
+            "name": "Jurado de ejemplo",
+            "score": 92.5,
+            "maxScore": 100,
+            "criteria": [
+              { "label": "Criterio de ejemplo", "score": 92.5, "maxScore": 100 }
+            ],
+            "feedback": "Observación ilustrativa. Sustituir por la evaluación aprobada."
+          }
+        ]
+      }
+    }
+  ],
+  "assets": [],
+  "documents": []
+}

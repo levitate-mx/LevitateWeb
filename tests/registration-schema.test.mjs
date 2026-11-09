@@ -98,6 +98,33 @@ test("fresh canonical schema is already prepared and rechecking does not write",
   assert.equal(sqlite.prepare("SELECT role FROM registration_users").get().role, "academy");
 });
 
+test("private participant portal preparation adds all objects without changing registrations and is idempotent", async (t) => {
+  const marker = "-- Private participant experience: keep definitions identical to registration_participant_portal.sql.";
+  const { db, sqlite, writes } = fixture(t, baseSchema.split(marker)[0]);
+  seed(sqlite);
+  sqlite.exec("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-1','participant-1')");
+  const before = ["registration_academies", "registration_users", "registration_participants", "registration_dances"]
+    .map((table) => rows(sqlite, table));
+  const linksBefore = sqlite.prepare("SELECT * FROM registration_dance_participants").all();
+  const plan = await planRegistrationSchema(db);
+  assert.ok(plan.steps.length >= 8);
+  assert.ok(plan.steps.every((step) => step.sql.startsWith("CREATE ")));
+  assert.deepEqual(writes, [], "planning must not change the database");
+  const prepared = await prepareRegistrationSchema(db, { apply: true });
+  assert.equal(prepared.applied, plan.steps.length);
+  const expected = new DatabaseSync(":memory:");
+  t.after(() => expected.close());
+  expected.exec(baseSchema);
+  const objectsFor = (database) => database.prepare("SELECT name,type,sql FROM sqlite_schema WHERE name LIKE 'participant_portal_%' OR name LIKE 'idx_participant_portal_%' ORDER BY name")
+    .all().map((row) => ({ name: row.name, type: row.type, sql: row.sql.replace(/\s+/g, " ").trim() }));
+  assert.deepEqual(objectsFor(sqlite), objectsFor(expected), "prepared portal tables/indexes/triggers must match canonical definitions");
+  assert.deepEqual(["registration_academies", "registration_users", "registration_participants", "registration_dances"].map((table) => rows(sqlite, table)), before);
+  assert.deepEqual(sqlite.prepare("SELECT * FROM registration_dance_participants").all(), linksBefore);
+  const writeCount = writes.length;
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, writeCount);
+});
+
 test("preparation adds reverse dance indexes without changing links and remains idempotent", async (t) => {
   const reverseIndexes = [
     ["idx_registration_dance_participants_participant_dance", ["participant_id", "dance_id"]],

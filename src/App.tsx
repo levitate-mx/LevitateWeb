@@ -25,9 +25,13 @@ import { RulesPage } from "./components/rules/RulesPage";
 import { SedesPage } from "./components/sedes/SedesPage";
 import { ShopPage } from "./components/shop/ShopPage";
 import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
+import { ParticipantPage } from "./components/participant/ParticipantPage";
+import { ParticipantAdminPage } from "./components/participant-admin/ParticipantAdminPage";
 
 export default function App() {
   const searchParams = new URLSearchParams(window.location.search);
+  const participantMatch = window.location.pathname.match(/^\/mi-levitate\/?$/);
+  const participantAdminMatch = window.location.pathname.match(/^\/admin\/mi-levitate\/?$/);
   const evaluationsMatch = window.location.pathname.match(/^\/evaluaciones\/?$/);
   const aerialEvaluationsMatch = window.location.pathname.match(/^\/modalidades\/levitate-aerial\/evaluacion\/?$/);
   const adminMediaMatch = window.location.pathname.match(/^\/admin\/imagenes\/?$/);
@@ -56,6 +60,14 @@ export default function App() {
   const workshopsMatch = window.location.pathname.match(/^\/workshops\/?$/);
   const venueMatch = window.location.pathname.match(/^\/sedes\/([^/]+)\/?$/);
   const loginType = searchParams.get("tipo");
+
+  if (participantMatch) {
+    return <ParticipantPage />;
+  }
+
+  if (participantAdminMatch) {
+    return <ParticipantAdminPage />;
+  }
 
   if (adminMediaMatch) {
     return <LevitateRegistrationRoute />;

@@ -8,6 +8,7 @@ import { getJudgingEvents, getJudgingScores } from "./judging-reader.js";
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
+import { handleParticipantPortal } from "./participant-portal.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
   getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
@@ -376,6 +377,10 @@ const registrationShopProducts = new Map([
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/participant/") || url.pathname === "/api/registration/admin/participant-portal") {
+      return handleParticipantPortal(request, env, { requireAdmin: requireRegistrationAdmin });
+    }
 
     if (url.pathname === "/api/health") {
       return sendJson({ ok: true, storage: "cloudflare-d1" });
