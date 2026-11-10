@@ -170,7 +170,8 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
     WHERE a.event_id = ? AND dp.participant_id = ?
-      ${adminPreview ? "AND a.kind IN ('judge_sheet','photo')" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))`}`, event.id, participant.id) : [];
+      ${adminPreview ? "AND a.kind IN ('judge_sheet','photo')" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))`}
+    ORDER BY a.created_at DESC,a.id DESC`, event.id, participant.id) : [];
   const document = await first(db, `SELECT d.asset_id FROM participant_portal_documents d
     JOIN participant_portal_assets a ON a.id = d.asset_id
     WHERE d.participant_id = ? AND d.event_id = ? ${adminPreview ? "" : "AND d.published = 1 AND a.published = 1"}

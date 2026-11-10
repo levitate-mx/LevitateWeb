@@ -161,6 +161,18 @@ test('Drive trial rejects invalid archival sources before creating a source albu
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 0);
 });
 
+test('personal photo projections put newly prepared previews before older copies without removing either', async t => {
+  const { admin, request, db } = await fixture(t);
+  const saved = await admin({ action: 'routine.save', eventId: 'test-event', danceId: 'dance-a' });
+  for (const uploadId of ['older-preview', 'newer-preview']) await admin({ action: 'asset.upload', eventId: 'test-event',
+    routineId: saved.data.routineId, kind: 'photo', uploadId, fileName: uploadId + '.jpg', contentType: 'image/jpeg', base64Data: photoSource.toString('base64') });
+  db.sqlite.prepare("UPDATE participant_portal_assets SET created_at='2020-01-01 00:00:00' WHERE id='older-preview'").run();
+  db.sqlite.prepare("UPDATE participant_portal_assets SET created_at='2026-11-10 00:00:00' WHERE id='newer-preview'").run();
+  const projection = await request(previewPath(), { cookie: adminCookie });
+  assert.deepEqual(projection.data.routines[0].photos.items.map(photo => photo.id), ['newer-preview', 'older-preview']);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 2);
+});
+
 test('private portal requires its own QR grant and actual admin session; no CURP entry',async t=>{
   const {request,access,db}=await fixture(t);
   await request('/api/participant/me',{expected:401});
