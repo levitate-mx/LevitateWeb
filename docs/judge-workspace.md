@@ -21,8 +21,11 @@ The web theme also installs a `LevitateWebPresentation` theme extension. It sele
 the web-specific workspace and judging-sheet composition, while native themes
 continue through the original layouts. Navigation, programme/judge selection,
 score fields, validation, drafts and save callbacks still use the existing store.
-The judging action bar stays outside the scrolling criteria so the total and
-save action remain reachable on desktop and mobile. While a judging sheet is
+The judging action bar stays outside the scrolling criteria so routine selection
+and saving remain reachable on desktop and mobile. Desktop feedback, penalties
+and favorites use a separate scrolling side panel; mobile keeps those controls
+after the criteria. The visual score summary is omitted without changing score
+calculation or validation. While a judging sheet is
 open, sidebar and mobile navigation are hidden; its Back action returns to the
 workspace and restores navigation without clearing the draft.
 
