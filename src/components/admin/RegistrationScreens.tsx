@@ -5294,16 +5294,43 @@ function getProgramMusicDurationLabel(row: ProgramRow) {
   return formatMusicDuration(row.musicDurationSeconds).padStart(5, "0");
 }
 
-function downloadProgramXls(blocks: ProgramBlock[]) {
-  let routineNumber = 0;
+async function downloadProgramXls(blocks: ProgramBlock[]) {
+  const programRows = blocks.flatMap(block => block.rows);
+  if (!programRows.length || programRows.length > 600 || new Set(programRows.map(row => row.danceId)).size !== programRows.length) {
+    throw new Error("Selecciona un programa válido de hasta 600 coreografías para descargarlo.");
+  }
+  if (new Set(programRows.map(row => row.venue)).size !== 1) {
+    throw new Error("Selecciona una sola sede antes de descargar el programa de jueceo.");
+  }
+  const requested = programRows.map((row, index) => ({ danceId: row.danceId, sourceRoutineId: String(index + 1) }));
+  const issued = await requestRegistrationApi<{
+    registrationEventId: string; token: string; links: { danceId: string; sourceRoutineId: string }[];
+  }>("/api/registration/admin/participant-portal", {
+    method: "POST", body: JSON.stringify({ action: "judging.program.issue", links: requested }),
+  });
+  const expectedIds = new Set(programRows.map(row => row.danceId));
+  if (!issued || typeof issued !== "object" || typeof issued.registrationEventId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(issued.registrationEventId)
+    || typeof issued.token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(issued.token)
+    || !Array.isArray(issued.links) || issued.links.length !== requested.length) {
+    throw new Error("No se pudo verificar la vinculación del programa. Vuelve a intentar la descarga.");
+  }
+  const sourceIds = new Set<string>(), issuedIds = new Map<string, string>();
+  for (const link of issued.links) {
+    if (!link || !expectedIds.has(link.danceId) || issuedIds.has(link.danceId)
+      || typeof link.sourceRoutineId !== "string" || !/^[1-9][0-9]{0,8}$/.test(link.sourceRoutineId)
+      || sourceIds.has(link.sourceRoutineId)) {
+      throw new Error("No se pudo verificar la vinculación del programa. Vuelve a intentar la descarga.");
+    }
+    sourceIds.add(link.sourceRoutineId); issuedIds.set(link.danceId, link.sourceRoutineId);
+  }
   const rows = blocks.flatMap((block) => {
     const includeLevel = isAerialProgramBlock(block);
-    const headers = [...getProgramHeaders(includeLevel), "DURACIÓN CANCIÓN (MM:SS)", "ID", "ID INSCRIPCIÓN"];
+    const headers = [...getProgramHeaders(includeLevel), "DURACIÓN CANCIÓN (MM:SS)", "ID", "ID INSCRIPCIÓN", "ID EDICIÓN", "TOKEN VINCULACIÓN"];
 
     return [
-      `<tr><td colspan="${headers.length}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
-      `<tr>${headers.map((header) => `<th>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
-      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel), getProgramMusicDurationLabel(row), String(++routineNumber)].map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}<td>${toProgramHtmlValue(row.danceId, true)}</td></tr>`),
+      `<tr><td colspan="${headers.length - 3}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
+      `<tr>${headers.map((header,index) => `<th${index>=headers.length-3 ? ' style="display:none;mso-hide:all"' : ''}>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
+      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel), getProgramMusicDurationLabel(row), issuedIds.get(row.danceId)].map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}${[row.danceId, issued.registrationEventId, issued.token].map(value => `<td style="display:none;mso-hide:all">${toProgramHtmlValue(value, true)}</td>`).join("")}</tr>`),
     ];
   });
   const worksheet = `<!doctype html>
@@ -9153,6 +9180,8 @@ function ProgramPanel({
   const [venueFilter, setVenueFilter] = useState("all");
   const [genreFilter, setGenreFilter] = useState("all");
   const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(() => new Set());
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const availableVenues = useMemo(
     () => Array.from(new Set([
       ...dances.map((dance) => dance.venue),
@@ -9181,6 +9210,13 @@ function ProgramPanel({
       return next;
     });
   };
+  const handleDownload = async () => {
+    if (isExporting) return;
+    setIsExporting(true); setExportError("");
+    try { await downloadProgramXls(programBlocks); }
+    catch (cause) { setExportError(getErrorMessage(cause, "No se pudo preparar el programa. Vuelve a intentarlo.")); }
+    finally { setIsExporting(false); }
+  };
 
   return (
     <section className="levitate-admin-program" aria-label="Programa de competencia" aria-busy={isLoading}>
@@ -9192,23 +9228,24 @@ function ProgramPanel({
           </strong>
           <p>Abre un bloque para ver sus coreografías en orden de salida.</p>
         </div>
-        <button disabled={totalRows === 0} onClick={() => downloadProgramXls(programBlocks)} type="button">
+        <button disabled={totalRows === 0 || isExporting} onClick={() => void handleDownload()} type="button" aria-busy={isExporting}>
           <Download aria-hidden="true" size={16} />
-          Descargar XLS
+          {isExporting ? "Preparando programa…" : "Descargar XLS"}
         </button>
       </header>
+      <AdminStatusMessage message={exportError} tone="error" />
 
       <div className="levitate-admin-program__filters">
         <label>
           <span>Sede</span>
-          <select value={venueFilter} onChange={(event) => setVenueFilter(event.target.value)}>
+          <select disabled={isExporting} value={venueFilter} onChange={(event) => setVenueFilter(event.target.value)}>
             <option value="all">Todas las sedes</option>
             {availableVenues.map((venue) => <option key={venue} value={venue}>{getVenueLabel(venue)}</option>)}
           </select>
         </label>
         <label>
           <span>Disciplina</span>
-          <select value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)}>
+          <select disabled={isExporting} value={genreFilter} onChange={(event) => setGenreFilter(event.target.value)}>
             <option value="all">Todas las disciplinas</option>
             <option value="motion">Motion</option>
             <option value="aereo">Aerial</option>

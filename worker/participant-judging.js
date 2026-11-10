@@ -1,3 +1,5 @@
+import { projectParticipantResult, pendingParticipantResult } from './participant-results.js';
+
 const text = value => typeof value === "string" ? value.trim() : "";
 const finite = value => typeof value === "number" && Number.isFinite(value);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -116,6 +118,7 @@ export async function enrichParticipantJudging({ data, rows, event, adminPreview
       continue;
     }
     let judging;
+    let result=event?.automatic_results===true ? pendingParticipantResult() : routine.result;
     if (!row || !source.valid) judging = pending("unlinked");
     // Only the caller's authenticated edition binding enables automatic
     // release. Photo/result drafts remain independent; hidden editions always
@@ -128,9 +131,10 @@ export async function enrichParticipantJudging({ data, rows, event, adminPreview
         const matched = snapshot.rows.filter(value => value?.id === source.routineId);
         judging = matched.length !== 1 ? pending(matched.length ? "unavailable" : "unlinked")
           : projectedJudging(snapshot, matched[0], adminPreview);
+        if(event?.automatic_results===true&&matched.length===1) result=projectParticipantResult({snapshot,routineId:source.routineId});
       }
     }
-    routines.push({ ...routine, judging });
+    routines.push({ ...routine, judging, result });
   }
   return { ...data, routines };
 }

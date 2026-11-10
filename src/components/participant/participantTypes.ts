@@ -41,6 +41,17 @@ export interface ParticipantJudgingPdfDescriptor {
   preview: boolean;
 }
 
+export interface ParticipantDiplomaGenerator {
+  name: string;
+  academy: string;
+  eventTitle: string;
+  season?: string;
+  venue?: string;
+  dateLabel?: string;
+  preview: boolean;
+  templateUrl: "/assets/participant-recognition-template.pdf";
+}
+
 export interface ParticipantRoutine {
   id: string;
   title: string;
@@ -79,7 +90,7 @@ export interface ParticipantPortalData {
   participant: { id: string; name: string; academy: string };
   events: { id: string; title: string; season: string; venue: string; startsAt: string | null }[];
   selectedEventId: string;
-  diploma: { status: "pending" | "available"; assetId: string | null; url: string | null } | null;
+  diploma: { status: "pending" | "available"; assetId: string | null; url: string | null; generator?: ParticipantDiplomaGenerator } | null;
   routines: ParticipantRoutine[];
 }
 

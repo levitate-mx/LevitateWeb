@@ -609,6 +609,23 @@ CREATE TABLE IF NOT EXISTS participant_portal_judging_sources (
   updated_by TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS participant_portal_program_links (
+  event_id TEXT NOT NULL REFERENCES participant_portal_events(id) ON DELETE CASCADE,
+  dance_id TEXT NOT NULL REFERENCES registration_dances(id) ON DELETE CASCADE,
+  source_routine_id TEXT NOT NULL,
+  PRIMARY KEY(event_id,dance_id),
+  UNIQUE(event_id,source_routine_id)
+);
+CREATE TABLE IF NOT EXISTS participant_portal_program_exports (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES participant_portal_events(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  manifest_json TEXT NOT NULL,
+  source_event_id TEXT,
+  created_by TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS participant_portal_access (
   id TEXT PRIMARY KEY,
   participant_id TEXT NOT NULL REFERENCES registration_participants(id) ON DELETE CASCADE,

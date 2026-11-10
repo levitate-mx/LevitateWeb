@@ -24,6 +24,7 @@ import {
   participantRequest,
 } from "./participantApi";
 import type {
+  ParticipantDiplomaGenerator,
   ParticipantPhoto,
   ParticipantPortalData,
 } from "./participantTypes";
@@ -49,6 +50,28 @@ function participantPageMode(pathname: string, search: string, internalPreview: 
   if (internalPreview || /^\/admin\/mi-levitate\/resumen\/?$/.test(pathname)) return "internal";
   if (development && new URLSearchParams(search).get("preview") === "1") return "demo";
   return "participant";
+}
+
+function participantDiplomaGenerator(
+  data: ParticipantPortalData | null,
+  event: ParticipantPortalData["events"][number] | undefined,
+  internalPreview: boolean,
+): ParticipantDiplomaGenerator | undefined {
+  const descriptor = data?.diploma?.generator;
+  if (data?.diploma?.status !== "available" || !event || !descriptor
+    || event.id !== data.selectedEventId || typeof descriptor.preview !== "boolean"
+    || (!internalPreview && descriptor.preview)
+    || descriptor.templateUrl !== "/assets/participant-recognition-template.pdf"
+    || descriptor.name !== data.participant.name || descriptor.academy !== data.participant.academy
+    || descriptor.eventTitle !== event.title
+    || (descriptor.season !== undefined && descriptor.season !== event.season)
+    || (descriptor.venue !== undefined && descriptor.venue !== event.venue)
+    || (descriptor.dateLabel !== undefined && descriptor.dateLabel !== (event.startsAt?.slice(0, 10) || ""))) return undefined;
+  // Only the authenticated profile and its selected edition supply identity.
+  // The generator has no access-grant operation and never invents a QR URL.
+  return { name: data.participant.name, academy: data.participant.academy, eventTitle: event.title,
+    season: event.season, venue: event.venue, dateLabel: event.startsAt?.slice(0, 10) || "",
+    templateUrl: "/assets/participant-recognition-template.pdf", preview: internalPreview || descriptor.preview };
 }
 
 function PhotoImage({ photo, className }: { photo: ParticipantPhoto; className?: string }) {
@@ -177,6 +200,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [judgingDownloadMessage, setJudgingDownloadMessage] = useState("");
   const [judgingDownloadError, setJudgingDownloadError] = useState(false);
   const judgingGeneration = useRef(0);
+  const diplomaGeneration = useRef(0);
+  const diplomaRequest = useRef<AbortController | null>(null);
   const eventRequest = useRef<AbortController | null>(null);
   const accessNavigation = useRef(0);
 
@@ -187,6 +212,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       if (!fragment.has("access") && !fragment.has("token")) return;
       ++accessNavigation.current;
       ++judgingGeneration.current;
+      ++diplomaGeneration.current;
+      diplomaRequest.current?.abort();
       eventRequest.current?.abort();
       setData(null);
       setSelectedRoutineId(null);
@@ -241,6 +268,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     return () => {
       active = false;
       ++judgingGeneration.current;
+      ++diplomaGeneration.current;
+      diplomaRequest.current?.abort();
       controller.abort();
       eventRequest.current?.abort();
     };
@@ -248,6 +277,13 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   const routine = data?.routines.find((item) => item.id === selectedRoutineId) || data?.routines[0];
   const event = data?.events.find((item) => item.id === data.selectedEventId);
+  useEffect(() => {
+    ++diplomaGeneration.current;
+    diplomaRequest.current?.abort();
+    setDownloadBusy(null);
+    setDownloadMessage("");
+    return () => { ++diplomaGeneration.current; diplomaRequest.current?.abort(); };
+  }, [data?.participant.id, data?.selectedEventId, phase]);
   useEffect(() => {
     ++judgingGeneration.current;
     setJudgingDownloadBusy(false);
@@ -309,6 +345,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   async function selectEvent(eventId: string) {
     if (preview || eventId === data?.selectedEventId) return;
     ++judgingGeneration.current;
+    ++diplomaGeneration.current;
+    diplomaRequest.current?.abort();
     setJudgingDownloadBusy(false);
     eventRequest.current?.abort();
     const controller = new AbortController();
@@ -355,6 +393,64 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       );
     } finally {
       setDownloadBusy(null);
+    }
+  }
+
+  async function downloadGeneratedDiploma() {
+    if (downloadBusy || changingEvent || !generatedDiploma) return;
+    const generation = ++diplomaGeneration.current;
+    const controller = new AbortController();
+    diplomaRequest.current = controller;
+    setDownloadBusy("diploma");
+    setDownloadMessage("");
+    try {
+      const [{ generateParticipantDiploma }, response] = await Promise.all([
+        import("../../../shared/participant-diploma.js"),
+        fetch("/assets/participant-recognition-template.pdf", {
+          credentials: "same-origin", cache: "force-cache", signal: controller.signal,
+          headers: { Accept: "application/pdf" },
+        }),
+      ]);
+      if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+      if (!response.ok || !response.headers.get("content-type")?.toLowerCase().includes("application/pdf")
+        || Number(response.headers.get("content-length")) > 8 * 1024 * 1024) {
+        throw new Error("No pudimos preparar tu reconocimiento. Intenta de nuevo más tarde.");
+      }
+      const templateBytes = await response.arrayBuffer();
+      if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+      if (templateBytes.byteLength > 8 * 1024 * 1024) throw new Error("No pudimos preparar tu reconocimiento.");
+      const { templateUrl: _templateUrl, ...input } = generatedDiploma;
+      let bytes: Uint8Array;
+      try {
+        bytes = await generateParticipantDiploma({ ...input, templateBytes });
+      } catch (cause) {
+        if ((cause as Error & { code?: string })?.code !== "diploma_unicode_font_required") throw cause;
+        if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+        const fontResponse = await fetch("/assets/participant-recognition-unicode.ttf", {
+          credentials: "same-origin", cache: "force-cache", signal: controller.signal,
+          headers: { Accept: "font/ttf, application/octet-stream" },
+        });
+        if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+        if (!fontResponse.ok || !/^(?:font\/(?:ttf|sfnt)|application\/(?:octet-stream|x-font-ttf))(?:;|$)/i.test(fontResponse.headers.get("content-type") || "")
+          || Number(fontResponse.headers.get("content-length")) > 2 * 1024 * 1024) {
+          throw new Error("No pudimos cargar la fuente de tu reconocimiento. Intenta de nuevo más tarde.");
+        }
+        const unicodeFontBytes = await fontResponse.arrayBuffer();
+        if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+        if (unicodeFontBytes.byteLength > 2 * 1024 * 1024) throw new Error("No pudimos cargar la fuente de tu reconocimiento.");
+        bytes = await generateParticipantDiploma({ ...input, templateBytes, unicodeFontBytes });
+      }
+      if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+      startBrowserDownload(prepareBrowserDownload(
+        new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
+        `${isInternalPreview ? "revision-interna-" : ""}levitate-reconocimiento.pdf`,
+      ));
+      setDownloadMessage("Tu reconocimiento está listo. Revisa las descargas de tu navegador.");
+    } catch (cause) {
+      if (generation !== diplomaGeneration.current || controller.signal.aborted) return;
+      setDownloadMessage(cause instanceof Error ? cause.message : "No pudimos preparar tu reconocimiento. Intenta de nuevo.");
+    } finally {
+      if (generation === diplomaGeneration.current) setDownloadBusy(null);
     }
   }
 
@@ -408,6 +504,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     data.diploma?.status === "available"
       ? isInternalPreview ? participantAdminAssetUrl(data.diploma.url) : participantAssetUrl(data.diploma.url, preview)
       : undefined;
+  const generatedDiploma = participantDiplomaGenerator(data, event, isInternalPreview);
+  const diplomaAvailable = Boolean(diploma || generatedDiploma);
   const generatedJudging = routine?.judging.pdf;
   const canGenerateJudging = Boolean(generatedJudging?.judges.length && (isInternalPreview
     || (!generatedJudging.preview && routine?.judging.status === "available"
@@ -535,10 +633,11 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 season={event?.season || ""}
                 eventTitle={event?.title || "Levitate MX"}
                 preview={preview}
+                internalPreview={isInternalPreview}
               />
               <div className="participant-diploma-copy" data-participant-reveal>
                 <p className="participant-document-status">
-                  {diploma ? (
+                  {diplomaAvailable ? (
                     <>
                       <Check size={15} aria-hidden="true" />
                       Reconocimiento autenticado y listo
@@ -556,12 +655,12 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                   <button
                     type="button"
                     className="participant-button"
-                    disabled={!diploma || Boolean(downloadBusy) || changingEvent}
-                    onClick={() => diploma && void download(diploma, "diploma")}
+                    disabled={!diplomaAvailable || Boolean(downloadBusy) || changingEvent}
+                    onClick={() => diploma ? void download(diploma, "diploma") : void downloadGeneratedDiploma()}
                   >
                     {downloadBusy === "diploma"
                       ? "Preparando reconocimiento…"
-                      : diploma
+                      : diplomaAvailable
                         ? "Descargar reconocimiento"
                         : "Reconocimiento en preparación"}
                     <ArrowDownToLine size={19} aria-hidden="true" />

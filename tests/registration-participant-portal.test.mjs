@@ -78,7 +78,8 @@ test('private portal requires its own QR grant and actual admin session; no CURP
   assert.match(grant.entryUrl,/^\/mi-levitate#access=/);
   const stored=db.sqlite.prepare('SELECT token_hash FROM participant_portal_access').get();assert.notEqual(stored.token_hash,grant.token);
   const {data,headers:responseHeaders}=await request('/api/participant/me',{cookie});
-  assert.equal(data.participant.name,'Mariana Prueba');assert.equal(data.diploma.status,'pending');
+  assert.equal(data.participant.name,'Mariana Prueba');assert.equal(data.diploma.status,'available');
+  assert.equal(data.diploma.generator.name,'Mariana Prueba');assert.equal(data.diploma.generator.preview,false);
   assert.equal(data.routines.length,1);assert.equal(data.routines[0].id,'registration:dance-a');assert.equal(data.routines[0].result.status,'pending');
   assert.doesNotMatch(JSON.stringify(data),/PRUA|folio|token_hash/);assert.equal(responseHeaders.get('cache-control'),'private, no-store');
   await request('/api/participant/me?eventId=another-event',{cookie,expected:404});
@@ -154,7 +155,7 @@ test('invalid file types and oversized requests are rejected; storage missing re
   await request('/api/registration/admin/participant-portal',{method:'POST',cookie:'levitate_registration_session=admin-session',rawBody:'{}',extraHeaders:{'content-type':'application/json','content-length':String(19*1024*1024)},expected:413});
   delete env.PARTICIPANT_MEDIA;
   await admin({action:'asset.upload',eventId:'test-event',kind:'diploma',participantId:'person-a',fileName:'valid.pdf',contentType:'application/pdf',base64Data:Buffer.from('%PDF-1.7').toString('base64')},503);
-  const me=await request('/api/participant/me',{cookie});assert.equal(me.data.diploma.status,'pending');
+  const me=await request('/api/participant/me',{cookie});assert.equal(me.data.diploma.status,'available');assert.equal(me.data.diploma.generator.templateUrl,'/assets/participant-recognition-template.pdf');
 });
 
 test('admin updates preserve publication when omitted and mapping lookup avoids clearing results',async t=>{
@@ -290,7 +291,7 @@ test('admin preview reads every draft without publishing it, regardless of all p
     assert.equal(publicView.data.routines[0].result.score,eventPublished&&routinePublished?138.5:null);
     assert.equal(publicView.data.routines[0].judging.status,eventPublished&&routinePublished?'available':'pending');
     assert.equal(publicView.data.routines[0].photos.count,eventPublished&&routinePublished&&photosPublished&&assetsPublished?1:0);
-    assert.equal(publicView.data.diploma.status,eventPublished&&documentPublished&&assetsPublished?'available':'pending');
+    assert.equal(publicView.data.diploma.status,eventPublished?'available':'pending');
     assert.doesNotMatch(JSON.stringify(publicView.data),/\/api\/registration\/admin|adminPreview|googleapis|drive\.google/);
     assert.equal(totalChanges(db),before,'the participant query must not publish or create data either');
   }

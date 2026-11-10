@@ -182,16 +182,20 @@ export function ParticipantAdminPage() {
       </section>
       {eventId && <>
         <section className="pp-admin-section">
-          <h2>Hojas de jueceo automáticas</h2>
-          <p>Vincula una vez el evento de jueceo de esta edición. Las hojas se leen de la aplicación y se generan al descargarlas, sin cargar PDFs ni guardarlos en Drive.</p>
+          <h2>Jueceo y reconocimientos automáticos</h2>
+          <p>Exporta el programa desde administración e impórtalo en la app de jueceo. La edición y sus coreografías quedarán vinculadas automáticamente. Los resultados y las hojas se leen de la app; cada participante descarga su reconocimiento sin cargar PDFs.</p>
+          <p role="status">{judgingSource.sourceEventId ? `Conectado a ${judgingSource.events.find(source=>source.id===judgingSource.sourceEventId)?.name || 'su evento de jueceo'}.` : 'La conexión se completará al importar el programa exportado desde esta web.'}</p>
+          {judgingSourceMessage && <p role="status">{judgingSourceMessage}</p>}
+          <p>Las evaluaciones incompletas permanecen pendientes. Los lugares se muestran cuando termina la categoría y la edición debe estar visible para sus participantes.</p>
+          <details><summary>Vinculación de programas anteriores</summary>
           <label>Evento de jueceo<select value={judgingSource.sourceEventId} onChange={e => setJudgingSource({ ...judgingSource, sourceEventId: e.target.value })}>
             <option value="">Sin vincular</option>{judgingSource.events.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
           </select></label>
-          {judgingSourceMessage && <p role="status">{judgingSourceMessage}</p>}
           <button onClick={() => perform(async () => { await api('', { action: 'judging.source.save', eventId, sourceEventId: judgingSource.sourceEventId }); }, 'Conexión de jueceo guardada. Los datos se consultarán automáticamente.')}>Guardar conexión de jueceo</button>
           <p>La asociación utiliza la identidad de cada coreografía. Las evaluaciones incompletas permanecen pendientes y una edición oculta no muestra hojas a sus participantes.</p>
           <ParticipantJudgingProgram eventId={eventId} sourceEventId={judgingSource.sourceEventId} disabled={busy}
             onLinked={() => { void refresh().catch(reportError); }} />
+          </details>
         </section>
         <section className="pp-admin-section">
           <h2>02 / Participantes y diplomas</h2>
@@ -202,12 +206,15 @@ export function ParticipantAdminPage() {
             <h3>{person.name}</h3><p>{person.academy}</p>
             <div className="pp-admin-actions"><a className="pp-admin-preview-link" href={`/admin/mi-levitate/resumen?${new URLSearchParams({ eventId, participantId: person.id })}`} target="_blank" rel="noreferrer">Revisar su resumen de Mi Levitate ↗</a></div>
             <p>Vista interna con los borradores y archivos de esta persona. Abrirla no genera un acceso ni publica contenido.</p>
+            <p>El reconocimiento se genera automáticamente en su resumen. Conserva el QR que ya recibió; no necesitas reemplazarlo para preparar su diploma.</p>
+            <details><summary>Accesos y documentos anteriores</summary>
             <div className="pp-admin-actions"><button onClick={() => perform(async () => { const value = await api<{ entryUrl: string }>('', { action: 'access.create', eventId, participantId: personId, rotate: person.accesses?.some(a => a.active && a.eventId === eventId) || false }); setQr(new URL(value.entryUrl, location.origin).href); }, 'Acceso individual creado. Guarda su QR antes de salir.')}>{person.accesses?.some(a => a.active && a.eventId === eventId) ? 'Reemplazar acceso y generar nuevo QR' : 'Crear enlace y QR individual'}</button>
               <button disabled={!qr} onClick={() => perform(async () => {
                 const { generateParticipantDiploma } = await import('../../../shared/participant-diploma.js');
                 const logoBytes = await fetch('/assets/levitate-logo-mx.png').then(r => r.arrayBuffer());
                 const templateBytes = await fetch('/assets/participant-recognition-template.pdf').then(r => r.arrayBuffer());
-                const pdf = await generateParticipantDiploma({ name: person.name, academy: person.academy, eventTitle: edition?.title || '', season: edition?.season, venue: edition?.venue, dateLabel: edition?.startsAt?.slice(0, 10), entryUrl: qr || undefined, logoBytes, templateBytes });
+                const unicodeFontBytes = await fetch('/assets/participant-recognition-unicode.ttf').then(r => r.arrayBuffer());
+                const pdf = await generateParticipantDiploma({ name: person.name, academy: person.academy, eventTitle: edition?.title || '', season: edition?.season, venue: edition?.venue, dateLabel: edition?.startsAt?.slice(0, 10), entryUrl: qr || undefined, logoBytes, templateBytes, unicodeFontBytes });
                 const blob = new Blob([new Uint8Array(pdf)], { type: 'application/pdf' });
                 download(blob, `diploma-${person.id}.pdf`);
                 const asset = await upload(blob, 'diploma', `diploma-${person.id}.pdf`, person.id);
@@ -219,6 +226,7 @@ export function ParticipantAdminPage() {
             <label>Cargar un diploma PDF aprobado<input type="file" accept="application/pdf" onChange={e => { const file = e.target.files?.[0]; if (file) void perform(async () => { const asset = await upload(file, 'diploma', file.name, person.id); await api('', { action: 'document.assign', eventId, participantId: person.id, assetId: asset.assetId, published: false }); }, 'Diploma cargado en borrador.'); e.target.value = ''; }} /></label>
             <ul className="pp-admin-assets">{assets.filter(a => a.kind === 'diploma' && a.participantId === personId).map(a => <li key={a.id}><a target="_blank" rel="noreferrer" href={`${endpoint}?assetId=${encodeURIComponent(a.id)}`}>Revisar {a.fileName || 'diploma'}</a><button onClick={() => publishDiploma(a.id)}>Publicar este diploma</button></li>)}</ul>
             {person.accesses?.filter(a => a.active && a.eventId === eventId).map(a => <button className="pp-admin-subtle" key={a.id} onClick={() => perform(async () => { await api('', { action: 'access.revoke', accessId: a.id }); setQr(''); }, 'Acceso revocado.')}>Revocar acceso {a.id.slice(-6)}</button>)}
+            </details>
           </div>}
         </section>
         <section className="pp-admin-section">
