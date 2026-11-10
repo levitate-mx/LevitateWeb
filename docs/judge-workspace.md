@@ -31,13 +31,33 @@ internal placeholder, not a deliverable address; use the username to sign in.
 Do not use the password-reset email flow until a real address is configured.
 Only provision this account in an isolated test event, never in a real panel.
 
+### Android-style event and judge selection
+
+The user explicitly requested that `juezweb` select existing programmes and
+judges as in Android. `JUDGING_SELECTABLE_JUDGE_USER_IDS` grants this capability
+to exact website user IDs on the server; ordinary judge accounts remain bound
+to their assignments. It does not confer admin access. The catalogue remains
+limited to verified Levitate events and excludes archived events/admin profiles.
+
+This mode reads existing Core judge profiles and their saved sheets. It never
+creates a jury member, copies grades or changes scoring rules. Event menus
+include each programme's blocks and routine counts before it is selected.
+Refreshing the catalogue retrieves current events from the server.
+
+Each mutation identifies the selected judge separately and is validated against
+that event's existing judge and block assignment. Pending uploads are grouped
+by their original event/judge, even after changing selections; one profile's
+notes or favorites cannot be sent under the subsequently selected judge.
+Removing the server grant restores assignment-only access on the next request.
+
 ## Data and compatibility
 
 All browser reads/writes go to same-origin `/api/registration/judge/*` endpoints,
 which verify the existing session and assignment on every request. Mutations
 require same-origin JSON, validate routine/block/criterion/maximum and write
-only allowlisted columns. Only the caller's scores, feedback, penalties and
-favorites are returned. Favorites retain the native multi-selection and legacy
+only allowlisted columns. Ordinary accounts receive only their assigned judge's
+scores, feedback, penalties and favorites; explicitly enabled selector accounts
+receive the existing regular judges of authorized events. Favorites retain the native multi-selection and legacy
 category compatibility. The legacy `/admin/puntuaciones` reader remains GET-only;
 the separately authorized admin workspace is documented in
 `judging-admin-workspace.md`.

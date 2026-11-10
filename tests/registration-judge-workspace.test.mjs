@@ -16,6 +16,210 @@ const criteria = [{ template_id: 'ballet', criterion_id: 1, max_score: 10 }, { t
 const row = (extra = {}) => ({ event_id: eventId, judge_id: judgeId, block_id: 'b1', routine_id: 'r1', device_id: 'browser-test', criterion_id: 1, value: 8, ...extra });
 const session = { user: { id: 'judge-user', name: 'Juez Web', role: 'judge' } };
 
+function allowSelection(f) {
+  f.env.JUDGING_SELECTABLE_JUDGE_USER_IDS = "judge-user";
+  f.data.judges.push(
+    {
+      event_id: eventId,
+      judge_id: "judge-two",
+      name: "Judge Two",
+      role: "judge",
+      assigned_block_ids: ["b2"],
+    },
+    {
+      event_id: eventId,
+      judge_id: "ati",
+      name: "Admin",
+      role: "admin",
+      assigned_block_ids: [],
+    },
+  );
+  f.data.scores.push(
+    row({ routine_id: "r3", block_id: "b2", judge_id: "judge-two", value: 5 }),
+    row({ judge_id: "ati", value: 10 }),
+  );
+}
+
+test("explicit selector access lists existing Levitate events and blocks without creating jury profiles", async (t) => {
+  const f = fixture(t);
+  allowSelection(f);
+  f.env.JUDGING_LEVITATE_EVENT_IDS += `,${otherEvent}`;
+  f.data.events.push({
+    id: otherEvent,
+    slug: "levitate-two",
+    name: "Levitate Two",
+    event_type: "event",
+  });
+  f.data.judges.push({
+    event_id: otherEvent,
+    judge_id: "other",
+    name: "Other",
+    role: "judge",
+    assigned_block_ids: [],
+  });
+  f.data.blocks.push({
+    event_id: otherEvent,
+    block_id: "b-other",
+    name: "Other block",
+  });
+  const response = await handleJudgeWorkspace(
+    f.request("session"),
+    f.env,
+    session,
+    { fetcher: f.fetcher },
+  );
+  const data = await response.json();
+  assert.equal(data.selectableJudges, true);
+  assert.equal(data.assignments.length, 2);
+  const first = data.assignments.find((a) => a.event.id === eventId);
+  assert.equal(
+    first.blocks.find((b) => b.block_id === "b1").routines.length,
+    2,
+  );
+  assert.equal(
+    first.blocks.find((b) => b.block_id === "b2").routines.length,
+    1,
+  );
+  assert.ok(f.calls.every((call) => call.method === "GET"));
+});
+test("selector bundles show the existing regular judges and their own recorded sheets, never admin scores", async (t) => {
+  const f = fixture(t);
+  allowSelection(f);
+  const response = await handleJudgeWorkspace(
+    f.request("bundle"),
+    f.env,
+    session,
+    { fetcher: f.fetcher },
+  );
+  const data = await response.json();
+  assert.deepEqual(
+    data.judges.map((j) => j.judge_id),
+    [judgeId, "judge-two"],
+  );
+  assert.deepEqual(
+    data.scores.map((s) => s.judge_id),
+    [judgeId, "judge-two"],
+  );
+  assert.equal(data.routines.length, 3);
+  assert.equal(data.blocks.length, 2);
+});
+test("selector saves bind to the chosen existing judge and enforce their block assignment", async (t) => {
+  const f = fixture(t);
+  allowSelection(f);
+  const score = row({
+    routine_id: "r3",
+    block_id: "b2",
+    judge_id: "judge-two",
+    value: 6,
+  });
+  await handleJudgeWorkspace(
+    f.request("scores", { judge: "judge-two", body: { rows: [score] } }),
+    f.env,
+    session,
+    { fetcher: f.fetcher },
+  );
+  const writes = () => f.calls.filter((c) => c.method === "POST");
+  assert.equal(writes().length, 1);
+  assert.equal(JSON.parse(writes()[0].body)[0].judge_id, "judge-two");
+  for (const input of [row(), row({ judge_id: "judge-two" })]) {
+    await assert.rejects(
+      handleJudgeWorkspace(
+        f.request("scores", { judge: "judge-two", body: { rows: [input] } }),
+        f.env,
+        session,
+        { fetcher: f.fetcher },
+      ),
+      (e) => e.statusCode === 403,
+    );
+  }
+  assert.equal(writes().length, 1);
+  await assert.rejects(
+    handleJudgeWorkspace(
+      f.request("scores", { body: { rows: [score] } }),
+      f.env,
+      session,
+      { fetcher: f.fetcher },
+    ),
+    (e) => e.statusCode === 400,
+  );
+});
+test("selector permission never grants admin, other brands or reserved identities", async (t) => {
+  const f = fixture(t);
+  allowSelection(f);
+  for (const judge of ["ati", "admin", "not-in-event"])
+    await assert.rejects(
+      handleJudgeWorkspace(
+        f.request("scores", {
+          judge,
+          body: { rows: [row({ judge_id: judge })] },
+        }),
+        f.env,
+        session,
+        { fetcher: f.fetcher },
+      ),
+      (e) => e.statusCode === 403,
+    );
+  await assert.rejects(
+    handleJudgeWorkspace(
+      f.request("bundle", { event: otherEvent }),
+      f.env,
+      session,
+      { fetcher: f.fetcher },
+    ),
+    (e) => e.statusCode === 403,
+  );
+  for (const role of ["admin", "academy"])
+    await assert.rejects(
+      handleJudgeWorkspace(
+        f.request("session"),
+        f.env,
+        { user: { ...session.user, role } },
+        { fetcher: f.fetcher },
+      ),
+      (e) => e.statusCode === 403,
+    );
+  assert.equal(f.calls.filter((c) => c.method === "POST").length, 0);
+});
+test("ordinary accounts cannot opt into selection and removing the server grant restores their assigned-only access", async (t) => {
+  const f = fixture(t);
+  allowSelection(f);
+  f.env.JUDGING_SELECTABLE_JUDGE_USER_IDS = "another-user";
+  const data = await (
+    await handleJudgeWorkspace(
+      f.request("bundle", { judge: "judge-two" }),
+      f.env,
+      session,
+      { fetcher: f.fetcher },
+    )
+  ).json();
+  assert.deepEqual(
+    data.judges.map((j) => j.judge_id),
+    [judgeId],
+  );
+  await assert.rejects(
+    handleJudgeWorkspace(
+      f.request("scores", {
+        judge: "judge-two",
+        body: {
+          selectableJudges: true,
+          rows: [row({ judge_id: "judge-two" })],
+        },
+      }),
+      f.env,
+      session,
+      { fetcher: f.fetcher },
+    ),
+    (e) => e.statusCode === 403,
+  );
+  const result = await (
+    await handleJudgeWorkspace(f.request("session"), f.env, session, {
+      fetcher: f.fetcher,
+    })
+  ).json();
+  assert.equal(result.selectableJudges, undefined);
+  assert.equal(result.assignments.length, 1);
+});
+
 function fixture(t) {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(readFileSync(new URL('../db/registration_d1_schema.sql', import.meta.url), 'utf8'));
@@ -53,10 +257,11 @@ function fixture(t) {
     for (const key of ['event_id', 'judge_id', 'routine_id', 'id']) {
       const filter = url.searchParams.get(key);
       if (filter?.startsWith('eq.')) rows = rows.filter(row => row[key] === filter.slice(3));
+      if (filter?.startsWith('in.(')) rows = rows.filter(row => filter.slice(4, -1).split(',').includes(row[key]));
     }
     return Response.json(rows);
   };
-  const request = (action, { body, event = eventId, origin = 'https://levitate.mx' } = {}) => new Request(`https://levitate.mx/api/registration/judge/${action}?event_id=${event}`, {
+  const request = (action, { body, event = eventId, origin = 'https://levitate.mx', judge } = {}) => new Request(`https://levitate.mx/api/registration/judge/${action}?event_id=${event}${judge ? `&judge_id=${judge}` : ''}`, {
     method: body ? 'POST' : 'GET', headers: body ? { origin, 'content-type': 'application/json' } : {}, ...(body ? { body: JSON.stringify(body) } : {}),
   });
   return { sqlite, env, data, calls, fetcher, request, password, setWriteStatus(value) { writeStatus = value; } };

@@ -1,5 +1,8 @@
 import { judgingConnection, readJudgingRows } from "./judging-reader.js";
-import { requireJudgingEvent } from "./judging-authority.js";
+import {
+  requireJudgingEvent,
+  levitateJudgingEventIds,
+} from "./judging-authority.js";
 
 const routineColumns =
   "event_id,routine_id,block_id,block,block_title,sort_order,name,academy,division,genre,level,category,choreographer,state,scheduled_time,duration,participant";
@@ -8,11 +11,12 @@ const orders = {
   routines: "sort_order.asc,routine_id.asc",
   criteria_templates: "sort_order.asc,template_id.asc",
   criteria: "template_id.asc,sort_order.asc,criterion_id.asc",
-  scores: "routine_id.asc,criterion_id.asc",
-  feedback: "routine_id.asc",
-  penalties: "routine_id.asc",
-  routine_favorite_votes: "block_id.asc,routine_id.asc,category.asc",
-  routine_favorites: "block_id.asc,category.asc",
+  scores: "routine_id.asc,judge_id.asc,criterion_id.asc",
+  feedback: "routine_id.asc,judge_id.asc",
+  penalties: "routine_id.asc,judge_id.asc",
+  routine_favorite_votes:
+    "block_id.asc,routine_id.asc,judge_id.asc,category.asc",
+  routine_favorites: "block_id.asc,judge_id.asc,category.asc",
 };
 const columns = {
   blocks: "event_id,block_id,name,title,sort_order,is_active",
@@ -182,18 +186,27 @@ async function scopeFor(env, rows, eventId, fetcher) {
 }
 
 async function readBundle(scope) {
+  const permittedJudges = new Set(
+    (scope.selectableJudges || [scope.judge]).map((judge) => judge.judge_id),
+  );
   const entries = await Promise.all(
     Object.entries(columns).map(async ([table, select]) => {
       const rows = await scope.read(
         table,
         select,
-        ownTables.has(table) ? { judge_id: `eq.${scope.judgeId}` } : {},
+        ownTables.has(table)
+          ? {
+              judge_id: scope.selectableJudges
+                ? `in.(${[...permittedJudges].join(",")})`
+                : `eq.${scope.judgeId}`,
+            }
+          : {},
       );
       if (
         rows.some(
           (row) =>
             row.event_id !== scope.eventId ||
-            (ownTables.has(table) && row.judge_id !== scope.judgeId),
+            (ownTables.has(table) && !permittedJudges.has(row.judge_id)),
         )
       ) {
         fail(
@@ -219,7 +232,7 @@ async function readBundle(scope) {
   return {
     event: scope.event,
     ...data,
-    judges: [scope.judge],
+    judges: scope.selectableJudges || [scope.judge],
     favorites: [...data.routine_favorite_votes, ...data.routine_favorites],
   };
 }
@@ -387,6 +400,15 @@ export async function handleJudgeWorkspace(
 ) {
   const url = new URL(request.url),
     action = url.pathname.split("/").pop();
+  if (session?.user?.role !== "judge")
+    fail("judge_forbidden", "Esta cuenta no tiene acceso de juez.", 403);
+  const canSelect = String(env.JUDGING_SELECTABLE_JUDGE_USER_IDS || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(session.user.id);
+  if (canSelect)
+    return handleSelectableWorkspace(request, env, session, action, fetcher);
   const grants = await assignments(env, session);
   if (action === "session" && request.method === "GET") {
     const scopes = await Promise.all(
@@ -404,6 +426,189 @@ export async function handleJudgeWorkspace(
     fail("method_not_allowed", "Método no permitido.", 405);
   const eventId = url.searchParams.get("event_id");
   const scope = await scopeFor(env, grants, eventId, fetcher);
+  return handleScopedJudgeAction(request, scope, action, fetcher);
+}
+
+async function selectableScope(env, eventId, fetcher, judgeId = null) {
+  eventId = await requireJudgingEvent(env, eventId);
+  const config = judgingConnection(env);
+  const rows = await readJudgingRows(
+    config,
+    "judges",
+    {
+      select:
+        "event_id,judge_id,name,role,hero_image_name,photo_data,assigned_block_ids",
+      event_id: `eq.${eventId}`,
+      order: "sort_order.asc,judge_id.asc",
+    },
+    fetcher,
+  );
+  if (rows.some((row) => row.event_id !== eventId))
+    fail(
+      "judge_invalid_response",
+      "No pudimos verificar los jueces del evento.",
+      502,
+    );
+  const judges = rows.filter(
+    (row) => row.role === "judge" && !["ati", "admin"].includes(row.judge_id),
+  );
+  if (
+    judges.some(
+      (row) =>
+        !validId(row.judge_id) ||
+        !Array.isArray(row.assigned_block_ids) ||
+        row.assigned_block_ids.some((id) => !validId(id)),
+    )
+  ) {
+    fail(
+      "judge_invalid_assignment",
+      "El administrador debe revisar los jueces y bloques del programa.",
+      403,
+    );
+  }
+  const judge = judgeId
+    ? judges.find((row) => row.judge_id === judgeId)
+    : judges[0];
+  if (!judge)
+    fail(
+      "judge_assignment_unavailable",
+      "El juez no esta disponible para este evento.",
+      403,
+    );
+  const scope = await scopeFor(
+    env,
+    [{ event_id: eventId, judge_id: judge.judge_id, block_ids_json: "[]" }],
+    eventId,
+    fetcher,
+  );
+  return { ...scope, availableJudges: judges };
+}
+
+async function handleSelectableWorkspace(
+  request,
+  env,
+  session,
+  action,
+  fetcher,
+) {
+  const url = new URL(request.url);
+  if (action === "session" && request.method === "GET") {
+    const ids = await levitateJudgingEventIds(env),
+      config = judgingConnection(env);
+    const rows = await readJudgingRows(
+      config,
+      "events",
+      {
+        select: "id,slug,name,source_name,is_active,event_type",
+        id: `in.(${ids.join(",")})`,
+        order: "is_active.desc,created_at.desc,id.asc",
+      },
+      fetcher,
+    );
+    if (rows.some((event) => !ids.includes(event.id)))
+      fail(
+        "judge_invalid_response",
+        "No pudimos verificar el catalogo de Levitate.",
+        502,
+      );
+    const events = rows.filter((event) =>
+      [null, undefined, "event"].includes(event.event_type),
+    );
+    const programs = new Map(
+      events.map((event) => [event.id, { event, judges: [], blocks: [] }]),
+    );
+    const read = async (table, select, order) => {
+      if (!programs.size) return [];
+      const values = await readJudgingRows(
+        config,
+        table,
+        { select, event_id: `in.(${[...programs.keys()].join(",")})`, order },
+        fetcher,
+      );
+      if (values.some((row) => !programs.has(row.event_id)))
+        fail(
+          "judge_invalid_response",
+          "No pudimos verificar los programas de Levitate.",
+          502,
+        );
+      return values;
+    };
+    const [judges, blocks, routines] = await Promise.all([
+      read(
+        "judges",
+        "event_id,judge_id,name,role,assigned_block_ids",
+        "event_id.asc,sort_order.asc,judge_id.asc",
+      ),
+      read(
+        "blocks",
+        columns.blocks,
+        "event_id.asc,sort_order.asc,block_id.asc",
+      ),
+      read(
+        "routines",
+        "event_id,routine_id,block_id,block,name,academy,division,genre,level,category",
+        "event_id.asc,sort_order.asc,routine_id.asc",
+      ),
+    ]);
+    for (const judge of judges) {
+      if (judge.role !== "judge" || ["ati", "admin"].includes(judge.judge_id))
+        continue;
+      if (
+        !validId(judge.judge_id) ||
+        !Array.isArray(judge.assigned_block_ids) ||
+        judge.assigned_block_ids.some((id) => !validId(id))
+      )
+        fail(
+          "judge_invalid_assignment",
+          "El administrador debe revisar los bloques de los jueces.",
+          403,
+        );
+      programs.get(judge.event_id).judges.push(judge);
+    }
+    const byBlock = new Map();
+    for (const routine of routines) {
+      const key = JSON.stringify([routine.event_id, routine.block_id]);
+      if (!byBlock.has(key)) byBlock.set(key, []);
+      byBlock.get(key).push(routine);
+    }
+    for (const block of blocks)
+      programs
+        .get(block.event_id)
+        .blocks.push({
+          ...block,
+          routines:
+            byBlock.get(JSON.stringify([block.event_id, block.block_id])) || [],
+        });
+    const catalog = [...programs.values()]
+      .filter((program) => program.judges.length)
+      .map((program) => ({
+        event: program.event,
+        judge: program.judges[0],
+        blocks: program.blocks,
+      }));
+    return json({
+      user: { id: session.user.id, name: session.user.name },
+      selectableJudges: true,
+      assignments: catalog,
+    });
+  }
+  if (request.method !== (action === "bundle" ? "GET" : "POST"))
+    fail("method_not_allowed", "Metodo no permitido.", 405);
+  const judgeId = url.searchParams.get("judge_id");
+  if (action !== "bundle" && !validId(judgeId))
+    fail("judge_invalid_judge", "Selecciona un juez antes de guardar.");
+  const eventId = url.searchParams.get('event_id');
+  const scope = action === 'bundle'
+    ? await selectableScope(env,eventId,fetcher,judgeId)
+    : await scopeFor(env,[{event_id:eventId,judge_id:judgeId,block_ids_json:'[]'}],eventId,fetcher);
+  if (action === "bundle") {
+    return handleScopedJudgeAction(
+      request,
+      { ...scope, assigned: [], selectableJudges: scope.availableJudges },
+      action,
+      fetcher,
+    );
+  }
   return handleScopedJudgeAction(request, scope, action, fetcher);
 }
 
