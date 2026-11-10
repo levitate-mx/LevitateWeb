@@ -339,7 +339,16 @@ function configureMediaDriveFixture(f) {
   });
 }
 
-function mockMediaDrive(t, { folderResponse, tokenStatus = 200 } = {}) {
+function configurePhotoDriveFixture(f) {
+  Object.assign(f.env, {
+    PARTICIPANT_PHOTO_DRIVE_OAUTH_CLIENT_ID: 'private-photo-client-id',
+    PARTICIPANT_PHOTO_DRIVE_OAUTH_CLIENT_SECRET: 'private-photo-client-secret',
+    PARTICIPANT_PHOTO_DRIVE_OAUTH_REFRESH_TOKEN: 'private-photo-refresh-token',
+    PARTICIPANT_PHOTO_DRIVE_ACCOUNT_EMAIL: 'ati.levitatemx@gmail.com',
+  });
+}
+
+function mockMediaDrive(t, { folderResponse, tokenStatus = 200, accountEmail = 'evento@example.test' } = {}) {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (input, options = {}) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -355,7 +364,7 @@ function mockMediaDrive(t, { folderResponse, tokenStatus = 200 } = {}) {
     assert.equal(options.headers.authorization, 'Bearer private-drive-access-token');
     assert.equal(options.redirect, 'manual');
     if (url.pathname === '/drive/v3/about') return Response.json({
-      user: { displayName: 'Cuenta del evento', emailAddress: 'evento@example.test' }, storageQuota: { usage: '1000' },
+      user: { displayName: 'Cuenta del evento', emailAddress: accountEmail }, storageQuota: { usage: '1000' },
     });
     if (url.pathname.startsWith('/drive/v3/files/')) {
       assert.equal(url.searchParams.get('supportsAllDrives'), 'true');
@@ -367,6 +376,97 @@ function mockMediaDrive(t, { folderResponse, tokenStatus = 200 } = {}) {
   });
   return calls;
 }
+
+test('dedicated photo Drive diagnostics use Ati authorization without changing the music credentials', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'photo-drive-dedicated', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  configurePhotoDriveFixture(f);
+  const before = { ...f.env };
+  const calls = mockMediaDrive(t, { accountEmail: 'ati.levitatemx@gmail.com' });
+  const start = f.db.runtimeQueries.length;
+  const { json, headers } = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(json.connection.status, 'connected');
+  assert.equal(json.connection.validated, true);
+  assert.equal(json.connection.account.emailAddress, 'ati.levitatemx@gmail.com');
+  assert.equal(json.connection.folder, null);
+  assert.equal(calls.length, 2);
+  const token = calls.find(call => call.url.href === 'https://oauth2.googleapis.com/token');
+  assert.equal(token.options.body.get('client_id'), 'private-photo-client-id');
+  assert.equal(token.options.body.get('client_secret'), 'private-photo-client-secret');
+  assert.equal(token.options.body.get('refresh_token'), 'private-photo-refresh-token');
+  assert.deepEqual(f.env, before, 'photo diagnostics must not replace or mutate any music configuration');
+  assert.ok(f.db.runtimeQueries.slice(start).every(sql => /^\s*SELECT/.test(sql)));
+  assert.equal(headers.get('cache-control'), 'private, no-store');
+  assert.equal(headers.get('vary'), 'Cookie');
+  assert.doesNotMatch(JSON.stringify(json), /private-photo-|private-drive-|existing_music_folder|refreshToken|clientSecret|Bearer/);
+});
+
+test('a partial photo Drive connection fails closed instead of using valid music authorization', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'photo-drive-partial', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  configurePhotoDriveFixture(f);
+  delete f.env.PARTICIPANT_PHOTO_DRIVE_OAUTH_REFRESH_TOKEN;
+  f.db.sqlite.prepare(`INSERT INTO registration_media_drive_settings(key,folder_id,folder_name)
+    VALUES ('photo_video','previous_photo_folder','Existing photos')`).run();
+  const before = f.db.sqlite.prepare('SELECT * FROM registration_media_drive_settings').get();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw new Error('No authorization may be contacted'); });
+  const { json } = await f.request('/admin/media-drive/connection', { cookie: admin.cookie });
+  assert.equal(json.connection.status, 'missing_configuration');
+  assert.equal(json.connection.validated, false);
+  await f.request('/admin/media-drive/folder', { method: 'POST', cookie: admin.cookie,
+    body: { folder: 'new_photo_video_folder' }, status: 400 });
+  assert.equal(calls, 0, 'a partial Ati connection must never refresh the working music token');
+  assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_media_drive_settings').get(), before);
+  assert.equal(f.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN, 'private-drive-refresh-token');
+  assert.doesNotMatch(JSON.stringify(json), /private-photo-|private-drive-|refreshToken|clientSecret/);
+});
+
+test('dedicated photo Drive refuses the wrong Google account without replacing the linked folder', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'photo-drive-wrong-account', { role: 'admin' });
+  configureMediaDriveFixture(f);
+  configurePhotoDriveFixture(f);
+  f.db.sqlite.prepare(`INSERT INTO registration_media_drive_settings(key,folder_id,folder_name)
+    VALUES ('photo_video','previous_photo_folder','Existing photos')`).run();
+  const before = f.db.sqlite.prepare('SELECT * FROM registration_media_drive_settings').get();
+  const calls = mockMediaDrive(t, { accountEmail: 'musica.levitate@gmail.com' });
+  const { json, headers } = await f.request('/admin/media-drive/folder', { method: 'POST', cookie: admin.cookie,
+    body: { folder: 'new_photo_video_folder' }, status: 503 });
+  assert.equal(json.error.code, 'portal_storage_wrong_account');
+  assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM registration_media_drive_settings').get(), before);
+  assert.equal(calls[0].options.body.get('refresh_token'), 'private-photo-refresh-token');
+  assert.ok(calls.filter(call => call.url.hostname === 'www.googleapis.com').every(call => call.options.method === 'GET'));
+  assert.equal(headers.get('cache-control'), 'private, no-store');
+  assert.equal(headers.get('vary'), 'Cookie');
+  assert.doesNotMatch(JSON.stringify(json), /private-photo-|private-drive-|refreshToken|clientSecret/);
+});
+
+test('configured Ati photo routes deny anonymous, academy, judge and judging-admin access before Google or folder reads', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'photo-drive-denied-academy');
+  const judge = await seedAcademy(f, 'photo-drive-denied-judge');
+  const judgingAdmin = await seedAcademy(f, 'photo-drive-denied-judging-admin');
+  f.db.sqlite.prepare('UPDATE registration_users SET is_judge=1 WHERE id=?').run(judge.userId);
+  f.db.sqlite.prepare('UPDATE registration_users SET is_judging_admin=1 WHERE id=?').run(judgingAdmin.userId);
+  configureMediaDriveFixture(f);
+  configurePhotoDriveFixture(f);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw new Error('Must authorize before Google'); });
+  const start = f.db.runtimeQueries.length;
+  for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403], [judge.cookie, 403], [judgingAdmin.cookie, 403]]) {
+    for (const [path, method, body] of [
+      ['/admin/media-drive/connection', 'GET', undefined],
+      ['/admin/media-drive/folder', 'POST', { folder: 'new_photo_video_folder' }],
+    ]) {
+      await f.request(path, { cookie, status, method, body });
+    }
+  }
+  assert.equal(calls, 0);
+  assert.ok(f.db.runtimeQueries.slice(start).every(sql => !/registration_media_drive_settings/.test(sql)));
+});
 
 test('media Drive validates existing authorization and keeps the music folder separate', async t => {
   const f = await fixture(t);
@@ -459,6 +559,7 @@ test('photo/video folder configuration cannot change the existing music upload d
   const academy = await seedAcademy(f, 'media-drive-music');
   const { dance } = await createDance(f, academy);
   configureMediaDriveFixture(f);
+  configurePhotoDriveFixture(f);
   f.db.sqlite.prepare(`INSERT INTO registration_media_drive_settings(key,folder_id,folder_name)
     VALUES ('photo_video','new_photo_video_folder','Fotos y videos')`).run();
   const calls = [];
@@ -467,10 +568,13 @@ test('photo/video folder configuration cannot change the existing music upload d
     calls.push(url.href);
     if (url.href === 'https://oauth2.googleapis.com/token') {
       assert.equal(options.body.get('client_id'), 'private-drive-client-id');
+      assert.equal(options.body.get('client_secret'), 'private-drive-client-secret');
+      assert.equal(options.body.get('refresh_token'), 'private-drive-refresh-token');
       assert.equal(options.redirect, 'manual');
       return Response.json({ access_token: 'private-drive-access-token' });
     }
     if (options.method === 'POST' && url.pathname === '/upload/drive/v3/files') {
+      assert.equal(options.headers.authorization, 'Bearer private-drive-access-token');
       assert.deepEqual(JSON.parse(options.body).parents, ['existing_music_folder']);
       return new Response(null, { status: 200, headers: { location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=fixture' } });
     }
@@ -486,6 +590,7 @@ test('photo/video folder configuration cannot change the existing music upload d
   assert.equal(calls.length, 3);
   assert.equal(f.db.sqlite.prepare('SELECT drive_file_id FROM registration_music_uploads WHERE dance_id = ?').get(dance.id).drive_file_id, 'fixture-private-music-file');
   assert.equal(f.db.sqlite.prepare("SELECT folder_id FROM registration_media_drive_settings WHERE key='photo_video'").get().folder_id, 'new_photo_video_folder');
+  assert.equal(f.env.PARTICIPANT_PHOTO_DRIVE_OAUTH_REFRESH_TOKEN, 'private-photo-refresh-token');
   assert.doesNotMatch(JSON.stringify(json), /private-drive-|fixture-private-music-file|drive\.google\.com/);
 });
 

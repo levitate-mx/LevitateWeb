@@ -175,6 +175,23 @@ test('ambiguous participant names require an existing folder binding and ambiguo
   const ambiguous = await unique.run(); assert.equal(ambiguous.status, 'unavailable'); assert.equal(unique.calls.processing, 0);
 });
 
+test('dance-scoped hierarchy permits identical participant names while database membership still limits the discovered dances', async t => {
+  const f = await fixture(t);
+  f.db.sqlite.exec("UPDATE registration_participants SET full_name='ALÍSON   PRUEBA' WHERE id='person-b'");
+  const legacy = f.options.getDiscovery;
+  f.options.getDiscovery = async () => ({ ...await legacy(), identityScope: 'dance' });
+  const result = await f.run();
+  assert.equal(result.imported, 1); assert.equal(f.calls.discovery.length, 1);
+  assert.deepEqual(f.calls.discovery[0].dances, [{ id: 'dance-a', title: 'Vuelo' }]);
+  assert.equal(f.rows('participant_portal_assets').length, 1);
+  assert.equal(f.rows('participant_portal_drive_files')[0].dance_id, 'dance-a');
+  f.expire();
+  const outsider = await f.run({ participantId: 'person-b' });
+  assert.equal(outsider.imported, 0);
+  assert.deepEqual(f.calls.discovery[1].dances, [{ id: 'dance-b', title: 'Otra pieza' }]);
+  assert.equal(f.rows('participant_portal_assets').length, 1);
+});
+
 test('a manually paused routine keeps its publication block and all existing score fields', async t => {
   const f = await fixture(t);
   f.db.sqlite.exec(`INSERT INTO participant_portal_routines(id,event_id,dance_id,status,result_json,judging_json,photos_published,publication_blocked,revision)

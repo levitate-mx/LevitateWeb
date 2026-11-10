@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { PARTICIPANT_PHOTO_ACCOUNT, PARTICIPANT_PHOTO_HIERARCHY } from "./participant-drive-hierarchy.js";
 
 const api = "https://www.googleapis.com/drive/v3";
 const uploadApi = "https://www.googleapis.com/upload/drive/v3/files";
@@ -82,8 +83,10 @@ function thumbnailUrl(value, resize = false) {
  * and supplies identities and membership loaded from its database, never HTTP
  * query values. No method returns an upstream URL or credential to a client.
  */
-export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, expectedEmail, fetchImpl = fetch, timeoutMs = 10000 } = {}) {
+export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, expectedEmail, fetchImpl = fetch, timeoutMs = 10000, layout } = {}) {
   const owner = email(expectedEmail);
+  const hierarchy = layout === "academy_dance";
+  if ((layout !== undefined && !hierarchy) || (hierarchy && owner !== PARTICIPANT_PHOTO_ACCOUNT)) throw fail("portal_storage_wrong_account", "La conexión de fotos debe pertenecer a Ati Levitate.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner) || typeof getConfig !== "function" || typeof getAccessToken !== "function") throw fail();
   let config;
   try { config = await getConfig(); } catch { throw fail(); }
@@ -134,23 +137,45 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     if (email(value.user?.emailAddress) !== owner) throw fail("portal_storage_wrong_account", "La conexión debe pertenecer a la cuenta de Levitate configurada.");
     return value;
   });
-  const rootFolder = async () => {
+  const rootFolder = async context => {
     await verifyAccount();
-    const result = await list(`'root' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and (appProperties has { key='levitatePhotoAlbum' and value='demo_root_v1' } or appProperties has { key='levitatePhotoAlbum' and value='source_root_v1' })`, "id", 2);
+    const marker = hierarchy
+      ? `appProperties has { key='levitatePhotoAlbum' and value='${PARTICIPANT_PHOTO_HIERARCHY.root}' } and appProperties has { key='levitateEventId' and value='${context.eventId}' }`
+      : "(appProperties has { key='levitatePhotoAlbum' and value='demo_root_v1' } or appProperties has { key='levitatePhotoAlbum' and value='source_root_v1' })";
+    const result = await list(`'root' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and ${marker}`, "id", 2);
     if (result.nextPageToken || result.files.length > 1) throw fail("portal_photo_source_ambiguous", "Hay más de una carpeta de fotos configurada. Revisa la asociación.", 409);
     if (!result.files.length) return null;
     const root = await metadata(result.files[0].id, baseFields);
-    privateItem(root, owner);
-    if (root.mimeType !== folderMime || !roots.has(root.appProperties?.levitatePhotoAlbum) || root.capabilities?.canListChildren !== true) throw fail();
+    validateRoot(root, undefined, context);
     return root;
   };
-  const validateRoot = (value, expectedParent) => {
+  const validateRoot = (value, expectedParent, context) => {
     privateItem(value, owner, expectedParent);
-    if (value.mimeType !== folderMime || !roots.has(value.appProperties?.levitatePhotoAlbum) || value.capabilities?.canListChildren !== true) throw fail();
+    const properties = value.appProperties || {};
+    if (value.mimeType !== folderMime || value.capabilities?.canListChildren !== true
+      || (hierarchy ? properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.root || properties.levitateEventId !== context?.eventId
+        || properties.levitateAcademyId !== undefined || properties.levitateDanceId !== undefined || properties.levitateParticipantId !== undefined || properties.demo !== undefined
+        : !roots.has(properties.levitatePhotoAlbum))) throw fail();
+  };
+  const validateAcademy = (value, root, context) => {
+    privateItem(value, owner, root.id);
+    const properties = value.appProperties || {};
+    if (value.mimeType !== folderMime || value.capabilities?.canListChildren !== true
+      || properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.academy || properties.levitateEventId !== context.eventId
+      || properties.levitateAcademyId !== context.academyId || properties.levitateDanceId !== undefined
+      || properties.levitateParticipantId !== undefined || properties.demo !== undefined) throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta academia.", 409);
   };
   const validateAlbum = (album, root, context, dance, exactName = true) => {
     privateItem(album, owner, root.id);
     const properties = album.appProperties || {}, demo = properties.demo === "true";
+    if (hierarchy) {
+      if (album.mimeType !== folderMime || album.capabilities?.canListChildren !== true
+        || properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.album || properties.levitateEventId !== context.eventId
+        || properties.levitateAcademyId !== context.academyId || properties.levitateDanceId !== dance.id
+        || properties.levitateParticipantId !== undefined || properties.demo !== undefined) throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta coreografía.", 409);
+      text(album.name, 1200);
+      return { demo: false, trusted: true };
+    }
     if (album.mimeType !== folderMime || !albums.has(properties.levitatePhotoAlbum) || album.capabilities?.canListChildren !== true
       || properties.levitateEventId !== context.eventId || properties.levitateDanceId !== dance.id
       || (properties.levitateParticipantId && properties.levitateParticipantId !== context.participantId)
@@ -161,10 +186,13 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     if (exactName && key(unlabelled) !== key(expected)) throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta participación.", 409);
     return { demo, trusted: properties.levitateParticipantId === context.participantId && properties.levitateAcademyId === context.academyId };
   };
-  const validatePhoto = (photo, albumId) => {
+  const validatePhoto = (photo, albumId, context, dance) => {
     privateItem(photo, owner, albumId);
     if (!imageTypes.has(photo.mimeType) || photo.capabilities?.canDownload !== true
       || photo.appProperties?.watermarkVersion || photo.appProperties?.levitatePhotoAlbum === "demo_photo_v1") throw fail();
+    if (hierarchy && [
+      ["levitateEventId", context?.eventId], ["levitateAcademyId", context?.academyId], ["levitateDanceId", dance?.id],
+    ].some(([key, expected]) => photo.appProperties?.[key] !== undefined && photo.appProperties[key] !== expected)) throw fail("portal_photo_source_mismatch", "La foto no corresponde a esta coreografía.", 409);
     dimensions(photo);
     contentSize(photo);
     revision(photo);
@@ -197,18 +225,28 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     }
   };
   const discover = async input => {
-    const context = scope(input), root = await rootFolder();
+    const context = scope(input), root = await rootFolder(context);
     if (!root || !context.dances.length) return { albums: [] };
-    const folders = await list(`'${root.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}'`);
+    let albumParent = root;
+    if (hierarchy) {
+      const academies = await list(`'${root.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and appProperties has { key='levitatePhotoAlbum' and value='${PARTICIPANT_PHOTO_HIERARCHY.academy}' } and appProperties has { key='levitateEventId' and value='${context.eventId}' } and appProperties has { key='levitateAcademyId' and value='${context.academyId}' }`, "id", 2);
+      if (academies.nextPageToken || academies.files.length > 1) throw fail("portal_photo_source_ambiguous", "Hay dos carpetas para la misma academia. Revisa la asociación.", 409);
+      if (!academies.files.length) return { albums: [] };
+      albumParent = await metadata(academies.files[0].id, baseFields);
+      validateAcademy(albumParent, root, context);
+    }
+    const folders = await list(`'${albumParent.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}'`);
     if (folders.nextPageToken) throw fail("portal_photo_source_ambiguous", "Hay muchas carpetas de fotos. Revisa la asociación antes de continuar.", 409);
     const result = [];
     for (const dance of context.dances) {
       const binding = context.knownBindings instanceof Map ? context.knownBindings.get(dance.id) : context.knownBindings?.[dance.id];
-      const boundId = typeof binding === "string" ? binding : binding?.folderId;
+      const boundId = hierarchy ? undefined : typeof binding === "string" ? binding : binding?.folderId;
       if (boundId !== undefined) identifier(boundId);
       const expected = key(`${dance.title} · ${context.participantName} · ${context.academyName}`);
       const candidates = folders.files.filter(folder => {
         const properties = folder.appProperties || {};
+        if (hierarchy) return properties.levitatePhotoAlbum === PARTICIPANT_PHOTO_HIERARCHY.album
+          && properties.levitateEventId === context.eventId && properties.levitateAcademyId === context.academyId && properties.levitateDanceId === dance.id;
         if (properties.levitateEventId !== context.eventId || properties.levitateDanceId !== dance.id
           || !albums.has(properties.levitatePhotoAlbum) || (properties.demo === "true" && !context.adminPreview)) return false;
         const name = typeof folder.name === "string" ? folder.name : "";
@@ -217,20 +255,22 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
       if (candidates.length > 1) throw fail("portal_photo_source_ambiguous", "Hay dos carpetas para la misma participación. Revisa la asociación.", 409);
       if (!candidates.length) continue;
       const album = await metadata(candidates[0].id, baseFields);
-      const albumState = validateAlbum(album, root, context, dance, !boundId);
+      const albumState = validateAlbum(album, albumParent, context, dance, !boundId);
       const images = await list(`'${album.id}' in parents and 'me' in owners and trashed = false and (mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp')`, fileFields, 100);
       const photos = [];
       for (const listed of images.files) {
         if (listed.appProperties?.watermarkVersion || listed.appProperties?.levitatePhotoAlbum === "demo_photo_v1") continue;
-        validatePhoto(listed, album.id);
+        validatePhoto(listed, album.id, context, dance);
         const expectedRevision = revision(listed);
         photos.push({ id: listed.id, revision: expectedRevision, name: text(listed.name, 1000), mimeType: listed.mimeType, ...dimensions(listed),
           read: async () => {
             const freshRoot = await metadata(root.id, baseFields);
-            validateRoot(freshRoot, root.parents[0]);
-            validateAlbum(await metadata(album.id, baseFields), freshRoot, context, dance, !boundId);
+            validateRoot(freshRoot, root.parents[0], context);
+            const freshParent = hierarchy ? await metadata(albumParent.id, baseFields) : freshRoot;
+            if (hierarchy) validateAcademy(freshParent, freshRoot, context);
+            validateAlbum(await metadata(album.id, baseFields), freshParent, context, dance, !boundId);
             const current = await metadata(listed.id);
-            validatePhoto(current, album.id);
+            validatePhoto(current, album.id, context, dance);
             if (revision(current) !== expectedRevision) throw fail("portal_photo_source_changed", "La foto cambió mientras se preparaba. Vuelve a consultar el pasaporte.", 409);
             const access = await token();
             const loaded = await timebox(async signal => {
@@ -259,11 +299,12 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
               return { bytes, contentType, sourceKind: "original" };
             });
             const after = await metadata(listed.id);
-            validatePhoto(after, album.id);
+            validatePhoto(after, album.id, context, dance);
             if (revision(after) !== expectedRevision) throw fail("portal_photo_source_changed", "La foto cambió mientras se preparaba. Vuelve a consultar el pasaporte.", 409);
-            validateAlbum(await metadata(album.id, baseFields), freshRoot, context, dance, !boundId);
+            validateAlbum(await metadata(album.id, baseFields), freshParent, context, dance, !boundId);
+            if (hierarchy) validateAcademy(await metadata(albumParent.id, baseFields), freshRoot, context);
             const finalRoot = await metadata(root.id, baseFields);
-            validateRoot(finalRoot, root.parents[0]);
+            validateRoot(finalRoot, root.parents[0], context);
             return loaded;
           } });
       }
@@ -273,6 +314,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
   };
 
   const prepareDemoSource = async input => {
+    if (hierarchy) throw fail("portal_photo_source_invalid", "La preparación de prueba anterior usa únicamente su conexión original.", 400);
     if (!input || typeof input !== "object" || Array.isArray(input)) throw fail("portal_photo_source_invalid", "Revisa los datos de la foto de prueba.", 400);
     const context = scope({ ...input, adminPreview: true, dances: [{ id: input.danceId, title: input.danceTitle }] });
     const dance = context.dances[0], bytes = input.bytes;
@@ -337,5 +379,5 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     } catch { /* Google may omit its UI link; the verified folder ID remains. */ }
     return { folderId: album.id, folderName: finalAlbum.name, folderUrl, accountEmail: owner, sourceId: source.id, revision: revision(source) };
   };
-  return { discover, prepareDemoSource };
+  return { discover, prepareDemoSource, identityScope: hierarchy ? "dance" : "participant" };
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { getParticipantDriveDiscovery } from "../worker/participant-drive-discovery.js";
+import { PARTICIPANT_PHOTO_ACCOUNT } from "../worker/participant-drive-hierarchy.js";
 
 const owner = "photos@example.test", secret = "SYNTHETIC_PRIVATE_DRIVE_TOKEN";
 const rootId = "photo_root_00000001", albumId = "photo_album_0000001", sourceId = "photo_source_000001";
@@ -19,7 +20,7 @@ function item(id, parent, extra = {}) {
     capabilities: { canDownload: true, canListChildren: true, canAddChildren: true }, ...extra };
 }
 const publicMetadata = value => { const { bytes, ...metadata } = value; return structuredClone(metadata); };
-function fixture({ demo = false, intercept, aboutOwner = owner } = {}) {
+function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hierarchy ? PARTICIPANT_PHOTO_ACCOUNT : owner } = {}) {
   const files = new Map(), calls = [], sessions = new Map();
   const state = { files, intercept, next: 0, tokenCalls: 0, thumbnailBytes, quota: { limit: "15000000000", usage: "1000" } };
   files.set(rootId, item(rootId, "my_drive_root_000001", { appProperties: { levitatePhotoAlbum: demo ? "demo_root_v1" : "source_root_v1", ...(demo ? { demo: "true" } : {}) } }));
@@ -28,6 +29,18 @@ function fixture({ demo = false, intercept, aboutOwner = owner } = {}) {
   files.set(sourceId, item(sourceId, albumId, { name: "Performance.jpg", mimeType: "image/jpeg", size: String(sourceBytes.length),
     imageMediaMetadata: { width: 2000, height: 3000, rotation: 0 }, md5Checksum: hash(sourceBytes, "md5"),
     version: "1", thumbnailLink: "https://lh3.googleusercontent.com/drive-storage/synthetic-thumbnail=s220", bytes: sourceBytes, appProperties: {} }));
+  const academyFolderId = "academy_folder_000001";
+  if (hierarchy) {
+    files.get(rootId).appProperties = { levitatePhotoAlbum: "source_root_v2", levitateEventId: context.eventId };
+    files.set(academyFolderId, item(academyFolderId, rootId, { name: context.academyName,
+      appProperties: { levitatePhotoAlbum: "academy_v2", levitateEventId: context.eventId, levitateAcademyId: context.academyId } }));
+    Object.assign(files.get(albumId), { name: context.dances[0].title, parents: [academyFolderId],
+      appProperties: { levitatePhotoAlbum: "source_album_v2", levitateEventId: context.eventId, levitateAcademyId: context.academyId, levitateDanceId: context.dances[0].id } });
+    for (const file of files.values()) {
+      file.owners = [{ emailAddress: PARTICIPANT_PHOTO_ACCOUNT }];
+      file.permissions = [{ type: "user", role: "owner", emailAddress: PARTICIPANT_PHOTO_ACCOUNT }];
+    }
+  }
   const fetchImpl = async (input, options) => {
     const url = new URL(input), call = { url, options }; calls.push(call);
     assert.equal(options.redirect, "manual"); assert.ok(options.signal instanceof AbortSignal);
@@ -88,9 +101,10 @@ function fixture({ demo = false, intercept, aboutOwner = owner } = {}) {
     }
     throw new Error(`Unexpected fixture route ${url.pathname}`);
   };
-  const reader = () => getParticipantDriveDiscovery({ expectedEmail: owner, getConfig: () => ({ authType: "oauth_refresh_token" }),
+  const reader = () => getParticipantDriveDiscovery({ expectedEmail: hierarchy ? PARTICIPANT_PHOTO_ACCOUNT : owner,
+    ...(hierarchy ? { layout: "academy_dance" } : {}), getConfig: () => ({ authType: "oauth_refresh_token" }),
     getAccessToken: async (config, { signal }) => { assert.ok(signal instanceof AbortSignal); state.tokenCalls++; return secret; }, fetchImpl });
-  return { files, calls, state, reader };
+  return { files, calls, state, reader, academyFolderId };
 }
 const imageReads = f => f.calls.filter(({ url }) => url.hostname.includes("googleusercontent") || url.searchParams.get("alt") === "media");
 const writes = f => f.calls.filter(({ options }) => options.method !== "GET");
@@ -241,4 +255,65 @@ test("demo preparation refuses another participant binding or mismatching source
   const g = fixture({ demo: true });
   await assert.rejects((await g.reader()).prepareDemoSource({ ...input, sha256: "a".repeat(64) }), controlled("portal_photo_source_invalid", 400));
   assert.equal(g.calls.length, 0);
+});
+
+test("academy/dance hierarchy identifies albums by database IDs for every member, independent of names and legacy bindings", async () => {
+  const f = fixture({ hierarchy: true }), reader = await f.reader();
+  assert.equal(reader.identityScope, "dance");
+  f.files.get(albumId).name = "Nombre de coreografía corregido";
+  f.files.get(f.academyFolderId).name = "Academia corregida";
+  const first = await reader.discover({ ...context, participantName: "Nombre diferente", academyName: "Nombre diferente",
+    knownBindings: { "dance-1": { folderId: "old_music_album_0001" } } });
+  const second = await reader.discover({ ...context, participantId: "person-2", participantName: "Otro miembro" });
+  assert.equal(first.albums[0].id, albumId); assert.equal(first.albums[0].trusted, true);
+  assert.equal(second.albums[0].photos[0].id, sourceId);
+  assert.deepEqual((await first.albums[0].photos[0].read()).bytes, thumbnailBytes);
+  assert.equal(writes(f).length, 0);
+  assert.ok(f.calls.every(({ url }) => !url.pathname.includes("old_music_album")));
+  assert.doesNotMatch(JSON.stringify(first), /googleusercontent|thumbnailLink|webViewLink|SYNTHETIC_PRIVATE/);
+});
+
+test("hierarchy album names and stale bindings never grant access outside the database edition, academy and dance", async () => {
+  for (const changes of [{ eventId: "other-edition" }, { academyId: "other-academy" }, { dances: [{ id: "other-dance", title: context.dances[0].title }] }]) {
+    const f = fixture({ hierarchy: true });
+    const result = await (await f.reader()).discover({ ...context, ...changes, knownBindings: { "other-dance": { folderId: albumId } } });
+    assert.deepEqual(result, { albums: [] }); assert.equal(imageReads(f).length, 0);
+  }
+});
+
+test("hierarchy rejects duplicate ID markers, personal album bindings, moved folders and unsafe permissions", async () => {
+  for (const change of ["duplicate-academy", "duplicate-album", "personal-album", "moved-album", "shared-academy", "wrong-account"]) {
+    const f = fixture({ hierarchy: true, ...(change === "wrong-account" ? { aboutOwner: "musica.levitate@gmail.com" } : {}) });
+    if (change === "duplicate-academy") f.files.set("duplicate_academy_0001", { ...structuredClone(f.files.get(f.academyFolderId)), id: "duplicate_academy_0001" });
+    if (change === "duplicate-album") f.files.set("duplicate_album_00001", { ...structuredClone(f.files.get(albumId)), id: "duplicate_album_00001" });
+    if (change === "personal-album") f.files.get(albumId).appProperties.levitateParticipantId = "other-person";
+    if (change === "moved-album") f.files.get(albumId).parents = ["foreign_academy_0001"];
+    if (change === "shared-academy") f.files.get(f.academyFolderId).permissions.push({ type: "anyone", role: "reader" });
+    if (change === "moved-album") assert.deepEqual(await (await f.reader()).discover(context), { albums: [] });
+    else await assert.rejects((await f.reader()).discover(context), controlled(change.startsWith("duplicate") ? "portal_photo_source_ambiguous"
+      : change === "wrong-account" ? "portal_storage_wrong_account" : change === "personal-album" ? "portal_photo_source_mismatch" : "portal_photo_source_not_private", change.startsWith("duplicate") || change === "personal-album" ? 409 : 503));
+    assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+  }
+});
+
+test("hierarchy rechecks academy, album and photo scope around a thumbnail read", async () => {
+  for (const change of ["academy-privacy", "academy-scope", "album-scope", "photo-scope"]) {
+    const f = fixture({ hierarchy: true, intercept({ url }, state) {
+      if (url.hostname !== "lh3.googleusercontent.com") return;
+      if (change === "academy-privacy") state.files.get("academy_folder_000001").shared = true;
+      if (change === "academy-scope") state.files.get("academy_folder_000001").appProperties.levitateAcademyId = "foreign-academy";
+      if (change === "album-scope") state.files.get(albumId).appProperties.levitateDanceId = "foreign-dance";
+      if (change === "photo-scope") state.files.get(sourceId).appProperties.levitateDanceId = "foreign-dance";
+    } });
+    const result = await (await f.reader()).discover(context);
+    await assert.rejects(result.albums[0].photos[0].read(), controlled(change === "academy-privacy" ? "portal_photo_source_not_private" : "portal_photo_source_mismatch", change === "academy-privacy" ? 503 : 409));
+  }
+});
+
+test("hierarchy is explicit, limited to Ati, and cannot invoke the legacy demo mutator", async () => {
+  await assert.rejects(getParticipantDriveDiscovery({ expectedEmail: owner, layout: "academy_dance", getConfig: () => ({}), getAccessToken: () => secret }), controlled("portal_storage_wrong_account"));
+  const f = fixture({ hierarchy: true });
+  await assert.rejects((await f.reader()).prepareDemoSource({}), controlled("portal_photo_source_invalid", 400));
+  assert.equal(f.calls.length, 0);
+  assert.equal((await fixture().reader()).identityScope, "participant");
 });

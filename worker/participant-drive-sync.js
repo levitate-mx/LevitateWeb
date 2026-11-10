@@ -100,15 +100,16 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
   };
   try {
     const knownBindings = parsedBindings(claimed.bindings_json);
-    // Identical names in an academy need a prior explicit ID binding; a folder
-    // with that name alone cannot establish which participant owns it.
-    const allowedDances = initial.ambiguousName ? initial.dances.filter(dance => identifier(knownBindings[dance.id]?.folderId)) : initial.dances;
+    const discovery = await getDiscovery();
+    if (typeof discovery?.discover !== 'function') throw unavailable();
+    // Legacy albums contain an individual participant name. The new hierarchy
+    // binds academy + choreography IDs; membership came from the database above.
+    const allowedDances = initial.ambiguousName && discovery.identityScope !== 'dance'
+      ? initial.dances.filter(dance => identifier(knownBindings[dance.id]?.folderId)) : initial.dances;
     if (!allowedDances.length) {
       await release({ error: 'ambiguous_participant' });
       return pending(participantId, eventId);
     }
-    const discovery = await getDiscovery();
-    if (typeof discovery?.discover !== 'function') throw unavailable();
     const discovered = await discovery.discover({ eventId, participantId, participantName: initial.participant.full_name,
       academyId: initial.participant.academy_id, academyName: initial.participant.academy_name, dances: allowedDances, knownBindings, adminPreview });
     await assertAuthorized();

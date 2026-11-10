@@ -14,6 +14,8 @@ import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveS
 import { handleParticipantPortal } from "./participant-portal.js";
 import { getParticipantDriveStorage } from "./participant-drive-storage.js";
 import { getParticipantDriveDiscovery } from "./participant-drive-discovery.js";
+import { getParticipantPhotoDriveConfig, hasParticipantPhotoDriveConfig } from "./participant-photo-drive-config.js";
+import { getParticipantMediaStorageRouter } from "./participant-media-storage-router.js";
 import { serveParticipantDemoPhoto } from "./participant-demo-media.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
@@ -2253,7 +2255,8 @@ async function handleRegistrationAdminMediaDrive(request, env) {
       ? parseMediaDriveFolderId(requireString(body.folder, "folder"))
       : (await readMediaDriveSettings(db))?.folderId || "";
     const diagnostic = await getMediaDriveDiagnostic({
-      getConfig: () => getRegistrationDriveAuthConfig(env),
+      getConfig: () => hasParticipantPhotoDriveConfig(env)
+        ? getParticipantPhotoDriveConfig(env) : getRegistrationDriveAuthConfig(env),
       getAccessToken: (config, { signal }) => getGoogleDriveAccessToken(config, {
         authFailureCode: "media_drive_auth_failed",
         authFailureMessage: "No pudimos comprobar la conexión con Google Drive.",
@@ -2261,6 +2264,10 @@ async function handleRegistrationAdminMediaDrive(request, env) {
       }),
       folderId,
     });
+    if (hasParticipantPhotoDriveConfig(env) && diagnostic.connection.validated
+      && diagnostic.connection.account?.emailAddress?.trim().toLowerCase() !== env.PARTICIPANT_PHOTO_DRIVE_ACCOUNT_EMAIL?.trim().toLowerCase()) {
+      throwHttpError("portal_storage_wrong_account", "La conexión de fotografías debe pertenecer a la cuenta Ati configurada.", 503);
+    }
     if (linkingFolder) {
       const { connection } = diagnostic;
       if (connection.status !== "connected" || !connection.validated || connection.folder?.status !== "ready" || !connection.folder.validated) {
@@ -7565,6 +7572,25 @@ async function storeRegistrationMusicUpload({ dance, env, musicUpload, session }
 }
 
 function getParticipantMediaStorage(env, options = {}) {
+  if (!hasParticipantPhotoDriveConfig(env)) return getParticipantLegacyMediaStorage(env, options);
+  return getParticipantMediaStorageRouter({
+    photoConfigured: true,
+    getLegacyStore: () => getParticipantLegacyMediaStorage(env, options),
+    getPhotoStore: () => getParticipantDriveStorage({
+      db: env.DB,
+      getConfig: () => getParticipantPhotoDriveConfig(env),
+      getAccessToken: (config, { signal } = {}) => getGoogleDriveAccessToken(config, {
+        authFailureCode: "portal_drive_auth_failed",
+        authFailureMessage: "No pudimos comprobar el acceso al Drive de fotografías.",
+        signal,
+      }),
+      expectedEmail: env.PARTICIPANT_PHOTO_DRIVE_ACCOUNT_EMAIL,
+      ...options,
+    }),
+  });
+}
+
+function getParticipantLegacyMediaStorage(env, options = {}) {
   return getParticipantDriveStorage({
     db: env.DB,
     getConfig: () => getRegistrationDriveAuthConfig(env),
@@ -7579,12 +7605,14 @@ function getParticipantMediaStorage(env, options = {}) {
 }
 
 function getParticipantPhotoDiscovery(env) {
+  const dedicatedPhotos = hasParticipantPhotoDriveConfig(env);
   return getParticipantDriveDiscovery({
-    getConfig: () => getRegistrationDriveAuthConfig(env),
+    getConfig: () => dedicatedPhotos ? getParticipantPhotoDriveConfig(env) : getRegistrationDriveAuthConfig(env),
     getAccessToken: (config, { signal } = {}) => getGoogleDriveAccessToken(config, {
       authFailureCode: 'portal_drive_auth_failed', authFailureMessage: 'No pudimos comprobar el acceso a Drive.', signal,
     }),
-    expectedEmail: env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL,
+    expectedEmail: dedicatedPhotos ? env.PARTICIPANT_PHOTO_DRIVE_ACCOUNT_EMAIL : env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL,
+    ...(dedicatedPhotos ? { layout: "academy_dance" } : {}),
   });
 }
 
@@ -7598,8 +7626,8 @@ function getRegistrationMusicDriveConfig(env) {
   return { ...authConfig, folderId };
 }
 
-// Photo/video shares Google's existing authorization, while its folder is
-// selected independently. No credentials or music-folder IDs reach the browser.
+// The legacy authorization is retained for music, PDFs and historical assets.
+// New photos use their own optional configuration without replacing these keys.
 function getRegistrationDriveAuthConfig(env) {
   const oauthClientId = optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_ID || env.GMAIL_OAUTH_CLIENT_ID);
   const oauthClientSecret = optionalString(env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET || env.GMAIL_OAUTH_CLIENT_SECRET);

@@ -641,7 +641,7 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
     }
     case "storage.prepare": {
       const storage = await resolveMediaStore(env, getMediaStore, { create: true });
-      return json({ mediaStorage: storage.info || { provider: "configured", ready: true } });
+      return json({ mediaStorage: storage.getInfo ? await storage.getInfo() : storage.info || { provider: "configured", ready: true } });
     }
     case "demo.photo.prepare":
       return json(await prepareParticipantDemoPhoto(env, {
@@ -793,7 +793,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
         if (url.searchParams.has("assetId")) return await serveAsset(db,env,request,str(url.searchParams.get("assetId"),"el archivo",100),true,getMediaStore);
         if (url.searchParams.get("storage") === "1") {
           const storage = await resolveMediaStore(env,getMediaStore);
-          return json({ mediaStorage: storage.info || { provider: "configured", ready: true } });
+          return json({ mediaStorage: storage.getInfo ? await storage.getInfo() : storage.info || { provider: "configured", ready: true } });
         }
         if (url.searchParams.get("preview") === "1") return json(await participantData(db,env,
           str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true,getJudgingSnapshot));
