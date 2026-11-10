@@ -28,8 +28,12 @@ import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
 import { ParticipantPage } from "./components/participant/ParticipantPage";
 import { ParticipantAdminPage } from "./components/participant-admin/ParticipantAdminPage";
 import { JudgeWorkspaceEntry } from "./components/judging/JudgeWorkspaceEntry";
+import { lazy, Suspense } from "react";
+
+const JudgingAdminWorkspace = lazy(() => import("./components/judging/JudgingAdminWorkspace").then(module => ({ default: module.JudgingAdminWorkspace })));
 
 export default function App() {
+  if (["/jueceo/admin", "/jueceo/admin/"].includes(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando jueceo...</main>}><JudgingAdminWorkspace /></Suspense>;
   if (/^\/jueceo\/?$/.test(window.location.pathname)) return <JudgeWorkspaceEntry />;
   const searchParams = new URLSearchParams(window.location.search);
   const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo\.?)?\/?$/);

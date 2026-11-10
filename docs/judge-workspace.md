@@ -38,7 +38,9 @@ which verify the existing session and assignment on every request. Mutations
 require same-origin JSON, validate routine/block/criterion/maximum and write
 only allowlisted columns. Only the caller's scores, feedback, penalties and
 favorites are returned. Favorites retain the native multi-selection and legacy
-category compatibility. Admin judging reads remain GET-only.
+category compatibility. The legacy `/admin/puntuaciones` reader remains GET-only;
+the separately authorized admin workspace is documented in
+`judging-admin-workspace.md`.
 
 The worker uses the existing app publishable key server-side, never a service
 key or a browser-supplied identity. No existing Core RLS policies are broadened

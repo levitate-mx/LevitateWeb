@@ -1,0 +1,2567 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import {
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronRight,
+  ClipboardList,
+  Copy,
+  Download,
+  CloudUpload,
+  Mail,
+  MoreHorizontal,
+  FileSpreadsheet,
+  Home,
+  ImagePlus,
+  LoaderCircle,
+  Moon,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Star,
+  Sun,
+  Trash2,
+  Trophy,
+  Users,
+  X,
+} from "lucide-react";
+import { requestRegistrationApi } from "../admin/registrationApi";
+import "./JudgingAdminWorkspace.css";
+
+type Event = {
+  id: string;
+  slug: string;
+  name: string;
+  is_active: boolean;
+  event_type: string;
+  updated_at: string;
+  competition_config?: Record<string, unknown>;
+};
+type Block = { block_id: string; name: string; title: string };
+type Routine = {
+  routine_id: string;
+  block_id: string;
+  name: string;
+  academy: string;
+  genre: string;
+  division: string;
+  level: string;
+  category: string;
+  updated_at: string;
+  [key: string]: unknown;
+};
+type Judge = {
+  judge_id: string;
+  name: string;
+  role: string;
+  photo_data: string;
+  assigned_block_ids: string[];
+  updated_at?: string;
+};
+type JudgeScore = {
+  id: string;
+  name: string;
+  status: string;
+  total: number | null;
+  maximumScore: number | null;
+  penalty: number;
+  feedback: string;
+  criteria: {
+    id: number;
+    label: string;
+    section: string;
+    value: number | null;
+    maximumScore: number;
+  }[];
+};
+type Score = {
+  id: string;
+  name: string;
+  academy: string;
+  state: string;
+  genre: string;
+  division: string;
+  level: string;
+  category: string;
+  blockId: string;
+  status: string;
+  completedJudges: number;
+  expectedJudges: number;
+  judges: JudgeScore[];
+};
+type Standing = {
+  routineId: string;
+  score: number | null;
+  placement: null | {
+    rank: number | null;
+    label: string;
+    isParticipation: boolean;
+  };
+};
+type ReportBlock = {
+  id: string;
+  name: string;
+  title: string;
+  sections: {
+    id: string;
+    label: string;
+    categories: { id: string; title: string; rows: Standing[] }[];
+  }[];
+  specialAwards: { id: string; title: string; displayValue: string }[];
+  topScore: null | { routineId: string; score: number };
+};
+type Bundle = {
+  event: Event;
+  blocks: Block[];
+  routines: Routine[];
+  judges: Judge[];
+  favorites: {
+    block_id: string;
+    routine_id: string;
+    judge_id: string;
+    category: string;
+  }[];
+  specialAwards: { block_id: string; award: string; manual_value: string }[];
+  accounts: {
+    judge_id: string;
+    username: string;
+    user_id: string;
+    enabled: number;
+  }[];
+  snapshot: {
+    fetchedAt: string;
+    warnings: string[];
+    rows: Score[];
+    report: { title: string; blocks: ReportBlock[] };
+  };
+};
+type Presence = {
+  judge_id: string;
+  device_id: string;
+  state: string;
+  routine_id: string | null;
+  platform: string;
+  updated_at: string;
+  sync_reported_at?: string;
+  sync_diagnostics?: {
+    pending_count?: number;
+    last_error?: string;
+    last_confirmed_at?: string;
+  };
+};
+type View =
+  | "home"
+  | "scores"
+  | "judges"
+  | "report"
+  | "favorites"
+  | "import"
+  | "activity"
+  | "ranking"
+  | "settings";
+type Modal = { title: string; content: ReactNode } | null;
+const primary = [
+  { id: "home", label: "Home", icon: Home },
+  { id: "scores", label: "Editar calificaciones", icon: ClipboardList },
+  { id: "judges", label: "Jueces", icon: Users },
+  { id: "report", label: "Dictamen final", icon: Trophy },
+  { id: "favorites", label: "Favoritos", icon: Star },
+  { id: "import", label: "Importar Excel", icon: FileSpreadsheet },
+] as const;
+const base = "/api/registration/admin/judging/workspace/";
+const norm = (v: unknown) =>
+  String(v ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .trim();
+const number = (v: number | null | undefined) =>
+  v == null
+    ? "—"
+    : new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 }).format(v);
+const errorText = (e: unknown) =>
+  e instanceof Error ? e.message : "No se pudo completar la operación.";
+const labels: Record<string, string> = {
+  pending: "Pendiente",
+  partial: "Incompleta",
+  complete: "Completa",
+  unavailable: "No disponible",
+};
+const time = (v: string | undefined) =>
+  v
+    ? new Date(v).toLocaleTimeString("es-MX", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Sin registro";
+function IconButton({
+  label,
+  children,
+  ...props
+}: {
+  label: string;
+  children: ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      className="ja-icon"
+      title={label}
+      aria-label={label}
+      {...props}
+    >
+      {children}
+      <span className="ja-tooltip">{label}</span>
+    </button>
+  );
+}
+function Status({ value }: { value: string }) {
+  return (
+    <span className={`ja-status is-${value}`}>{labels[value] || value}</span>
+  );
+}
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="ja-empty">{children}</p>;
+}
+function ModalFrame({
+  modal,
+  onClose,
+}: {
+  modal: NonNullable<Modal>;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  return (
+    <dialog ref={ref} className="ja-dialog" onCancel={onClose}>
+      <header>
+        <h2>{modal.title}</h2>
+        <IconButton label="Cerrar" onClick={onClose}>
+          <X size={20} />
+        </IconButton>
+      </header>
+      {modal.content}
+    </dialog>
+  );
+}
+function ConfirmForm({
+  message,
+  label,
+  onConfirm,
+  danger = false,
+}: {
+  message: string;
+  label?: string;
+  onConfirm: (value: string) => Promise<void>;
+  danger?: boolean;
+}) {
+  const [value, setValue] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError("");
+        try {
+          await onConfirm(value);
+        } catch (e) {
+          setError(errorText(e));
+          setBusy(false);
+        }
+      }}
+    >
+      <p>{message}</p>
+      {label ? (
+        <label>
+          {label}
+          <input
+            autoComplete="off"
+            required
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </label>
+      ) : null}
+      {error ? (
+        <p role="alert" className="ja-error">
+          {error}
+        </p>
+      ) : null}
+      <footer>
+        <button disabled={busy} className={danger ? "ja-danger" : "ja-primary"}>
+          {busy ? (
+            <LoaderCircle size={17} className="ja-spin" />
+          ) : (
+            <Check size={17} />
+          )}
+          Confirmar
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+export function JudgingAdminWorkspace() {
+  const params = new URLSearchParams(location.search);
+  const [events, setEvents] = useState<Event[]>([]),
+    [eventId, setEventId] = useState(params.get("event") || ""),
+    [bundle, setBundle] = useState<Bundle | null>(null);
+  const [view, setView] = useState<View>(
+    ([...primary.map((p) => p.id), "activity", "ranking", "settings"].includes(
+      params.get("view") || "",
+    )
+      ? params.get("view")
+      : "home") as View,
+  );
+  const [blockId, setBlockId] = useState(""),
+    [query, setQuery] = useState(""),
+    [status, setStatus] = useState("all"),
+    [activity, setActivity] = useState<Presence[]>([]);
+  const [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(""),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [user, setUser] = useState("Admin"),
+    [modal, setModal] = useState<Modal>(null);
+  const [exportId, setExportId] = useState("");
+  const [exports, setExports] = useState<
+    { id: string; block_id: string; created_at: string; files: number }[]
+  >([]);
+  const [theme, setTheme] = useState(
+    () =>
+      localStorage.getItem("levitate-judging-theme") ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+  );
+  const generation = useRef(0);
+  const api = useCallback(
+    <T,>(action: string, body?: unknown, selected = eventId) =>
+      requestRegistrationApi<T>(
+        `${base}${action}${selected ? `?eventId=${encodeURIComponent(selected)}` : ""}`,
+        body === undefined
+          ? {}
+          : { method: "POST", body: JSON.stringify(body) },
+      ),
+    [eventId],
+  );
+  useEffect(() => {
+    localStorage.setItem("levitate-judging-theme", theme);
+  }, [theme]);
+  useEffect(() => setExportId(""), [blockId]);
+  useEffect(() => {
+    if (!eventId || view !== "scores") return;
+    let live = true;
+    api<{ exports: typeof exports }>("exports")
+      .then((r) => {
+        if (live) setExports(r.exports);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [api, eventId, view, exportId]);
+  const loadEvents = useCallback(async () => {
+    const response = await requestRegistrationApi<{
+      events: Event[];
+      user: { name: string };
+    }>(`${base}events`);
+    setEvents(response.events);
+    setUser(response.user.name || "Admin");
+    return response.events;
+  }, []);
+  useEffect(() => {
+    let live = true;
+    loadEvents()
+      .then((rows) => {
+        if (live)
+          setEventId((current) =>
+            rows.some((e) => e.id === current)
+              ? current
+              : rows.find((e) => e.event_type !== "archived")?.id || "",
+          );
+      })
+      .catch((e) => {
+        if (live) {
+          setError(errorText(e));
+          setLoading(false);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [loadEvents]);
+  const refresh = useCallback(
+    async (quiet = false) => {
+      if (!eventId) {
+        setLoading(false);
+        return;
+      }
+      const current = ++generation.current;
+      if (!quiet) {
+        setLoading(true);
+        setError("");
+      }
+      try {
+        const data = await api<Bundle>("snapshot");
+        if (current !== generation.current) return;
+        setBundle(data);
+        setBlockId((old) =>
+          data.blocks.some((b) => b.block_id === old)
+            ? old
+            : data.blocks[0]?.block_id || "",
+        );
+        setError("");
+      } catch (e) {
+        if (current === generation.current) setError(errorText(e));
+      } finally {
+        if (current === generation.current) setLoading(false);
+      }
+    },
+    [eventId, api],
+  );
+  useEffect(() => {
+    setBundle(null);
+    setExportId("");
+    setActivity([]);
+    setQuery("");
+    setBlockId("");
+    void refresh();
+    return () => {
+      generation.current++;
+    };
+  }, [refresh]);
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (eventId) url.searchParams.set("event", eventId);
+    url.searchParams.set("view", view);
+    history.replaceState(null, "", url);
+  }, [eventId, view]);
+  useEffect(() => {
+    if (!eventId || !bundle) return;
+    let live = true;
+    const poll = async () => {
+      if (document.hidden) return;
+      try {
+        const r = await api<{ activity: Presence[] }>("activity");
+        if (live) setActivity(r.activity);
+      } catch {
+        /* Keep the last confirmed presence until the next read. */
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 10000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [eventId, !!bundle, api]);
+  useEffect(() => {
+    if (!bundle || modal || busy) return;
+    const timer = setInterval(() => {
+      if (!document.hidden) void refresh(true);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [!!bundle, modal, busy, refresh]);
+  async function mutate(action: string, data: unknown) {
+    await api(action, data);
+    await refresh(true);
+    setNotice("Cambios guardados.");
+  }
+  function openEditor(routine: Routine, judge: Judge) {
+    const p = new URLSearchParams({
+      mode: "admin-editor",
+      event: eventId,
+      judge: judge.judge_id,
+      routine: routine.routine_id,
+    });
+    location.assign(`/jueceo/app/?${p}`);
+  }
+  function metadata(routine: Routine, field = "level") {
+    setModal({
+      title: `#${routine.routine_id} · Datos de coreografía`,
+      content: (
+        <MetadataForm
+          routine={routine}
+          initialField={field}
+          onSave={async (data) => {
+            await mutate("metadata", data);
+            setModal(null);
+          }}
+        />
+      ),
+    });
+  }
+  function move(routine: Routine) {
+    setModal({
+      title: "Mover coreografía",
+      content: (
+        <MoveForm
+          routine={routine}
+          blocks={bundle!.blocks}
+          onSave={async (block) => {
+            await mutate("move-routine", {
+              routine_id: routine.routine_id,
+              expected_updated_at: routine.updated_at,
+              target_block_id: block,
+            });
+            setModal(null);
+          }}
+        />
+      ),
+    });
+  }
+  function remove(routine: Routine) {
+    setModal({
+      title: "Eliminar coreografía",
+      content: (
+        <ConfirmForm
+          danger
+          message={`Se eliminarán ${routine.name}, sus notas, devoluciones, penalizaciones y favoritos. Esta acción no se puede deshacer desde la web.`}
+          label={`Escribe ${routine.routine_id} para confirmar`}
+          onConfirm={async (confirmation) => {
+            await mutate("delete-routine", {
+              routine_id: routine.routine_id,
+              expected_updated_at: routine.updated_at,
+              confirmation,
+            });
+            setModal(null);
+          }}
+        />
+      ),
+    });
+  }
+  const judges =
+    bundle?.judges.filter(
+      (j) => j.role === "judge" && !["ati", "admin"].includes(j.judge_id),
+    ) || [];
+  const routines = (bundle?.routines || []).filter(
+    (r) => r.block_id === blockId,
+  );
+  const scores = new Map(bundle?.snapshot.rows.map((row) => [row.id, row]));
+  const blockReport = bundle?.snapshot.report.blocks.find(
+    (b) => b.id === blockId,
+  );
+  const standings = new Map(
+    blockReport?.sections
+      .flatMap((s) => s.categories.flatMap((c) => c.rows))
+      .map((s) => [s.routineId, s]),
+  );
+  const visible = routines.filter(
+    (r) =>
+      norm(
+        `${r.routine_id} ${r.name} ${r.academy} ${r.genre} ${r.division} ${r.level} ${r.category}`,
+      ).includes(norm(query)) &&
+      (status === "all" || scores.get(r.routine_id)?.status === status),
+  );
+  const completed = routines.filter(
+    (r) => scores.get(r.routine_id)?.status === "complete",
+  ).length;
+  const title =
+    primary.find((p) => p.id === view)?.label ||
+    (
+      {
+        activity: "Actividad",
+        ranking: "Ranking en vivo",
+        settings: "Configuración",
+      } as const
+    )[view as "activity"];
+  async function downloadSheets() {
+    if (!visible.length) return;
+    setBusy("Preparando hojas de jueceo");
+    setError("");
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const { generateParticipantJudgingPdf } =
+        await import("../../../shared/participant-judging-sheet.js");
+      const merged = await PDFDocument.create();
+      const logoBytes = new Uint8Array(
+        await (await fetch("/assets/levitate-logo-mx.png")).arrayBuffer(),
+      );
+      for (const r of visible) {
+        const row = scores.get(r.routine_id);
+        if (!row?.judges.length) continue;
+        const bytes = await generateParticipantJudgingPdf({
+          eventTitle: bundle!.event.name,
+          routine: {
+            ...r,
+            id: r.routine_id,
+            title: r.name,
+            block: bundle!.blocks.find((b) => b.block_id === blockId)?.name,
+          },
+          judges: row.judges,
+          logoBytes,
+        });
+        const source = await PDFDocument.load(bytes);
+        for (const page of await merged.copyPages(
+          source,
+          source.getPageIndices(),
+        ))
+          merged.addPage(page);
+      }
+      if (!merged.getPageCount()) throw new Error("No hay hojas disponibles.");
+      savePdf(await merged.save(), `Levitate-hojas-${blockId}.pdf`);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy("");
+    }
+  }
+  async function downloadReport() {
+    setBusy("Preparando dictamen");
+    try {
+      const { generateAdminReportPdf } = await import("./judgingAdminPdf");
+      savePdf(
+        await generateAdminReportPdf(bundle!, blockId),
+        `Levitate-dictamen-${blockId}.pdf`,
+      );
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy("");
+    }
+  }
+  async function uploadSheets() {
+    setError("");
+    if (
+      !routines.length ||
+      routines.some((r) => scores.get(r.routine_id)?.status !== "complete")
+    ) {
+      setError(
+        "Completa todas las hojas del bloque antes de exportar para envío.",
+      );
+      return;
+    }
+    setBusy("Preparando exportación");
+    try {
+      const { generateParticipantJudgingPdf } =
+        await import("../../../shared/participant-judging-sheet.js");
+      const batch = await api<{ id: string }>("export-start", {
+        block_id: blockId,
+      });
+      const logoBytes = new Uint8Array(
+        await (await fetch("/assets/levitate-logo-mx.png")).arrayBuffer(),
+      );
+      for (let n = 0; n < routines.length; n++) {
+        const r = routines[n],
+          row = scores.get(r.routine_id)!;
+        setBusy(`Subiendo hojas ${n + 1} de ${routines.length}`);
+        const bytes = await generateParticipantJudgingPdf({
+          eventTitle: bundle!.event.name,
+          routine: {
+            ...r,
+            id: r.routine_id,
+            title: r.name,
+            block: bundle!.blocks.find((b) => b.block_id === blockId)?.name,
+          },
+          judges: row.judges,
+          logoBytes,
+        });
+        const data = await fileBase64(
+          new File([new Uint8Array(bytes)], "hojas.pdf", {
+            type: "application/pdf",
+          }),
+        );
+        await api("export-file", {
+          export_id: batch.id,
+          routine_id: r.routine_id,
+          pdf: data.split(",")[1],
+        });
+      }
+      setExportId(batch.id);
+      setNotice("Hojas guardadas en Drive privado.");
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy("");
+    }
+  }
+  return (
+    <div className="ja-app" data-theme={theme}>
+      <aside className="ja-sidebar">
+        <a
+          href="/admin/dashboard"
+          className="ja-back"
+          title="Panel Levitate"
+          aria-label="Panel Levitate"
+        >
+          <ArrowLeft size={21} />
+        </a>
+        <nav aria-label="Administración de jueceo">
+          {primary.map((item) => (
+            <button
+              key={item.id}
+              title={item.label}
+              aria-label={item.label}
+              aria-current={view === item.id ? "page" : undefined}
+              onClick={() => {
+                setView(item.id);
+                setQuery("");
+                setStatus("all");
+              }}
+            >
+              <item.icon size={23} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="ja-sidebar-bottom">
+          <IconButton
+            label="Actividad"
+            aria-pressed={view === "activity"}
+            onClick={() => setView("activity")}
+          >
+            <Activity size={21} />
+          </IconButton>
+          <IconButton
+            label="Ranking en vivo"
+            aria-pressed={view === "ranking"}
+            onClick={() => setView("ranking")}
+          >
+            <Trophy size={21} />
+          </IconButton>
+          <IconButton
+            label="Configuración"
+            aria-pressed={view === "settings"}
+            onClick={() => setView("settings")}
+          >
+            <Settings size={21} />
+          </IconButton>
+        </div>
+      </aside>
+      <div className="ja-main">
+        <header className="ja-topbar">
+          <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
+          <div className="ja-event">
+            <label htmlFor="ja-event">Evento</label>
+            <select
+              id="ja-event"
+              value={eventId}
+              disabled={!!busy}
+              onChange={(e) => {
+                setEventId(e.target.value);
+                setModal(null);
+              }}
+            >
+              <option value="" disabled>
+                Seleccionar evento
+              </option>
+              {events
+                .filter((e) => e.event_type !== "archived")
+                .map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                    {e.is_active ? " · Activo" : ""}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div className="ja-top-status">
+            <i className={error ? "is-error" : ""} />
+            <span>
+              {error ? "Revisar conexión" : "Online"}
+              <small>
+                {loading
+                  ? "Actualizando…"
+                  : bundle
+                    ? `Sincronizado ${time(bundle.snapshot.fetchedAt)}`
+                    : "Conectando…"}
+              </small>
+            </span>
+          </div>
+          <IconButton
+            label={theme === "dark" ? "Modo claro" : "Modo oscuro"}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun size={21} /> : <Moon size={21} />}
+          </IconButton>
+          <details className="ja-more">
+            <summary aria-label="Más opciones">
+              <MoreHorizontal size={22} />
+            </summary>
+            <nav>
+              <button onClick={() => setView("activity")}>
+                <Activity size={18} />
+                Actividad
+              </button>
+              <button onClick={() => setView("ranking")}>
+                <Trophy size={18} />
+                Ranking en vivo
+              </button>
+              <button onClick={() => setView("settings")}>
+                <Settings size={18} />
+                Configuración
+              </button>
+              <a href="/admin/dashboard">
+                <ArrowLeft size={18} />
+                Panel Levitate
+              </a>
+            </nav>
+          </details>
+          <span className="ja-admin-name">
+            {user}
+            <small>Administrador</small>
+          </span>
+        </header>
+        <main className="ja-content">
+          <div className="ja-heading">
+            <div>
+              <p>LEVITATE · JUECEO</p>
+              <h1>{title}</h1>
+            </div>
+            <div className="ja-heading-actions">
+              {view === "report" || view === "ranking" ? (
+                <IconButton
+                  label="Descargar dictamen PDF"
+                  disabled={!blockReport || !!busy}
+                  onClick={() => void downloadReport()}
+                >
+                  <Download size={20} />
+                </IconButton>
+              ) : null}
+              <IconButton
+                label="Actualizar datos"
+                disabled={loading || !!busy}
+                onClick={() => void refresh()}
+              >
+                <RefreshCw className={loading ? "ja-spin" : ""} size={20} />
+              </IconButton>
+            </div>
+          </div>
+          {error ? (
+            <div className="ja-error" role="alert">
+              {error}{" "}
+              {error.includes("sesión") || error.includes("permisos") ? (
+                <a href="/login">Iniciar sesión</a>
+              ) : null}
+            </div>
+          ) : null}
+          {notice ? (
+            <div className="ja-notice" role="status">
+              {notice}
+              <IconButton label="Cerrar aviso" onClick={() => setNotice("")}>
+                <X size={16} />
+              </IconButton>
+            </div>
+          ) : null}
+          {loading && !bundle ? <Empty>Cargando programa…</Empty> : null}
+          {bundle &&
+          view !== "import" &&
+          view !== "judges" &&
+          view !== "settings" &&
+          view !== "activity" ? (
+            <div className="ja-toolbar">
+              <label className="ja-block">
+                Bloque
+                <select
+                  value={blockId}
+                  onChange={(e) => setBlockId(e.target.value)}
+                >
+                  {bundle.blocks.map((b) => (
+                    <option key={b.block_id} value={b.block_id}>
+                      {b.title || b.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {view !== "home" ? (
+                <label className="ja-search">
+                  <Search size={18} />
+                  <input
+                    type="search"
+                    aria-label="Buscar coreografía"
+                    placeholder="Buscar coreografía o academia"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </label>
+              ) : null}
+              {view === "scores" ? (
+                <>
+                  <select
+                    aria-label="Estado de evaluación"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    <option value="all">Todas</option>
+                    {Object.entries(labels).map(([v, label]) => (
+                      <option key={v} value={v}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <IconButton
+                    label="Descargar hojas PDF"
+                    disabled={!!busy || !visible.length}
+                    onClick={() => void downloadSheets()}
+                  >
+                    <Download size={20} />
+                  </IconButton>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {bundle?.snapshot.warnings.length &&
+          ["report", "scores", "ranking"].includes(view) ? (
+            <details className="ja-warnings">
+              <summary>
+                {bundle.snapshot.warnings.length} avisos del programa
+              </summary>
+              <ul>
+                {bundle.snapshot.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          {bundle && view === "home" ? (
+            <>
+              <section className="ja-home-hero">
+                <div>
+                  <p>HOLA, {user.split(" ")[0].toUpperCase()}</p>
+                  <h2>
+                    Todo listo para
+                    <br />
+                    levantar el telón.
+                  </h2>
+                  <p>{bundle.event.name}</p>
+                  <button
+                    className="ja-primary"
+                    onClick={() => setView("scores")}
+                  >
+                    Editar calificaciones
+                    <ArrowRight size={18} />
+                  </button>
+                </div>
+                <img
+                  src="/jueceo/app/assets/assets/images/levitate_dancer_hero.png"
+                  alt="Artista Levitate"
+                />
+              </section>
+              <section className="ja-metrics">
+                <article>
+                  <ClipboardList />
+                  <strong>
+                    {completed}
+                    <small> / {routines.length}</small>
+                  </strong>
+                  <span>Coreografías completas</span>
+                  <progress
+                    max={Math.max(1, routines.length)}
+                    value={completed}
+                  />
+                </article>
+                <article>
+                  <Users />
+                  <strong>{judges.length}</strong>
+                  <span>Jueces del evento</span>
+                  <button onClick={() => setView("activity")}>
+                    Ver actividad
+                    <ChevronRight size={16} />
+                  </button>
+                </article>
+              </section>
+              <section className="ja-upcoming">
+                <header>
+                  <h2>Próximas coreografías</h2>
+                  <button onClick={() => setView("scores")}>
+                    Ver todas
+                    <ChevronRight size={16} />
+                  </button>
+                </header>
+                {routines
+                  .filter(
+                    (r) => scores.get(r.routine_id)?.status !== "complete",
+                  )
+                  .slice(0, 3)
+                  .map((r) => (
+                    <article key={r.routine_id}>
+                      <b>#{r.routine_id}</b>
+                      <div>
+                        <strong>{r.name}</strong>
+                        <small>{r.academy}</small>
+                      </div>
+                      <span>{r.level}</span>
+                      <Status
+                        value={scores.get(r.routine_id)?.status || "pending"}
+                      />
+                      <IconButton
+                        label={`Ver ${r.name}`}
+                        onClick={() => {
+                          setQuery(r.routine_id);
+                          setView("scores");
+                        }}
+                      >
+                        <ChevronRight size={20} />
+                      </IconButton>
+                    </article>
+                  ))}
+                {!routines.length ? (
+                  <Empty>Este bloque todavía no tiene coreografías.</Empty>
+                ) : completed === routines.length ? (
+                  <Empty>Bloque completo.</Empty>
+                ) : null}
+              </section>
+            </>
+          ) : null}
+          {bundle && view === "scores" ? (
+            <div className="ja-export-actions">
+              {exports.some((e) => e.block_id === blockId) ? (
+                <select
+                  aria-label="Exportación de hojas"
+                  value={exportId}
+                  onChange={(e) => setExportId(e.target.value)}
+                >
+                  <option value="">Exportaciones anteriores</option>
+                  {exports
+                    .filter((e) => e.block_id === blockId)
+                    .map((e) => (
+                      <option
+                        key={e.id}
+                        value={e.id}
+                        disabled={e.files < routines.length}
+                      >
+                        {new Date(
+                          `${e.created_at.replace(" ", "T")}Z`,
+                        ).toLocaleString("es-MX")}{" "}
+                        · {e.files} hojas
+                      </option>
+                    ))}
+                </select>
+              ) : null}
+              <button
+                disabled={!!busy || !routines.length}
+                onClick={() => void uploadSheets()}
+              >
+                <CloudUpload size={17} />
+                Subir hojas a Drive
+              </button>
+              <button
+                disabled={!!busy || !exportId}
+                onClick={() =>
+                  setModal({
+                    title: "Enviar hojas a academias",
+                    content: <ExportRecipients exportId={exportId} api={api} />,
+                  })
+                }
+              >
+                <Mail size={17} />
+                Enviar correos
+              </button>
+            </div>
+          ) : null}
+          {bundle && view === "scores" ? (
+            <div
+              className="ja-table-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Calificaciones por juez"
+            >
+              <table className="ja-matrix">
+                <thead>
+                  <tr>
+                    <th>
+                      Coreografía <small>{visible.length}</small>
+                    </th>
+                    {judges.map((j) => (
+                      <th key={j.judge_id}>
+                        {j.photo_data ? (
+                          <img
+                            className="ja-avatar"
+                            src={j.photo_data}
+                            alt=""
+                          />
+                        ) : null}
+                        {j.name}
+                      </th>
+                    ))}
+                    <th>
+                      Puntaje oficial<small>/ 150</small>
+                    </th>
+                    <th>
+                      <span className="ja-sr">Acciones</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((r) => {
+                    const row = scores.get(r.routine_id);
+                    return (
+                      <tr key={r.routine_id}>
+                        <th scope="row">
+                          <div className="ja-routine-heading">
+                            <b>#{r.routine_id}</b>
+                            <IconButton
+                              label={`Editar datos de ${r.name}`}
+                              onClick={() => metadata(r, "name")}
+                            >
+                              <Pencil size={14} />
+                            </IconButton>
+                          </div>
+                          <strong>{r.name}</strong>
+                          <small>{r.academy}</small>
+                          <div className="ja-chips">
+                            {(
+                              [
+                                "division",
+                                "genre",
+                                "level",
+                                "category",
+                              ] as const
+                            ).map((f) => (
+                              <button
+                                key={f}
+                                title={`Editar ${f}`}
+                                onClick={() => metadata(r, f)}
+                              >
+                                {r[f] || "Sin dato"}
+                              </button>
+                            ))}
+                          </div>
+                        </th>
+                        {judges.map((j) => {
+                          const js = row?.judges.find(
+                            (s) => s.id === j.judge_id,
+                          );
+                          const assigned =
+                            !j.assigned_block_ids.length ||
+                            j.assigned_block_ids.includes(r.block_id);
+                          const active = activity.some(
+                            (a) =>
+                              a.judge_id === j.judge_id &&
+                              a.routine_id === r.routine_id &&
+                              Date.now() - Date.parse(a.updated_at) < 120000,
+                          );
+                          return (
+                            <td key={j.judge_id}>
+                              <button
+                                className={`ja-score ${active ? "is-active" : ""}`}
+                                title={`Editar hoja de ${j.name} · ${r.name}`}
+                                disabled={!assigned}
+                                onClick={() => openEditor(r, j)}
+                              >
+                                <strong>{number(js?.total)}</strong>
+                                <small>
+                                  {assigned
+                                    ? labels[js?.status || "pending"]
+                                    : "No asignado"}
+                                </small>
+                                {js?.penalty ? (
+                                  <span className="ja-penalty">
+                                    {number(js.penalty)}
+                                  </span>
+                                ) : null}
+                                {active ? (
+                                  <span className="ja-presence">Evaluando</span>
+                                ) : null}
+                              </button>
+                            </td>
+                          );
+                        })}
+                        <td className="ja-total">
+                          <strong>
+                            {number(standings.get(r.routine_id)?.score)}
+                          </strong>
+                          <small>
+                            {row?.completedJudges || 0}/
+                            {row?.expectedJudges || 0} jueces
+                          </small>
+                          <Status value={row?.status || "pending"} />
+                        </td>
+                        <td>
+                          <div className="ja-row-actions">
+                            <IconButton
+                              label={`Mover ${r.name} a otro bloque`}
+                              onClick={() => move(r)}
+                            >
+                              <ArrowRight size={17} />
+                            </IconButton>
+                            <IconButton
+                              label={`Eliminar ${r.name}`}
+                              onClick={() => remove(r)}
+                            >
+                              <Trash2 size={17} />
+                            </IconButton>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!visible.length ? (
+                <Empty>No hay coreografías que coincidan.</Empty>
+              ) : null}
+            </div>
+          ) : null}
+          {bundle && view === "judges" ? (
+            <JudgesPanel
+              key={eventId}
+              bundle={bundle}
+              judges={judges}
+              api={api}
+              mutate={mutate}
+              setModal={setModal}
+              setNotice={setNotice}
+              refresh={() => refresh(true)}
+            />
+          ) : null}
+          {bundle && (view === "report" || view === "ranking") ? (
+            <ReportPanel
+              report={blockReport}
+              bundle={bundle}
+              query={query}
+              ranking={view === "ranking"}
+            />
+          ) : null}
+          {bundle && view === "favorites" ? (
+            <FavoritesPanel
+              bundle={bundle}
+              blockId={blockId}
+              query={query}
+              mutate={mutate}
+            />
+          ) : null}
+          {view === "import" ? (
+            <ImportPanel
+              events={events}
+              api={api}
+              onImported={async (id) => {
+                await loadEvents();
+                setEventId(id);
+                setView("scores");
+                setNotice("Programa importado como evento inactivo.");
+              }}
+              onEventAction={async (action, e) => {
+                setModal({
+                  title:
+                    action === "archive"
+                      ? "Archivar evento"
+                      : action === "restore"
+                        ? "Restaurar evento"
+                        : "Activar evento",
+                  content: (
+                    <ConfirmForm
+                      message={
+                        action === "archive"
+                          ? "El programa se conservará, pero dejará de estar disponible para jueceo."
+                          : action === "restore"
+                            ? "El evento se restaurará como inactivo."
+                            : "Este evento será el activo de Levitate. No se modificarán otras marcas."
+                      }
+                      label={
+                        action === "archive" ? `Escribe ${e.slug}` : undefined
+                      }
+                      onConfirm={async (confirmation) => {
+                        await api(
+                          action,
+                          { expected_updated_at: e.updated_at, confirmation },
+                          e.id,
+                        );
+                        await loadEvents();
+                        if (action === "archive" && eventId === e.id) {
+                          setEventId("");
+                          setBundle(null);
+                        } else if (e.id === eventId) await refresh();
+                        setModal(null);
+                        setNotice("Evento actualizado.");
+                      }}
+                    />
+                  ),
+                });
+              }}
+            />
+          ) : null}
+          {bundle && view === "activity" ? (
+            <ActivityPanel
+              judges={judges}
+              activity={activity}
+              routines={bundle.routines}
+            />
+          ) : null}
+          {bundle && view === "settings" ? (
+            <SettingsPanel
+              key={`${eventId}-${bundle.event.updated_at}`}
+              event={bundle.event}
+              onSave={(data) => mutate("configuration", data)}
+            />
+          ) : null}
+          {!bundle && !loading && !error && view !== "import" ? (
+            <Empty>No hay un evento seleccionado.</Empty>
+          ) : null}
+        </main>
+      </div>
+      {busy ? (
+        <div className="ja-busy" role="status">
+          <LoaderCircle size={18} className="ja-spin" />
+          {busy}
+        </div>
+      ) : null}
+      {modal ? (
+        <ModalFrame modal={modal} onClose={() => setModal(null)} />
+      ) : null}
+    </div>
+  );
+}
+
+function ExportRecipients({ exportId, api }: { exportId: string; api: Api }) {
+  const [data, setData] = useState<{
+      title: string;
+      recipients: {
+        email: string;
+        academy: string;
+        files: number;
+        deliveryStatus?: string | null;
+      }[];
+      missingAcademies: string[];
+    } | null>(null),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [sent, setSent] = useState<string[]>([]),
+    [confirmed, setConfirmed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api<typeof data>("export-recipients", { export_id: exportId })
+      .then((r) => {
+        if (live) {
+          setData(r);
+          setSent(
+            r?.recipients
+              .filter((v) => v.deliveryStatus === "sent")
+              .map((v) => v.email) || [],
+          );
+        }
+      })
+      .catch((e) => {
+        if (live) setError(errorText(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [api, exportId]);
+  return (
+    <div className="ja-send">
+      <p>{data?.title || "Consultando destinatarios…"}</p>
+      {data?.missingAcademies.length ? (
+        <p className="ja-error">
+          Sin correo: {data.missingAcademies.join(", ")}
+        </p>
+      ) : null}
+      {data?.recipients.map((r) => (
+        <div key={r.email}>
+          <strong>{r.academy}</strong>
+          <span>
+            {r.email} · {r.files} hojas
+          </span>
+          {sent.includes(r.email) ? <b>Enviado</b> : null}
+          {r.deliveryStatus && r.deliveryStatus !== "sent" ? (
+            <p className="ja-error">
+              {r.deliveryStatus === "sending"
+                ? "Envío en curso"
+                : "Envío sin confirmar. Revisar en Gmail antes de repetir."}
+            </p>
+          ) : null}
+        </div>
+      ))}
+      {data && !data.recipients.length ? (
+        <Empty>No hay destinatarios con hojas disponibles.</Empty>
+      ) : null}
+      {data?.recipients.length ? (
+        <>
+          <label className="ja-check">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+            />
+            Confirmo los destinatarios y el envío
+          </label>
+          <button
+            className="ja-primary"
+            disabled={
+              !confirmed || busy || sent.length === data.recipients.length
+            }
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                for (const r of data.recipients) {
+                  if (sent.includes(r.email) || r.deliveryStatus) continue;
+                  await api("export-send", {
+                    export_id: exportId,
+                    recipient: r.email,
+                    confirmation: exportId,
+                  });
+                  setSent((old) => [...old, r.email]);
+                }
+              } catch (e) {
+                setError(errorText(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Mail size={17} />
+            {busy ? "Enviando…" : "Enviar hojas"}
+          </button>
+        </>
+      ) : null}
+      {error ? (
+        <p role="alert" className="ja-error">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function MetadataForm({
+  routine,
+  initialField,
+  onSave,
+}: {
+  routine: Routine;
+  initialField: string;
+  onSave: (data: unknown) => Promise<void>;
+}) {
+  const [field, setField] = useState(initialField),
+    [value, setValue] = useState(String(routine[initialField] || "")),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  const fields = {
+    name: "Nombre",
+    academy: "Academia",
+    genre: "Género",
+    division: "División",
+    level: "Nivel",
+    category: "Categoría",
+    choreographer: "Coreógrafo",
+    state: "Estado",
+    scheduled_time: "Horario",
+    duration: "Duración",
+  };
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+          await onSave({
+            routine_id: routine.routine_id,
+            expected_updated_at: routine.updated_at,
+            field,
+            value,
+          });
+        } catch (e) {
+          setError(errorText(e));
+          setBusy(false);
+        }
+      }}
+    >
+      <label>
+        Campo
+        <select
+          value={field}
+          onChange={(e) => {
+            setField(e.target.value);
+            setValue(String(routine[e.target.value] || ""));
+          }}
+        >
+          {Object.entries(fields).map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {fields[field as keyof typeof fields]}
+        <input
+          value={value}
+          maxLength={200}
+          onChange={(e) => setValue(e.target.value)}
+          required={field === "name" || field === "genre"}
+        />
+      </label>
+      {error ? (
+        <p className="ja-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <footer>
+        <button className="ja-primary" disabled={busy}>
+          <Check size={18} />
+          Guardar
+        </button>
+      </footer>
+    </form>
+  );
+}
+function MoveForm({
+  routine,
+  blocks,
+  onSave,
+}: {
+  routine: Routine;
+  blocks: Block[];
+  onSave: (id: string) => Promise<void>;
+}) {
+  const [id, setId] = useState(
+      blocks.find((b) => b.block_id !== routine.block_id)?.block_id || "",
+    ),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+          await onSave(id);
+        } catch (e) {
+          setError(errorText(e));
+          setBusy(false);
+        }
+      }}
+    >
+      <p>
+        #{routine.routine_id} · {routine.name}
+      </p>
+      <label>
+        Bloque destino
+        <select value={id} onChange={(e) => setId(e.target.value)} required>
+          {blocks
+            .filter((b) => b.block_id !== routine.block_id)
+            .map((b) => (
+              <option key={b.block_id} value={b.block_id}>
+                {b.title || b.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      <p>Se conservarán las notas, devoluciones, penalizaciones y favoritos.</p>
+      {error ? (
+        <p className="ja-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <footer>
+        <button disabled={!id || busy} className="ja-primary">
+          <ArrowRight size={18} />
+          Mover
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+type Api = <T>(action: string, body?: unknown, selected?: string) => Promise<T>;
+function JudgesPanel({
+  bundle,
+  judges,
+  api,
+  mutate,
+  setModal,
+  setNotice,
+  refresh,
+}: {
+  bundle: Bundle;
+  judges: Judge[];
+  api: Api;
+  mutate: (a: string, d: unknown) => Promise<void>;
+  setModal: (m: Modal) => void;
+  setNotice: (m: string) => void;
+  refresh: () => Promise<void>;
+}) {
+  const [selected, setSelected] = useState(judges[0]?.judge_id || ""),
+    [creating, setCreating] = useState(false),
+    [codes, setCodes] = useState<{ judge_id: string; access_code: string }[]>(
+      [],
+    ),
+    [error, setError] = useState("");
+  const judge = creating
+    ? null
+    : judges.find((j) => j.judge_id === selected) || null;
+  useEffect(() => {
+    let live = true;
+    api<{ codes: { judge_id: string; access_code: string }[] }>("access-codes")
+      .then((r) => {
+        if (live) setCodes(r.codes);
+      })
+      .catch((e) => {
+        if (live) setError(errorText(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [api, judges.length]);
+  return (
+    <section className="ja-judges">
+      <aside>
+        <header>
+          <h2>
+            Jueces <small>{judges.length}</small>
+          </h2>
+          <IconButton label="Agregar juez" onClick={() => setCreating(true)}>
+            <Plus size={20} />
+          </IconButton>
+        </header>
+        {judges.map((j) => (
+          <button
+            className={judge?.judge_id === j.judge_id ? "is-selected" : ""}
+            key={j.judge_id}
+            onClick={() => {
+              setSelected(j.judge_id);
+              setCreating(false);
+            }}
+          >
+            {j.photo_data ? (
+              <img className="ja-avatar" src={j.photo_data} alt="" />
+            ) : (
+              <span className="ja-avatar ja-initial">{j.name[0]}</span>
+            )}
+            <span>
+              <strong>{j.name}</strong>
+              <small>
+                {j.assigned_block_ids.length
+                  ? `${j.assigned_block_ids.length} bloques`
+                  : "Todos los bloques"}
+              </small>
+            </span>
+            <ChevronRight size={17} />
+          </button>
+        ))}
+      </aside>
+      <div className="ja-judge-editor">
+        {error ? (
+          <p role="alert" className="ja-error">
+            {error}
+          </p>
+        ) : null}
+        {judge || creating ? (
+          <JudgeForm
+            key={creating ? "new" : `${judge!.judge_id}-${judge!.updated_at}`}
+            judge={judge}
+            blocks={bundle.blocks}
+            code={
+              codes.find((c) => c.judge_id === judge?.judge_id)?.access_code
+            }
+            account={bundle.accounts.find(
+              (a) => a.judge_id === judge?.judge_id,
+            )}
+            api={api}
+            onSave={async (data) => {
+              await mutate("upsert-judge", data);
+              setSelected((data as { judge_id: string }).judge_id);
+              setCreating(false);
+            }}
+            onDelete={() =>
+              setModal({
+                title: "Eliminar juez",
+                content: (
+                  <ConfirmForm
+                    danger
+                    message={`Se eliminará ${judge!.name} y sus datos de jueceo del evento, incluidas sus calificaciones. Se deshabilitará su acceso web a este evento.`}
+                    label={`Escribe ${judge!.judge_id}`}
+                    onConfirm={async (confirmation) => {
+                      await mutate("delete-judge", {
+                        judge_id: judge!.judge_id,
+                        expected_updated_at: judge!.updated_at,
+                        confirmation,
+                      });
+                      setSelected("");
+                      setModal(null);
+                    }}
+                  />
+                ),
+              })
+            }
+            onAccount={async (data) => {
+              const result = await api<{
+                username?: string;
+                password?: string;
+              }>("web-account", data);
+              await refresh();
+              if (result.password)
+                setModal({
+                  title: "Acceso web creado",
+                  content: (
+                    <div className="ja-credentials">
+                      <p>
+                        Usuario <strong>{result.username}</strong>
+                      </p>
+                      <p>
+                        Contraseña <code>{result.password}</code>
+                      </p>
+                      <a href="/login">levitate.mx/login</a>
+                      <p>La contraseña se muestra solo esta vez.</p>
+                      <button
+                        onClick={() =>
+                          void navigator.clipboard.writeText(
+                            `Usuario: ${result.username}\nContraseña: ${result.password}\nhttps://levitate.mx/login`,
+                          )
+                        }
+                      >
+                        <Copy size={17} />
+                        Copiar acceso
+                      </button>
+                    </div>
+                  ),
+                });
+              else setNotice("Acceso actualizado.");
+            }}
+          />
+        ) : (
+          <Empty>Selecciona o agrega un juez.</Empty>
+        )}
+      </div>
+    </section>
+  );
+}
+function JudgeForm({
+  judge,
+  blocks,
+  code,
+  account,
+  onSave,
+  onDelete,
+  onAccount,
+}: {
+  judge: Judge | null;
+  blocks: Block[];
+  code?: string;
+  account?: Bundle["accounts"][number];
+  api: Api;
+  onSave: (d: unknown) => Promise<void>;
+  onDelete: () => void;
+  onAccount: (d: unknown) => Promise<void>;
+}) {
+  const [name, setName] = useState(judge?.name || ""),
+    [id, setId] = useState(judge?.judge_id || ""),
+    [assigned, setAssigned] = useState(judge?.assigned_block_ids || []),
+    [photo, setPhoto] = useState<string | undefined>(undefined),
+    [all, setAll] = useState(!judge?.assigned_block_ids.length),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [username, setUsername] = useState("");
+  async function loadPhoto(file: File) {
+    setError("");
+    if (
+      file.size > 1000000 ||
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+    ) {
+      setError("Usa una imagen JPEG, PNG o WebP de hasta 1 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(String(reader.result));
+    reader.readAsDataURL(file);
+  }
+  const image = photo === undefined ? judge?.photo_data : photo;
+  return (
+    <>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            await onSave({
+              judge_id: id,
+              name,
+              assigned_block_ids: all ? [] : assigned,
+              ...(photo === undefined ? {} : { photo_data: photo }),
+              ...(judge ? { expected_updated_at: judge.updated_at } : {}),
+            });
+          } catch (e) {
+            setError(errorText(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="ja-photo-editor">
+          {image ? (
+            <img src={image} alt={name || "Foto del juez"} />
+          ) : (
+            <Users size={55} />
+          )}
+          <label className="ja-upload">
+            <ImagePlus size={18} />
+            Elegir foto
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                if (e.target.files?.[0]) void loadPhoto(e.target.files[0]);
+              }}
+            />
+          </label>
+          {image ? (
+            <IconButton label="Quitar foto" onClick={() => setPhoto("")}>
+              <Trash2 size={18} />
+            </IconButton>
+          ) : null}
+        </div>
+        <label>
+          Nombre
+          <input
+            required
+            maxLength={100}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (!judge)
+                setId(
+                  norm(e.target.value)
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, ""),
+                );
+            }}
+          />
+        </label>
+        <label>
+          ID del juez
+          <input
+            required
+            pattern="[A-Za-z0-9_-]{1,160}"
+            value={id}
+            readOnly={!!judge}
+            onChange={(e) => setId(e.target.value)}
+          />
+        </label>
+        <fieldset>
+          <legend>Bloques asignados</legend>
+          <label className="ja-check">
+            <input
+              type="checkbox"
+              checked={all}
+              onChange={(e) => setAll(e.target.checked)}
+            />
+            Todos los bloques
+          </label>
+          {!all
+            ? blocks.map((b) => (
+                <label className="ja-check" key={b.block_id}>
+                  <input
+                    type="checkbox"
+                    checked={assigned.includes(b.block_id)}
+                    onChange={(e) =>
+                      setAssigned(
+                        e.target.checked
+                          ? [...assigned, b.block_id]
+                          : assigned.filter((id) => id !== b.block_id),
+                      )
+                    }
+                  />
+                  {b.title || b.name}
+                </label>
+              ))
+            : null}
+          {!all && !assigned.length ? (
+            <p className="ja-error">Selecciona al menos un bloque.</p>
+          ) : null}
+        </fieldset>
+        {code ? (
+          <div className="ja-access-code">
+            <span>Código app</span>
+            <code>{code}</code>
+            <IconButton
+              label="Copiar código"
+              onClick={() => void navigator.clipboard.writeText(code)}
+            >
+              <Copy size={17} />
+            </IconButton>
+          </div>
+        ) : null}
+        {error ? (
+          <p className="ja-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <footer>
+          {judge ? (
+            <IconButton label="Eliminar juez" onClick={onDelete}>
+              <Trash2 size={19} />
+            </IconButton>
+          ) : null}
+          <button
+            className="ja-primary"
+            disabled={busy || (!all && !assigned.length)}
+          >
+            <Check size={18} />
+            {busy ? "Guardando…" : "Guardar juez"}
+          </button>
+        </footer>
+      </form>
+      {judge ? (
+        <section className="ja-account">
+          <h3>Acceso web</h3>
+          {account ? (
+            <>
+              <p>
+                {account.username} ·{" "}
+                {account.enabled ? "Habilitado" : "Deshabilitado"}
+              </p>
+              <button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await onAccount({
+                      judge_id: id,
+                      user_id: account.user_id,
+                      enabled: !account.enabled,
+                    });
+                  } catch (e) {
+                    setError(errorText(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {account.enabled ? "Deshabilitar acceso" : "Habilitar acceso"}
+              </button>
+            </>
+          ) : (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                setError("");
+                try {
+                  await onAccount({ judge_id: id, username });
+                } catch (e) {
+                  setError(errorText(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <label>
+                Usuario
+                <input
+                  required
+                  pattern="[a-z0-9][a-z0-9._-]{2,59}"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                  autoComplete="off"
+                />
+              </label>
+              <button disabled={busy}>
+                <Plus size={17} />
+                Crear acceso web
+              </button>
+            </form>
+          )}
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function ReportPanel({
+  report,
+  bundle,
+  query,
+  ranking,
+}: {
+  report: ReportBlock | undefined;
+  bundle: Bundle;
+  query: string;
+  ranking: boolean;
+}) {
+  const lookup = new Map(bundle.snapshot.rows.map((r) => [r.id, r]));
+  if (!report) return <Empty>No hay un bloque seleccionado.</Empty>;
+  const render = (standing: Standing) => {
+    const row = lookup.get(standing.routineId);
+    if (
+      !row ||
+      !norm(
+        `${row.id} ${row.name} ${row.academy} ${row.level} ${row.category}`,
+      ).includes(norm(query))
+    )
+      return null;
+    return (
+      <article className="ja-standing" key={row.id}>
+        <div className="ja-standing-score">
+          <small>PUNTAJE</small>
+          <strong>{number(standing.score)}</strong>
+        </div>
+        <div>
+          <h3>{row.name}</h3>
+          <p>{row.academy}</p>
+          <div className="ja-chips">
+            <span>#{row.id}</span>
+            <span>{row.level}</span>
+            <span>{row.category}</span>
+            <Status value={row.status} />
+          </div>
+        </div>
+        <b className="ja-placement">
+          {standing.placement?.isParticipation
+            ? "Participación"
+            : standing.placement?.label || "—"}
+        </b>
+      </article>
+    );
+  };
+  return (
+    <section className="ja-report">
+      <header>
+        <h2>{report.title || report.name}</h2>
+        <span>{ranking ? "Ranking en vivo" : "Dictamen final"}</span>
+      </header>
+      {ranking ? (
+        <>
+          {report.sections
+            .flatMap((s) => s.categories.flatMap((c) => c.rows))
+            .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+            .map(render)}
+        </>
+      ) : (
+        report.sections.map((section) => (
+          <section key={section.id}>
+            <h2>{section.label}</h2>
+            {section.categories.map((c) => (
+              <section className="ja-report-category" key={c.id}>
+                <h3>{c.title}</h3>
+                {c.rows.map(render)}
+              </section>
+            ))}
+          </section>
+        ))
+      )}
+      {report.topScore ? (
+        <div className="ja-top-score">
+          <Trophy size={24} />
+          <div>
+            <small>TOP SCORE</small>
+            <strong>
+              {lookup.get(report.topScore.routineId)?.name} ·{" "}
+              {number(report.topScore.score)}
+            </strong>
+          </div>
+        </div>
+      ) : null}
+      <section className="ja-awards-report">
+        <h2>Premios especiales</h2>
+        {report.specialAwards.map((a) => (
+          <div key={a.id}>
+            <span>{a.title}</span>
+            <strong>{a.displayValue || "Sin asignar"}</strong>
+          </div>
+        ))}
+      </section>
+    </section>
+  );
+}
+function FavoritesPanel({
+  bundle,
+  blockId,
+  query,
+  mutate,
+}: {
+  bundle: Bundle;
+  blockId: string;
+  query: string;
+  mutate: (a: string, d: unknown) => Promise<void>;
+}) {
+  const categories = [
+    { key: "costume", alias: "favorite_1", title: "Mejor vestuario" },
+    {
+      key: "choreography",
+      alias: "favorite_2",
+      title: "Mejor idea coreográfica",
+    },
+    { key: "music", alias: "favorite_3", title: "Mejor música" },
+  ];
+  return (
+    <section className="ja-favorites">
+      {categories.map((c) => {
+        const votes = bundle.favorites.filter(
+          (f) =>
+            f.block_id === blockId && [c.key, c.alias].includes(f.category),
+        );
+        const routines = bundle.routines
+          .filter(
+            (r) =>
+              r.block_id === blockId &&
+              votes.some((v) => v.routine_id === r.routine_id) &&
+              norm(`${r.name} ${r.academy}`).includes(norm(query)),
+          )
+          .map((r) => ({
+            r,
+            judges: [
+              ...new Set(
+                votes
+                  .filter((v) => v.routine_id === r.routine_id)
+                  .map((v) => v.judge_id),
+              ),
+            ],
+          }))
+          .sort((a, b) => b.judges.length - a.judges.length);
+        return (
+          <section key={c.key}>
+            <header>
+              <Star size={22} />
+              <h2>{c.title}</h2>
+            </header>
+            {routines.map(({ r, judges }) => (
+              <article key={r.routine_id}>
+                <b className="ja-votes">
+                  {judges.length}
+                  <small>{judges.length === 1 ? "voto" : "votos"}</small>
+                </b>
+                <div>
+                  <strong>
+                    #{r.routine_id} · {r.name}
+                  </strong>
+                  <p>{r.academy}</p>
+                  <small>
+                    {judges
+                      .map(
+                        (id) =>
+                          bundle.judges.find((j) => j.judge_id === id)?.name ||
+                          id,
+                      )
+                      .join(" · ")}
+                  </small>
+                </div>
+              </article>
+            ))}
+            {!routines.length ? <Empty>Sin votos registrados.</Empty> : null}
+          </section>
+        );
+      })}
+      <section className="ja-manual-awards">
+        <h2>Premios especiales</h2>
+        {[
+          "Mejor vestuario",
+          "Mejor música",
+          "Mejor idea coreográfica",
+          "Mejor porra",
+        ].map((label, index) => {
+          const award = `award_${index + 1}`;
+          return (
+            <AwardForm
+              key={`${blockId}-${award}-${bundle.specialAwards.find((a) => a.block_id === blockId && a.award === award)?.manual_value || ""}`}
+              label={label}
+              value={
+                bundle.specialAwards.find(
+                  (a) => a.block_id === blockId && a.award === award,
+                )?.manual_value || ""
+              }
+              onSave={(value) =>
+                mutate("special-award", {
+                  block_id: blockId,
+                  award,
+                  manual_value: value,
+                })
+              }
+            />
+          );
+        })}
+      </section>
+    </section>
+  );
+}
+function AwardForm({
+  label,
+  value,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  onSave: (v: string) => Promise<void>;
+}) {
+  const [text, setText] = useState(value),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError("");
+        try {
+          await onSave(text);
+        } catch (e) {
+          setError(errorText(e));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <label>
+        {label}
+        <input
+          value={text}
+          maxLength={200}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Sin asignar"
+        />
+      </label>
+      <IconButton
+        label={`Guardar ${label}`}
+        disabled={busy || text === value}
+        onClick={() => {}}
+        type="submit"
+      >
+        <Check size={19} />
+      </IconButton>
+      {error ? (
+        <p className="ja-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+function ActivityPanel({
+  judges,
+  activity,
+  routines,
+}: {
+  judges: Judge[];
+  activity: Presence[];
+  routines: Routine[];
+}) {
+  return (
+    <section className="ja-activity">
+      {judges.map((j) => {
+        const devices = activity.filter((a) => a.judge_id === j.judge_id);
+        const online = devices.some(
+          (a) => Date.now() - Date.parse(a.updated_at) < 600000,
+        );
+        return (
+          <article key={j.judge_id}>
+            <header>
+              {j.photo_data ? (
+                <img className="ja-avatar" src={j.photo_data} alt="" />
+              ) : (
+                <Users size={25} />
+              )}
+              <h2>{j.name}</h2>
+              <span
+                className={`ja-status ${online ? "is-complete" : "is-pending"}`}
+              >
+                {online ? "Activo" : "Inactivo"}
+              </span>
+            </header>
+            {devices.map((a) => {
+              const stale =
+                !a.sync_reported_at ||
+                Date.now() - Date.parse(a.sync_reported_at) > 120000;
+              return (
+                <div className="ja-device" key={a.device_id}>
+                  <strong>
+                    {a.platform || "Dispositivo"} ·{" "}
+                    {a.state === "judging" ? "Evaluando" : "Home"}
+                  </strong>
+                  <small>{a.device_id}</small>
+                  <dl>
+                    <div>
+                      <dt>Última actividad</dt>
+                      <dd>{time(a.updated_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>Coreografía</dt>
+                      <dd>
+                        {routines.find((r) => r.routine_id === a.routine_id)
+                          ?.name || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Datos pendientes</dt>
+                      <dd>
+                        {stale
+                          ? "Sin reporte reciente"
+                          : (a.sync_diagnostics?.pending_count ??
+                            "Sin reporte")}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Última confirmación</dt>
+                      <dd>
+                        {time(
+                          a.sync_diagnostics?.last_confirmed_at || undefined,
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                  {a.sync_diagnostics?.last_error ? (
+                    <p className="ja-error">{a.sync_diagnostics.last_error}</p>
+                  ) : null}
+                </div>
+              );
+            })}
+            {!devices.length ? <Empty>Sin actividad registrada.</Empty> : null}
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+function ImportPanel({
+  events,
+  api,
+  onImported,
+  onEventAction,
+}: {
+  events: Event[];
+  api: Api;
+  onImported: (id: string) => Promise<void>;
+  onEventAction: (a: string, e: Event) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null),
+    [name, setName] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [confirmed, setConfirmed] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (file.size > 20 * 1024 * 1024)
+        throw new Error("El Excel supera 20 MB.");
+      const data = await fileBase64(file);
+      const result = await api<{ event_id: string }>("import", {
+        filename: file.name,
+        name,
+        payload_base64: data.split(",")[1],
+      });
+      await onImported(result.event_id);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="ja-import">
+      <form onSubmit={submit}>
+        <h2>Importar programa</h2>
+        <label>
+          Nombre del evento
+          <input
+            required
+            maxLength={150}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label className="ja-drop">
+          <FileSpreadsheet size={32} />
+          <span>{file?.name || "Seleccionar Excel"}</span>
+          <input
+            type="file"
+            required
+            accept=".xls,.xlsx"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] || null);
+              setConfirmed(false);
+            }}
+          />
+        </label>
+        <label className="ja-check">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+          />
+          Crear un evento nuevo e inactivo
+        </label>
+        {error ? (
+          <p className="ja-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <button className="ja-primary" disabled={!file || !confirmed || busy}>
+          {busy ? (
+            <LoaderCircle className="ja-spin" size={18} />
+          ) : (
+            <Plus size={18} />
+          )}{" "}
+          {busy ? "Importando…" : "Importar"}
+        </button>
+      </form>
+      <section>
+        <h2>Eventos de Levitate</h2>
+        {events.map((e) => (
+          <article className="ja-event-row" key={e.id}>
+            <div>
+              <strong>{e.name}</strong>
+              <small>
+                {e.event_type === "archived"
+                  ? "Archivado"
+                  : e.is_active
+                    ? "Activo"
+                    : "Inactivo"}
+              </small>
+            </div>
+            <div>
+              {e.event_type === "archived" ? (
+                <button onClick={() => void onEventAction("restore", e)}>
+                  Restaurar
+                </button>
+              ) : (
+                <>
+                  {!e.is_active ? (
+                    <button onClick={() => void onEventAction("activate", e)}>
+                      Activar
+                    </button>
+                  ) : null}
+                  <button onClick={() => void onEventAction("archive", e)}>
+                    Archivar
+                  </button>
+                </>
+              )}
+            </div>
+          </article>
+        ))}
+      </section>
+    </section>
+  );
+}
+function SettingsPanel({
+  event,
+  onSave,
+}: {
+  event: Event;
+  onSave: (d: unknown) => Promise<void>;
+}) {
+  const original = (event.competition_config?.scoring || {}) as Record<
+    string,
+    unknown
+  >;
+  const [aggregation, setAggregation] = useState(
+      String(original.aggregation || "average"),
+    ),
+    [missing, setMissing] = useState(
+      String(original.officialMissingScorePolicy || "zero"),
+    ),
+    [high, setHigh] = useState(Number(original.dropHighestCount || 0)),
+    [low, setLow] = useState(Number(original.dropLowestCount || 0)),
+    [penalties, setPenalties] = useState(original.includePenalties !== false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  return (
+    <form
+      className="ja-settings"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError("");
+        try {
+          await onSave({
+            expected_updated_at: event.updated_at,
+            configuration: {
+              scoring: {
+                ...original,
+                aggregation,
+                officialMissingScorePolicy: missing,
+                missingScorePolicy: original.missingScorePolicy || "ignore",
+                dropHighestCount: high,
+                dropLowestCount: low,
+                includePenalties: penalties,
+              },
+            },
+          });
+        } catch (e) {
+          setError(errorText(e));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <h2>Cálculo oficial</h2>
+      <label>
+        Agregación
+        <select
+          value={aggregation}
+          onChange={(e) => setAggregation(e.target.value)}
+        >
+          <option value="average">Promedio</option>
+          <option value="sum">Suma</option>
+        </select>
+      </label>
+      <label>
+        Calificaciones faltantes
+        <select value={missing} onChange={(e) => setMissing(e.target.value)}>
+          <option value="zero">Contar como cero</option>
+          <option value="ignore">Omitir</option>
+        </select>
+      </label>
+      <div className="ja-two-fields">
+        <label>
+          Descartar mayores
+          <input
+            type="number"
+            min={0}
+            max={20}
+            required
+            value={high}
+            onChange={(e) => setHigh(Number(e.target.value))}
+          />
+        </label>
+        <label>
+          Descartar menores
+          <input
+            type="number"
+            min={0}
+            max={20}
+            required
+            value={low}
+            onChange={(e) => setLow(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      <label className="ja-check">
+        <input
+          type="checkbox"
+          checked={penalties}
+          onChange={(e) => setPenalties(e.target.checked)}
+        />
+        Incluir penalizaciones
+      </label>
+      {error ? (
+        <p className="ja-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <button className="ja-primary" disabled={busy}>
+        <Check size={18} />
+        Guardar configuración
+      </button>
+    </form>
+  );
+}
+function savePdf(bytes: Uint8Array, name: string) {
+  const url = URL.createObjectURL(
+    new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function fileBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    r.readAsDataURL(file);
+  });
+}

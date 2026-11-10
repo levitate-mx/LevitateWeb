@@ -12,3 +12,4 @@ levitate-homepage-full*.png
 .env*
 !.env.example
 .vercel
+supabase/.temp/

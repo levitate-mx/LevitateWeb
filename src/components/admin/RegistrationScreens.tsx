@@ -710,6 +710,7 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Operación", label: "Mi Levitate", icon: FileText, href: "/admin/mi-levitate" },
   { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
   { group: "Operación", label: "Puntuaciones", icon: BadgeCheck, section: "scores" },
+  { group: "Operación", label: "Jueceo admin", icon: ClipboardList, href: "/jueceo/admin" },
   { group: "Pruebas", label: "Votación Relevé", icon: Trophy, section: "releveVoting" },
 ];
 
