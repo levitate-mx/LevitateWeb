@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import QRCode from 'qrcode';
+import { layoutParticipantDiplomaRecipient } from './participant-diploma-layout.js';
 
 const ink = rgb(0.045, 0.045, 0.045);
 const pink = rgb(0.86, 0.0, 0.39);
@@ -102,13 +103,11 @@ export async function generateParticipantDiploma({ name, academy, eventTitle, se
     const centered = (value, y, font, size, color = ink) => {
       page.drawText(value, { x: (612 - font.widthOfTextAtSize(value, size)) / 2, y, font, size, color });
     };
-    const fittedName = fit(name, nameFont, 29, 18, 470, 2, 'El nombre');
-    const nameStart = fittedName.lines.length === 1 ? 402 : 414;
-    fittedName.lines.forEach((line, index) => centered(line, nameStart - index * (fittedName.size + 3), nameFont, fittedName.size));
-    if (academy) {
-      const fittedAcademy = fit(academy, academyFont, 8, 7, 440, 1, 'La academia');
-      centered(fittedAcademy.lines[0], 372, academyFont, fittedAcademy.size, rgb(0.2, 0.17, 0.18));
-    }
+    const recipient = layoutParticipantDiplomaRecipient({ name, academy,
+      measureName: (value, size) => nameFont.widthOfTextAtSize(value, size),
+      measureAcademy: (value, size) => academyFont.widthOfTextAtSize(value, size) });
+    recipient.name.lines.forEach((line, index) => centered(line, 792 - recipient.name.baselines[index], nameFont, recipient.name.size));
+    recipient.academy.lines.forEach((line, index) => centered(line, 792 - recipient.academy.baselines[index], academyFont, recipient.academy.size, rgb(0.2, 0.17, 0.18)));
     const authenticatedLabel = preview ? 'EJEMPLO · AUTENTICADO' : 'AUTENTICADO';
     page.drawText(authenticatedLabel, {
       x: 498 - bold.widthOfTextAtSize(authenticatedLabel, 6.5), y: 748, font: bold, size: 6.5, color: pink,

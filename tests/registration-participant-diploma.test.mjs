@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { PDFDocument, PDFDict, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFName, PDFRawStream, StandardFonts, decodePDFRawStream } from 'pdf-lib';
 import { generateParticipantDiploma, generateParticipantQrSvg } from '../shared/participant-diploma.js';
+import { layoutParticipantDiplomaRecipient } from '../shared/participant-diploma-layout.js';
 
 const templateBytes = await readFile(new URL('../public/assets/participant-recognition-template.pdf', import.meta.url));
 const unicodeFontBytes = await readFile(new URL('../public/assets/participant-recognition-unicode.ttf', import.meta.url));
@@ -46,6 +47,40 @@ test('long participant names wrap without changing the issued identity', async (
   const pdf = await PDFDocument.load(bytes);
   assert.equal(pdf.getTitle(), `Reconocimiento de participación autenticado · ${name}`);
   assert.equal(pdf.getPageCount(), 1);
+});
+
+test('the reported long name fits one readable line above its academy', async () => {
+  const pdf = await PDFDocument.create();
+  const nameFont = await pdf.embedFont(StandardFonts.TimesRoman);
+  const academyFont = await pdf.embedFont(StandardFonts.Helvetica);
+  const name = 'ALISON LIKE MANCILLA MORALES', academy = 'Academia Danzárale';
+  const layout = layoutParticipantDiplomaRecipient({ name, academy,
+    measureName: (value, size) => nameFont.widthOfTextAtSize(value, size),
+    measureAcademy: (value, size) => academyFont.widthOfTextAtSize(value, size) });
+  assert.deepEqual(layout.name.lines, [name]);
+  assert.ok(layout.name.size >= 22);
+  assert.ok(nameFont.widthOfTextAtSize(name, layout.name.size) <= 470);
+  assert.ok(layout.name.baselines.at(-1) + layout.name.size * 0.3 < layout.academy.baselines[0] - layout.academy.size);
+  assert.ok(layout.academy.baselines.at(-1) + layout.academy.size * 0.3 < 427.2, 'academy remains above the pink rule');
+});
+
+test('exceptionally long identities use balanced lines in the reserved recipient space', async () => {
+  const pdf = await PDFDocument.create();
+  const nameFont = await pdf.embedFont(StandardFonts.TimesRoman);
+  const academyFont = await pdf.embedFont(StandardFonts.Helvetica);
+  const name = 'MARÍA FERNANDA DE LOS ÁNGELES HERNÁNDEZ GONZÁLEZ DE LA TORRE MORALES';
+  const academy = 'Academia de Danza Contemporánea y Artes Escénicas de los Ángeles';
+  const layout = layoutParticipantDiplomaRecipient({ name, academy,
+    measureName: (value, size) => nameFont.widthOfTextAtSize(value, size),
+    measureAcademy: (value, size) => academyFont.widthOfTextAtSize(value, size) });
+  assert.equal(layout.name.lines.length, 2);
+  assert.equal(layout.name.lines.join(' '), name);
+  assert.equal(layout.academy.lines.join(' '), academy);
+  assert.ok(layout.name.lines.every(line => line.split(' ').length > 1));
+  assert.ok(layout.name.lines.every(line => nameFont.widthOfTextAtSize(line, layout.name.size) <= 470));
+  assert.ok(layout.name.baselines[0] - layout.name.size > 338.27, 'name stays below Se otorga a');
+  assert.ok(layout.name.baselines.at(-1) + layout.name.size * 0.3 < layout.academy.baselines[0] - layout.academy.size);
+  assert.ok(layout.academy.baselines.at(-1) + layout.academy.size * 0.3 < 427.2);
 });
 
 test('QR and diploma generators reject non-web credential targets', async () => {

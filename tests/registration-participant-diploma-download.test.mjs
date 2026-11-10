@@ -6,6 +6,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
+import { layoutParticipantDiplomaRecipient } from "../shared/participant-diploma-layout.js";
 
 const require = createRequire(import.meta.url);
 const source = await readFile(new URL("../src/components/participant/ParticipantPage.tsx", import.meta.url), "utf8");
@@ -181,7 +182,9 @@ test("PDF generation errors remain recoverable without creating or replacing an 
 
 test("the visible diploma uses the approved personalized art and labels internal drafts", async () => {
   const componentSource = await readFile(new URL("../src/components/participant/ParticipantDiplomaPreview.tsx", import.meta.url), "utf8");
-  const scope = { exports: {}, require };
+  const scope = { exports: {}, require(path) {
+    return path === "../../../shared/participant-diploma-layout.js" ? { layoutParticipantDiplomaRecipient } : require(path);
+  } };
   vm.runInNewContext(compile(componentSource), scope);
   const html = renderToStaticMarkup(createElement(scope.exports.ParticipantDiplomaPreview, {
     name: "Mariana López", academy: "Academia Uno", season: "Otoño 2026", eventTitle: selectedEvent.title,
