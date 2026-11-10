@@ -29,6 +29,12 @@ calculation or validation. While a judging sheet is
 open, sidebar and mobile navigation are hidden; its Back action returns to the
 workspace and restores navigation without clearing the draft.
 
+Judge portraits reuse the public jury files under `/assets/`, with exact
+normalized names so Daniel Herrera and Daniel Montalvo remain distinct. The web
+Flutter `webJudgePortraitCatalog` and React `judging/judgePortraits.ts` share
+those paths. Eva Carrillo uses a neutral placeholder until her portrait is added;
+failed image requests also show a placeholder. Native hero assets are unchanged.
+
 The React administration workspace scopes the corresponding light/dark tokens
 under `.ja-app` in `JudgingAdminWorkspace.css`. It starts in dark mode and keeps
 an explicit light/dark choice when the administrator changes the toggle.

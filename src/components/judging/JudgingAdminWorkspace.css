@@ -1113,6 +1113,7 @@
   width: 32px;
   border-radius: 50%;
   object-fit: cover;
+  object-position: center top;
   flex-shrink: 0;
   display: inline-block;
 }
@@ -1121,6 +1122,9 @@
   margin: 0 auto 6px;
   height: 29px;
   width: 29px;
+}
+.ja-matrix thead .ja-initial {
+  display: grid;
 }
 .ja-initial {
   display: grid;
@@ -1201,6 +1205,7 @@
   height: 106px;
   width: 106px;
   object-fit: cover;
+  object-position: center top;
   border-radius: 18px;
   background: var(--ja-raised);
 }

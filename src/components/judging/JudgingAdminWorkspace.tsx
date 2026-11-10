@@ -37,6 +37,7 @@ import type {
   ReportStanding,
 } from "../admin/JudgingScoresPanel";
 import "./JudgingAdminWorkspace.css";
+import { resolveJudgePortrait } from "./judgePortraits";
 
 type Event = {
   id: string;
@@ -192,6 +193,16 @@ function Status({ value }: { value: string }) {
 }
 function Empty({ children }: { children: ReactNode }) {
   return <p className="ja-empty">{children}</p>;
+}
+function JudgeAvatar({ judge }: { judge: Judge }) {
+  const image = resolveJudgePortrait(judge);
+  return image ? (
+    <img className="ja-avatar" src={image} alt="" />
+  ) : (
+    <span className="ja-avatar ja-initial" aria-hidden="true">
+      {judge.name.trim().slice(0, 1).toUpperCase() || "?"}
+    </span>
+  );
 }
 function ModalFrame({
   modal,
@@ -1071,13 +1082,7 @@ export function JudgingAdminWorkspace() {
                     </th>
                     {judges.map((j) => (
                       <th key={j.judge_id}>
-                        {j.photo_data ? (
-                          <img
-                            className="ja-avatar"
-                            src={j.photo_data}
-                            alt=""
-                          />
-                        ) : null}
+                        <JudgeAvatar judge={j} />
                         <span className="ja-column-label">Juez</span>
                         <strong>{j.name}</strong>
                       </th>
@@ -1622,11 +1627,7 @@ function JudgesPanel({
               setCreating(false);
             }}
           >
-            {j.photo_data ? (
-              <img className="ja-avatar" src={j.photo_data} alt="" />
-            ) : (
-              <span className="ja-avatar ja-initial">{j.name[0]}</span>
-            )}
+            <JudgeAvatar judge={j} />
             <span>
               <strong>{j.name}</strong>
               <small>
@@ -1764,7 +1765,7 @@ function JudgeForm({
     reader.onload = () => setPhoto(String(reader.result));
     reader.readAsDataURL(file);
   }
-  const image = photo === undefined ? judge?.photo_data : photo;
+  const image = photo === undefined && judge ? resolveJudgePortrait(judge) : photo;
   return (
     <>
       <form
@@ -2328,11 +2329,7 @@ function ActivityPanel({
         return (
           <article key={j.judge_id}>
             <header>
-              {j.photo_data ? (
-                <img className="ja-avatar" src={j.photo_data} alt="" />
-              ) : (
-                <Users size={25} />
-              )}
+              <JudgeAvatar judge={j} />
               <h2>{j.name}</h2>
               <span
                 className={`ja-status ${online ? "is-complete" : "is-pending"}`}
