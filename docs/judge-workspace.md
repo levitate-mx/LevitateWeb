@@ -22,7 +22,9 @@ the web-specific workspace and judging-sheet composition, while native themes
 continue through the original layouts. Navigation, programme/judge selection,
 score fields, validation, drafts and save callbacks still use the existing store.
 The judging action bar stays outside the scrolling criteria so the total and
-save action remain reachable on desktop and mobile.
+save action remain reachable on desktop and mobile. While a judging sheet is
+open, sidebar and mobile navigation are hidden; its Back action returns to the
+workspace and restores navigation without clearing the draft.
 
 The React administration workspace scopes the corresponding light/dark tokens
 under `.ja-app` in `JudgingAdminWorkspace.css`. It starts in dark mode and keeps
