@@ -194,6 +194,44 @@ function routineChunks(ids) {
   return groups;
 }
 
+// Closing a block needs its stable source identity and complete membership,
+// without loading the scores of every block in an event.
+export async function getJudgingBlockDirectory(env, eventId, { fetcher = fetch, trustedEventId } = {}) {
+  eventId = allowedParticipantEventId(env, eventId, trustedEventId);
+  const config = configuration(env), budget = { requests: 0, rows: 0 };
+  const event = await readEvent(config, eventId, fetcher, "id,name,event_type", budget);
+  const [sourceBlocks, routines] = await Promise.all([
+    readRows(config, "blocks", { select: tableColumns.blocks, event_id: `eq.${eventId}`, order: tableOrders.blocks }, fetcher, budget),
+    readRows(config, "routines", { select: "event_id,routine_id,block_id,block", event_id: `eq.${eventId}`, order: tableOrders.routines }, fetcher, budget),
+  ]);
+  const byId = new Map(), seen = new Set();
+  for (const block of sourceBlocks) {
+    const id = cleanText(block.block_id);
+    if (block.event_id !== eventId || !id || id !== block.block_id || byId.has(id)) {
+      fail("judging_invalid_response", "No pudimos comprobar los bloques del programa.", 502);
+    }
+    byId.set(id, { id, name: cleanText(block.title) || cleanText(block.name) || id, routineIds: [] });
+  }
+  for (const routine of routines) {
+    const id = cleanText(routine.routine_id);
+    if (routine.event_id !== eventId || !routineIdPattern.test(id) || id !== routine.routine_id || seen.has(id)) {
+      fail("judging_invalid_response", "No pudimos comprobar las identidades del programa.", 502);
+    }
+    seen.add(id);
+    let blockId = cleanText(routine.block_id);
+    if (!blockId && cleanText(routine.block)) {
+      const matches = sourceBlocks.filter(block => cleanText(block.name) === cleanText(routine.block));
+      if (matches.length !== 1) fail("judging_invalid_response", "Asigna un bloque único a cada presentación antes de cerrarlo.", 502);
+      blockId = matches[0].block_id;
+    }
+    if (!blockId) continue; // Unassigned presentations cannot release a block.
+    const block = byId.get(blockId);
+    if (!block) fail("judging_invalid_response", "Una presentación tiene un bloque que no pertenece al programa.", 502);
+    block.routineIds.push(id);
+  }
+  return { event: { id: eventId, name: cleanText(event.name) }, blocks: [...byId.values()] };
+}
+
 // A result's category can include other routines, so fetch the complete blocks
 // containing the participant's presentations. Full-event metadata establishes
 // membership; scoring rows remain limited to those blocks and stay server-side.
@@ -269,7 +307,8 @@ export async function getJudgingSheets(env, eventId, { routineIds, fetcher = fet
   const snapshot=buildJudgingScoreSnapshot({event,blocks:blocks.filter(block=>selectedBlocks.has(block.block_id)),routines,judges:data.judges,
     templates:data.criteria_templates,criteria:data.criteria,scores:data.scores,penalties:data.penalties,
     feedback:data.feedback,specialAwards:[]},new Date().toISOString());
-  return {...snapshot,resultScope:{complete:true,eventId,blockIds:[...selectedBlocks]}};
+  return {...snapshot,resultScope:{complete:true,eventId,blockIds:[...selectedBlocks]},
+    publicationContext:{competitionConfig:event.competition_config || {}}};
 }
 
 export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {

@@ -37,7 +37,7 @@ La relación entre archivo, edición, coreografía y participantes se conserva e
 3. Los criterios, puntajes, penalizaciones, observaciones y resultados oficiales se consultan directamente desde JueceoCore. La descarga genera un PDF por juez dentro de un mismo documento, sin cargarlo ni guardarlo en Drive. Los lugares esperan a que esté completa la categoría correspondiente.
 4. Reutilizar los accesos individuales ya emitidos. El reconocimiento digital se genera al descargarlo, con el nombre, academia y edición de la persona identificada. No crea ni reemplaza sus QR y no necesita guardarse en Drive. Los PDF personalizados aprobados anteriormente mantienen prioridad.
 5. Pedir al fotógrafo carpetas identificadas por presentación. Cargar 10–20 fotografías por pieza desde administración, o preparar el lote con `participant-portal-media.py --for-upload`. La computadora del operador genera las vistas con marca de agua antes de subirlas; cada álbum se carga una vez para sus integrantes.
-6. Aprobar los archivos, publicar la presentación y hacer visible la edición. Los documentos tienen su publicación independiente.
+6. Aprobar los archivos y publicar las presentaciones individualmente o cerrar su bloque con la política **Al cerrar cada bloque**. Hacer visible la edición cuando corresponda. Los documentos tienen su publicación independiente.
 7. Entregar cada QR al participante o su responsable. Un acceso puede revocarse o reemplazarse. Al reemplazarlo, el QR anterior deja de abrir el espacio.
 
 El QR es una llave personal: quien lo tenga puede consultar ese espacio. Para compartir en redes conviene usar una imagen del reconocimiento sin su QR privado. Este sistema no incorpora reconocimiento facial, cobro ni entrega de originales comprados. Las fotografías se entregan como vistas previas; cualquier descarga adicional debe habilitarse explícitamente.
@@ -56,6 +56,20 @@ El QR es una llave personal: quien lo tenga puede consultar ese espacio. Para co
 - Borradores, publicación, revocación, versiones de resultados y registro del administrador que los modificó.
 - Preparación aditiva del esquema, sin crear tablas durante peticiones de participantes.
 
+## Publicación al cerrar cada bloque
+
+En **Mi Levitate → Publicación por bloque**, cada edición puede conservar la publicación individual o elegir **Al cerrar cada bloque**. Cambiar esta opción no abre la edición ni modifica accesos, QR, música o evaluaciones de JueceoCore. Una edición todavía sin programa puede dejar preparada la opción; sus bloques aparecerán después de vincular el programa real.
+
+El administrador selecciona un bloque y actualiza su revisión. **Cerrar y publicar bloque** solo está disponible cuando todas sus coreografías están vinculadas y todos sus jueces completaron los criterios correspondientes. Un puntaje de cero es válido; una lectura parcial, una identidad ambigua o una fuente no disponible nunca certifican el cierre. El cierre de Mi Levitate no usa `is_active` ni impide editar desde la app.
+
+El cierre publica juntas las fichas de ese bloque y permite consultar sus resultados y hojas. Las fotografías mantienen sus controles independientes: cada archivo debe estar aprobado y su galería habilitada. La edición debe continuar visible para que cualquier material llegue al participante. Los reconocimientos conservan su publicación independiente.
+
+Cada cierre registra el administrador y una huella del programa, sus asociaciones y la evaluación revisada. Si cambian notas, criterios, configuración, jueces o integrantes del bloque de competencia, su material queda pendiente hasta revisar y cerrar de nuevo. **Reabrir y ocultar** retira el material sin borrar notas ni archivos. Las rutas directas de archivos aplican el mismo control que el resumen; conservar una URL anterior no permite saltarse la reapertura.
+
+Los perfiles reales abiertos actualizan su contenido cada 60 segundos mientras la pestaña está visible y al volver a ella, con un mínimo de 30 segundos entre consultas. Conservan la presentación seleccionada y cancelan descargas pendientes si cambian la identidad, la edición o la publicación. Las páginas de ejemplo y la revisión administrativa no realizan este refresco automático.
+
+El estado y el historial se guardan en las tablas aditivas de `db/registration_participant_block_publication.sql`, dentro de la D1 existente. Las peticiones de lectura no crean ni modifican cierres. No se necesitan tareas programadas, servicios de pago ni nuevas bases de datos.
+
 ## Configuración y activación
 
 La configuración usa `PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL = "musica.levitate@gmail.com"` y reutiliza la autorización existente de Google Drive. El perfil Ati de Chrome es independiente de la cuenta OAuth que almacena archivos de la web. El 9 de noviembre de 2026 se verificaron la cuenta y la cuota y se creó la carpeta **Mi Levitate · Vistas previas privadas** mediante la sesión administrativa normal. Esta ruta aprovecha el Drive, D1 y el plan gratuito del Worker actuales. No requiere contratar R2 ni Workers Paid ni activar ampliaciones de almacenamiento o facturación.
@@ -65,7 +79,7 @@ La configuración usa `PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL = "musica.levitate@
 3. Como administrador autenticado, usar **Preparar carpeta privada en Drive** en `/admin/mi-levitate`. La acción `storage.prepare` comprueba cuenta y cuota y crea o reutiliza una carpeta propia de la aplicación en la cuenta autorizada. Se mantiene separada de carpetas compartidas, música, originales y QRs; no se habilitan permisos públicos o de dominio. La aplicación descubre su referencia mediante `appProperties` de Drive, sin crear tablas ni alterar la configuración de música o de originales. `GET /api/registration/admin/participant-portal?storage=1` comprueba el estado sin crear la carpeta.
 4. El esquema aditivo de `db/registration_participant_portal.sql` ya está aplicado. La consulta de lectura del 9 de noviembre de 2026 encontró la edición real `edomex-2026-otono` oculta (`published = 0`), sin fichas editoriales ni archivos del portal. Conservar los 262 accesos emitidos, las inscripciones, resultados y relaciones actuales. Esta activación no requiere crear o reemplazar accesos ni crear otra base de datos.
 5. Ejecutar la comprobación interna de almacenamiento. Las copias de fotos deben llegar preparadas, medir hasta 1600 píxeles por lado y pesar como máximo 1 MB; los PDF admiten hasta 8 MB. El preparador ajusta calidad y tamaño automáticamente antes de cargar. El Worker valida y entrega archivos mediante su API autenticada, con operaciones acotadas para el plan actual. Drive conserva sus cuotas y espacio disponibles; una cuota agotada debe detener la operación, sin contratar ampliaciones automáticamente. Ver [el flujo de lotes](participant-portal-batch.md).
-6. Antes de publicar material real, revisar arte, nombres, correspondencias y resultados oficiales. La plantilla de reconocimientos conserva el arte de Otoño 2026 y rechaza nombres que no caben, sin truncar la identidad. Las hojas y resultados leen automáticamente la fuente de JueceoCore vinculada. La edición permanece oculta hasta la publicación administrativa existente; el cierre automático por bloque no forma parte de esta etapa.
+6. Antes de publicar material real, revisar arte, nombres, correspondencias y resultados oficiales. La plantilla de reconocimientos conserva el arte de Otoño 2026 y ajusta los nombres completos dentro de su espacio. Las hojas y resultados leen automáticamente la fuente de JueceoCore vinculada. Configurar la política de publicación individual o por cierre de bloque; la edición permanece oculta hasta que un administrador la haga visible.
 
 ## Hojas automáticas desde JueceoCore
 

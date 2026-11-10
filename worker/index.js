@@ -4,7 +4,7 @@ import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
 import { ticketEvent, getTicketAttendance, recordTicketAdmission } from "./ticket-attendance.js";
 import { accessSessions, resolveAccessSession, getAccessCoverage, isSplitAccessSession, isAmbiguousAccessSession } from "./ticket-access.js";
 import { getTicketSalesSummary } from "./ticket-sales.js";
-import { getJudgingEvents, getJudgingScores, getJudgingRoutineDirectory, getJudgingSheets } from "./judging-reader.js";
+import { getJudgingEvents, getJudgingScores, getJudgingRoutineDirectory, getJudgingBlockDirectory, getJudgingSheets } from "./judging-reader.js";
 import { handleJudgeWorkspace, handleAdminJudgeEditor } from "./judge-workspace.js";
 import { handleJudgingAdmin } from "./judging-admin.js";
 import {handleJudgingExports,serveJudgingExport} from './judging-admin-exports.js';
@@ -448,6 +448,7 @@ export default {
         getJudgingSnapshot: (eventId, options) => getJudgingSheets(env, eventId, options),
         getJudgingEventList: () => getJudgingEvents(env),
         getJudgingDirectory: (eventId, options) => getJudgingRoutineDirectory(env, eventId, options),
+        getJudgingBlockDirectory: (eventId, options) => getJudgingBlockDirectory(env, eventId, options),
       });
     }
 

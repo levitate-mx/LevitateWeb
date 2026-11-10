@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getJudgingEvents, getJudgingScores, getJudgingSheets, getJudgingRoutineDirectory } from "../worker/judging-reader.js";
+import { getJudgingEvents, getJudgingScores, getJudgingSheets, getJudgingRoutineDirectory, getJudgingBlockDirectory } from "../worker/judging-reader.js";
 import { projectParticipantResult } from "../worker/participant-results.js";
 
 const eventId="f3c2e100-1234-4567-8abc-123456789abc";
@@ -45,6 +45,31 @@ function upstream(data,{cap=1000,ignoreScopeFor=[],rawPageFor={}}={}) {
     return Response.json(rows.slice(offset,offset+cap));
   }};
 }
+
+test("block publication directory returns stable membership without loading private evaluations",async()=>{
+  const server=upstream(fixture());
+  const result=await getJudgingBlockDirectory(env,eventId,{fetcher:server.fetcher});
+  assert.deepEqual(result.blocks,[{id:"b1",name:"Bloque 1",routineIds:["r1","r2"]},{id:"b2",name:"Bloque 2",routineIds:["r3"]}]);
+  assert.deepEqual(new Set(server.calls.map(({url})=>url.pathname.split('/').at(-1))),new Set(['events','blocks','routines']));
+  assert.doesNotMatch(JSON.stringify(result),/PRIVATE CODE|criteria|score|access_code|judge/i);
+});
+
+test("block publication directory rejects ambiguous, foreign and duplicate identities",async()=>{
+  const duplicate=fixture();duplicate.routines.push({...duplicate.routines[0]});
+  await assert.rejects(getJudgingBlockDirectory(env,eventId,{fetcher:upstream(duplicate).fetcher}),/identidades/);
+  const ambiguous=fixture();ambiguous.blocks.push({...ambiguous.blocks[0],block_id:'b-other'});ambiguous.routines[0].block_id=null;
+  await assert.rejects(getJudgingBlockDirectory(env,eventId,{fetcher:upstream(ambiguous).fetcher}),/bloque único/);
+  const foreign=fixture();foreign.blocks[0].event_id=otherEventId;
+  await assert.rejects(getJudgingBlockDirectory(env,eventId,{fetcher:upstream(foreign,{ignoreScopeFor:['blocks']}).fetcher}),/bloques/);
+  await assert.rejects(getJudgingBlockDirectory(env,otherEventId,{fetcher:upstream(fixture(otherEventId)).fetcher}),/evento de Levitate/);
+});
+
+test("release snapshots carry calculation configuration but not a public closure signal",async()=>{
+  const data=fixture();data.events[0].competition_config={maximumScore:150,version:'release-test'};
+  const snapshot=await getJudgingSheets(env,eventId,{routineIds:['r1'],fetcher:upstream(data).fetcher});
+  assert.deepEqual(snapshot.publicationContext,{competitionConfig:data.events[0].competition_config});
+  assert.equal(snapshot.publicationContext.closed,undefined);
+});
 
 test("participant result reader reads full requested blocks but no evaluations from unrelated blocks",async()=>{
   const server=upstream(fixture());

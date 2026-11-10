@@ -3,6 +3,7 @@ import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./par
 import { prepareParticipantDemoPhoto } from "./participant-demo-media.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
+import { createBlockPublicationGate, getBlockPublication, saveBlockPublicationMode, closeParticipantBlock, reopenParticipantBlock } from "./participant-block-publication.js";
 
 const cookieName = "levitate_participant_session";
 const sessionSeconds = 60 * 60 * 24 * 7;
@@ -135,7 +136,9 @@ async function me(db, env, request, getJudgingSnapshot) {
   const grant = await session(db, request);
   const requested = new URL(request.url).searchParams.get("eventId");
   if (requested && requested !== grant.event_id) fault("portal_event_not_found", "No se encontró la edición.", 404);
-  return json(await participantData(db, env, grant.participant_id, grant.event_id, false, getJudgingSnapshot));
+  const data = await participantData(db, env, grant.participant_id, grant.event_id, false, getJudgingSnapshot);
+  await session(db, request); // An access replaced while Core responded cannot finish the old request.
+  return json(data);
 }
 // The preview flag is supplied only by the authenticated admin route. Participant
 // requests always derive both IDs from their grant and use publication checks.
@@ -192,13 +195,80 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
         photos: { status: photos.length ? "available" : "pending", count: photos.length,
           items: photos.map((asset) => ({ id: asset.id, previewUrl: link(asset.id), ...(asset.allow_download ? { downloadUrl: `${link(asset.id)}${adminPreview ? "&" : "?"}download=1` } : {}), width: asset.width, height: asset.height, caption: asset.caption })) } };
     }) };
+  let enriched = data;
+  const snapshots = new Map();
+  let source;
   if (getJudgingSnapshot) {
-    const source = await first(db, "SELECT source_event_id,enabled FROM participant_portal_judging_sources WHERE event_id=?", event.id);
-    return enrichParticipantJudging({ data, rows, event: { ...event, automatic_judging: source?.enabled === 1, automatic_results: source?.enabled === 1 }, adminPreview,
+    source = await first(db, "SELECT source_event_id,enabled FROM participant_portal_judging_sources WHERE event_id=?", event.id);
+    enriched = await enrichParticipantJudging({ data, rows, event: { ...event, automatic_judging: source?.enabled === 1, automatic_results: source?.enabled === 1 }, adminPreview,
       sourceEventId: source?.source_event_id,
-      getSnapshot: source && !source.enabled ? undefined : (sourceEventId,options)=>getJudgingSnapshot(sourceEventId,{...options,trustedEventId:source?.source_event_id}) });
+      getSnapshot: source && !source.enabled ? undefined : (sourceEventId,options) => {
+        const snapshot = Promise.resolve().then(() => getJudgingSnapshot(sourceEventId,{...options,trustedEventId:source?.source_event_id}));
+        snapshots.set(sourceEventId.toLowerCase(), snapshot);
+        return snapshot;
+      } });
   }
-  return data;
+  if (!adminPreview) {
+    const publication = await createBlockPublicationGate({ db, eventId: event.id });
+    if (publication.mode === "block_close") {
+      enriched = { ...enriched, routines: await Promise.all(enriched.routines.map(async routine => {
+        const row = rows.find(value => (value.id || `registration:${value.registration_dance_id}`) === routine.id);
+        const sourceEventId = row?.source_event_id || source?.source_event_id || "";
+        const sourceRoutineId = row?.source_routine_id || row?.registration_dance_id || "";
+        let allowed = false;
+        if (event.published && row?.status === "published" && sourceEventId && sourceRoutineId) {
+          try {
+            const snapshot = await snapshots.get(sourceEventId.toLowerCase());
+            allowed = await publication.allowsRoutine({ sourceEventId, sourceRoutineId,
+              danceId: row.registration_dance_id, snapshot });
+          } catch { /* A missing or changed evaluation keeps the block private. */ }
+        }
+        return allowed ? routine : { ...routine, result: pendingResult(),
+          judging: { source: "jueceocore", sourceStatus: "pending", status: "pending", judges: [] },
+          photos: { status: "pending", count: 0, items: [] } };
+      })) };
+      // Recheck publication flags after every upstream read/hash. These two
+      // bounded reads also cover withdrawals made while Core was responding.
+      const [currentRows, currentAssets] = await Promise.all([
+        all(db, `SELECT r.id,r.photos_published FROM participant_portal_routines r
+          JOIN participant_portal_events e ON e.id=r.event_id
+          JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
+          WHERE r.event_id=? AND dp.participant_id=? AND e.published=1 AND r.status='published'`, event.id, participant.id),
+        all(db, `SELECT a.id,a.allow_download FROM participant_portal_assets a
+          JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
+          JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
+          WHERE a.event_id=? AND dp.participant_id=? AND a.published=1`, event.id, participant.id),
+      ]);
+      const confirmed = await publication.confirm();
+      const permissions = new Map(currentRows.map(row => [row.id, row]));
+      const approved = new Map(currentAssets.map(asset => [asset.id, asset]));
+      enriched = { ...enriched, routines: enriched.routines.map(routine => {
+        const permission = confirmed ? permissions.get(routine.id) : null;
+        if (!permission) return { ...routine, result: pendingResult(),
+          judging: { source: "jueceocore", sourceStatus: "pending", status: "pending", judges: [] },
+          photos: { status: "pending", count: 0, items: [] } };
+        const items = permission.photos_published ? routine.photos.items.filter(photo => approved.has(photo.id)).map(photo => {
+          if (approved.get(photo.id).allow_download) return photo;
+          const { downloadUrl, ...preview } = photo;
+          return preview;
+        }) : [];
+        let judging = routine.judging;
+        if (judging.assetId && !approved.has(judging.assetId)) {
+          const { assetId, url, ...inline } = judging;
+          judging = { ...inline, status: inline.judges?.length ? "available" : "pending" };
+        }
+        return { ...routine, judging, photos: { ...routine.photos, status: items.length ? "available" : "pending", count: items.length, items } };
+      }) };
+    } else if (!await publication.confirm()) {
+      enriched = { ...enriched, routines: enriched.routines.map(routine => ({ ...routine, result: pendingResult(),
+        judging: { sourceStatus: "pending", status: "pending", judges: [] }, photos: { status: "pending", count: 0, items: [] } })) };
+    }
+    const visibleNow = await first(db, "SELECT published FROM participant_portal_events WHERE id=?", event.id);
+    if (event.published && !visibleNow?.published) enriched = { ...enriched, diploma: { status: "pending", assetId: null, url: null },
+      routines: enriched.routines.map(routine => ({ ...routine, result: pendingResult(),
+        judging: { sourceStatus: "pending", status: "pending", judges: [] }, photos: { status: "pending", count: 0, items: [] } })) };
+  }
+  return enriched;
 }
 function photoFileName(name) {
   return `${name.replace(/\.[^.]+$/, "").slice(0, 190)}.jpg`;
@@ -220,9 +290,10 @@ async function photoResponse(asset, object) {
   }
   return { body: source, size: source.length };
 }
-async function serveAsset(db, env, request, assetId, admin = false, getMediaStore) {
+async function serveAsset(db, env, request, assetId, admin = false, getMediaStore, getJudgingSnapshot) {
   const grant = admin ? null : await session(db, request);
   const asset = await first(db, "SELECT * FROM participant_portal_assets WHERE id = ?", assetId);
+  let publication;
   if (!admin) {
     if (!asset || asset.event_id !== grant.event_id || !asset.published) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
     const event = await eventById(db, asset.event_id);
@@ -231,10 +302,25 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
       const document = await first(db, `SELECT asset_id FROM participant_portal_documents WHERE participant_id = ? AND event_id = ? AND asset_id = ? AND published = 1`, grant.participant_id, grant.event_id, asset.id);
       if (asset.participant_id !== grant.participant_id || !document) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
     } else {
-      const membership = await first(db, `SELECT r.id, r.photos_published FROM participant_portal_routines r
+      const membership = await first(db, `SELECT r.id,r.dance_id,r.source_event_id,r.source_routine_id,r.photos_published FROM participant_portal_routines r
         JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
         WHERE r.id = ? AND r.event_id = ? AND r.status = 'published' AND dp.participant_id = ?`, asset.routine_id, grant.event_id, grant.participant_id);
       if (!membership || (asset.kind === "photo" && !membership.photos_published)) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
+      publication = await createBlockPublicationGate({ db, eventId: event.id });
+      if (publication.mode === "block_close") {
+        const source = await first(db, "SELECT source_event_id FROM participant_portal_judging_sources WHERE event_id=? AND enabled=1", event.id);
+        let allowed = false;
+        if (getJudgingSnapshot && source?.source_event_id && membership.source_event_id === source.source_event_id && membership.source_routine_id) {
+          try {
+            const snapshot = await getJudgingSnapshot(source.source_event_id, {
+              routineIds: [membership.source_routine_id], trustedEventId: source.source_event_id,
+            });
+            allowed = await publication.allowsRoutine({ sourceEventId: source.source_event_id,
+              sourceRoutineId: membership.source_routine_id, danceId: membership.dance_id, snapshot });
+          } catch { /* Direct URLs must obey the same release gate as the page. */ }
+        }
+        if (!allowed) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
+      }
     }
     if (asset.kind === "photo" && new URL(request.url).searchParams.get("download") === "1" && !asset.allow_download) {
       fault("portal_download_unavailable", "Esta imagen está disponible como vista previa.", 403);
@@ -245,6 +331,17 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
   const object = await storage.get(asset.object_key);
   if (!object) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
   const photo = asset.kind === "photo" ? await photoResponse(asset, object) : null;
+  if (publication) {
+    const current = await first(db, `SELECT a.id FROM participant_portal_assets a
+      JOIN participant_portal_events e ON e.id=a.event_id
+      JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
+      JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
+      JOIN participant_portal_access g ON g.event_id=e.id AND g.participant_id=dp.participant_id
+      WHERE a.id=? AND g.id=? AND g.active=1 AND e.published=1 AND r.status='published' AND a.published=1
+        AND (a.kind='judge_sheet' OR (a.kind='photo' AND r.photos_published=1 AND (?=0 OR a.allow_download=1)))`,
+      asset.id, grant.id, new URL(request.url).searchParams.get("download") === "1" ? 1 : 0);
+    if (!current || !await publication.confirm()) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
+  }
   const disposition = asset.kind === "diploma" || new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline";
   return new Response(photo?.body ?? object.body, { headers: { ...headers, "content-type": photo ? "image/jpeg" : asset.content_type,
     "content-disposition": `${disposition}; filename="${(photo ? photoFileName(asset.file_name) : asset.file_name).replace(/[^a-zA-Z0-9._-]/g, "_")}"`, "content-length": String(photo?.size ?? asset.byte_size) } });
@@ -401,8 +498,11 @@ async function linkJudgingProgram(db, input, actorId, getJudgingSnapshot) {
   await db.batch(statements);
   return json({ ok: true, linked: links.length });
 }
-async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEventList, getJudgingDirectory) {
+async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEventList, getJudgingDirectory, getJudgingSnapshot, getJudgingBlockDirectory) {
   switch (input.action) {
+    case "publication.mode.save": return json(await saveBlockPublicationMode({ db, input, actorId }));
+    case "block.close": return json(await closeParticipantBlock({ db, input, actorId, getDirectory: getJudgingBlockDirectory, getSnapshot: getJudgingSnapshot }));
+    case "block.reopen": return json(await reopenParticipantBlock({ db, input, actorId }));
     case "judging.program.issue": return json(await issueParticipantProgramLink({db,env,input,actorId}));
     case "judging.program.link": return linkJudgingProgram(db,input,actorId,getJudgingDirectory);
     case "judging.source.save": {
@@ -526,7 +626,7 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
     default: fault("portal_invalid_action","Selecciona una acción válida.");
   }
 }
-export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore, getJudgingSnapshot, getJudgingEventList, getJudgingDirectory } = {}) {
+export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore, getJudgingSnapshot, getJudgingEventList, getJudgingDirectory, getJudgingBlockDirectory } = {}) {
   try {
     const db = env.DB;
     if (!db) fault("portal_unavailable","El portal no está disponible por el momento.",503);
@@ -542,6 +642,10 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
         ? await requireAdmin(request,env,db,{touchLastSeen:false})
         : await requireAdmin(request,env,db);
       if (request.method === "GET") {
+        if (url.searchParams.get("publication") === "1") return json(await getBlockPublication({ db,
+          eventId: str(url.searchParams.get("eventId"), "la edición", 100),
+          blockId: str(url.searchParams.get("blockId"), "el bloque", 200, true),
+          getDirectory: getJudgingBlockDirectory, getSnapshot: getJudgingSnapshot }));
         if (url.searchParams.get("judging") === "1") {
           const event = await eventById(db, str(url.searchParams.get("eventId"), "la edición", 100));
           if (!getJudgingEventList) fault("portal_judging_unavailable", "La conexión de jueceo no está disponible.", 503);
@@ -562,7 +666,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
           str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true,getJudgingSnapshot));
         return await adminList(db,request);
       }
-      return await adminAction(db,env,await body(request),admin?.session?.user?.id,getMediaStore,getJudgingEventList,getJudgingDirectory);
+      return await adminAction(db,env,await body(request),admin?.session?.user?.id,getMediaStore,getJudgingEventList,getJudgingDirectory,getJudgingSnapshot,getJudgingBlockDirectory);
     }
     if (path === "/api/participant/access/exchange") {
       method(request,["POST"]);
@@ -585,7 +689,7 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
     }
     if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,env,request,getJudgingSnapshot); }
     const assetMatch=path.match(/^\/api\/participant\/assets\/([a-zA-Z0-9_-]{8,100})$/);
-    if (assetMatch) { method(request,["GET"]); return await serveAsset(db,env,request,assetMatch[1],false,getMediaStore); }
+    if (assetMatch) { method(request,["GET"]); return await serveAsset(db,env,request,assetMatch[1],false,getMediaStore,getJudgingSnapshot); }
     return json({error:{code:"portal_not_found",message:"No se encontró esta página."}},404);
   } catch (error) {
     const status=Number.isInteger(error?.statusCode) ? error.statusCode : 500;

@@ -3,6 +3,7 @@ import { RegistrationApiError, requestRegistrationApi } from '../admin/registrat
 import { MediaDriveConnectionPanel } from '../admin/MediaDriveConnectionPanel';
 import { prepareParticipantPhoto } from './prepareParticipantPhoto';
 import { ParticipantJudgingProgram } from './ParticipantJudgingProgram';
+import { ParticipantBlockPublication } from './ParticipantBlockPublication';
 import './ParticipantAdminPage.css';
 
 type Event = { id: string; title: string; season: string; venue: string; startsAt: string; published: boolean };
@@ -197,6 +198,8 @@ export function ParticipantAdminPage() {
             onLinked={() => { void refresh().catch(reportError); }} />
           </details>
         </section>
+        <ParticipantBlockPublication eventId={eventId} disabled={busy || !authorized}
+          onChanged={() => { void refresh().catch(reportError); void refreshAssets().catch(reportError); }} onError={reportError} />
         <section className="pp-admin-section">
           <h2>02 / Participantes y diplomas</h2>
           <label>Buscar por nombre o academia<input value={search} onChange={e => { setSearch(e.target.value); setPersonOffset(0); }} placeholder="Escribe para buscar" /></label>

@@ -30,6 +30,7 @@ import type {
 } from "./participantTypes";
 import { LevitateHeader } from "../home/LevitateHeader";
 import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
+import { participantPublicationChanged, startParticipantRefresh } from "./participantRefresh";
 import "./ParticipantPage.css";
 
 const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
@@ -202,8 +203,29 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const judgingGeneration = useRef(0);
   const diplomaGeneration = useRef(0);
   const diplomaRequest = useRef<AbortController | null>(null);
+  const assetGeneration = useRef(0);
+  const assetRequest = useRef<AbortController | null>(null);
+  const assetKind = useRef<"diploma" | "jueceo" | null>(null);
   const eventRequest = useRef<AbortController | null>(null);
   const accessNavigation = useRef(0);
+  const refreshContext = useRef({ data, phase, changingEvent });
+  refreshContext.current = { data, phase, changingEvent };
+
+  function cancelParticipantDownloads(clearMessages = true) {
+    ++judgingGeneration.current;
+    ++diplomaGeneration.current;
+    ++assetGeneration.current;
+    diplomaRequest.current?.abort();
+    assetRequest.current?.abort();
+    assetKind.current = null;
+    if (clearMessages) {
+      setDownloadBusy(null);
+      setDownloadMessage("");
+      setJudgingDownloadBusy(false);
+      setJudgingDownloadMessage("");
+      setJudgingDownloadError(false);
+    }
+  }
 
   useEffect(() => {
     if (preview || isInternalPreview) return;
@@ -211,9 +233,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       const fragment = new URLSearchParams(window.location.hash.slice(1));
       if (!fragment.has("access") && !fragment.has("token")) return;
       ++accessNavigation.current;
-      ++judgingGeneration.current;
-      ++diplomaGeneration.current;
-      diplomaRequest.current?.abort();
+      cancelParticipantDownloads();
       eventRequest.current?.abort();
       setData(null);
       setSelectedRoutineId(null);
@@ -267,25 +287,62 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
       });
     return () => {
       active = false;
-      ++judgingGeneration.current;
-      ++diplomaGeneration.current;
-      diplomaRequest.current?.abort();
+      cancelParticipantDownloads(false);
       controller.abort();
       eventRequest.current?.abort();
     };
   }, [preview, isInternalPreview, attempt]);
 
+  useEffect(() => {
+    if (preview || isInternalPreview || phase !== "ready" || changingEvent || !data) return;
+    const participantId = data.participant.id;
+    const eventId = data.selectedEventId;
+    const navigation = accessNavigation.current;
+    return startParticipantRefresh({
+      participantId, eventId,
+      windowTarget: window,
+      documentTarget: document,
+      isVisible: () => document.visibilityState === "visible",
+      isCurrent: () => accessNavigation.current === navigation && refreshContext.current.phase === "ready"
+        && !refreshContext.current.changingEvent && refreshContext.current.data?.participant.id === participantId
+        && refreshContext.current.data.selectedEventId === eventId,
+      read: signal => participantRequest<ParticipantPortalData>(`/api/participant/me?eventId=${encodeURIComponent(eventId)}`, { signal }),
+      onData: response => {
+        const previous = refreshContext.current.data;
+        if (previous && participantPublicationChanged(previous, response)) {
+          cancelParticipantDownloads();
+          setPhotoIndex(null);
+        }
+        setData(response);
+        setSelectedRoutineId(current => response.routines.some(item => item.id === current)
+          ? current : response.routines[0]?.id || null);
+      },
+      onInvalidAccess: () => {
+        ++accessNavigation.current;
+        cancelParticipantDownloads();
+        eventRequest.current?.abort();
+        setPhotoIndex(null);
+        setData(null);
+        setError("Tu sesión cambió o terminó. Abre de nuevo tu enlace personal para continuar.");
+        setPhase("access");
+      },
+    });
+  }, [preview, isInternalPreview, phase, changingEvent, data?.participant.id, data?.selectedEventId]);
+
   const routine = data?.routines.find((item) => item.id === selectedRoutineId) || data?.routines[0];
   const event = data?.events.find((item) => item.id === data.selectedEventId);
   useEffect(() => {
-    ++diplomaGeneration.current;
-    diplomaRequest.current?.abort();
-    setDownloadBusy(null);
-    setDownloadMessage("");
-    return () => { ++diplomaGeneration.current; diplomaRequest.current?.abort(); };
+    cancelParticipantDownloads();
+    return () => { cancelParticipantDownloads(false); };
   }, [data?.participant.id, data?.selectedEventId, phase]);
   useEffect(() => {
     ++judgingGeneration.current;
+    if (assetKind.current === "jueceo") {
+      ++assetGeneration.current;
+      assetRequest.current?.abort();
+      assetKind.current = null;
+      setDownloadBusy(current => current === "jueceo" ? null : current);
+    }
     setJudgingDownloadBusy(false);
     setJudgingDownloadMessage("");
     setJudgingDownloadError(false);
@@ -344,10 +401,8 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   async function selectEvent(eventId: string) {
     if (preview || eventId === data?.selectedEventId) return;
-    ++judgingGeneration.current;
-    ++diplomaGeneration.current;
-    diplomaRequest.current?.abort();
-    setJudgingDownloadBusy(false);
+    ++accessNavigation.current;
+    cancelParticipantDownloads();
     eventRequest.current?.abort();
     const controller = new AbortController();
     eventRequest.current = controller;
@@ -379,20 +434,34 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   }
 
   async function download(url: string, kind: "diploma" | "jueceo") {
-    if (downloadBusy) return;
+    if (downloadBusy || changingEvent) return;
+    const generation = ++assetGeneration.current;
+    const navigation = accessNavigation.current;
+    const judging = judgingGeneration.current;
+    const controller = new AbortController();
+    assetRequest.current?.abort();
+    assetRequest.current = controller;
+    assetKind.current = kind;
+    const isCurrent = () => !controller.signal.aborted && generation === assetGeneration.current
+      && navigation === accessNavigation.current && (kind !== "jueceo" || judging === judgingGeneration.current);
     setDownloadBusy(kind);
     setDownloadMessage("");
     try {
-      await downloadParticipantPdf(url, `${preview ? "ejemplo-" : ""}levitate-${kind}.pdf`);
+      await downloadParticipantPdf(url, `${preview ? "ejemplo-" : ""}levitate-${kind}.pdf`, { signal: controller.signal, isCurrent });
+      if (!isCurrent()) return;
       setDownloadMessage("Tu documento está listo. Revisa las descargas de tu navegador.");
     } catch (cause) {
+      if (!isCurrent()) return;
       setDownloadMessage(
         cause instanceof Error
           ? cause.message
           : "No se pudo descargar el documento. Intenta de nuevo.",
       );
     } finally {
-      setDownloadBusy(null);
+      if (generation === assetGeneration.current) {
+        assetKind.current = null;
+        setDownloadBusy(null);
+      }
     }
   }
 

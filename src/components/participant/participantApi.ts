@@ -162,16 +162,20 @@ export function participantAdminAssetUrl(value: string | null | undefined): stri
   }
 }
 
-export async function downloadParticipantPdf(url: string, fileName: string): Promise<void> {
+export async function downloadParticipantPdf(url: string, fileName: string,
+  options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}): Promise<void> {
   const response = await fetch(url, {
     credentials: "same-origin",
     cache: "no-store",
+    signal: options.signal,
     headers: { Accept: "application/pdf" },
   });
+  if (options.signal?.aborted || options.isCurrent?.() === false) return;
   if (!response.ok) throw await responseError(response);
   if (!response.headers.get("content-type")?.toLowerCase().includes("application/pdf")) {
     throw new Error("El documento todavía no está disponible. Intenta de nuevo más tarde.");
   }
   const blob = await response.blob();
+  if (options.signal?.aborted || options.isCurrent?.() === false) return;
   startBrowserDownload(prepareBrowserDownload(blob, fileName));
 }

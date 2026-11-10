@@ -6,6 +6,8 @@ const workshopStatements = workshopMigration.match(/CREATE TABLE[\s\S]*?\n\);|CR
 const participantPortalMigration = readFileSync(new URL("../../db/registration_participant_portal.sql", import.meta.url), "utf8");
 const participantPortalStatements = participantPortalMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE TRIGGER[\s\S]*?\nEND;/g) || [];
 const managedStatements = [...workshopStatements, ...participantPortalStatements];
+const participantBlockMigration = readFileSync(new URL("../../db/registration_participant_block_publication.sql", import.meta.url), "utf8");
+managedStatements.push(...(participantBlockMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
 const judgeMigration = readFileSync(new URL("../../db/registration_judge_workspace.sql", import.meta.url), "utf8");
 managedStatements.push(...(judgeMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const judgingAdminMigration = readFileSync(new URL("../../db/registration_judging_admin.sql", import.meta.url), "utf8");
