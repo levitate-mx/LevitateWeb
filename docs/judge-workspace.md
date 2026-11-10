@@ -13,10 +13,21 @@ ink (`#2a2928`), pink (`#d94c8c`) and dark (`#101013`) palette follows the
 public website. Smaller text uses deeper or lighter rose for contrast. The
 Inter font and its OFL license are bundled in the Flutter assets so typography
 does not depend on an external font service. Native app entry points keep their
-existing theme by default.
+existing theme by default. The judging web app uses dark mode independently of
+the device preference, including the administrative sheet editor and loading
+screen.
+
+The web theme also installs a `LevitateWebPresentation` theme extension. It selects
+the web-specific workspace and judging-sheet composition, while native themes
+continue through the original layouts. Navigation, programme/judge selection,
+score fields, validation, drafts and save callbacks still use the existing store.
+The judging action bar stays outside the scrolling criteria so the total and
+save action remain reachable on desktop and mobile.
 
 The React administration workspace scopes the corresponding light/dark tokens
-under `.ja-app` in `JudgingAdminWorkspace.css`. These appearance changes do not
+under `.ja-app` in `JudgingAdminWorkspace.css`. It starts in dark mode and keeps
+an explicit light/dark choice when the administrator changes the toggle.
+These appearance changes do not
 change score calculations, sessions, assignments, APIs or the IndexedDB outbox.
 When rebuilding, keep the web packaging step above: it strips the native seed
 programme from the public assets and includes the local fonts and CanvasKit.

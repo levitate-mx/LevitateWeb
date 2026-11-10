@@ -123,13 +123,21 @@ type View =
   | "settings";
 type Modal = { title: string; content: ReactNode } | null;
 const primary = [
-  { id: "home", label: "Home", icon: Home },
+  { id: "home", label: "Inicio", icon: Home },
   { id: "scores", label: "Editar calificaciones", icon: ClipboardList },
   { id: "judges", label: "Jueces", icon: Users },
   { id: "report", label: "Dictamen final", icon: Trophy },
   { id: "favorites", label: "Favoritos", icon: Star },
   { id: "import", label: "Importar Excel", icon: FileSpreadsheet },
 ] as const;
+const compactNavLabels: Record<(typeof primary)[number]["id"], string> = {
+  home: "Inicio",
+  scores: "Notas",
+  judges: "Jueces",
+  report: "Dictamen",
+  favorites: "Favoritos",
+  import: "Excel",
+};
 const base = "/api/registration/admin/judging/workspace/";
 const norm = (v: unknown) =>
   String(v ?? "")
@@ -295,11 +303,10 @@ export function JudgingAdminWorkspace() {
   const [exports, setExports] = useState<
     { id: string; block_id: string; created_at: string; files: number }[]
   >([]);
-  const [theme, setTheme] = useState(
-    () =>
-      localStorage.getItem("levitate-judging-theme") ||
-      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
-  );
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("levitate-judging-theme");
+    return saved === "light" || saved === "dark" ? saved : "dark";
+  });
   const generation = useRef(0);
   const api = useCallback(
     <T,>(action: string, body?: unknown, selected = eventId) =>
@@ -645,6 +652,10 @@ export function JudgingAdminWorkspace() {
   return (
     <div className="ja-app" data-theme={theme}>
       <aside className="ja-sidebar">
+        <div className="ja-brand">
+          <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
+          <span>Espacio de jueceo</span>
+        </div>
         <a
           href="/admin/dashboard"
           className="ja-back"
@@ -652,7 +663,9 @@ export function JudgingAdminWorkspace() {
           aria-label="Panel Levitate"
         >
           <ArrowLeft size={21} />
+          <span>Panel Levitate</span>
         </a>
+        <p className="ja-nav-caption">COMPETENCIA</p>
         <nav aria-label="Administración de jueceo">
           {primary.map((item) => (
             <button
@@ -667,37 +680,49 @@ export function JudgingAdminWorkspace() {
               }}
             >
               <item.icon size={23} />
-              <span>{item.label}</span>
+              <span className="ja-nav-label">{item.label}</span>
+              <span className="ja-nav-short" aria-hidden="true">
+                {compactNavLabels[item.id]}
+              </span>
             </button>
           ))}
         </nav>
         <div className="ja-sidebar-bottom">
-          <IconButton
-            label="Actividad"
+          <button
             aria-pressed={view === "activity"}
             onClick={() => setView("activity")}
           >
             <Activity size={21} />
-          </IconButton>
-          <IconButton
-            label="Ranking en vivo"
+            <span>Actividad</span>
+          </button>
+          <button
             aria-pressed={view === "ranking"}
             onClick={() => setView("ranking")}
           >
             <Trophy size={21} />
-          </IconButton>
-          <IconButton
-            label="Configuración"
+            <span>Ranking en vivo</span>
+          </button>
+          <button
             aria-pressed={view === "settings"}
             onClick={() => setView("settings")}
           >
             <Settings size={21} />
-          </IconButton>
+            <span>Configuración</span>
+          </button>
+        </div>
+        <div className="ja-profile">
+          <span className="ja-profile-initial" aria-hidden="true">
+            {user.slice(0, 1).toUpperCase()}
+          </span>
+          <span>
+            <strong>{user}</strong>
+            <small>Administrador</small>
+          </span>
         </div>
       </aside>
       <div className="ja-main">
         <header className="ja-topbar">
-          <img src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
+          <img className="ja-mobile-brand" src="/assets/levitate-logo-mx.png" alt="Levitate MX" />
           <div className="ja-event">
             <label htmlFor="ja-event">Evento</label>
             <select
@@ -764,10 +789,6 @@ export function JudgingAdminWorkspace() {
               </a>
             </nav>
           </details>
-          <span className="ja-admin-name">
-            {user}
-            <small>Administrador</small>
-          </span>
         </header>
         <main className="ja-content">
           <div className="ja-heading">
@@ -816,13 +837,17 @@ export function JudgingAdminWorkspace() {
           view !== "judges" &&
           view !== "settings" &&
           view !== "activity" ? (
-            <div className="ja-toolbar">
+            <div className={`ja-toolbar${view === "home" ? " ja-toolbar-overview" : ""}`}>
               <label className="ja-block">
                 Bloque
                 <select
                   value={blockId}
+                  disabled={!bundle.blocks.length}
                   onChange={(e) => setBlockId(e.target.value)}
                 >
+                  {!bundle.blocks.length ? (
+                    <option value="">Sin bloques registrados</option>
+                  ) : null}
                   {bundle.blocks.map((b) => (
                     <option key={b.block_id} value={b.block_id}>
                       {b.title || b.name}
@@ -882,54 +907,69 @@ export function JudgingAdminWorkspace() {
           ) : null}
           {bundle && view === "home" ? (
             <>
-              <section className="ja-home-hero">
-                <div>
-                  <p>HOLA, {user.split(" ")[0].toUpperCase()}</p>
-                  <h2>
-                    Todo listo para
-                    <br />
-                    <span>levantar el telón.</span>
-                  </h2>
-                  <p>{bundle.event.name}</p>
-                  <button
-                    className="ja-primary"
-                    onClick={() => setView("scores")}
-                  >
-                    Editar calificaciones
-                    <ArrowRight size={18} />
-                  </button>
-                </div>
-                <img
-                  src="/jueceo/app/assets/assets/images/levitate_dancer_hero.png"
-                  alt="Artista Levitate"
-                />
-              </section>
-              <section className="ja-metrics">
-                <article>
-                  <ClipboardList />
-                  <strong>
-                    {completed}
-                    <small> / {routines.length}</small>
-                  </strong>
-                  <span>Coreografías completas</span>
+              <div className="ja-overview">
+                <section className="ja-overview-intro">
+                  <div>
+                    <p>HOLA, {user.split(" ")[0].toUpperCase()}</p>
+                    <h2>
+                      {bundle.blocks.find((b) => b.block_id === blockId)?.title ||
+                        bundle.blocks.find((b) => b.block_id === blockId)?.name ||
+                        "Programa de competencia"}
+                    </h2>
+                    <p className="ja-home-context">{bundle.event.name}</p>
+                    <button
+                      className="ja-primary"
+                      onClick={() => setView("scores")}
+                    >
+                      Editar calificaciones
+                      <ArrowRight size={18} />
+                    </button>
+                  </div>
+                  <img
+                    src="/jueceo/app/assets/assets/images/levitate_dancer_hero.png"
+                    alt="Artista Levitate"
+                  />
+                  <span className="ja-home-signature" aria-hidden="true">See you on stage.</span>
+                </section>
+                <section className="ja-progress-card" aria-label="Avance del bloque">
+                  <div className="ja-section-caption"><span /> EN ESTE BLOQUE</div>
+                  <h2>El avance<br />de la <span>competencia.</span></h2>
+                  <div className="ja-progress-count">
+                    <strong>{completed}</strong>
+                    <span>de {routines.length}<br />coreografías completas</span>
+                  </div>
                   <progress
+                    aria-label="Coreografías completas"
                     max={Math.max(1, routines.length)}
                     value={completed}
                   />
+                  <p>{routines.length - completed} por completar</p>
+                  <button onClick={() => setView("report")}>
+                    Consultar dictamen <ArrowRight size={17} />
+                  </button>
+                </section>
+              </div>
+              <section className="ja-metrics">
+                <article>
+                  <ClipboardList />
+                  <div><strong>{routines.length}</strong><span>Coreografías en este bloque</span></div>
                 </article>
                 <article>
                   <Users />
-                  <strong>{judges.length}</strong>
-                  <span>Jueces del evento</span>
+                  <div><strong>{judges.length}</strong><span>Jueces del evento</span></div>
                   <button onClick={() => setView("activity")}>
                     Ver actividad
                     <ChevronRight size={16} />
                   </button>
                 </article>
+                <article>
+                  <Trophy />
+                  <div><strong>{bundle.blocks.length}</strong><span>Bloques en el programa</span></div>
+                </article>
               </section>
               <section className="ja-upcoming">
                 <header>
-                  <h2>Próximas coreografías</h2>
+                  <div><p className="ja-section-caption">EL PROGRAMA CONTINÚA</p><h2>Próximas coreografías</h2></div>
                   <button onClick={() => setView("scores")}>
                     Ver todas
                     <ChevronRight size={16} />
@@ -1038,7 +1078,8 @@ export function JudgingAdminWorkspace() {
                             alt=""
                           />
                         ) : null}
-                        {j.name}
+                        <span className="ja-column-label">Juez</span>
+                        <strong>{j.name}</strong>
                       </th>
                     ))}
                     <th>

@@ -7,8 +7,10 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
 
 ## Flujos
 
-- Navegacion basada en iOS: Home, Editar calificaciones, Jueces, Dictamen final,
-  Favoritos e Importar Excel; actividad, ranking y configuracion secundarios.
+- Navegacion con etiquetas en escritorio y barra compacta en movil: Home,
+  Editar calificaciones, Jueces, Dictamen final, Favoritos e Importar Excel;
+  actividad, ranking y configuracion secundarios. El tablero prioriza el bloque,
+  el avance de evaluacion y las proximas coreografias con la identidad de Levitate.
 - Matriz por coreografia y juez, estados completos/incompletos, filtros,
   metadatos editables, movimiento entre bloques y eliminacion confirmada.
 - El puntaje abre la hoja Flutter ya utilizada por los jueces, en modo editor
