@@ -30,7 +30,7 @@ function nodes(value) {
 // Render the real component with deterministic hooks so late server responses
 // and navigation can be exercised without replacing its request handlers.
 function harness(eventId = 'edition-a') {
-  const slots = [], requests = [], changed = [], errors = [];
+  const slots = [], requests = [], changed = [], modeChanges = [], errors = [];
   let hook = 0, pendingEffects = [], dirty = true, tree, props;
   const hooks = {
     useState(initial) {
@@ -61,7 +61,7 @@ function harness(eventId = 'edition-a') {
     } };
   } };
   vm.runInNewContext(compiled, scope);
-  props = { eventId, onChanged: () => changed.push(props.eventId), onError: cause => errors.push(cause) };
+  props = { eventId, onChanged: () => changed.push(props.eventId), onModeChange: mode => modeChanges.push({ eventId: props.eventId, mode }), onError: cause => errors.push(cause) };
   function render() {
     let count = 0;
     while (dirty) {
@@ -74,7 +74,7 @@ function harness(eventId = 'edition-a') {
   async function settle() { await new Promise(resolve => setImmediate(resolve)); render(); }
   render();
   return {
-    requests, changed, errors,
+    requests, changed, modeChanges, errors,
     get tree() { return tree; },
     button(label) { const button = nodes(tree).find(node => node.type === 'button' && text(node) === label); assert.ok(button, label); return button; },
     click(label) { this.button(label).props.onClick(); render(); },
@@ -142,14 +142,69 @@ test('a changed publication mode must be saved before closing a block', async ()
   view.unmount();
 });
 
+test('automatic completion consults the passport without presenting close or reopen buttons', async () => {
+  const view = harness();
+  const automatic = publication({ mode: 'block_complete' });
+  automatic.selectedBlock.state = 'ready'; automatic.selectedBlock.fingerprint = '';
+  await view.resolve(0, automatic);
+  assert.match(text(view.tree), /Al abrir el pasaporte se consultan las notas/);
+  assert.match(text(view.tree), /todos los jueces completan el bloque; no hace falta cerrarlo/);
+  assert.match(text(view.tree), /Evaluaciones completas/);
+  assert.equal(nodes(view.tree).some(node => node.type === 'button' && /cerrar|reabrir/i.test(text(node))), false);
+  assert.equal(view.requests.length, 1, 'viewing a completed block does not create a closure');
+  view.unmount();
+});
+
+test('automatic mode stays pending for incomplete evaluations and still has no manual closure controls', async () => {
+  const view = harness();
+  const automatic = publication({ mode: 'block_complete' });
+  Object.assign(automatic.selectedBlock, { state: 'open', complete: false, completedRoutines: 1, fingerprint: '' });
+  await view.resolve(0, automatic);
+  assert.match(text(view.tree), /Evaluaciones pendientes/);
+  assert.match(text(view.tree), /1 de 2 coreografías/);
+  assert.match(text(view.tree), /notas permanecen pendientes/);
+  assert.equal(nodes(view.tree).some(node => node.type === 'button' && /cerrar|reabrir/i.test(text(node))), false);
+  view.unmount();
+});
+
+test('automatic completion can be configured before programme linkage without creating closures or publishing the edition', async () => {
+  const view = harness();
+  await view.resolve(0, publication({ mode: 'individual', sourceEventId: '', blocks: [], selectedBlock: null }));
+  view.change('Forma de publicación', 'block_complete');
+  view.click('Guardar forma de publicación');
+  assert.deepEqual(JSON.parse(view.requests[1].options.body), { action: 'publication.mode.save', eventId: 'edition-a', mode: 'block_complete' });
+  await view.resolve(1, { ok: true });
+  await view.resolve(2, publication({ mode: 'block_complete', sourceEventId: '', blocks: [], selectedBlock: null }));
+  assert.match(text(view.tree), /todavía no está vinculado/);
+  assert.match(text(view.tree), /no hace falta cerrarlo/);
+  assert.doesNotMatch(JSON.stringify(view.requests.map(request => request.options.body)), /block\.close|block\.reopen|event\.upsert|asset\.publish|access\./);
+  view.unmount();
+});
+
+test('the parent only receives a publication mode confirmed by the current edition server response', async () => {
+  const view = harness();
+  await view.resolve(0, publication({ mode: 'individual' }));
+  assert.deepEqual(view.modeChanges, [{ eventId: 'edition-a', mode: 'individual' }]);
+  view.change('Forma de publicación', 'block_complete');
+  assert.equal(view.modeChanges.length, 1, 'an unsaved selection cannot enable automatic controls in the parent');
+  view.click('Guardar forma de publicación');
+  await view.resolve(1, { ok: true });
+  assert.equal(view.modeChanges.length, 1, 'the write acknowledgement does not stand in for a fresh review');
+  await view.resolve(2, publication({ mode: 'block_complete' }));
+  assert.deepEqual(view.modeChanges.at(-1), { eventId: 'edition-a', mode: 'block_complete' });
+  view.unmount();
+});
+
 test('edition navigation aborts old reads and ignores late block results', async () => {
   const view = harness();
   view.setProps({ eventId: 'edition-b' });
   assert.equal(view.requests[0].options.signal.aborted, true);
   await view.resolve(0, publication());
   assert.doesNotMatch(text(view.tree), /2 de 2 coreografías/);
+  assert.equal(view.modeChanges.length, 0, 'a late old-edition response cannot change parent permissions');
   const second = publication(); second.selectedBlock.name = 'Bloque de otra edición'; second.blocks[0].name = second.selectedBlock.name;
   await view.resolve(1, second);
+  assert.deepEqual(view.modeChanges, [{ eventId: 'edition-b', mode: 'block_close' }]);
   view.click('Cerrar y publicar bloque');
   assert.equal(JSON.parse(view.requests[2].options.body).eventId, 'edition-b');
   view.unmount();

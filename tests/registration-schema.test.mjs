@@ -98,6 +98,33 @@ test("fresh canonical schema is already prepared and rechecking does not write",
   assert.equal(sqlite.prepare("SELECT role FROM registration_users").get().role, "academy");
 });
 
+test("automatic block completion adds only its missing flags and preserves existing manual closures", async (t) => {
+  const oldSchema = removeColumns(removeColumns(baseSchema, "participant_portal_publication_settings", ["automatic_completion"]), "participant_portal_routines", ["publication_blocked"]);
+  const { db, sqlite, writes } = fixture(t, oldSchema);
+  seed(sqlite);
+  sqlite.exec(`INSERT INTO participant_portal_events(id,title,season,venue,published) VALUES('edition','Edición','Otoño','cdmx',0);
+    INSERT INTO participant_portal_publication_settings(event_id,mode,operation_nonce) VALUES('edition','block_close','existing-settings');
+    INSERT INTO participant_portal_routines(id,event_id,dance_id,source_event_id,source_routine_id,status)
+      VALUES('portal','edition','dance-1','11111111-2222-4333-8444-555555555555','1','published');
+    INSERT INTO participant_portal_block_publications(event_id,source_event_id,block_id,state,fingerprint,manifest_json,closed_at,operation_nonce)
+      VALUES('edition','11111111-2222-4333-8444-555555555555','block-1','closed','${'a'.repeat(64)}','[]',datetime('now'),'existing-closure')`);
+  const closureBefore = { ...sqlite.prepare('SELECT * FROM participant_portal_block_publications').get() };
+  const participantBefore = rows(sqlite, 'registration_participants');
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 2);
+  assert.ok(plan.steps.every(step => step.sql.startsWith('ALTER TABLE ')));
+  assert.deepEqual(writes, []);
+  const prepared = await prepareRegistrationSchema(db, { apply: true });
+  assert.equal(prepared.applied, 2);
+  assert.equal(sqlite.prepare('SELECT automatic_completion FROM participant_portal_publication_settings').get().automatic_completion, 0);
+  assert.equal(sqlite.prepare('SELECT publication_blocked FROM participant_portal_routines').get().publication_blocked, 0);
+  assert.deepEqual({ ...sqlite.prepare('SELECT * FROM participant_portal_block_publications').get() }, closureBefore);
+  assert.deepEqual(rows(sqlite, 'registration_participants'), participantBefore);
+  assert.throws(() => sqlite.prepare("UPDATE participant_portal_publication_settings SET mode='block_complete'").run(), /CHECK/);
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, 2);
+});
+
 test("private participant portal preparation adds all objects without changing registrations and is idempotent", async (t) => {
   const marker = "-- Private participant experience: keep definitions identical to registration_participant_portal.sql.";
   const { db, sqlite, writes } = fixture(t, baseSchema.split(marker)[0]);

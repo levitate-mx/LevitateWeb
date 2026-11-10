@@ -20,6 +20,12 @@ const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE T
 // These additions replace the schema preparation previously done by request handlers.
 // Existing tables, columns, IDs, permissions, and nonempty access tokens are preserved.
 const additions = {
+  participant_portal_publication_settings: {
+    automatic_completion: "INTEGER NOT NULL DEFAULT 0 CHECK (automatic_completion IN (0,1))",
+  },
+  participant_portal_routines: {
+    publication_blocked: "INTEGER NOT NULL DEFAULT 0 CHECK (publication_blocked IN (0,1))",
+  },
   registration_event_tickets: {
     event_id: "TEXT NOT NULL DEFAULT 'edomex-2026-otono'",
   },
@@ -311,7 +317,7 @@ export async function planRegistrationSchema(db) {
   for (const table of managedTables) {
     if (!tables.has(table.name)) continue;
     for (const column of table.columns) {
-      if (!columns.get(table.name).has(column)) errors.push(`Missing prerequisite column ${table.name}.${column}.`);
+      if (!columns.get(table.name).has(column) && !Object.hasOwn(additions[table.name] || {}, column)) errors.push(`Missing prerequisite column ${table.name}.${column}.`);
     }
   }
   for (const [name, table] of indexes) {

@@ -1,40 +1,41 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { RegistrationApiError, requestRegistrationApi } from '../admin/registrationApi';
 
-type PublicationMode = 'individual' | 'block_close';
+export type ParticipantPublicationMode = 'individual' | 'block_close' | 'block_complete';
 type Block = { id: string; name: string; routineCount: number };
 type SelectedBlock = {
   id: string;
   name: string;
-  state: 'open' | 'closed' | 'changed';
+  state: 'open' | 'closed' | 'changed' | 'ready';
   complete: boolean;
   completedRoutines: number;
   totalRoutines: number;
   closedAt: string | null;
   fingerprint: string;
 };
-type Publication = { mode: PublicationMode; sourceEventId: string; blocks: Block[]; selectedBlock: SelectedBlock | null };
+type Publication = { mode: ParticipantPublicationMode; sourceEventId: string; blocks: Block[]; selectedBlock: SelectedBlock | null };
 type Props = {
   eventId: string;
   disabled?: boolean;
   onChanged?: () => void;
+  onModeChange?: (mode: ParticipantPublicationMode) => void;
   onError?: (cause: unknown) => void;
 };
 
 const endpoint = '/api/registration/admin/participant-portal';
-const stateLabels = { open: 'Abierto · En preparación', closed: 'Cerrado · Listo para sus participantes', changed: 'Cambió la evaluación · Requiere revisión' };
+const stateLabels = { open: 'Abierto · En preparación', closed: 'Cerrado · Listo para sus participantes', changed: 'Cambió la evaluación · Requiere revisión', ready: 'Evaluaciones completas' };
 
-export function ParticipantBlockPublication({ eventId, disabled = false, onChanged, onError }: Props) {
+export function ParticipantBlockPublication({ eventId, disabled = false, onChanged, onModeChange, onError }: Props) {
   const headingId = useId();
   const [selection, setSelection] = useState({ eventId, blockId: '' });
   const blockId = selection.eventId === eventId ? selection.blockId : '';
   const identity = JSON.stringify([eventId, blockId]);
   const currentIdentity = useRef(identity);
   currentIdentity.current = identity;
-  const callbacks = useRef({ onChanged, onError });
-  callbacks.current = { onChanged, onError };
+  const callbacks = useRef({ onChanged, onModeChange, onError });
+  callbacks.current = { onChanged, onModeChange, onError };
   const [response, setResponse] = useState<{ identity: string; data: Publication } | null>(null);
-  const [mode, setMode] = useState<PublicationMode>('individual');
+  const [mode, setMode] = useState<ParticipantPublicationMode>('individual');
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
@@ -78,11 +79,12 @@ export function ParticipantBlockPublication({ eventId, disabled = false, onChang
     setLoading(true);
     requestRegistrationApi<Publication>(`${endpoint}?${params}`, { signal: controller.signal }).then(data => {
       if (controller.signal.aborted || sequence !== readSequence.current || selectedIdentity !== currentIdentity.current) return;
-      if (!['individual', 'block_close'].includes(data.mode) || typeof data.sourceEventId !== 'string'
+      if (!['individual', 'block_close', 'block_complete'].includes(data.mode) || typeof data.sourceEventId !== 'string'
         || !Array.isArray(data.blocks) || (data.selectedBlock !== null && typeof data.selectedBlock !== 'object')) {
         throw new Error('No pudimos leer la revisión del bloque. Actualiza los datos.');
       }
       setResponse({ identity: selectedIdentity, data }); setMode(data.mode);
+      callbacks.current.onModeChange?.(data.mode);
     }).catch(cause => {
       if (controller.signal.aborted || sequence !== readSequence.current || selectedIdentity !== currentIdentity.current) return;
       setResponse(null); reportError(cause);
@@ -95,7 +97,7 @@ export function ParticipantBlockPublication({ eventId, disabled = false, onChang
   async function mutate(action: 'publication.mode.save' | 'block.close' | 'block.reopen') {
     if (locked || !view || !eventId) return;
     if (action === 'block.close' && !canClose) return;
-    if (action === 'block.reopen' && (!selected || selected.state === 'open')) return;
+    if (action === 'block.reopen' && (view.mode !== 'block_close' || mode !== view.mode || !selected || selected.state === 'open')) return;
     const sequence = ++writeSequence.current, selectedIdentity = identity;
     const controller = new AbortController(); writeController.current = controller;
     ++readSequence.current; readController.current?.abort();
@@ -124,9 +126,10 @@ export function ParticipantBlockPublication({ eventId, disabled = false, onChang
 
   return <section className="pp-admin-section pp-admin-block-publication" aria-labelledby={headingId} aria-busy={loading || busy}>
     <h2 id={headingId}>Publicación por bloque</h2>
-    <p>Al cerrar un bloque se liberan juntas sus puntuaciones y hojas de jueceo. Las fotos requieren archivos aprobados y una galería habilitada. La edición conserva su visibilidad actual.</p>
+    <p>Configura cuándo se muestran las puntuaciones y hojas de jueceo de cada bloque. Las fotos requieren archivos aprobados y una galería habilitada. La edición conserva su visibilidad actual.</p>
     <fieldset disabled={locked}>
-      <label>Forma de publicación<select value={mode} disabled={!view} onChange={change => setMode(change.target.value as PublicationMode)}>
+      <label>Forma de publicación<select value={mode} disabled={!view} onChange={change => setMode(change.target.value as ParticipantPublicationMode)}>
+        <option value="block_complete">Cuando terminen todos los jueces</option>
         <option value="individual">Publicación individual</option>
         <option value="block_close">Al cerrar cada bloque</option>
       </select></label>
@@ -135,20 +138,25 @@ export function ParticipantBlockPublication({ eventId, disabled = false, onChang
         <button className="pp-admin-subtle" onClick={() => { setError(''); setMessage(''); setReload(value => value + 1); }}>Actualizar revisión</button>
       </div>
       {view && !view.sourceEventId && <p>El programa de esta edición todavía no está vinculado. Puedes preparar la forma de publicación ahora; los bloques aparecerán al importar el programa en la app.</p>}
-      {view?.sourceEventId && view.mode === 'individual' && <p>La publicación individual sigue activa. Guarda «Al cerrar cada bloque» para mantener las evaluaciones ocultas hasta su cierre.</p>}
-      {view?.sourceEventId && view.mode === 'block_close' && <>
+      {view?.sourceEventId && view.mode === 'individual' && <p>La publicación individual sigue activa. Guarda «Cuando terminen todos los jueces» para esperar a que se complete todo el bloque.</p>}
+      {view?.mode === 'block_complete' && <p>Al abrir el pasaporte se consultan las notas. Se muestran cuando todos los jueces completan el bloque; no hace falta cerrarlo. La edición debe estar visible para sus participantes.</p>}
+      {view?.sourceEventId && view.mode !== 'individual' && <>
         {view.blocks.length ? <label>Bloque de competencia<select value={selected?.id || blockId} onChange={change => setSelection({ eventId, blockId: change.target.value })}>
           {view.blocks.map(block => <option key={block.id} value={block.id}>{block.name} · {block.routineCount} coreografías</option>)}
         </select></label> : <p>El programa vinculado todavía no tiene bloques de competencia disponibles.</p>}
         {selected && <div className="pp-admin-block-summary">
-          <p className={`pp-admin-block-state pp-admin-block-state--${selected.state}`}><strong>{stateLabels[selected.state]}</strong></p>
+          <p className={`pp-admin-block-state pp-admin-block-state--${selected.state}`}><strong>{view.mode === 'block_complete'
+            ? selected.complete ? 'Evaluaciones completas' : 'Evaluaciones pendientes'
+            : stateLabels[selected.state]}</strong></p>
           <p>{selected.completedRoutines} de {selected.totalRoutines} coreografías con todos sus jueces completos.</p>
-          {selected.state === 'changed' && <p>La evaluación o el programa cambió después del cierre. Su material permanece oculto hasta revisar y cerrar de nuevo.</p>}
-          {!selected.complete && <p>Para cerrar el bloque deben estar completas sus evaluaciones y vinculadas todas sus coreografías.</p>}
-          <div className="pp-admin-actions">
+          {view.mode === 'block_close' && selected.state === 'changed' && <p>La evaluación o el programa cambió después del cierre. Su material permanece oculto hasta revisar y cerrar de nuevo.</p>}
+          {!selected.complete && <p>{view.mode === 'block_complete'
+            ? 'Las notas permanecen pendientes hasta completar las evaluaciones y vincular todas las coreografías del bloque.'
+            : 'Para cerrar el bloque deben estar completas sus evaluaciones y vinculadas todas sus coreografías.'}</p>}
+          {view.mode === 'block_close' && <div className="pp-admin-actions">
             <button disabled={!canClose} onClick={() => void mutate('block.close')}>{selected.state === 'closed' ? 'Bloque cerrado' : 'Cerrar y publicar bloque'}</button>
             {selected.state !== 'open' && <button className="pp-admin-subtle" onClick={() => void mutate('block.reopen')}>Reabrir y ocultar</button>}
-          </div>
+          </div>}
         </div>}
       </>}
     </fieldset>

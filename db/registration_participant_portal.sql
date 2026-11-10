@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS participant_portal_routines (
   result_json TEXT,
   judging_json TEXT,
   photos_published INTEGER NOT NULL DEFAULT 0 CHECK (photos_published IN (0,1)),
+  publication_blocked INTEGER NOT NULL DEFAULT 0 CHECK (publication_blocked IN (0,1)),
   revision INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(event_id,dance_id),

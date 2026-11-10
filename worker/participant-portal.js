@@ -146,6 +146,9 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   const participant = await participantById(db, participantId);
   const event = await eventById(db, eventId);
   const link = adminPreview ? adminAssetUrl : assetUrl;
+  const publication = adminPreview ? null : await createBlockPublicationGate({ db, eventId: event.id });
+  const automaticCompletion = publication?.mode === "block_complete";
+  const routineVisibility = automaticCompletion ? "coalesce(r.publication_blocked,0)=0" : "r.status='published'";
   // Registration has a venue but no edition field. Never infer that a future
   // edition at the same venue should inherit the current registration roster.
   const registrationEvents = typeof env.PARTICIPANT_REGISTRATION_EVENT_IDS === "string"
@@ -164,7 +167,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
     WHERE a.event_id = ? AND dp.participant_id = ?
-      ${adminPreview ? "AND a.kind IN ('judge_sheet','photo')" : "AND a.published = 1 AND r.status = 'published' AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))"}`, event.id, participant.id) : [];
+      ${adminPreview ? "AND a.kind IN ('judge_sheet','photo')" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))`}`, event.id, participant.id) : [];
   const document = await first(db, `SELECT d.asset_id FROM participant_portal_documents d
     JOIN participant_portal_assets a ON a.id = d.asset_id
     WHERE d.participant_id = ? AND d.event_id = ? ${adminPreview ? "" : "AND d.published = 1 AND a.published = 1"}
@@ -185,7 +188,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
         preview: Boolean(adminPreview), templateUrl: '/assets/participant-recognition-template.pdf',
       } } : { status: "pending", assetId: null, url: null },
     routines: rows.map((row) => {
-      const visible = Boolean(adminPreview || (event.published && row.status === "published"));
+      const visible = Boolean(adminPreview || (event.published && (automaticCompletion ? !row.publication_blocked : row.status === "published")));
       const judging = visible ? parsed(row.judging_json) : null;
       const sheet = visible ? assets.find((asset) => asset.routine_id === row.id && asset.kind === "judge_sheet") : null;
       const photos = visible && (adminPreview || row.photos_published) ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo") : [];
@@ -209,14 +212,13 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       } });
   }
   if (!adminPreview) {
-    const publication = await createBlockPublicationGate({ db, eventId: event.id });
-    if (publication.mode === "block_close") {
+    if (publication.mode === "block_close" || automaticCompletion) {
       enriched = { ...enriched, routines: await Promise.all(enriched.routines.map(async routine => {
         const row = rows.find(value => (value.id || `registration:${value.registration_dance_id}`) === routine.id);
         const sourceEventId = row?.source_event_id || source?.source_event_id || "";
         const sourceRoutineId = row?.source_routine_id || row?.registration_dance_id || "";
         let allowed = false;
-        if (event.published && row?.status === "published" && sourceEventId && sourceRoutineId) {
+        if (event.published && row && (automaticCompletion ? !row.publication_blocked : row.status === "published") && sourceEventId && sourceRoutineId) {
           try {
             const snapshot = await snapshots.get(sourceEventId.toLowerCase());
             allowed = await publication.allowsRoutine({ sourceEventId, sourceRoutineId,
@@ -233,7 +235,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
         all(db, `SELECT r.id,r.photos_published FROM participant_portal_routines r
           JOIN participant_portal_events e ON e.id=r.event_id
           JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
-          WHERE r.event_id=? AND dp.participant_id=? AND e.published=1 AND r.status='published'`, event.id, participant.id),
+          WHERE r.event_id=? AND dp.participant_id=? AND e.published=1 AND ${routineVisibility}`, event.id, participant.id),
         all(db, `SELECT a.id,a.allow_download FROM participant_portal_assets a
           JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
           JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
@@ -302,12 +304,13 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
       const document = await first(db, `SELECT asset_id FROM participant_portal_documents WHERE participant_id = ? AND event_id = ? AND asset_id = ? AND published = 1`, grant.participant_id, grant.event_id, asset.id);
       if (asset.participant_id !== grant.participant_id || !document) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
     } else {
+      publication = await createBlockPublicationGate({ db, eventId: event.id });
+      const routineVisibility = publication.mode === "block_complete" ? "coalesce(r.publication_blocked,0)=0" : "r.status='published'";
       const membership = await first(db, `SELECT r.id,r.dance_id,r.source_event_id,r.source_routine_id,r.photos_published FROM participant_portal_routines r
         JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
-        WHERE r.id = ? AND r.event_id = ? AND r.status = 'published' AND dp.participant_id = ?`, asset.routine_id, grant.event_id, grant.participant_id);
+        WHERE r.id = ? AND r.event_id = ? AND ${routineVisibility} AND dp.participant_id = ?`, asset.routine_id, grant.event_id, grant.participant_id);
       if (!membership || (asset.kind === "photo" && !membership.photos_published)) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
-      publication = await createBlockPublicationGate({ db, eventId: event.id });
-      if (publication.mode === "block_close") {
+      if (publication.mode === "block_close" || publication.mode === "block_complete") {
         const source = await first(db, "SELECT source_event_id FROM participant_portal_judging_sources WHERE event_id=? AND enabled=1", event.id);
         let allowed = false;
         if (getJudgingSnapshot && source?.source_event_id && membership.source_event_id === source.source_event_id && membership.source_routine_id) {
@@ -332,12 +335,13 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
   if (!object) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
   const photo = asset.kind === "photo" ? await photoResponse(asset, object) : null;
   if (publication) {
+    const routineVisibility = publication.mode === "block_complete" ? "coalesce(r.publication_blocked,0)=0" : "r.status='published'";
     const current = await first(db, `SELECT a.id FROM participant_portal_assets a
       JOIN participant_portal_events e ON e.id=a.event_id
       JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
       JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
       JOIN participant_portal_access g ON g.event_id=e.id AND g.participant_id=dp.participant_id
-      WHERE a.id=? AND g.id=? AND g.active=1 AND e.published=1 AND r.status='published' AND a.published=1
+      WHERE a.id=? AND g.id=? AND g.active=1 AND e.published=1 AND ${routineVisibility} AND a.published=1
         AND (a.kind='judge_sheet' OR (a.kind='photo' AND r.photos_published=1 AND (?=0 OR a.allow_download=1)))`,
       asset.id, grant.id, new URL(request.url).searchParams.get("download") === "1" ? 1 : 0);
     if (!current || !await publication.confirm()) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
@@ -377,7 +381,7 @@ async function adminList(db, request) {
     routinePagination: { offset: routineOffset, limit: 200, hasMore: routines.length > 200 },
     assetPagination: { offset: assetOffset, limit: 500, hasMore: assets.length > 500 },
     routines: routines.slice(0,200).map((row) => ({ id: row.id || null, danceId: row.registration_dance_id, eventId: selected.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division: row.division, level: row.level,
-      sourceEventId: row.source_event_id || "", sourceRoutineId: row.source_routine_id || "", status: row.status || "unassigned", revision: row.revision || 0, result: parsed(row.result_json), judging: parsed(row.judging_json), photosPublished: Boolean(row.photos_published) })),
+      sourceEventId: row.source_event_id || "", sourceRoutineId: row.source_routine_id || "", status: row.status || "unassigned", publicationBlocked: Boolean(row.publication_blocked), revision: row.revision || 0, result: parsed(row.result_json), judging: parsed(row.judging_json), photosPublished: Boolean(row.photos_published) })),
     assets: assets.slice(0,500).map((asset) => ({ id: asset.id, eventId: asset.event_id, routineId: asset.routine_id, participantId: asset.participant_id, kind: asset.kind, fileName: asset.file_name, contentType: asset.content_type, byteSize: asset.byte_size, width: asset.width, height: asset.height, caption: asset.caption, allowDownload: Boolean(asset.allow_download), published: Boolean(asset.published) })) });
 }
 function detectType(bytes) {
@@ -574,7 +578,7 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
       const dance = await first(db,"SELECT id,venue FROM registration_dances WHERE id=?",str(input.danceId,"la coreografía",100));
       if (!dance || dance.venue !== event.venue) fault("portal_invalid_routine","La coreografía no corresponde a esta sede.");
       const result = normalizePortalResult(input.result), judging = normalizePortalJudging(input.judging);
-      const previous = await first(db,"SELECT id,revision,source_event_id,source_routine_id FROM participant_portal_routines WHERE event_id=? AND dance_id=?",event.id,dance.id);
+      const previous = await first(db,"SELECT id,revision,source_event_id,source_routine_id,publication_blocked FROM participant_portal_routines WHERE event_id=? AND dance_id=?",event.id,dance.id);
       const hasSourceEvent = Object.hasOwn(input,"sourceEventId"), hasSourceRoutine = Object.hasOwn(input,"sourceRoutineId");
       if (hasSourceEvent !== hasSourceRoutine) fault("portal_invalid_routine","Vincula el evento y la rutina de jueceo juntos.");
       const sourceEvent = hasSourceEvent ? str(input.sourceEventId,"el evento de jueceo",100,true) : previous?.source_event_id || "";
@@ -582,7 +586,7 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
       if (Boolean(sourceEvent) !== Boolean(sourceRoutine)) fault("portal_invalid_routine","Vincula el evento y la rutina de jueceo juntos.");
       const routineId = previous?.id || id();
       const revision = (previous?.revision || 0) + 1;
-      const snapshot = {danceId:dance.id,sourceEventId:sourceEvent || null,sourceRoutineId:sourceRoutine || null,result,judging,photosPublished:bool(input.photosPublished),status:'draft'};
+      const snapshot = {danceId:dance.id,sourceEventId:sourceEvent || null,sourceRoutineId:sourceRoutine || null,result,judging,photosPublished:bool(input.photosPublished),publicationBlocked:Boolean(previous?.publication_blocked),status:'draft'};
       await db.batch([
         db.prepare(`INSERT INTO participant_portal_routines(id,event_id,dance_id,source_event_id,source_routine_id,result_json,judging_json,photos_published,revision)
           VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id,dance_id) DO UPDATE SET source_event_id=excluded.source_event_id,source_routine_id=excluded.source_routine_id,
@@ -599,9 +603,10 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
         normalizePortalResult(parsed(routine.result_json)); normalizePortalJudging(parsed(routine.judging_json));
       }
       const status = input.action === "routine.publish" ? "published" : "draft";
-      const snapshot = {danceId:routine.dance_id,sourceEventId:routine.source_event_id,sourceRoutineId:routine.source_routine_id,result:parsed(routine.result_json),judging:parsed(routine.judging_json),photosPublished:Boolean(routine.photos_published),status};
+      const blocked = input.action === "routine.unpublish" ? 1 : 0;
+      const snapshot = {danceId:routine.dance_id,sourceEventId:routine.source_event_id,sourceRoutineId:routine.source_routine_id,result:parsed(routine.result_json),judging:parsed(routine.judging_json),photosPublished:Boolean(routine.photos_published),publicationBlocked:Boolean(blocked),status};
       await db.batch([
-        db.prepare("UPDATE participant_portal_routines SET status=?,updated_at=datetime('now') WHERE id=?").bind(status,routine.id),
+        db.prepare("UPDATE participant_portal_routines SET status=?,publication_blocked=?,updated_at=datetime('now') WHERE id=?").bind(status,blocked,routine.id),
         revisionStatement(db,{routineId:routine.id,eventId:routine.event_id,revision:routine.revision,action:status==='published'?'publish':'unpublish',snapshot,actorId}),
       ]);
       return json({ ok:true });

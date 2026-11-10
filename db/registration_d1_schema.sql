@@ -653,6 +653,7 @@ CREATE TABLE IF NOT EXISTS participant_portal_routines (
   result_json TEXT,
   judging_json TEXT,
   photos_published INTEGER NOT NULL DEFAULT 0 CHECK (photos_published IN (0,1)),
+  publication_blocked INTEGER NOT NULL DEFAULT 0 CHECK (publication_blocked IN (0,1)),
   revision INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(event_id,dance_id),
@@ -748,6 +749,7 @@ CREATE TABLE IF NOT EXISTS participant_portal_documents (
 CREATE TABLE IF NOT EXISTS participant_portal_publication_settings (
   event_id TEXT PRIMARY KEY REFERENCES participant_portal_events(id) ON DELETE CASCADE,
   mode TEXT NOT NULL CHECK (mode IN ('individual','block_close')),
+  automatic_completion INTEGER NOT NULL DEFAULT 0 CHECK (automatic_completion IN (0,1)),
   operation_nonce TEXT NOT NULL,
   updated_by TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

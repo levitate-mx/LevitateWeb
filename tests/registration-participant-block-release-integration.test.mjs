@@ -271,3 +271,129 @@ test('an individual routine withdrawal overrides its already-closed block withou
     (SELECT count(*) FROM participant_portal_access) AS accesses`).get(), counts);
   assert.equal((await f.review()).data.selectedBlock.state, 'closed', 'withdrawing one presentation preserves the audited block closure');
 });
+
+const changes = db => db.sqlite.prepare('SELECT total_changes() AS count').get().count;
+function assertNoClosures(db) {
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS count FROM participant_portal_block_publications').get().count, 0);
+}
+
+test('automatic completion releases full-block results, sheets and approved photos without closing or publishing draft records', async t => {
+  const f = await fixture(t, { mode: 'block_complete' });
+  const before = changes(f.db), sourceBefore = f.sourceFingerprint();
+  const { data } = await f.me(), own = data.routines[0];
+  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 120); assert.equal(own.result.place, 1);
+  assert.equal(own.judging.status, 'available'); assert.equal(own.judging.judges.length, 1);
+  assert.equal(own.judging.pdf.routine.id, 'r1');
+  assert.deepEqual(own.photos.items.map(photo => photo.id), ['approved-photo']);
+  assert.doesNotMatch(JSON.stringify(data), /COMENTARIO PRIVADO|draft-photo|other-photo/);
+  await f.asset('approved-photo'); await f.asset('approved-sheet');
+  await f.asset('draft-photo', 404); await f.asset('other-photo', 404);
+  assertNoClosures(f.db);
+  assert.equal(f.db.sqlite.prepare("SELECT count(*) AS count FROM participant_portal_routines WHERE status='draft'").get().count, 2);
+  assert.equal(changes(f.db), before, 'participant reads never turn the full block into D1 publication writes');
+  assert.equal(f.sourceFingerprint(), sourceBefore, 'JueceoCore remains read-only');
+});
+
+test('a peer missing its last criterion keeps the entire automatic block private until the next passport read finds it complete', async t => {
+  const f = await fixture(t, { mode: 'block_complete', partial: true });
+  const before = changes(f.db);
+  assertHidden((await f.me()).data);
+  await f.asset('approved-photo', 404); await f.asset('approved-sheet', 404);
+  assert.equal(changes(f.db), before);
+  f.core.scores.push({ event_id: sourceId, routine_id: 'r2', judge_id: 'j1', criterion_id: 1, value: 30 });
+  const sourceBeforeRead = f.sourceFingerprint();
+  const own = (await f.me()).data.routines[0];
+  assert.equal(own.result.status, 'published'); assert.equal(own.result.place, 1);
+  assert.equal(own.judging.status, 'available'); assert.deepEqual(own.photos.items.map(photo => photo.id), ['approved-photo']);
+  await f.asset('approved-photo'); await f.asset('approved-sheet');
+  assertNoClosures(f.db); assert.equal(changes(f.db), before);
+  assert.equal(f.sourceFingerprint(), sourceBeforeRead);
+});
+
+test('automatic publication waits for every expected judge on every peer, including judges with no recorded score yet', async t => {
+  const f = await fixture(t, { mode: 'block_complete' });
+  f.core.judges.push({ event_id: sourceId, judge_id: 'j2', name: 'Segundo juez', role: 'judge', assigned_block_ids: [] });
+  f.core.scores.push({ event_id: sourceId, routine_id: 'r1', judge_id: 'j2', criterion_id: 1, value: 35 });
+  const before = changes(f.db);
+  assertHidden((await f.me()).data);
+  await f.asset('approved-photo', 404);
+  f.core.scores.push({ event_id: sourceId, routine_id: 'r2', judge_id: 'j2', criterion_id: 1, value: 32 });
+  const own = (await f.me()).data.routines[0];
+  assert.equal(own.result.status, 'published'); assert.equal(own.judging.status, 'available');
+  assert.equal(own.judging.judges.length, 2);
+  assert.equal(changes(f.db), before); assertNoClosures(f.db);
+});
+
+test('removing a required criterion withdraws an automatic block again without deleting its galleries or QR grants', async t => {
+  const f = await fixture(t, { mode: 'block_complete' });
+  assert.equal((await f.me()).data.routines[0].result.status, 'published');
+  const grants = f.db.sqlite.prepare('SELECT * FROM participant_portal_access ORDER BY id').all();
+  const files = f.db.sqlite.prepare('SELECT * FROM participant_portal_assets ORDER BY id').all();
+  const before = changes(f.db);
+  f.core.scores = f.core.scores.filter(row => row.routine_id !== 'r2');
+  assertHidden((await f.me()).data);
+  await f.asset('approved-photo', 404); await f.asset('approved-sheet', 404);
+  assert.equal(changes(f.db), before); assertNoClosures(f.db);
+  assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM participant_portal_access ORDER BY id').all(), grants);
+  assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM participant_portal_assets ORDER BY id').all(), files);
+});
+
+test('a complete grade correction appears in the next automatic result and sheet without another close action', async t => {
+  const f = await fixture(t, { mode: 'block_complete' });
+  const before = changes(f.db);
+  assert.equal((await f.me()).data.routines[0].result.score, 120);
+  f.core.scores.find(row => row.routine_id === 'r1').value = 42;
+  f.core.scores.find(row => row.routine_id === 'r2').value = 45;
+  const own = (await f.me()).data.routines[0];
+  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 126); assert.equal(own.result.place, 2);
+  assert.equal(own.judging.judges[0].criteria[0].score, 42);
+  assert.equal(own.judging.pdf.judges[0].criteria[0].value, 42);
+  assert.equal(changes(f.db), before); assertNoClosures(f.db);
+});
+
+test('automatic completion preserves the hidden-edition and operator gallery gates', async t => {
+  const f = await fixture(t, { mode: 'block_complete', published: false, photosPublished: false });
+  let before = changes(f.db);
+  assertHidden((await f.me()).data); await f.asset('approved-photo', 404); await f.asset('approved-sheet', 404);
+  assert.equal(changes(f.db), before);
+  await f.admin({ action: 'event.upsert', event: {
+    id: editionId, title: 'Levitate de prueba', season: 'Otoño 2026', venue: 'edomex', published: true,
+  } });
+  before = changes(f.db);
+  const own = (await f.me()).data.routines[0];
+  assert.equal(own.result.status, 'published'); assert.equal(own.judging.status, 'available');
+  assert.deepEqual(own.photos.items, []); await f.asset('approved-photo', 404);
+  assert.equal(changes(f.db), before); assertNoClosures(f.db);
+});
+
+test('an explicit routine pause overrides automatic completion until its operator resumes publication', async t => {
+  const f = await fixture(t, { mode: 'block_complete' });
+  assert.equal((await f.me()).data.routines[0].result.status, 'published');
+  await f.admin({ action: 'routine.unpublish', routineId: 'portal-a' });
+  assert.equal(f.db.sqlite.prepare("SELECT publication_blocked FROM participant_portal_routines WHERE id='portal-a'").get().publication_blocked, 1);
+  let before = changes(f.db);
+  assertHidden((await f.me()).data); await f.asset('approved-photo', 404); await f.asset('approved-sheet', 404);
+  assert.equal(changes(f.db), before);
+  await f.admin({ action: 'routine.publish', routineId: 'portal-a' });
+  assert.equal(f.db.sqlite.prepare("SELECT publication_blocked FROM participant_portal_routines WHERE id='portal-a'").get().publication_blocked, 0);
+  before = changes(f.db);
+  assert.equal((await f.me()).data.routines[0].judging.status, 'available');
+  await f.asset('approved-photo');
+  assert.equal(changes(f.db), before); assertNoClosures(f.db);
+});
+
+for (const assetId of ['approved-photo', 'approved-sheet']) {
+  for (const [label, withdraw] of Object.entries(withdrawals).filter(([label]) => label !== 'reopening the block')) {
+    test(`automatic mode: ${label} while storage is reading ${assetId} returns no private file bytes`, { timeout: 5000 }, async t => {
+      const f = await fixture(t, { mode: 'block_complete' });
+      const pending = f.delayNextStorageRead();
+      const download = f.asset(assetId, 404);
+      await Promise.race([pending.entered, download.then(() => assert.fail('the completed automatic block must first authorize the storage read'))]);
+      try { await withdraw(f, assetId); }
+      finally { pending.release(); }
+      const response = await download;
+      assert.equal(response.data.error.code, 'portal_asset_not_found');
+      assert.equal(response.data instanceof Uint8Array, false); assertNoClosures(f.db);
+    });
+  }
+}

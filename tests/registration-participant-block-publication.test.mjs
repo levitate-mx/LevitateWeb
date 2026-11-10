@@ -10,6 +10,7 @@ import {
 
 const schema = await readFile(new URL('../db/registration_d1_schema.sql', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../db/registration_participant_block_publication.sql', import.meta.url), 'utf8');
+const completionMigration = await readFile(new URL('../db/registration_participant_block_completion.sql', import.meta.url), 'utf8');
 const eventId = 'edomex-publication-test', sourceId = '11111111-2222-4333-8444-555555555555';
 const otherSourceId = '99999999-2222-4333-8444-555555555555';
 
@@ -105,8 +106,110 @@ test('legacy editions default to individual mode and can opt in before linking t
   await assert.rejects(() => f.mode('automatic-from-client'), error => error.code === 'portal_invalid_publication');
 });
 
+test('automatic completion adds columns without rebuilding the original mode CHECK or existing data', t => {
+  const db = new DatabaseSync(':memory:'); t.after(() => db.close());
+  const oldSchema = schema.replace(/^  automatic_completion INTEGER[^\n]+\n/gm, '').replace(/^  publication_blocked INTEGER[^\n]+\n/gm, '');
+  db.exec(oldSchema);
+  db.exec(`INSERT INTO participant_portal_events(id,title,season,venue) VALUES('old-event','Evento anterior','Otoño','edomex');
+    INSERT INTO participant_portal_publication_settings(event_id,mode,operation_nonce) VALUES('old-event','block_close','existing-operation')`);
+  db.exec(completionMigration);
+  assert.deepEqual({ ...db.prepare('SELECT event_id,mode,operation_nonce,automatic_completion FROM participant_portal_publication_settings').get() },
+    { event_id: 'old-event', mode: 'block_close', operation_nonce: 'existing-operation', automatic_completion: 0 });
+  assert.ok(db.prepare('PRAGMA table_info(participant_portal_routines)').all().some(row => row.name === 'publication_blocked' && row.dflt_value === '0'));
+  assert.throws(() => db.prepare("UPDATE participant_portal_publication_settings SET mode='block_complete'").run(), /CHECK/);
+  db.prepare('UPDATE participant_portal_publication_settings SET automatic_completion=1').run();
+  assert.equal(db.prepare('SELECT automatic_completion FROM participant_portal_publication_settings').get().automatic_completion, 1);
+});
+
+test('automatic mode persists additively and reads completed blocks without writing publication records', async t => {
+  const f = await fixture(t); await f.mode('block_complete');
+  const setting = f.rows('participant_portal_publication_settings')[0];
+  assert.equal(setting.mode, 'block_close'); assert.equal(setting.automatic_completion, 1);
+  assert.equal(JSON.parse(f.rows('participant_portal_publication_history')[0].details_json).mode, 'block_complete');
+  const protectedTables = ['participant_portal_events', 'participant_portal_access', 'participant_portal_routines', 'participant_portal_assets', 'participant_portal_publication_settings', 'participant_portal_publication_history', 'participant_portal_block_publications'];
+  const before = protectedTables.map(table => f.rows(table)); f.db.queries.length = 0;
+  const view = await f.view();
+  assert.equal(view.mode, 'block_complete'); assert.equal(view.selectedBlock.state, 'ready');
+  assert.equal(view.selectedBlock.complete, true); assert.equal(view.selectedBlock.closedAt, null);
+  assert.equal(await f.allows(), true);
+  assert.deepEqual(protectedTables.map(table => f.rows(table)), before);
+  assert.ok(f.db.queries.every(sql => /^\s*SELECT\b/i.test(sql)), 'passport/admin GET workflows never mutate the database');
+  assert.ok(f.db.queries.every(sql => !sql.includes('participant_portal_block_publications')), 'automatic mode ignores manual release history');
+  assert.ok(f.rows('participant_portal_routines').every(row => row.status === 'draft' && row.publication_blocked === 0));
+  await assert.rejects(() => f.close(), error => error.code === 'portal_block_mode_required');
+  await assert.rejects(() => f.reopen(), error => error.code === 'portal_block_mode_required');
+});
+
+test('an incomplete peer holds the entire automatic block until all its expected judges finish', async t => {
+  const f = await fixture(t); await f.mode('block_complete');
+  const missing = f.input.scores.find(row => row.routine_id === '2' && row.judge_id === 'judge-2');
+  f.input.scores = f.input.scores.filter(row => row !== missing);
+  const view = await f.view(); assert.equal(view.selectedBlock.state, 'open'); assert.equal(view.selectedBlock.complete, false);
+  assert.equal(view.selectedBlock.completedRoutines, 1); assert.equal(view.selectedBlock.totalRoutines, 2);
+  assert.equal(await f.allows(), false, 'a complete individual sheet is not released before its peers');
+  f.input.scores.push(missing);
+  assert.equal((await f.view()).selectedBlock.state, 'ready'); assert.equal(await f.allows(), true);
+  f.input.scores = f.input.scores.filter(row => row.routine_id !== '3');
+  assert.equal(await f.allows(), true, 'another incomplete block does not hold this completed block');
+  assert.equal(await f.allows({ sourceRoutineId: '3', danceId: 'dance-3' }), false);
+  assert.equal(f.rows('participant_portal_block_publications').length, 0);
+});
+
+test('zero is a valid submitted score and later complete corrections update automatic publication on consultation', async t => {
+  const f = await fixture(t); await f.mode('block_complete');
+  for (const score of f.input.scores) score.value = 0;
+  const before = await f.view(); assert.equal(before.selectedBlock.state, 'ready'); assert.equal(await f.allows(), true);
+  f.input.scores[0].value = 8;
+  const corrected = await f.view(); assert.equal(corrected.selectedBlock.state, 'ready');
+  assert.notEqual(corrected.selectedBlock.fingerprint, before.selectedBlock.fingerprint); assert.equal(await f.allows(), true);
+  f.input.scores.splice(0, 1); assert.equal(await f.allows(), false, 'a removed score returns the entire block to pending');
+  assert.equal(f.rows('participant_portal_block_publications').length, 0);
+  assert.deepEqual(f.rows('participant_portal_publication_history').map(row => row.action), ['mode']);
+});
+
+test('old manual closure state and fingerprints have no effect on automatic completion', async t => {
+  const f = await fixture(t); await f.mode('block_close'); await f.close(); await f.reopen(); await f.mode('block_complete');
+  f.input.scores[0].value = 9;
+  const gate = await createBlockPublicationGate({ db: f.db, eventId });
+  assert.equal(await gate.allowsRoutine({ sourceEventId: sourceId, sourceRoutineId: '1', danceId: 'dance-1', snapshot: f.snapshot() }), true);
+  assert.equal((await f.view()).selectedBlock.state, 'ready');
+  f.db.sqlite.prepare("UPDATE participant_portal_block_publications SET state='open',fingerprint='obsolete',operation_nonce='unrelated-history'").run();
+  assert.equal(await gate.confirm(), true, 'unrelated manual history does not govern automatic release');
+  await f.mode('individual');
+  assert.equal(f.rows('participant_portal_publication_settings')[0].automatic_completion, 0);
+});
+
+test('automatic mode respects a manual withdrawal without blocking other complete participants in the block', async t => {
+  const f = await fixture(t); await f.mode('block_complete');
+  const fingerprint = (await f.view()).selectedBlock.fingerprint;
+  assert.equal(await f.allows(), true);
+  f.db.sqlite.prepare("UPDATE participant_portal_routines SET publication_blocked=1 WHERE id='portal-1'").run();
+  assert.equal(await f.allows(), false);
+  assert.equal(await f.allows({ sourceRoutineId: '2', danceId: 'dance-2' }), true);
+  const view = await f.view(); assert.equal(view.selectedBlock.state, 'ready');
+  assert.equal(view.selectedBlock.fingerprint, fingerprint, 'individual visibility overrides are separate from grade integrity');
+  f.db.sqlite.prepare("UPDATE participant_portal_routines SET publication_blocked=0 WHERE id='portal-1'").run();
+  assert.equal(await f.allows(), true);
+});
+
+test('automatic final confirmation detects flag, source, association and manual-withdrawal races', async t => {
+  const changes = [
+    f => f.db.sqlite.prepare('UPDATE participant_portal_publication_settings SET automatic_completion=0 WHERE event_id=?').run(eventId),
+    f => f.db.sqlite.prepare('UPDATE participant_portal_judging_sources SET enabled=0 WHERE event_id=?').run(eventId),
+    f => f.db.sqlite.prepare("UPDATE participant_portal_routines SET source_routine_id='99' WHERE id='portal-2'").run(),
+    f => f.db.sqlite.prepare("UPDATE participant_portal_routines SET publication_blocked=1 WHERE id='portal-1'").run(),
+  ];
+  for (const [index, change] of changes.entries()) await t.test(`automatic race ${index}`, async t => {
+    const f = await fixture(t); await f.mode('block_complete');
+    const gate = await createBlockPublicationGate({ db: f.db, eventId });
+    assert.equal(await gate.allowsRoutine({ sourceEventId: sourceId, sourceRoutineId: '1', danceId: 'dance-1', snapshot: f.snapshot() }), true);
+    change(f); assert.equal(await gate.confirm(), false);
+  });
+});
+
 test('a complete mapped block closes atomically without publishing the edition, photos, QR or other blocks', async t => {
   const f = await fixture(t); await f.mode('block_close');
+  f.db.sqlite.prepare("UPDATE participant_portal_routines SET publication_blocked=1 WHERE id='portal-1'").run();
   const before = [f.rows('participant_portal_events'), f.rows('participant_portal_access'), f.rows('participant_portal_assets')];
   const view = await f.view(); assert.equal(view.selectedBlock.complete, true); assert.equal(view.selectedBlock.state, 'open');
   assert.equal(view.selectedBlock.completedRoutines, 2); assert.equal(view.selectedBlock.totalRoutines, 2);
@@ -114,6 +217,7 @@ test('a complete mapped block closes atomically without publishing the edition, 
   const result = await f.close({ fingerprint: view.selectedBlock.fingerprint, sourceEventId: otherSourceId });
   assert.equal(result.selectedBlock.state, 'closed'); assert.ok(result.selectedBlock.closedAt);
   assert.deepEqual(f.rows('participant_portal_routines').map(row => [row.status, row.photos_published]), [['published', 1], ['published', 0], ['draft', 0]]);
+  assert.ok(f.rows('participant_portal_routines').every(row => row.publication_blocked === 0), 'an explicit manual block close republishes its withdrawn entries');
   assert.deepEqual([f.rows('participant_portal_events'), f.rows('participant_portal_access'), f.rows('participant_portal_assets')], before);
   assert.deepEqual(f.rows('participant_portal_publication_history').map(row => [row.action, row.actor_id]), [['mode', 'admin'], ['close', 'admin']]);
   assert.equal(await f.allows(), true); assert.equal(await f.allows({ sourceRoutineId: '2', danceId: 'dance-2' }), true);
@@ -271,7 +375,7 @@ test('a policy activation during a legacy individual response is detected by fin
   assert.equal(await gate.confirm(), false);
 });
 
-test('fifty blocks use at most five D1 reads including their final fresh confirmation', async t => {
+test('fifty blocks use bounded D1 reads in manual and automatic modes', async t => {
   const f = await fixture(t); await f.mode('block_close');
   const row = value => ({ event_id: sourceId, ...value });
   f.input.blocks = Array.from({ length: 50 }, (_, index) => row({ block_id: `block-${index + 1}`, name: `Bloque ${index + 1}`, sort_order: index, is_active: false }));
@@ -291,6 +395,13 @@ test('fifty blocks use at most five D1 reads including their final fresh confirm
   for (let index = 1; index <= 50; index++) assert.equal(await gate.allowsRoutine({ sourceEventId: sourceId, sourceRoutineId: String(index), danceId: `dance-${index}`, snapshot }), true);
   assert.equal(f.db.queries.length, 4, 'one shared freshness query covers all fifty blocks');
   assert.equal(await gate.confirm(), true); assert.equal(f.db.queries.length, 5);
+  await f.mode('block_complete'); f.db.queries.length = 0;
+  const automaticGate = await createBlockPublicationGate({ db: f.db, eventId });
+  assert.equal(f.db.queries.length, 2, 'automatic mode needs no manual closure reads');
+  for (let index = 1; index <= 50; index++) assert.equal(await automaticGate.allowsRoutine({ sourceEventId: sourceId, sourceRoutineId: String(index), danceId: `dance-${index}`, snapshot }), true);
+  assert.equal(f.db.queries.length, 3);
+  assert.equal(await automaticGate.confirm(), true); assert.equal(f.db.queries.length, 4);
+  assert.ok(f.db.queries.every(sql => /^\s*SELECT\b/i.test(sql)));
 });
 
 test('binding, mode and mapping races leave the attempted close completely without mutations', async t => {

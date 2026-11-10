@@ -3,6 +3,7 @@
 CREATE TABLE IF NOT EXISTS participant_portal_publication_settings (
   event_id TEXT PRIMARY KEY REFERENCES participant_portal_events(id) ON DELETE CASCADE,
   mode TEXT NOT NULL CHECK (mode IN ('individual','block_close')),
+  automatic_completion INTEGER NOT NULL DEFAULT 0 CHECK (automatic_completion IN (0,1)),
   operation_nonce TEXT NOT NULL,
   updated_by TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

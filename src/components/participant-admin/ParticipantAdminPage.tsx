@@ -3,12 +3,12 @@ import { RegistrationApiError, requestRegistrationApi } from '../admin/registrat
 import { MediaDriveConnectionPanel } from '../admin/MediaDriveConnectionPanel';
 import { prepareParticipantPhoto } from './prepareParticipantPhoto';
 import { ParticipantJudgingProgram } from './ParticipantJudgingProgram';
-import { ParticipantBlockPublication } from './ParticipantBlockPublication';
+import { ParticipantBlockPublication, type ParticipantPublicationMode } from './ParticipantBlockPublication';
 import './ParticipantAdminPage.css';
 
 type Event = { id: string; title: string; season: string; venue: string; startsAt: string; published: boolean };
 type Person = { id: string; name: string; academy: string; accesses: { id: string; active: boolean; eventId: string }[] };
-type Routine = { id: string | null; danceId: string; eventId: string; title: string; category: string; division: string; level: string; status: string; sourceEventId?: string; sourceRoutineId?: string; result: Record<string, unknown> | null; judging: { judges: unknown[] } | null; photosPublished: boolean };
+type Routine = { id: string | null; danceId: string; eventId: string; title: string; category: string; division: string; level: string; status: string; publicationBlocked?: boolean; sourceEventId?: string; sourceRoutineId?: string; result: Record<string, unknown> | null; judging: { judges: unknown[] } | null; photosPublished: boolean };
 type Asset = { id: string; kind: string; routineId?: string; participantId?: string; published?: boolean; fileName?: string };
 type Pagination = { offset: number; limit: number; hasMore: boolean };
 type Data = { events: Event[]; participants: Person[]; routines: Routine[]; assets: Asset[]; pagination?: Pagination; routinePagination?: Pagination; assetPagination?: Pagination };
@@ -59,11 +59,13 @@ export function ParticipantAdminPage() {
   const [storageMessage, setStorageMessage] = useState('');
   const [judgingSource, setJudgingSource] = useState<JudgingSource>({ events: [], sourceEventId: '' });
   const [judgingSourceMessage, setJudgingSourceMessage] = useState('');
+  const [publicationMode, setPublicationMode] = useState<{ eventId: string; mode: ParticipantPublicationMode }>({ eventId: '', mode: 'individual' });
   const latest = useRef(0);
   const latestAssets = useRef(0);
   const person = data.participants.find(row => row.id === personId);
   const routine = data.routines.find(row => row.danceId === danceId);
   const edition = data.events.find(row => row.id === eventId);
+  const automaticPublication = publicationMode.eventId === eventId && publicationMode.mode === 'block_complete';
   const reportError = (cause: unknown) => {
     if (cause instanceof RegistrationApiError && (cause.status === 401 || cause.status === 403)) {
       ++latest.current; ++latestAssets.current;
@@ -199,7 +201,8 @@ export function ParticipantAdminPage() {
           </details>
         </section>
         <ParticipantBlockPublication eventId={eventId} disabled={busy || !authorized}
-          onChanged={() => { void refresh().catch(reportError); void refreshAssets().catch(reportError); }} onError={reportError} />
+          onChanged={() => { void refresh().catch(reportError); void refreshAssets().catch(reportError); }}
+          onModeChange={mode => setPublicationMode({ eventId, mode })} onError={reportError} />
         <section className="pp-admin-section">
           <h2>02 / Participantes y diplomas</h2>
           <label>Buscar por nombre o academia<input value={search} onChange={e => { setSearch(e.target.value); setPersonOffset(0); }} placeholder="Escribe para buscar" /></label>
@@ -238,13 +241,13 @@ export function ParticipantAdminPage() {
           <label>Presentación<select value={danceId} onChange={e => { setDanceId(e.target.value); setAssetOffset(0); }}><option value="">Seleccionar presentación</option>{data.routines.map(r => <option key={r.danceId} value={r.danceId}>{r.title} · {r.division} · {r.level}</option>)}</select></label>
           <div className="pp-admin-actions"><button disabled={routineOffset === 0} onClick={() => { setRoutineOffset(Math.max(0, routineOffset - 200)); setDanceId(''); }}>Anterior</button><span>Presentaciones · página {Math.floor(routineOffset / 200) + 1}</span><button disabled={!data.routinePagination?.hasMore} onClick={() => { setRoutineOffset(routineOffset + 200); setDanceId(''); }}>Siguientes</button></div>
           {routine && <>
-            <p>Estado: <strong>{routine.status === 'published' ? 'Publicado' : 'Borrador'}</strong>. Guarda el puntaje y la medalla oficiales de esta presentación.</p>
+            <p>Estado: <strong>{routine.publicationBlocked ? 'Publicación pausada' : automaticPublication ? 'Publicación automática' : routine.status === 'published' ? 'Publicado' : 'Borrador'}</strong>. {routine.publicationBlocked ? 'Esta presentación tiene un retiro individual. Puedes reanudar su publicación para habilitar su material según las reglas de la edición.' : automaticPublication ? 'Sus notas se consultan al abrir el pasaporte y se muestran cuando todos los jueces completan el bloque.' : 'Guarda el puntaje y la medalla oficiales de esta presentación.'}</p>
             <div className="pp-admin-fields"><label>Puntaje<input type="number" step="0.01" min="0" value={result.score} onChange={e => setResult({ ...result, score: e.target.value })} /></label><label>Puntaje máximo<input type="number" min="1" value={result.maxScore} onChange={e => setResult({ ...result, maxScore: e.target.value })} /></label><label>Medalla<select value={result.medal} onChange={e => setResult({ ...result, medal: e.target.value })}>{['oro', 'plata', 'bronce', 'participacion'].map(m => <option key={m}>{m}</option>)}</select></label><label className="pp-admin-check"><input type="checkbox" checked={result.directCompetition} onChange={e => setResult({ ...result, directCompetition: e.target.checked, place: '' })} />Competencia directa</label>
               {result.directCompetition && <><label>Presentaciones elegibles<input type="number" min="2" value={result.eligibleCount} onChange={e => setResult({ ...result, eligibleCount: e.target.value })} /></label><label>Lugar oficial<select value={result.place} onChange={e => setResult({ ...result, place: e.target.value })}><option value="">Sin lugar de podio</option><option value="1">1.er lugar</option><option value="2">2.º lugar</option><option value="3">3.er lugar</option></select></label></>}
             </div>
             <p>Las hojas de jueceo se consultan automáticamente desde el evento vinculado. Usa la vista interna del participante para revisarlas antes de mostrar la edición.</p>
             <label className="pp-admin-check"><input type="checkbox" checked={photosPublished} onChange={e => setPhotosPublished(e.target.checked)} />Galería disponible al publicar esta presentación</label>
-            <div className="pp-admin-actions"><button onClick={() => perform(async () => { await api('', routinePayload()); }, 'Borrador guardado. Los cambios aún no son visibles.')}>Guardar borrador</button><button disabled={!routine.id} onClick={() => perform(async () => { const saved = await api<{ routineId: string }>('', routinePayload()); await api('', { action: 'routine.publish', routineId: saved.routineId }); }, 'Presentación publicada para sus integrantes.')}>Publicar presentación</button>{routine.status === 'published' && <button onClick={() => perform(async () => { await api('', { action: 'routine.unpublish', routineId: routine.id }); }, 'Presentación retirada de los perfiles.')}>Retirar publicación</button>}</div>
+            <div className="pp-admin-actions"><button onClick={() => perform(async () => { await api('', routinePayload()); }, automaticPublication ? 'Configuración guardada. El material seguirá las reglas automáticas del bloque.' : 'Borrador guardado. Los cambios aún no son visibles.')}>{automaticPublication ? 'Guardar ajustes' : 'Guardar borrador'}</button><button disabled={!routine.id} onClick={() => perform(async () => { const saved = await api<{ routineId: string }>('', routinePayload()); await api('', { action: 'routine.publish', routineId: saved.routineId }); }, 'Presentación habilitada según las reglas de publicación de la edición.')}>{routine.publicationBlocked ? 'Reanudar publicación' : 'Publicar presentación'}</button>{routine.id && !routine.publicationBlocked && (routine.status === 'published' || automaticPublication) && <button onClick={() => perform(async () => { await api('', { action: 'routine.unpublish', routineId: routine.id }); }, automaticPublication ? 'Publicación pausada para esta presentación.' : 'Presentación retirada de los perfiles.')}>{automaticPublication ? 'Pausar publicación' : 'Retirar publicación'}</button>}</div>
             {routine.id && <div className="pp-admin-uploads"><h3>Fotografías</h3><p>Carga las fotos de una sola presentación. Sus integrantes recibirán el mismo álbum. Las vistas previas se preparan automáticamente con la marca de agua de Levitate. Recomendado: entre 10 y 20 fotografías.</p>
               <label>Vistas previas JPEG, PNG o WebP<input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) void perform(async () => { for (const file of files) await upload(file, 'photo', file.name); }, `${files.length} fotografías cargadas en borrador.`); }} /></label>
               <ul className="pp-admin-assets">{assets.filter(a => a.routineId === routine.id).map(a => <li key={a.id}><a target="_blank" rel="noreferrer" href={`${endpoint}?assetId=${encodeURIComponent(a.id)}`}>Revisar {a.fileName || a.kind}</a><button onClick={() => perform(async () => { await api('', { action: 'asset.publish', assetId: a.id, published: !a.published }); }, a.published ? 'Archivo retirado.' : 'Archivo aprobado para publicación.')}>{a.published ? 'Retirar archivo' : 'Aprobar archivo'}</button></li>)}</ul>

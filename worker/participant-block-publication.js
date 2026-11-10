@@ -31,18 +31,20 @@ const sortBy = (rows, field) => [...rows].sort((left, right) => String(left[fiel
 
 async function context(db, eventId) {
   eventId = key(eventId, 'la edición', 100);
-  const edition = await first(db, `SELECT e.id,e.venue,s.mode,s.operation_nonce AS settings_nonce,j.source_event_id,j.enabled
+  const edition = await first(db, `SELECT e.id,e.venue,s.mode,s.automatic_completion,s.operation_nonce AS settings_nonce,j.source_event_id,j.enabled
     FROM participant_portal_events e LEFT JOIN participant_portal_publication_settings s ON s.event_id=e.id
     LEFT JOIN participant_portal_judging_sources j ON j.event_id=e.id WHERE e.id=?`, eventId);
   if (!edition) fault('portal_event_not_found', 'No se encontró la edición de Mi Levitate.', 404);
-  const mode = edition.mode || 'individual';
-  if (!['individual', 'block_close'].includes(mode)) fault('portal_invalid_publication', 'La política de publicación necesita revisión.', 409);
+  const storageMode = edition.mode || 'individual', automaticCompletion = edition.automatic_completion ?? 0;
+  if (!['individual', 'block_close'].includes(storageMode) || ![0, 1].includes(automaticCompletion)
+    || (automaticCompletion === 1 && storageMode !== 'block_close')) fault('portal_invalid_publication', 'La política de publicación necesita revisión.', 409);
+  const mode = storageMode === 'block_close' && automaticCompletion === 1 ? 'block_complete' : storageMode;
   const sourceEventId = edition.enabled === 1 && uuid.test(text(edition.source_event_id)) ? edition.source_event_id.toLowerCase() : '';
-  return { ...edition, eventId, mode, sourceEventId };
+  return { ...edition, eventId, mode, storageMode, automaticCompletion, sourceEventId };
 }
 
 async function mappings(db, edition) {
-  return all(db, `SELECT r.id,r.dance_id,r.source_event_id,r.source_routine_id,d.venue
+  return all(db, `SELECT r.id,r.dance_id,r.source_event_id,r.source_routine_id,r.publication_blocked,d.venue
     FROM participant_portal_routines r LEFT JOIN registration_dances d ON d.id=r.dance_id
     WHERE r.event_id=?`, edition.eventId);
 }
@@ -135,11 +137,12 @@ async function analyzeBlock(edition, blockId, snapshot, mappingRows, expectedIds
   return { complete: true, completedRoutines: rows.length, totalRoutines: rows.length, fingerprint, manifest };
 }
 
-function selectedView(block, analysis, publication) {
+function selectedView(block, analysis, publication, mode = 'block_close') {
+  const automatic = mode === 'block_complete';
   const closed = publication?.state === 'closed';
-  return { id: block.id, name: block.name, state: closed ? (analysis.complete && analysis.fingerprint === publication.fingerprint ? 'closed' : 'changed') : 'open',
+  return { id: block.id, name: block.name, state: automatic ? (analysis.complete ? 'ready' : 'open') : closed ? (analysis.complete && analysis.fingerprint === publication.fingerprint ? 'closed' : 'changed') : 'open',
     complete: analysis.complete, completedRoutines: analysis.completedRoutines, totalRoutines: analysis.totalRoutines,
-    closedAt: publication?.closed_at || null, fingerprint: analysis.fingerprint };
+    closedAt: automatic ? null : publication?.closed_at || null, fingerprint: analysis.fingerprint };
 }
 
 async function loadBlock({ db, eventId, blockId, getDirectory, getSnapshot }) {
@@ -167,11 +170,11 @@ async function loadBlock({ db, eventId, blockId, getDirectory, getSnapshot }) {
   if (selectedId && !block) fault('portal_block_not_found', 'No se encontró el bloque de esta edición.', 404);
   const response = { ...empty, blocks: blocks.map(block => ({ id: block.id, name: block.name, routineCount: block.routineIds.length })) };
   if (!block) return { edition, response };
-  const publication = await first(db, 'SELECT * FROM participant_portal_block_publications WHERE event_id=? AND source_event_id=? AND block_id=?', edition.eventId, edition.sourceEventId, block.id);
+  const publication = edition.mode === 'block_complete' ? null : await first(db, 'SELECT * FROM participant_portal_block_publications WHERE event_id=? AND source_event_id=? AND block_id=?', edition.eventId, edition.sourceEventId, block.id);
   const snapshot = block.routineIds.length ? await getSnapshot(edition.sourceEventId, { routineIds: [block.routineIds[0]], trustedEventId: edition.sourceEventId }) : null;
   const mappingRows = await mappings(db, edition);
   const analysis = await analyzeBlock(edition, block.id, snapshot, mappingRows, block.routineIds);
-  response.selectedBlock = selectedView(block, analysis, publication);
+  response.selectedBlock = selectedView(block, analysis, publication, edition.mode);
   return { edition, response, block, analysis, publication };
 }
 
@@ -180,11 +183,11 @@ export async function getBlockPublication(options) { return (await loadBlock(opt
 
 export async function saveBlockPublicationMode({ db, input, actorId }) {
   const edition = await context(db, input?.eventId), by = actor(actorId), mode = input?.mode;
-  if (!['individual', 'block_close'].includes(mode)) fault('portal_invalid_publication', 'Selecciona cómo se publica esta edición.');
-  const nonce = crypto.randomUUID();
+  if (!['individual', 'block_close', 'block_complete'].includes(mode)) fault('portal_invalid_publication', 'Selecciona cómo se publica esta edición.');
+  const nonce = crypto.randomUUID(), storageMode = mode === 'block_complete' ? 'block_close' : mode, automaticCompletion = mode === 'block_complete' ? 1 : 0;
   await db.batch([
-    db.prepare(`INSERT INTO participant_portal_publication_settings(event_id,mode,operation_nonce,updated_by) VALUES(?,?,?,?)
-      ON CONFLICT(event_id) DO UPDATE SET mode=excluded.mode,operation_nonce=excluded.operation_nonce,updated_by=excluded.updated_by,updated_at=datetime('now')`).bind(edition.eventId, mode, nonce, by),
+    db.prepare(`INSERT INTO participant_portal_publication_settings(event_id,mode,automatic_completion,operation_nonce,updated_by) VALUES(?,?,?,?,?)
+      ON CONFLICT(event_id) DO UPDATE SET mode=excluded.mode,automatic_completion=excluded.automatic_completion,operation_nonce=excluded.operation_nonce,updated_by=excluded.updated_by,updated_at=datetime('now')`).bind(edition.eventId, storageMode, automaticCompletion, nonce, by),
     db.prepare(`INSERT INTO participant_portal_publication_history(id,event_id,action,details_json,actor_id,operation_nonce) VALUES(?,?,'mode',?,?,?)`)
       .bind(crypto.randomUUID(), edition.eventId, JSON.stringify({ before: edition.mode, mode }), by, nonce),
   ]);
@@ -204,7 +207,7 @@ export async function closeParticipantBlock({ db, input, actorId, getDirectory, 
   const statements = [db.prepare(`INSERT INTO participant_portal_block_publications(event_id,source_event_id,block_id,state,fingerprint,manifest_json,closed_at,updated_by,operation_nonce)
     SELECT ?,?,?,'closed',?,?,datetime('now'),?,? WHERE
       EXISTS(SELECT 1 FROM participant_portal_events WHERE id=? AND venue=?)
-      AND EXISTS(SELECT 1 FROM participant_portal_publication_settings WHERE event_id=? AND mode='block_close' AND operation_nonce=?)
+      AND EXISTS(SELECT 1 FROM participant_portal_publication_settings WHERE event_id=? AND mode='block_close' AND automatic_completion=0 AND operation_nonce=?)
       AND EXISTS(SELECT 1 FROM participant_portal_judging_sources WHERE event_id=? AND source_event_id=? AND enabled=1)
       AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM participant_portal_block_publications WHERE event_id=? AND source_event_id=? AND block_id=?))
         OR EXISTS(SELECT 1 FROM participant_portal_block_publications WHERE event_id=? AND source_event_id=? AND block_id=? AND operation_nonce=?))
@@ -219,7 +222,7 @@ export async function closeParticipantBlock({ db, input, actorId, getDirectory, 
       publication?.operation_nonce || null, edition.eventId, edition.sourceEventId, block.id,
       edition.eventId, edition.sourceEventId, block.id, publication?.operation_nonce || null,
       manifest, edition.eventId, edition.sourceEventId, edition.venue),
-    db.prepare(`UPDATE participant_portal_routines SET status='published',updated_at=datetime('now') WHERE event_id=?
+    db.prepare(`UPDATE participant_portal_routines SET status='published',publication_blocked=0,updated_at=datetime('now') WHERE event_id=?
       AND id IN(SELECT json_extract(m.value,'$.id') FROM participant_portal_block_publications p,json_each(p.manifest_json) m
         WHERE p.event_id=? AND p.source_event_id=? AND p.block_id=? AND p.operation_nonce=? AND p.state='closed')`)
       .bind(edition.eventId, edition.eventId, edition.sourceEventId, block.id, nonce),
@@ -244,7 +247,7 @@ export async function reopenParticipantBlock({ db, input, actorId }) {
   await db.batch([
     db.prepare(`UPDATE participant_portal_block_publications SET state='open',fingerprint=NULL,closed_at=NULL,operation_nonce=?,updated_by=?,updated_at=datetime('now')
       WHERE event_id=? AND source_event_id=? AND block_id=? AND operation_nonce=?
-        AND EXISTS(SELECT 1 FROM participant_portal_publication_settings WHERE event_id=? AND mode='block_close' AND operation_nonce=?)
+        AND EXISTS(SELECT 1 FROM participant_portal_publication_settings WHERE event_id=? AND mode='block_close' AND automatic_completion=0 AND operation_nonce=?)
         AND EXISTS(SELECT 1 FROM participant_portal_judging_sources WHERE event_id=? AND source_event_id=? AND enabled=1)`)
       .bind(nonce, by, edition.eventId, edition.sourceEventId, blockId, publication.operation_nonce, edition.eventId, edition.settings_nonce, edition.eventId, edition.sourceEventId),
     db.prepare(`INSERT INTO participant_portal_publication_history(id,event_id,source_event_id,block_id,action,details_json,actor_id,operation_nonce)
@@ -260,35 +263,38 @@ export async function reopenParticipantBlock({ db, input, actorId }) {
 }
 
 function requestAuthorizationCheck(db, edition, mappingRows = null, publications = null) {
-  const scoped = Array.isArray(mappingRows) && Array.isArray(publications);
-  const publicationJson = scoped ? JSON.stringify(publications.map(row => ({
+  const scopedMappings = Array.isArray(mappingRows), scopedPublications = Array.isArray(publications);
+  const publicationJson = scopedPublications ? JSON.stringify(publications.map(row => ({
     block_id: row.block_id, state: row.state, fingerprint: row.fingerprint,
     manifest_json: row.manifest_json, operation_nonce: row.operation_nonce,
   }))) : '';
-  const mappingJson = scoped ? JSON.stringify(mappingRows) : '';
+  const mappingJson = scopedMappings ? JSON.stringify(mappingRows) : '';
   return async () => {
     try {
-      const args = [edition.eventId, edition.venue, edition.mode, edition.settings_nonce ?? null,
+      const args = [edition.eventId, edition.venue, edition.storageMode, edition.automaticCompletion, edition.settings_nonce ?? null,
         edition.source_event_id ?? null, edition.enabled ?? null];
-      const extra = scoped ? `
+      const publicationCheck = scopedPublications ? `
         AND (SELECT count(*) FROM participant_portal_block_publications p WHERE p.event_id=e.id AND p.source_event_id=?)=?
         AND NOT EXISTS(SELECT 1 FROM json_each(?) expected WHERE NOT EXISTS(
           SELECT 1 FROM participant_portal_block_publications p WHERE p.event_id=e.id AND p.source_event_id=?
             AND p.block_id IS json_extract(expected.value,'$.block_id') AND p.state IS json_extract(expected.value,'$.state')
             AND p.operation_nonce IS json_extract(expected.value,'$.operation_nonce') AND p.fingerprint IS json_extract(expected.value,'$.fingerprint')
-            AND p.manifest_json IS json_extract(expected.value,'$.manifest_json')))
+            AND p.manifest_json IS json_extract(expected.value,'$.manifest_json')))` : '';
+      const mappingCheck = scopedMappings ? `
         AND (SELECT count(*) FROM participant_portal_routines r WHERE r.event_id=e.id)=?
         AND NOT EXISTS(SELECT 1 FROM json_each(?) expected WHERE
           (SELECT count(*) FROM participant_portal_routines r LEFT JOIN registration_dances d ON d.id=r.dance_id
             WHERE r.event_id=e.id AND r.id IS json_extract(expected.value,'$.id') AND r.dance_id IS json_extract(expected.value,'$.dance_id')
               AND r.source_event_id IS json_extract(expected.value,'$.source_event_id') AND r.source_routine_id IS json_extract(expected.value,'$.source_routine_id')
+              AND r.publication_blocked IS json_extract(expected.value,'$.publication_blocked')
               AND d.venue IS json_extract(expected.value,'$.venue'))<>1)` : '';
-      if (scoped) args.push(edition.sourceEventId, publications.length, publicationJson, edition.sourceEventId, mappingRows.length, mappingJson);
+      if (scopedPublications) args.push(edition.sourceEventId, publications.length, publicationJson, edition.sourceEventId);
+      if (scopedMappings) args.push(mappingRows.length, mappingJson);
       const fresh = await first(db, `SELECT 1 AS allowed FROM participant_portal_events e
         LEFT JOIN participant_portal_publication_settings s ON s.event_id=e.id
         LEFT JOIN participant_portal_judging_sources j ON j.event_id=e.id
-        WHERE e.id=? AND e.venue=? AND coalesce(s.mode,'individual')=? AND s.operation_nonce IS ?
-          AND j.source_event_id IS ? AND j.enabled IS ? ${extra}`, ...args);
+        WHERE e.id=? AND e.venue=? AND coalesce(s.mode,'individual')=? AND coalesce(s.automatic_completion,0)=? AND s.operation_nonce IS ?
+          AND j.source_event_id IS ? AND j.enabled IS ? ${publicationCheck} ${mappingCheck}`, ...args);
       return Boolean(fresh?.allowed);
     } catch { return false; }
   };
@@ -303,8 +309,9 @@ export async function createBlockPublicationGate({ db, eventId }) {
   const edition = await context(db, eventId);
   if (edition.mode === 'individual') return { mode: edition.mode, allowsRoutine: async () => true, confirm: requestAuthorizationCheck(db, edition) };
   if (!edition.sourceEventId) return { mode: edition.mode, allowsRoutine: async () => false, confirm: requestAuthorizationCheck(db, edition) };
+  const automatic = edition.mode === 'block_complete';
   const [mappingRows, publications] = await Promise.all([
-    mappings(db, edition), all(db, 'SELECT * FROM participant_portal_block_publications WHERE event_id=? AND source_event_id=?', edition.eventId, edition.sourceEventId),
+    mappings(db, edition), automatic ? null : all(db, 'SELECT * FROM participant_portal_block_publications WHERE event_id=? AND source_event_id=?', edition.eventId, edition.sourceEventId),
   ]);
   const snapshots = new WeakMap();
   const confirm = requestAuthorizationCheck(db, edition, mappingRows, publications);
@@ -314,19 +321,23 @@ export async function createBlockPublicationGate({ db, eventId }) {
       || !snapshot || typeof snapshot !== 'object' || !Array.isArray(snapshot.rows)) return false;
     const own = snapshot.rows.filter(row => row?.id === sourceRoutineId);
     if (own.length !== 1 || !text(own[0].blockId)) return false;
-    const blockId = own[0].blockId, publication = publications.find(row => row.block_id === blockId && row.state === 'closed');
-    if (!publication || !digestPattern.test(publication.fingerprint)) return false;
-    let manifest;
-    try { manifest = JSON.parse(publication.manifest_json); } catch { return false; }
-    if (!Array.isArray(manifest) || !manifest.length || manifest.length > 5000
-      || manifest.some(row => !row || row.sourceEventId !== edition.sourceEventId || !routineIdentifier.test(row.sourceRoutineId))
-      || new Set(manifest.map(row => row.sourceRoutineId)).size !== manifest.length
-      || !manifest.some(row => row.sourceRoutineId === sourceRoutineId && row.danceId === danceId)) return false;
+    const ownMappings = mappingRows.filter(row => row.source_event_id === sourceEventId && row.source_routine_id === sourceRoutineId && row.dance_id === danceId);
+    if (ownMappings.length !== 1 || (automatic && ownMappings[0].publication_blocked !== 0)) return false;
+    const blockId = own[0].blockId, publication = automatic ? null : publications.find(row => row.block_id === blockId && row.state === 'closed');
+    let manifest = null;
+    if (!automatic) {
+      if (!publication || !digestPattern.test(publication.fingerprint)) return false;
+      try { manifest = JSON.parse(publication.manifest_json); } catch { return false; }
+      if (!Array.isArray(manifest) || !manifest.length || manifest.length > 5000
+        || manifest.some(row => !row || row.sourceEventId !== edition.sourceEventId || !routineIdentifier.test(row.sourceRoutineId))
+        || new Set(manifest.map(row => row.sourceRoutineId)).size !== manifest.length
+        || !manifest.some(row => row.sourceRoutineId === sourceRoutineId && row.danceId === danceId)) return false;
+    }
     let blocks = snapshots.get(snapshot);
     if (!blocks) { blocks = new Map(); snapshots.set(snapshot, blocks); }
     if (!blocks.has(blockId)) blocks.set(blockId, (async () => {
-      const analysis = await analyzeBlock(edition, blockId, snapshot, mappingRows, manifest.map(row => row.sourceRoutineId));
-      return Boolean(analysis.complete && analysis.fingerprint === publication.fingerprint && stableJson(analysis.manifest) === stableJson(manifest));
+      const analysis = await analyzeBlock(edition, blockId, snapshot, mappingRows, automatic ? undefined : manifest.map(row => row.sourceRoutineId));
+      return Boolean(analysis.complete && (automatic || (analysis.fingerprint === publication.fingerprint && stableJson(analysis.manifest) === stableJson(manifest))));
     })().catch(() => false));
     if (!(await blocks.get(blockId))) return false;
     // One bounded recheck covers every captured closure and association, even
