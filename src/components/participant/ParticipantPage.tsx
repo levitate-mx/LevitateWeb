@@ -665,7 +665,6 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                         : "Reconocimiento en preparación"}
                     <ArrowDownToLine size={19} aria-hidden="true" />
                   </button>
-                  <span>PDF autenticado · Tamaño carta · Personalizado para ti</span>
                 </div>
                 <p className="participant-download-message" role="status">
                   {downloadMessage}
