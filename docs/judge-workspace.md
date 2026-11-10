@@ -5,6 +5,22 @@ it from JueceoLevitateAndroid with `node scripts/build-judge-web.mjs <website>`
 before building/deploying this website. The generated browser app lives at
 `public/jueceo/app/`; the browser entry is `/jueceo/app/` (or `/jueceo`).
 
+## Website appearance
+
+The web entry supplies `levitateWebTheme` from
+`JueceoLevitateAndroid/lib/levitate_web_theme.dart`. Its paper (`#f4f1eb`),
+ink (`#2a2928`), pink (`#d94c8c`) and dark (`#101013`) palette follows the
+public website. Smaller text uses deeper or lighter rose for contrast. The
+Inter font and its OFL license are bundled in the Flutter assets so typography
+does not depend on an external font service. Native app entry points keep their
+existing theme by default.
+
+The React administration workspace scopes the corresponding light/dark tokens
+under `.ja-app` in `JudgingAdminWorkspace.css`. These appearance changes do not
+change score calculations, sessions, assignments, APIs or the IndexedDB outbox.
+When rebuilding, keep the web packaging step above: it strips the native seed
+programme from the public assets and includes the local fonts and CanvasKit.
+
 ## Access
 
 The normal `/login` username/password flow and HttpOnly registration cookie are

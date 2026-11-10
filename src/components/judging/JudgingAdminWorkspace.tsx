@@ -888,7 +888,7 @@ export function JudgingAdminWorkspace() {
                   <h2>
                     Todo listo para
                     <br />
-                    levantar el telón.
+                    <span>levantar el telón.</span>
                   </h2>
                   <p>{bundle.event.name}</p>
                   <button
