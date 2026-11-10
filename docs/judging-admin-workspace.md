@@ -27,6 +27,11 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
 - Dictamen, ranking y PDF reutilizan el calculo oficial y la presentacion de
   lugares ya aprobada para la web; `/admin/puntuaciones` sigue siendo de solo
   lectura y conserva sus reglas. No se cambiaron las reglas de los clientes iOS.
+- Dictamen y ranking comparten el detalle por juez y los filtros del admin
+  anterior: busqueda, disciplina y estado. Filtrar no recalcula lugares ni
+  modifica el PDF, Top Score o premios del bloque. Cambiar evento, bloque o
+  vista limpia esos filtros y cierra el detalle; actualizar datos conserva la
+  seleccion y muestra las notas nuevas sin guardar ni editar calificaciones.
 - Excel de hasta 20 MB usa el importador nativo con un identificador nuevo,
   sin activar ni reemplazar otros programas. Los eventos anteriores se pueden
   activar, archivar y restaurar con confirmacion. Activar solo afecta al alcance

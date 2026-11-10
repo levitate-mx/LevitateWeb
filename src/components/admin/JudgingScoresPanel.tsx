@@ -24,7 +24,7 @@ type JudgeScore = {
   criteria: { id: number; label: string; section: string; value: number | null; maximumScore: number }[];
   feedback: string;
 };
-type ChoreographyScore = {
+export type ChoreographyScore = {
   id: string | number;
   name: string;
   academy: string;
@@ -42,12 +42,12 @@ type ChoreographyScore = {
   judges: JudgeScore[];
 };
 type EventsPayload = { events: JudgingEvent[]; fetchedAt: string };
-type ReportStanding = {
+export type ReportStanding = {
   routineId: string;
   score: number | null;
   placement: { rank: number | null; label: string; isFirstPlace: boolean; isParticipation: boolean } | null;
 };
-type ReportBlock = {
+export type ReportBlock = {
   id: string;
   name: string;
   title: string;
@@ -133,7 +133,7 @@ function JudgeBreakdown({ judge }: { judge: JudgeScore }) {
   );
 }
 
-function filterReportSections(block: ReportBlock | null, rows: ChoreographyScore[], filters: { query: string; discipline: string; status: string }) {
+export function filterReportSections(block: ReportBlock | null, rows: ChoreographyScore[], filters: { query: string; discipline: string; status: string }) {
   const rowLookup = new Map(rows.map((row) => [String(row.id), row]));
   const search = normalizeAdminSearch(filters.query);
   return (block?.sections || []).map((section) => ({
@@ -153,7 +153,7 @@ function filterReportSections(block: ReportBlock | null, rows: ChoreographyScore
   })).filter((section) => section.categories.length > 0);
 }
 
-function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded, onToggle }: {
+export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded, onToggle, showMetadata = false }: {
   standing: ReportStanding;
   row: ChoreographyScore;
   maximumScore: number;
@@ -161,6 +161,7 @@ function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded
   blockId: string;
   expanded: boolean;
   onToggle: () => void;
+  showMetadata?: boolean;
 }) {
   const detailId = `judging-score-detail-${encodeURIComponent(eventId)}-${encodeURIComponent(blockId)}-${encodeURIComponent(String(row.id))}`;
   const place = standing.placement === null ? "—"
@@ -176,7 +177,8 @@ function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded
         <div className="judging-scores__entry-info">
           <h5>{row.name || "Coreografía sin nombre"}</h5>
           <p className="judging-scores__academy">{row.academy || "Sin academia"}</p>
-          {row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
+          {showMetadata ? <div className="judging-scores__entry-metadata"><span>#{row.id}</span>{row.level ? <span>{row.level}</span> : null}{row.category ? <span>{row.category}</span> : null}<span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></div>
+            : row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
           <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button>
         </div>
         <div className={`judging-scores__placement${standing.placement?.isParticipation ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{standing.placement === null ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>

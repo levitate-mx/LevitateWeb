@@ -30,6 +30,12 @@ import {
   X,
 } from "lucide-react";
 import { requestRegistrationApi } from "../admin/registrationApi";
+import { DictamenEntry, filterReportSections } from "../admin/JudgingScoresPanel";
+import type {
+  ChoreographyScore,
+  ReportBlock,
+  ReportStanding,
+} from "../admin/JudgingScoresPanel";
 import "./JudgingAdminWorkspace.css";
 
 type Event = {
@@ -62,57 +68,9 @@ type Judge = {
   assigned_block_ids: string[];
   updated_at?: string;
 };
-type JudgeScore = {
+type Score = Omit<ChoreographyScore, "id" | "judges"> & {
   id: string;
-  name: string;
-  status: string;
-  total: number | null;
-  maximumScore: number | null;
-  penalty: number;
-  feedback: string;
-  criteria: {
-    id: number;
-    label: string;
-    section: string;
-    value: number | null;
-    maximumScore: number;
-  }[];
-};
-type Score = {
-  id: string;
-  name: string;
-  academy: string;
-  state: string;
-  genre: string;
-  division: string;
-  level: string;
-  category: string;
-  blockId: string;
-  status: string;
-  completedJudges: number;
-  expectedJudges: number;
-  judges: JudgeScore[];
-};
-type Standing = {
-  routineId: string;
-  score: number | null;
-  placement: null | {
-    rank: number | null;
-    label: string;
-    isParticipation: boolean;
-  };
-};
-type ReportBlock = {
-  id: string;
-  name: string;
-  title: string;
-  sections: {
-    id: string;
-    label: string;
-    categories: { id: string; title: string; rows: Standing[] }[];
-  }[];
-  specialAwards: { id: string; title: string; displayValue: string }[];
-  topScore: null | { routineId: string; score: number };
+  judges: (ChoreographyScore["judges"][number] & { id: string })[];
 };
 type Bundle = {
   event: Event;
@@ -136,7 +94,7 @@ type Bundle = {
     fetchedAt: string;
     warnings: string[];
     rows: Score[];
-    report: { title: string; blocks: ReportBlock[] };
+    report: { title: string; maximumScore: number; blocks: ReportBlock[] };
   };
 };
 type Presence = {
@@ -872,7 +830,7 @@ export function JudgingAdminWorkspace() {
                   ))}
                 </select>
               </label>
-              {view !== "home" ? (
+              {view !== "home" && view !== "report" && view !== "ranking" ? (
                 <label className="ja-search">
                   <Search size={18} />
                   <input
@@ -1216,9 +1174,9 @@ export function JudgingAdminWorkspace() {
           ) : null}
           {bundle && (view === "report" || view === "ranking") ? (
             <ReportPanel
+              key={`${eventId}:${blockId}:${view}`}
               report={blockReport}
               bundle={bundle}
-              query={query}
               ranking={view === "ranking"}
             />
           ) : null}
@@ -1971,75 +1929,159 @@ function JudgeForm({
 function ReportPanel({
   report,
   bundle,
-  query,
   ranking,
 }: {
   report: ReportBlock | undefined;
   bundle: Bundle;
-  query: string;
   ranking: boolean;
 }) {
+  const [query, setQuery] = useState("");
+  const [discipline, setDiscipline] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [expandedId, setExpandedId] = useState("");
   const lookup = new Map(bundle.snapshot.rows.map((r) => [r.id, r]));
   if (!report) return <Empty>No hay un bloque seleccionado.</Empty>;
-  const render = (standing: Standing) => {
+  const sections = filterReportSections(report, bundle.snapshot.rows, {
+    query,
+    discipline,
+    status,
+  });
+  const visibleCount = sections.reduce(
+    (total, section) =>
+      total +
+      section.categories.reduce((sum, category) => sum + category.rows.length, 0),
+    0,
+  );
+  const totalCount = report.sections.reduce(
+    (total, section) =>
+      total +
+      section.categories.reduce((sum, category) => sum + category.rows.length, 0),
+    0,
+  );
+  const hasFilters = !!query.trim() || discipline !== "all" || status !== "all";
+  const resetFilters = () => {
+    setQuery("");
+    setDiscipline("all");
+    setStatus("all");
+    setExpandedId("");
+  };
+  const render = (standing: ReportStanding) => {
     const row = lookup.get(standing.routineId);
-    if (
-      !row ||
-      !norm(
-        `${row.id} ${row.name} ${row.academy} ${row.level} ${row.category}`,
-      ).includes(norm(query))
-    )
-      return null;
+    if (!row) return null;
     return (
-      <article className="ja-standing" key={row.id}>
-        <div className="ja-standing-score">
-          <small>PUNTAJE</small>
-          <strong>{number(standing.score)}</strong>
-        </div>
-        <div>
-          <h3>{row.name}</h3>
-          <p>{row.academy}</p>
-          <div className="ja-chips">
-            <span>#{row.id}</span>
-            <span>{row.level}</span>
-            <span>{row.category}</span>
-            <Status value={row.status} />
-          </div>
-        </div>
-        <b className="ja-placement">
-          {standing.placement?.isParticipation
-            ? "Participación"
-            : standing.placement?.label || "—"}
-        </b>
-      </article>
+      <DictamenEntry
+        key={row.id}
+        standing={standing}
+        row={row}
+        maximumScore={bundle.snapshot.report.maximumScore}
+        eventId={bundle.event.id}
+        blockId={report.id}
+        expanded={expandedId === row.id}
+        onToggle={() => setExpandedId(expandedId === row.id ? "" : row.id)}
+        showMetadata
+      />
     );
   };
   return (
-    <section className="ja-report">
+    <section className="ja-report judging-scores">
       <header>
         <h2>{report.title || report.name}</h2>
         <span>{ranking ? "Ranking en vivo" : "Dictamen final"}</span>
       </header>
+      <div
+        className="ja-report-filters"
+        role="group"
+        aria-label="Filtros del dictamen"
+      >
+        <label>
+          Buscar coreografía
+          <input
+            type="search"
+            placeholder="Nombre, academia, estado o ID"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setExpandedId("");
+            }}
+          />
+        </label>
+        <label>
+          Disciplina
+          <select
+            value={discipline}
+            onChange={(e) => {
+              setDiscipline(e.target.value);
+              setExpandedId("");
+            }}
+          >
+            <option value="all">Todas</option>
+            {report.sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Estado de evaluación
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setExpandedId("");
+            }}
+          >
+            <option value="all">Todos</option>
+            {Object.entries(labels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {hasFilters ? (
+        <div className="ja-report-filter-summary">
+          <p role="status">
+            {visibleCount} de {totalCount} coreografías del bloque.
+          </p>
+          <button type="button" onClick={resetFilters}>
+            <X size={16} />
+            Limpiar filtros
+          </button>
+        </div>
+      ) : null}
       {ranking ? (
-        <>
-          {report.sections
+        <div className="judging-scores__standings">
+          {sections
             .flatMap((s) => s.categories.flatMap((c) => c.rows))
-            .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-            .map(render)}
-        </>
+            .sort(
+              (a, b) => (b.standing.score ?? -1) - (a.standing.score ?? -1),
+            )
+            .map(({ standing }) => render(standing))}
+        </div>
       ) : (
-        report.sections.map((section) => (
+        sections.map((section) => (
           <section key={section.id}>
             <h2>{section.label}</h2>
             {section.categories.map((c) => (
               <section className="ja-report-category" key={c.id}>
                 <h3>{c.title}</h3>
-                {c.rows.map(render)}
+                <div className="judging-scores__standings">
+                  {c.rows.map(({ standing }) => render(standing))}
+                </div>
               </section>
             ))}
           </section>
         ))
       )}
+      {!visibleCount ? (
+        <Empty>
+          {hasFilters
+            ? "No hay coreografías que coincidan con los filtros de este bloque."
+            : "No hay resultados disponibles para mostrar en este bloque."}
+        </Empty>
+      ) : null}
       {report.topScore ? (
         <div className="ja-top-score">
           <Trophy size={24} />
