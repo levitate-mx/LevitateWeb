@@ -14,7 +14,7 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
 - El puntaje abre la hoja Flutter ya utilizada por los jueces, en modo editor
   administrativo. Usa endpoints administrativos separados y almacenamiento
   local aislado por administrador, evento y juez. No simula actividad del juez.
-  No permite salir mientras queden envios pendientes sin sincronizar.
+  El boton de volver espera a que los envios pendientes se sincronicen.
 - Jueces: nombre, foto JPEG/PNG/WebP de hasta 1 MB, bloques, codigo nativo y
   acceso web. Los usuarios nuevos reciben una contrasena aleatoria que se
   muestra una sola vez; no se reemplazan cuentas existentes ni contrasenas.

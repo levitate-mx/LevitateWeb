@@ -271,6 +271,7 @@ test("all administration and editor actions reject judge, academy and unauthenti
 });
 test("admin lists only authorized Levitate events and private snapshots retain official zero scores", async (t) => {
   const f = fixture(t);
+  f.data.judges[0].photo_data = "/9j/AA==";
   f.data.events.push({ id: foreign, name: "Another brand" });
   const events = await (
     await handleJudgingAdmin(f.request("events"), f.env, admin, {
@@ -289,6 +290,25 @@ test("admin lists only authorized Levitate events and private snapshots retain o
   assert.equal(snapshot.snapshot.rows[0].judges[0].total, 0);
   assert.equal(snapshot.snapshot.rows[0].judges[0].status, "complete");
   assert.equal(snapshot.judges.length, 2);
+  assert.equal(
+    snapshot.judges[0].photo_data,
+    "data:image/jpeg;base64,/9j/AA==",
+  );
+  const saved = validateAdminOperation("upsert-judge", {
+    judge_id: "one",
+    name: "ONE",
+    assigned_block_ids: [],
+    photo_data: snapshot.judges[0].photo_data,
+  });
+  assert.equal(saved.photo_data, "/9j/AA==");
+  assert.equal(
+    validateAdminOperation("upsert-judge", {
+      judge_id: "one",
+      name: "ONE",
+      assigned_block_ids: [],
+    }).photo_data,
+    undefined,
+  );
 });
 test("other brand ids fail closed even for administrators", async (t) => {
   const f = fixture(t);

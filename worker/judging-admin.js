@@ -39,6 +39,20 @@ const orders = {
   special_awards: "block_id.asc,award.asc",
 };
 const idPattern = /^[A-Za-z0-9_-]{1,160}$/;
+function browserPhoto(value) {
+  if (typeof value !== "string" || !value) return "";
+  if (/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(value))
+    return value;
+  if (!/^[A-Za-z0-9+/]+=*$/.test(value)) return "";
+  const type = value.startsWith("/9j/")
+    ? "jpeg"
+    : value.startsWith("iVBORw0KGgo")
+      ? "png"
+      : value.startsWith("UklGR")
+        ? "webp"
+        : null;
+  return type ? `data:image/${type};base64,${value}` : "";
+}
 const fail = (code, message, statusCode = 400) => {
   throw Object.assign(new Error(message), { code, statusCode });
 };
@@ -175,7 +189,8 @@ export function validateAdminOperation(action, input) {
             "judging_invalid_photo",
             "Usa una foto JPEG, PNG o WebP de hasta 1 MB.",
           );
-        d.photo_data = input.photo_data;
+        // Native iOS decodes plain base64, not a browser data URL.
+        d.photo_data = input.photo_data ? input.photo_data.split(",")[1] : "";
       }
     }
   } else if (action === "special-award") {
@@ -336,7 +351,10 @@ export async function readAdminSnapshot(
     event: scope.event,
     blocks: raw.blocks,
     routines: raw.routines,
-    judges: raw.judges,
+    judges: raw.judges.map((judge) => ({
+      ...judge,
+      photo_data: browserPhoto(judge.photo_data),
+    })),
     templates: raw.criteria_templates,
     criteria: raw.criteria,
     favorites: [...votes.values()],

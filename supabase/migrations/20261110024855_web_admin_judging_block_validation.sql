@@ -141,4 +141,3 @@ begin
 end $$;
 revoke all on function public.web_admin_judging_operation(text,uuid,uuid[],text,jsonb) from public, anon, authenticated;
 grant execute on function public.web_admin_judging_operation(text,uuid,uuid[],text,jsonb) to service_role;
-
