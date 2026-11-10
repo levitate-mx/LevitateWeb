@@ -1,6 +1,7 @@
 import { getAdminSectionFromPath } from "./components/admin/adminNavigation";
 import {
   LevitateAuthRoute,
+  LevitateAdminAccessBoundary,
   LevitateRegistrationAdminPaymentsRoute,
   LevitateRegistrationEntryRoute,
   LevitateRegistrationRoute,
@@ -28,12 +29,19 @@ import { WorkshopsPage } from "./components/workshops/WorkshopsPage";
 import { ParticipantPage } from "./components/participant/ParticipantPage";
 import { ParticipantAdminPage } from "./components/participant-admin/ParticipantAdminPage";
 import { JudgeWorkspaceEntry } from "./components/judging/JudgeWorkspaceEntry";
+import { JudgingReportEntry, JudgingReleveEntry } from "./components/judging/JudgingReportEntry";
 import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 
 const JudgingAdminWorkspace = lazy(() => import("./components/judging/JudgingAdminWorkspace").then(module => ({ default: module.JudgingAdminWorkspace })));
+const JudgingRelevePage = lazy(() => import("./components/judging/JudgingRelevePage").then(module => ({ default: module.JudgingRelevePage })));
+const guardAdminRoute = (screen: ReactNode) => (
+  <LevitateAdminAccessBoundary>{() => screen}</LevitateAdminAccessBoundary>
+);
 
 export default function App() {
   if (["/jueceo/admin", "/jueceo/admin/"].includes(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando jueceo...</main>}><JudgingAdminWorkspace /></Suspense>;
+  if (/^\/jueceo\/releve\/?$/.test(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando Relevé...</main>}><JudgingRelevePage /></Suspense>;
   if (/^\/jueceo\/?$/.test(window.location.pathname)) return <JudgeWorkspaceEntry />;
   const searchParams = new URLSearchParams(window.location.search);
   const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo\.?)?\/?$/);
@@ -73,19 +81,27 @@ export default function App() {
   }
 
   if (participantAdminPreviewMatch) {
-    return <ParticipantPage internalPreview />;
+    return guardAdminRoute(<ParticipantPage internalPreview />);
   }
 
   if (participantAdminMatch) {
-    return <ParticipantAdminPage />;
+    return guardAdminRoute(<ParticipantAdminPage />);
   }
 
   if (adminMediaMatch) {
-    return <LevitateRegistrationRoute />;
+    return guardAdminRoute(<LevitateRegistrationRoute />);
   }
 
   if (documentsMatch) {
     return <DocumentsPage />;
+  }
+
+  if (adminSection === "scores") {
+    return <JudgingReportEntry />;
+  }
+
+  if (adminSection === "releveVoting") {
+    return <JudgingReleveEntry />;
   }
 
   if (adminSection) {
@@ -145,7 +161,7 @@ export default function App() {
   }
 
   if (passportAdminMatch) {
-    return <PassportAdminPage />;
+    return guardAdminRoute(<PassportAdminPage />);
   }
 
   if (passportClaimMatch) {

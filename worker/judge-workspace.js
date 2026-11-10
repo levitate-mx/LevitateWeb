@@ -618,7 +618,7 @@ export async function handleAdminJudgeEditor(
   session,
   { fetcher = fetch } = {},
 ) {
-  if (session?.user?.role !== "admin")
+  if (!["admin", "judging_admin"].includes(session?.user?.role))
     fail(
       "judge_admin_forbidden",
       "Esta cuenta no tiene permisos de administracion.",

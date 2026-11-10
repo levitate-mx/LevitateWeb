@@ -452,6 +452,18 @@
   font-size: 10px;
   margin-top: 3px;
 }
+.ja-sidebar > .ja-logout {
+  justify-content: flex-start;
+  flex-shrink: 0;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 13px;
+  background: transparent;
+  border-color: var(--ja-line);
+  color: var(--ja-muted);
+  font-size: 12px;
+}
 .ja-sidebar .ja-tooltip {
   right: auto;
   left: 50px;
@@ -975,7 +987,7 @@
   text-transform: none;
   margin-top: 5px;
 }
-.ja-matrix thead th:last-child {
+.ja-matrix thead th.ja-actions-column {
   min-width: 70px;
 }
 .ja-matrix tr > th:first-child {
@@ -1908,7 +1920,7 @@
     justify-content: center;
     overflow: visible;
   }
-  .ja-sidebar > :is(.ja-back, .ja-brand, .ja-profile, .ja-nav-caption),
+  .ja-sidebar > :is(.ja-back, .ja-brand, .ja-profile, .ja-nav-caption, .ja-logout),
   .ja-sidebar > .ja-sidebar-bottom {
     display: none;
   }

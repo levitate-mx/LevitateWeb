@@ -61,7 +61,7 @@ export const adminJudgingJson = (data) =>
     headers: { "cache-control": "no-store, private", vary: "Cookie" },
   });
 export function requireJudgingAdmin(session) {
-  if (session?.user?.role !== "admin")
+  if (!["admin", "judging_admin"].includes(session?.user?.role))
     fail(
       "judging_admin_forbidden",
       "Esta cuenta no tiene permisos de administracion.",
@@ -343,7 +343,8 @@ export async function readAdminSnapshot(
   });
   const { results: accounts } = await env.DB.prepare(
     `SELECT a.judge_id,a.enabled,u.username,u.id user_id FROM registration_judge_assignments a
-    JOIN registration_users u ON u.id=a.user_id WHERE a.event_id=? AND u.is_judge=1`,
+    JOIN registration_users u ON u.id=a.user_id WHERE a.event_id=? AND u.is_judge=1
+      AND u.role!='admin' AND u.is_judging_admin=0`,
   )
     .bind(scope.eventId)
     .all();
@@ -426,6 +427,25 @@ export async function handleJudgingAdmin(
   requireJudgingAdmin(session);
   const url = new URL(request.url),
     action = url.pathname.split("/").pop();
+  if (
+    session.user.role === "judging_admin" &&
+    ![
+      "events",
+      "snapshot",
+      "activity",
+      "access-codes",
+      "exports",
+      "web-account",
+      "upsert-judge",
+      "delete-judge",
+      "special-award",
+    ].includes(action)
+  )
+    fail(
+      "judging_program_forbidden",
+      "La administracion del programa requiere permisos de administrador general.",
+      403,
+    );
   if (action === "import") {
     const body = await adminJudgingBody(request, 28500000);
     const name = text(body.name, "el nombre del evento", 150),
@@ -497,7 +517,11 @@ export async function handleJudgingAdmin(
       fetcher,
     );
     return adminJudgingJson({
-      user: { id: session.user.id, name: session.user.name },
+      user: {
+        id: session.user.id,
+        name: session.user.name,
+        role: session.user.role,
+      },
       events: rows.filter(
         (e) =>
           ids.includes(e.id) &&
@@ -541,10 +565,33 @@ export async function handleJudgingAdmin(
     });
   }
   if (action === "access-codes" && request.method === "GET") {
-    await readAdminEvent(env, eventId, { fetcher, allowArchived: true });
-    return adminJudgingJson(
-      await adminBridge(env, session, "access-codes", eventId, {}, { fetcher }),
-    );
+    const scope = await readAdminEvent(env, eventId, {
+      fetcher,
+      allowArchived: true,
+    });
+    const result = await adminBridge(env, session, "access-codes", eventId, {}, {
+      fetcher,
+    });
+    if (session.user.role === "judging_admin") {
+      const judges = await readAdminTable(scope, "judges", fetcher);
+      const ordinaryJudges = new Set(
+        judges
+          .filter(
+            (judge) =>
+              judge.role === "judge" &&
+              !["ati", "admin"].includes(judge.judge_id),
+          )
+          .map((judge) => judge.judge_id),
+      );
+      // Native administrator codes grant access beyond the judging workspace.
+      return adminJudgingJson({
+        codes: (Array.isArray(result.codes) ? result.codes : []).filter(
+          (code) =>
+            code?.role === "judge" && ordinaryJudges.has(code.judge_id),
+        ),
+      });
+    }
+    return adminJudgingJson(result);
   }
   const body = await adminJudgingBody(request);
   await readAdminEvent(env, eventId, {
@@ -562,7 +609,7 @@ export async function handleJudgingAdmin(
     if (body.user_id) {
       const uid = text(body.user_id, "el usuario");
       const user = await env.DB.prepare(
-        "SELECT id FROM registration_users WHERE id=? AND is_judge=1 AND status='active'",
+        "SELECT id FROM registration_users WHERE id=? AND is_judge=1 AND role!='admin' AND is_judging_admin=0 AND status='active'",
       )
         .bind(uid)
         .first();

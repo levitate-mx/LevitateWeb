@@ -39,6 +39,7 @@ const additions = {
   registration_users: {
     role: "TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin'))",
     is_judge: "INTEGER NOT NULL DEFAULT 0 CHECK (is_judge IN (0, 1))",
+    is_judging_admin: "INTEGER NOT NULL DEFAULT 0 CHECK (is_judging_admin IN (0, 1))",
   },
   registration_participants: {
     is_international: "INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1))",

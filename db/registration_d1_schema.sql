@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS registration_users (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
   role TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin')),
   is_judge INTEGER NOT NULL DEFAULT 0 CHECK (is_judge IN (0, 1)),
+  is_judging_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_judging_admin IN (0, 1)),
   email_confirmed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))

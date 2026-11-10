@@ -16,6 +16,7 @@ import {
   Home,
   ImagePlus,
   LoaderCircle,
+  LogOut,
   Moon,
   Pencil,
   Plus,
@@ -38,6 +39,7 @@ import type {
 } from "../admin/JudgingScoresPanel";
 import "./JudgingAdminWorkspace.css";
 import { resolveJudgePortrait } from "./judgePortraits";
+import { judgingRelevePath } from "../admin/registrationAccess";
 
 type Event = {
   id: string;
@@ -309,6 +311,7 @@ export function JudgingAdminWorkspace() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [user, setUser] = useState("Admin"),
+    [userRole, setUserRole] = useState<"admin" | "judging_admin" | undefined>(),
     [modal, setModal] = useState<Modal>(null);
   const [exportId, setExportId] = useState("");
   const [exports, setExports] = useState<
@@ -318,6 +321,14 @@ export function JudgingAdminWorkspace() {
     const saved = localStorage.getItem("levitate-judging-theme");
     return saved === "light" || saved === "dark" ? saved : "dark";
   });
+  const canManagePrograms = userRole === "admin";
+  const primaryItems = primary.filter((item) => canManagePrograms || item.id !== "import");
+  useEffect(() => {
+    if (userRole === "judging_admin" && (view === "import" || view === "settings")) {
+      setView("home");
+      setModal(null);
+    }
+  }, [userRole, view]);
   const generation = useRef(0);
   const api = useCallback(
     <T,>(action: string, body?: unknown, selected = eventId) =>
@@ -348,10 +359,11 @@ export function JudgingAdminWorkspace() {
   const loadEvents = useCallback(async () => {
     const response = await requestRegistrationApi<{
       events: Event[];
-      user: { name: string };
+      user: { name: string; role: "admin" | "judging_admin" };
     }>(`${base}events`);
     setEvents(response.events);
     setUser(response.user.name || "Admin");
+    setUserRole(response.user.role);
     return response.events;
   }, []);
   useEffect(() => {
@@ -462,6 +474,7 @@ export function JudgingAdminWorkspace() {
     location.assign(`/jueceo/app/?${p}`);
   }
   function metadata(routine: Routine, field = "level") {
+    if (!canManagePrograms) return;
     setModal({
       title: `#${routine.routine_id} · Datos de coreografía`,
       content: (
@@ -477,6 +490,7 @@ export function JudgingAdminWorkspace() {
     });
   }
   function move(routine: Routine) {
+    if (!canManagePrograms) return;
     setModal({
       title: "Mover coreografía",
       content: (
@@ -496,6 +510,7 @@ export function JudgingAdminWorkspace() {
     });
   }
   function remove(routine: Routine) {
+    if (!canManagePrograms) return;
     setModal({
       title: "Eliminar coreografía",
       content: (
@@ -660,6 +675,20 @@ export function JudgingAdminWorkspace() {
       setBusy("");
     }
   }
+  async function logout() {
+    setBusy("Cerrando sesión");
+    setError("");
+    try {
+      await requestRegistrationApi("/api/registration/auth/logout", { method: "POST" });
+      location.replace("/login");
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy("");
+    }
+  }
+  const homePath = userRole === "admin" ? "/admin/dashboard" : "/jueceo/admin";
+  const homeLabel = userRole === "admin" ? "Panel Levitate" : "Inicio de jueceo";
   return (
     <div className="ja-app" data-theme={theme}>
       <aside className="ja-sidebar">
@@ -668,17 +697,17 @@ export function JudgingAdminWorkspace() {
           <span>Espacio de jueceo</span>
         </div>
         <a
-          href="/admin/dashboard"
+          href={homePath}
           className="ja-back"
-          title="Panel Levitate"
-          aria-label="Panel Levitate"
+          title={homeLabel}
+          aria-label={homeLabel}
         >
           <ArrowLeft size={21} />
-          <span>Panel Levitate</span>
+          <span>{homeLabel}</span>
         </a>
         <p className="ja-nav-caption">COMPETENCIA</p>
         <nav aria-label="Administración de jueceo">
-          {primary.map((item) => (
+          {primaryItems.map((item) => (
             <button
               key={item.id}
               title={item.label}
@@ -713,12 +742,15 @@ export function JudgingAdminWorkspace() {
             <Trophy size={21} />
             <span>Ranking en vivo</span>
           </button>
-          <button
-            aria-pressed={view === "settings"}
-            onClick={() => setView("settings")}
-          >
-            <Settings size={21} />
-            <span>Configuración</span>
+          {canManagePrograms ? (
+            <button aria-pressed={view === "settings"} onClick={() => setView("settings")}>
+              <Settings size={21} />
+              <span>Configuración</span>
+            </button>
+          ) : null}
+          <button onClick={() => location.assign(judgingRelevePath)}>
+            <Trophy size={21} />
+            <span>Votación Relevé</span>
           </button>
         </div>
         <div className="ja-profile">
@@ -727,9 +759,13 @@ export function JudgingAdminWorkspace() {
           </span>
           <span>
             <strong>{user}</strong>
-            <small>Administrador</small>
+            <small>{userRole === "admin" ? "Administrador" : "Administración de jueceo"}</small>
           </span>
         </div>
+        <button className="ja-logout" disabled={!!busy} onClick={() => void logout()}>
+          <LogOut size={18} />
+          Cerrar sesión
+        </button>
       </aside>
       <div className="ja-main">
         <header className="ja-topbar">
@@ -790,14 +826,24 @@ export function JudgingAdminWorkspace() {
                 <Trophy size={18} />
                 Ranking en vivo
               </button>
-              <button onClick={() => setView("settings")}>
-                <Settings size={18} />
-                Configuración
-              </button>
-              <a href="/admin/dashboard">
-                <ArrowLeft size={18} />
-                Panel Levitate
+              {canManagePrograms ? (
+                <button onClick={() => setView("settings")}>
+                  <Settings size={18} />
+                  Configuración
+                </button>
+              ) : null}
+              <a href={judgingRelevePath}>
+                <Trophy size={18} />
+                Votación Relevé
               </a>
+              <a href={homePath}>
+                <ArrowLeft size={18} />
+                {homeLabel}
+              </a>
+              <button disabled={!!busy} onClick={() => void logout()}>
+                <LogOut size={18} />
+                Cerrar sesión
+              </button>
             </nav>
           </details>
         </header>
@@ -1090,9 +1136,9 @@ export function JudgingAdminWorkspace() {
                     <th>
                       Puntaje oficial<small>/ 150</small>
                     </th>
-                    <th>
+                    {canManagePrograms ? <th className="ja-actions-column">
                       <span className="ja-sr">Acciones</span>
-                    </th>
+                    </th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -1103,12 +1149,12 @@ export function JudgingAdminWorkspace() {
                         <th scope="row">
                           <div className="ja-routine-heading">
                             <b>#{r.routine_id}</b>
-                            <IconButton
+                            {canManagePrograms ? <IconButton
                               label={`Editar datos de ${r.name}`}
                               onClick={() => metadata(r, "name")}
                             >
                               <Pencil size={14} />
-                            </IconButton>
+                            </IconButton> : null}
                           </div>
                           <strong>{r.name}</strong>
                           <small>{r.academy}</small>
@@ -1121,13 +1167,13 @@ export function JudgingAdminWorkspace() {
                                 "category",
                               ] as const
                             ).map((f) => (
-                              <button
+                              canManagePrograms ? <button
                                 key={f}
                                 title={`Editar ${f}`}
                                 onClick={() => metadata(r, f)}
                               >
                                 {r[f] || "Sin dato"}
-                              </button>
+                              </button> : <span key={f}>{r[f] || "Sin dato"}</span>
                             ))}
                           </div>
                         </th>
@@ -1180,7 +1226,7 @@ export function JudgingAdminWorkspace() {
                           </small>
                           <Status value={row?.status || "pending"} />
                         </td>
-                        <td>
+                        {canManagePrograms ? <td>
                           <div className="ja-row-actions">
                             <IconButton
                               label={`Mover ${r.name} a otro bloque`}
@@ -1195,7 +1241,7 @@ export function JudgingAdminWorkspace() {
                               <Trash2 size={17} />
                             </IconButton>
                           </div>
-                        </td>
+                        </td> : null}
                       </tr>
                     );
                   })}
@@ -1234,7 +1280,7 @@ export function JudgingAdminWorkspace() {
               mutate={mutate}
             />
           ) : null}
-          {view === "import" ? (
+          {canManagePrograms && view === "import" ? (
             <ImportPanel
               events={events}
               api={api}
@@ -1291,7 +1337,7 @@ export function JudgingAdminWorkspace() {
               routines={bundle.routines}
             />
           ) : null}
-          {bundle && view === "settings" ? (
+          {canManagePrograms && bundle && view === "settings" ? (
             <SettingsPanel
               key={`${eventId}-${bundle.event.updated_at}`}
               event={bundle.event}

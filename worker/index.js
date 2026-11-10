@@ -6,7 +6,7 @@ import { accessSessions, resolveAccessSession, getAccessCoverage, isSplitAccessS
 import { getTicketSalesSummary } from "./ticket-sales.js";
 import { getJudgingEvents, getJudgingScores, getJudgingRoutineDirectory, getJudgingBlockDirectory, getJudgingSheets } from "./judging-reader.js";
 import { handleJudgeWorkspace, handleAdminJudgeEditor } from "./judge-workspace.js";
-import { handleJudgingAdmin } from "./judging-admin.js";
+import { handleJudgingAdmin, requireJudgingAdmin } from "./judging-admin.js";
 import {handleJudgingExports,serveJudgingExport} from './judging-admin-exports.js';
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
@@ -150,7 +150,7 @@ const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanz
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
 const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const registrationUserRoles = new Set(["academy", "admin", "judge"]);
+const registrationUserRoles = new Set(["academy", "admin", "judge", "judging_admin"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
@@ -388,14 +388,17 @@ export default {
       try{return await serveJudgingExport(request,env,{getMediaStore:()=>getParticipantMediaStorage(env)});}catch(error){return sendRegistrationError(error);}
     }
 
-    if (["/jueceo", "/jueceo/", "/jueceo/admin", "/jueceo/admin/", "/jueceo/app", "/jueceo/app/", "/jueceo/app/index.html"].includes(url.pathname)) {
+    if (["/jueceo", "/jueceo/", "/jueceo/admin", "/jueceo/admin/", "/jueceo/releve", "/jueceo/releve/", "/jueceo/app", "/jueceo/app/", "/jueceo/app/index.html"].includes(url.pathname)) {
       try {
         const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
-        const admin = url.pathname.startsWith('/jueceo/admin') || url.searchParams.get('mode') === 'admin-editor';
-        if (session.user.role !== (admin ? 'admin' : 'judge')) throwHttpError("judge_forbidden", "Esta cuenta no tiene acceso a esta seccion.", 403);
+        const admin = url.pathname.startsWith('/jueceo/admin') || url.pathname.startsWith('/jueceo/releve') || url.searchParams.get('mode') === 'admin-editor';
+        const judgingAdmin = ["admin", "judging_admin"].includes(session.user.role);
+        if (admin) requireJudgingAdmin(session);
+        else if (!judgingAdmin && session.user.role !== "judge") throwHttpError("judge_forbidden", "Esta cuenta no tiene acceso a esta seccion.", 403);
         if (["/jueceo", "/jueceo/", "/jueceo/app"].includes(url.pathname)) {
-          return new Response(null, { status: 302, headers: { location: session.user.role === 'admin' ? '/jueceo/admin' : "/jueceo/app/", "cache-control": "no-store, private" } });
+          return new Response(null, { status: 302, headers: { location: judgingAdmin ? '/jueceo/admin' : "/jueceo/app/", "cache-control": "no-store, private" } });
         }
+        if (!admin && judgingAdmin) return new Response(null, { status: 302, headers: { location: "/jueceo/admin", "cache-control": "no-store, private" } });
         const response = await env.ASSETS.fetch(request);
         const headers = new Headers(response.headers);
         headers.set("cache-control", "no-store, private");
@@ -1089,7 +1092,7 @@ async function handleRegistrationForgotPassword(request, env) {
 
     const message = "Si encontramos una cuenta confirmada, enviaremos un enlace para cambiar la contraseña.";
 
-    if (!user) {
+    if (!user || /@[^@]*\.invalid$/i.test(user.email || "")) {
       return sendJson({ ok: true, message });
     }
 
@@ -2204,7 +2207,8 @@ async function handleRegistrationAdminJudging(request, env) {
   let response;
   try {
     assertMethod(request, ["GET"]);
-    await requireRegistrationAdmin(request, env, getDb(env), { touchLastSeen: false });
+    const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+    requireJudgingAdmin(session);
     const url = new URL(request.url);
     response = sendJson(url.pathname.endsWith("/events")
       ? await getJudgingEvents(env)
@@ -2220,7 +2224,8 @@ async function handleRegistrationAdminReleveVotingPreview(request, env) {
   let response;
   try {
     assertMethod(request, ["GET"]);
-    await requireRegistrationAdmin(request, env, getDb(env), { touchLastSeen: false });
+    const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+    requireJudgingAdmin(session);
     response = sendJson(getReleveVotingPreview());
   } catch (error) {
     response = sendRegistrationError(error);
@@ -3699,7 +3704,9 @@ async function getRegistrationStateFromRequest({ db, request, touchLastSeen = tr
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
-          CASE WHEN registration_users.is_judge = 1 THEN 'judge' ELSE registration_users.role END AS user_role,
+          CASE WHEN registration_users.is_judge = 1 THEN 'judge'
+               WHEN registration_users.is_judging_admin = 1 THEN 'judging_admin'
+               ELSE registration_users.role END AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,
@@ -3829,7 +3836,7 @@ async function requireRegistrationInscriptionLookupAccess({ db, request, curp })
   if (academySession) {
     hasValidSession = true;
 
-    if (await isRegistrationCurpInAcademy(db, curp, academySession.academy.id)) {
+    if (["academy", "admin"].includes(academySession.user.role) && await isRegistrationCurpInAcademy(db, curp, academySession.academy.id)) {
       return { scope: "academy", session: academySession };
     }
   }
@@ -3895,7 +3902,9 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_users.name AS user_name,
           registration_users.username,
           registration_users.email AS user_email,
-          CASE WHEN registration_users.is_judge = 1 THEN 'judge' ELSE registration_users.role END AS user_role,
+          CASE WHEN registration_users.is_judge = 1 THEN 'judge'
+               WHEN registration_users.is_judging_admin = 1 THEN 'judging_admin'
+               ELSE registration_users.role END AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
           registration_academies.name AS academy_name,

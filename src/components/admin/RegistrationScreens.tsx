@@ -106,6 +106,8 @@ import { ReleveVotingPreview } from "./ReleveVotingPreview";
 import { MediaDriveConnectionPanel } from "./MediaDriveConnectionPanel";
 import { adminSectionPaths, getAdminSectionFromPath, type AdminSection } from "./adminNavigation";
 import { RegistrationApiError, requestRegistrationApi } from "./registrationApi";
+import { getRegistrationHomePath } from "./registrationAccess";
+import type { RegistrationRole } from "./registrationAccess";
 
 type AdminScreenId = "home" | "choreographers" | "participants" | "dance" | "releve" | "music" | "feedback" | "payments";
 type AdminLookupTab = "participants" | "choreographers" | "dances";
@@ -170,7 +172,7 @@ type RegistrationSession = {
     name: string;
     username: string;
     email: string;
-    role?: "academy" | "admin" | "judge";
+    role?: RegistrationRole;
     emailConfirmedAt?: string | null;
   };
   academy: {
@@ -709,9 +711,6 @@ const registrationAdminDashboardNavItems: RegistrationAdminDashboardNavItem[] = 
   { group: "Operación", label: "Foto y video", icon: Camera, section: "media" },
   { group: "Operación", label: "Mi Levitate", icon: FileText, href: "/admin/mi-levitate" },
   { group: "Operación", label: "Programa", icon: CalendarDays, section: "program" },
-  { group: "Operación", label: "Puntuaciones", icon: BadgeCheck, section: "scores" },
-  { group: "Operación", label: "Jueceo admin", icon: ClipboardList, href: "/jueceo/admin" },
-  { group: "Pruebas", label: "Votación Relevé", icon: Trophy, section: "releveVoting" },
 ];
 
 const maxMusicUploadBytes = 12000000;
@@ -5373,15 +5372,12 @@ function isUnauthorizedRegistrationError(error: unknown) {
 }
 
 function redirectRegistrationAdmin(session: RegistrationSession | RegistrationBootstrap) {
-  if (session.user.role === "judge" && typeof window !== "undefined") {
-    window.location.replace("/jueceo/app/");
-    return true;
-  }
-  if (session.user.role !== "admin" || typeof window === "undefined") {
+  if (typeof window === "undefined" ||
+    (session.user.role !== "admin" && session.user.role !== "judging_admin" && session.user.role !== "judge")) {
     return false;
   }
 
-  window.location.replace("/admin/dashboard");
+  window.location.replace(getRegistrationHomePath(session.user.role));
   return true;
 }
 
@@ -10140,12 +10136,69 @@ function InscriptionOrderCard({
   );
 }
 
+export function LevitateAdminAccessBoundary({
+  children,
+}: {
+  children: (access: { session: RegistrationSession | null; message: string }) => ReactNode;
+}) {
+  const [access, setAccess] = useState<{
+    session: RegistrationSession | null;
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let live = true;
+    requestRegistrationApi<RegistrationSession>("/api/registration/me", { signal: controller.signal })
+      .then((session) => {
+        if (!live) return;
+        if (session.user.role === "judging_admin") {
+          window.location.replace(getRegistrationHomePath(session.user.role));
+          return;
+        }
+        setAccess({ session, message: "" });
+      })
+      .catch((error: unknown) => {
+        if (!live) return;
+        setAccess({
+          session: null,
+          message: isUnauthorizedRegistrationError(error) ? "" : getErrorMessage(error, "No se pudo validar el acceso admin."),
+        });
+      });
+    return () => {
+      live = false;
+      controller.abort();
+    };
+  }, []);
+
+  if (!access) return <LoadingRegistrationScreen />;
+  return children(access);
+}
+
 export function LevitateRegistrationAdminPaymentsRoute({
   initialSection = "payments",
 }: {
   initialSection?: RegistrationAdminDashboardSection;
 } = {}) {
-  const [adminSession, setAdminSession] = useState<RegistrationSession | null>(null);
+  return (
+    <LevitateAdminAccessBoundary>
+      {(access) => <RegistrationAdminPaymentsWorkspace initialSection={initialSection} initialSession={access.session} initialAuthMessage={access.message} />}
+    </LevitateAdminAccessBoundary>
+  );
+}
+
+function RegistrationAdminPaymentsWorkspace({
+  initialSection,
+  initialSession,
+  initialAuthMessage,
+}: {
+  initialSection: RegistrationAdminDashboardSection;
+  initialSession: RegistrationSession | null;
+  initialAuthMessage: string;
+}) {
+  const [adminSession, setAdminSession] = useState<RegistrationSession | null>(
+    initialSession?.user.role === "admin" ? initialSession : null,
+  );
   const [activeSection, setActiveSection] = useState<RegistrationAdminDashboardSection>(initialSection);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const adminMenuToggleRef = useRef<HTMLButtonElement>(null);
@@ -10195,11 +10248,12 @@ export function LevitateRegistrationAdminPaymentsRoute({
   const [selectedChoreographerId, setSelectedChoreographerId] = useState("");
   const [focusedDanceId, setFocusedDanceId] = useState("");
   const [academyProfileTab, setAcademyProfileTab] = useState<RegistrationAcademyProfileTab>("overview");
-  const [adminAuthMessage, setAdminAuthMessage] = useState("");
+  const [adminAuthMessage, setAdminAuthMessage] = useState(
+    initialAuthMessage || (initialSession && initialSession.user.role !== "admin" ? "Este usuario no tiene acceso al panel admin." : ""),
+  );
   const [adminError, setAdminError] = useState("");
   const [adminLoadErrors, setAdminLoadErrors] = useState({ orders: "", participants: "", program: "" });
   const adminDataError = Object.values(adminLoadErrors).filter(Boolean).join(" ");
-  const [isCheckingAdminSession, setIsCheckingAdminSession] = useState(true);
   const [isOrdersLoading, setIsLoading] = useState(false);
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(false);
   const [isProgramLoading, setIsProgramLoading] = useState(false);
@@ -10271,6 +10325,10 @@ export function LevitateRegistrationAdminPaymentsRoute({
   }, [isAdminMenuOpen]);
 
   const handleAdminAuthenticated = useCallback((nextSession: RegistrationSession | RegistrationBootstrap) => {
+    if (nextSession.user.role === "judging_admin") {
+      window.location.replace(getRegistrationHomePath(nextSession.user.role));
+      return;
+    }
     if (nextSession.user.role !== "admin") {
       setAdminSession(null);
       setAdminAuthMessage("Este usuario no tiene acceso al panel admin.");
@@ -10283,26 +10341,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
     });
     setAdminAuthMessage("");
   }, []);
-
-  const loadAdminSession = useCallback(async () => {
-    setIsCheckingAdminSession(true);
-
-    try {
-      const session = await requestRegistrationApi<RegistrationSession>("/api/registration/me");
-
-      handleAdminAuthenticated(session);
-    } catch (error) {
-      setAdminSession(null);
-
-      if (isUnauthorizedRegistrationError(error)) {
-        setAdminAuthMessage("");
-      } else {
-        setAdminAuthMessage(getErrorMessage(error, "No se pudo validar el acceso admin."));
-      }
-    } finally {
-      setIsCheckingAdminSession(false);
-    }
-  }, [handleAdminAuthenticated]);
 
   const loadAdminOrders = useCallback(async (force = false) => {
     if (adminSession?.user.role !== "admin") {
@@ -10384,10 +10422,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
       if (requestId === adminLoadRequestIds.current.program) setIsProgramLoading(false);
     }
   }, [adminSession?.user.role]);
-
-  useEffect(() => {
-    void loadAdminSession();
-  }, [loadAdminSession]);
 
   useEffect(() => {
     if (adminSession?.user.role !== "admin" || activeSection === "payments" || activeSection === "workshops" || activeSection === "scores" || activeSection === "releveVoting") return;
@@ -11155,10 +11189,6 @@ export function LevitateRegistrationAdminPaymentsRoute({
   } else if (isRegistrationsSection) {
     headerTitle = "Participantes";
     headerDescription = "Revisa pago mínimo, boletos confirmados y requisitos faltantes";
-  }
-
-  if (isCheckingAdminSession) {
-    return <LoadingRegistrationScreen />;
   }
 
   if (!adminSession) {
@@ -13172,7 +13202,7 @@ export function LevitateStudentRegistrationRoute() {
 export function LevitateAuthRoute() {
   const handleAuthenticated = (session: RegistrationSession | RegistrationBootstrap) => {
     if (typeof window !== "undefined") {
-      window.location.replace(session.user.role === "judge" ? "/jueceo/app/" : session.user.role === "admin" ? "/admin/dashboard" : "/registro/academias");
+      window.location.replace(getRegistrationHomePath(session.user.role));
     }
   };
 
