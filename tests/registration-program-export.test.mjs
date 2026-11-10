@@ -9,7 +9,8 @@ const source = await readFile(new URL("../src/components/admin/RegistrationScree
 const syntax = ts.createSourceFile("RegistrationScreens.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const functionNames = [
   "buildProgramRows", "formatMusicDuration", "getProgramHeaders", "getProgramRowDisplay",
-  "getProgramMusicDurationLabel", "isAerialProgramBlock", "toProgramUpper", "toProgramHtmlValue", "downloadProgramXls",
+  "getProgramMusicDurationLabel", "isAerialProgramBlock", "toProgramUpper", "toProgramHtmlValue",
+  "createUtf8EncodedBlob", "downloadProgramXls",
 ];
 // Execute the real export functions without mounting the full admin application.
 const functions = functionNames.map((name) => {
@@ -71,8 +72,10 @@ test("the generated program XLS includes each song duration and preserves Motion
     { id: 2, title: "BLOQUE 2: AERIAL", rows: rows.filter((row) => row.genre === "aereo") },
   ]);
   const html = await app.blobs[0].text();
+  const bytes = new Uint8Array(await app.blobs[0].arrayBuffer());
 
   assert.equal(app.blobs[0].type, "application/vnd.ms-excel;charset=utf-8");
+  assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf], "Excel export starts with a UTF-8 BOM");
   assert.equal(app.downloads[0].download, "levitate-programa.xls");
   assert.equal((html.match(/DURACIÓN CANCIÓN \(MM:SS\)/g) || []).length, 2);
   assert.match(html, /colspan="10"[^>]*>BLOQUE 1: MOTION/);

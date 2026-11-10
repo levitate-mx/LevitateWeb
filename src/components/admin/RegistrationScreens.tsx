@@ -2092,7 +2092,7 @@ function downloadRegistrationAcademiesDirectoryCsv(summaries: RegistrationAcadem
     summary.alerts.join(" | "),
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -4935,6 +4935,12 @@ function toRegistrationCsvValue(value: unknown) {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function createUtf8EncodedBlob(contents: string, type: string) {
+  // Excel on Windows may ignore the Blob charset and assume ANSI unless the
+  // file starts with a UTF-8 byte-order mark.
+  return new Blob(["\uFEFF", contents], { type });
+}
+
 function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
   const headers = [
     "Tipo",
@@ -4977,7 +4983,7 @@ function downloadRegistrationOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     order.rejectionMessage ?? "",
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5023,7 +5029,7 @@ function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
     getAdminPaymentStatusLabel(row.latestStatus),
   ]);
   const csv = [headers, ...csvRows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5067,7 +5073,7 @@ function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     getAdminOrderDate(order).date,
   ]);
   const csv = [headers, ...csvRows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5110,7 +5116,7 @@ function downloadAdminParticipantsCsv(rows: RegistrationParticipantOperationalRo
   ]);
 
   const csv = [headers, ...csvRows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5135,7 +5141,7 @@ function downloadAdminChoreographersCsv(choreographers: RegistrationAdminChoreog
       : `Registro creado · ${getAdminDateLabel(choreographer.createdAt)}`,
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5175,7 +5181,7 @@ function downloadAdminChoreographiesCsv(dances: RegistrationDance[], fileName = 
     getAdminDateLabel(dance.createdAt),
   ]);
   const csv = [headers, ...rows].map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5237,7 +5243,7 @@ function downloadRegistrationDashboardCsv({
     ...venueSlices.map((slice) => [slice.label, slice.value, `${Math.round(slice.percent)}%`]),
   ];
   const csv = summaryRows.map((row) => row.map(toRegistrationCsvValue).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(csv, "text/csv;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -5348,7 +5354,7 @@ async function downloadProgramXls(blocks: ProgramBlock[]) {
     <table>${rows.join("")}</table>
   </body>
 </html>`;
-  const blob = new Blob([worksheet], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const blob = createUtf8EncodedBlob(worksheet, "application/vnd.ms-excel;charset=utf-8");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
