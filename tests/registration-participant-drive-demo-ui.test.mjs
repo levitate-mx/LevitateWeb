@@ -61,6 +61,7 @@ function harness(initial = {}) {
     get tree() { return tree; },
     get button() { return nodes(tree).find(node => node.type === 'button'); },
     click() { this.button.props.onClick(); render(); },
+    clickNamed(label) { const button = nodes(tree).find(node => node.type === 'button' && text(node) === label); assert.ok(button); button.props.onClick(); render(); },
     select(value) { nodes(tree).find(node => node.type === 'select').props.onChange({ target: { value } }); render(); },
     async resolve(index, value) { requests[index].resolve(value); await settle(); },
     async reject(index, cause) { requests[index].reject(cause); await settle(); },
@@ -99,7 +100,7 @@ test('one choreography is selected automatically; the trial makes one explicit a
   assert.equal(links[0].props.href, trial().folder.url);
   assert.equal(links[1].props.href, trial().previewUrl);
   assert.match(text(view.tree), /fotos en borrador/);
-  assert.match(text(view.tree), /detección continua.*todavía no/);
+  assert.match(text(view.tree), /Al abrir el pasaporte se buscan y preparan las fotos nuevas/);
   assert.doesNotMatch(view.requests[1].options.body, /published|access\.create|event\.upsert|asset\.publish/);
   view.unmount();
 });
@@ -112,6 +113,18 @@ test('several choreographies require a choice; changed choices clear previous tr
   assert.equal(nodes(view.tree).filter(node => node.type === 'a').length, 2);
   view.select('dance-two');
   assert.equal(nodes(view.tree).filter(node => node.type === 'a').length, 0);
+  view.unmount();
+});
+
+test('the automatic trial seeds an unmarked source and links to the passport where processing starts', async () => {
+  const view = harness();
+  await view.resolve(0, { routines: [{ danceId: 'dance-one', title: 'Aire Norte' }] });
+  view.click(); await view.resolve(1, trial());
+  view.clickNamed('Preparar foto sin marca para prueba automática');
+  assert.deepEqual(JSON.parse(view.requests[2].options.body), { action: 'photo.source.demo.prepare', eventId: 'edition-one', participantId: 'person-one', danceId: 'dance-one' });
+  await view.resolve(2, trial({ imported: 0 }));
+  assert.match(text(view.tree), /guardada sin marca.*Abre su pasaporte para generar automáticamente/);
+  assert.equal(nodes(view.tree).find(node => node.type === 'a' && /Ver previews/.test(text(node))).props.href, trial().previewUrl);
   view.unmount();
 });
 

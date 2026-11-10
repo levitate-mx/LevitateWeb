@@ -7,6 +7,7 @@ import { main } from "../scripts/prepare-registration-db.mjs";
 
 const baseSchema = readFileSync(new URL("../db/registration_d1_schema.sql", import.meta.url), "utf8");
 const accessScanMigration = readFileSync(new URL("../db/registration_ticket_access_scans.sql", import.meta.url), "utf8");
+const driveSyncMigration = readFileSync(new URL("../db/registration_participant_drive_sync.sql", import.meta.url), "utf8");
 const removableColumns = {
   registration_academies: ["origin_type", "origin_state", "origin_country"],
   registration_users: ["role"],
@@ -96,6 +97,49 @@ test("fresh canonical schema is already prepared and rechecking does not write",
   assert.deepEqual(writes, []);
   seed(sqlite);
   assert.equal(sqlite.prepare("SELECT role FROM registration_users").get().role, "academy");
+});
+
+test("Drive synchronization preparation only adds its three metadata tables and index, preserving participants and QR grants", async (t) => {
+  assert.ok(baseSchema.includes(driveSyncMigration));
+  const { db, sqlite, writes } = fixture(t, baseSchema.replace(driveSyncMigration, ""));
+  seed(sqlite);
+  sqlite.exec(`INSERT INTO participant_portal_events(id,title,season,venue,published) VALUES('edition','Edición','Otoño','cdmx',0);
+    INSERT INTO participant_portal_access(id,participant_id,event_id,token_hash) VALUES('grant','participant-1','edition','existing-qr-hash');`);
+  const before = ['registration_participants', 'registration_academies', 'registration_dances', 'participant_portal_access', 'participant_portal_events']
+    .map(table => rows(sqlite, table));
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 4);
+  assert.ok(plan.steps.every(step => /^CREATE (?:TABLE|INDEX)/.test(step.sql)));
+  assert.deepEqual(writes, []);
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 4);
+  assert.deepEqual(['registration_participants', 'registration_academies', 'registration_dances', 'participant_portal_access', 'participant_portal_events']
+    .map(table => rows(sqlite, table)), before);
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, 4);
+  assert.deepEqual(sqlite.prepare('PRAGMA index_info(idx_participant_portal_drive_files_pending)').all().map(row => row.name),
+    ['event_id', 'dance_id', 'status', 'updated_at']);
+});
+
+test("Drive synchronization state requires valid JSON and paired leases, and versions deduplicate each source photo", t => {
+  const { sqlite } = fixture(t);
+  seed(sqlite);
+  sqlite.exec("INSERT INTO participant_portal_events(id,title,season,venue,published) VALUES('edition','Edición','Otoño','cdmx',0)");
+  const sync = sqlite.prepare('INSERT INTO participant_portal_drive_sync(event_id,participant_id,bindings_json,lease_token,lease_until) VALUES(?,?,?,?,?)');
+  assert.throws(() => sync.run('edition', 'participant-1', '{bad', null, null), /CHECK/);
+  assert.throws(() => sync.run('edition', 'participant-1', '{}', 'lease', null), /CHECK/);
+  sync.run('edition', 'participant-1', '{}', null, null);
+  const file = sqlite.prepare(`INSERT INTO participant_portal_drive_files(event_id,dance_id,source_file_id,source_version,source_folder_id,status,lease_token,lease_until)
+    VALUES('edition','dance-1','drive-file',?,'drive-folder',?,?,?)`);
+  assert.throws(() => file.run('revision-1', 'public', null, null), /CHECK/);
+  assert.throws(() => file.run('revision-1', 'pending', 'lease', null), /CHECK/);
+  file.run('revision-1', 'pending', null, null);
+  assert.throws(() => file.run('revision-1', 'ready', null, null), /UNIQUE/);
+  file.run('revision-2', 'pending', null, null);
+  assert.equal(sqlite.prepare('SELECT count(*) AS n FROM participant_portal_drive_files').get().n, 2);
+  const settings = sqlite.prepare("INSERT INTO participant_portal_drive_album_settings(event_id,dance_id,publication_paused) VALUES('edition','dance-1',?)");
+  assert.throws(() => settings.run(2), /CHECK/);
+  settings.run(1);
+  assert.equal(sqlite.prepare('SELECT publication_paused FROM participant_portal_drive_album_settings').get().publication_paused, 1);
 });
 
 test("automatic block completion adds only its missing flags and preserves existing manual closures", async (t) => {

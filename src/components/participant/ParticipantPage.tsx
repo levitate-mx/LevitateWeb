@@ -31,6 +31,7 @@ import type {
 import { LevitateHeader } from "../home/LevitateHeader";
 import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
 import { participantPublicationChanged, startParticipantRefresh } from "./participantRefresh";
+import { startParticipantPhotoSync, type ParticipantPhotoSyncStatus, type ParticipantPhotoSyncResponse } from "./participantPhotoSync";
 import "./ParticipantPage.css";
 
 const scoreFormatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
@@ -195,6 +196,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [changingEvent, setChangingEvent] = useState(false);
   const [eventError, setEventError] = useState("");
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
+  const [photoSyncStatus, setPhotoSyncStatus] = useState<ParticipantPhotoSyncStatus>('ready');
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [judgingDownloadBusy, setJudgingDownloadBusy] = useState(false);
@@ -325,6 +327,40 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         setData(null);
         setError("Tu sesión cambió o terminó. Abre de nuevo tu enlace personal para continuar.");
         setPhase("access");
+      },
+    });
+  }, [preview, isInternalPreview, phase, changingEvent, data?.participant.id, data?.selectedEventId]);
+
+  useEffect(() => {
+    if (preview || phase !== 'ready' || changingEvent || !data) return;
+    const participantId = data.participant.id, eventId = data.selectedEventId;
+    const navigation = accessNavigation.current;
+    return startParticipantPhotoSync({ participantId, eventId,
+      isCurrent: () => accessNavigation.current === navigation && refreshContext.current.phase === 'ready'
+        && !refreshContext.current.changingEvent && refreshContext.current.data?.participant.id === participantId
+        && refreshContext.current.data.selectedEventId === eventId,
+      step: signal => participantRequest<ParticipantPhotoSyncResponse>(isInternalPreview
+        ? '/api/registration/admin/participant-portal' : '/api/participant/photos/sync', {
+          method: 'POST', signal, body: JSON.stringify(isInternalPreview
+            ? { action: 'photo.sync', eventId, participantId } : { eventId }),
+        }),
+      read: signal => isInternalPreview
+        ? openParticipantAdminPreview(new URLSearchParams({ eventId, participantId }).toString(), signal)
+        : participantRequest<ParticipantPortalData>(`/api/participant/me?eventId=${encodeURIComponent(eventId)}`, { signal }),
+      onStatus: setPhotoSyncStatus,
+      onData: response => {
+        const previous = refreshContext.current.data;
+        if (previous && participantPublicationChanged(previous, response)) {
+          cancelParticipantDownloads(); setPhotoIndex(null);
+        }
+        setData(response);
+        setSelectedRoutineId(current => response.routines.some(item => item.id === current) ? current : response.routines[0]?.id || null);
+      },
+      onInvalidAccess: () => {
+        ++accessNavigation.current;
+        cancelParticipantDownloads(); eventRequest.current?.abort(); setPhotoIndex(null); setData(null);
+        setError(isInternalPreview ? 'Inicia sesión como administrador para continuar la revisión.' : 'Tu sesión cambió o terminó. Abre de nuevo tu enlace personal.');
+        setPhase('access');
       },
     });
   }, [preview, isInternalPreview, phase, changingEvent, data?.participant.id, data?.selectedEventId]);
@@ -902,6 +938,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 Tus fotos<span>.</span>
               </h2>
             </header>
+            {photoSyncStatus === 'checking' && <p className="participant-status-copy" role="status">Estamos preparando tus fotografías…</p>}
             <div className="participant-gallery__offer" data-participant-reveal>
               <div>
                 <h3>Revive tu paso por el escenario.</h3>

@@ -13,6 +13,7 @@ import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
 import { handleParticipantPortal } from "./participant-portal.js";
 import { getParticipantDriveStorage } from "./participant-drive-storage.js";
+import { getParticipantDriveDiscovery } from "./participant-drive-discovery.js";
 import { serveParticipantDemoPhoto } from "./participant-demo-media.js";
 import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
@@ -445,6 +446,7 @@ export default {
       return handleParticipantPortal(request, env, {
         requireAdmin: requireRegistrationAdmin,
         getMediaStore: (options) => getParticipantMediaStorage(env, options),
+        getPhotoDiscovery: () => getParticipantPhotoDiscovery(env),
         getJudgingSnapshot: (eventId, options) => getJudgingSheets(env, eventId, options),
         getJudgingEventList: () => getJudgingEvents(env),
         getJudgingDirectory: (eventId, options) => getJudgingRoutineDirectory(env, eventId, options),
@@ -7564,6 +7566,16 @@ function getParticipantMediaStorage(env, options = {}) {
     }),
     expectedEmail: env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL,
     ...options,
+  });
+}
+
+function getParticipantPhotoDiscovery(env) {
+  return getParticipantDriveDiscovery({
+    getConfig: () => getRegistrationDriveAuthConfig(env),
+    getAccessToken: (config, { signal } = {}) => getGoogleDriveAccessToken(config, {
+      authFailureCode: 'portal_drive_auth_failed', authFailureMessage: 'No pudimos comprobar el acceso a Drive.', signal,
+    }),
+    expectedEmail: env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL,
   });
 }
 

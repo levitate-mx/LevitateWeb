@@ -12,6 +12,8 @@ const judgeMigration = readFileSync(new URL("../../db/registration_judge_workspa
 managedStatements.push(...(judgeMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const judgingAdminMigration = readFileSync(new URL("../../db/registration_judging_admin.sql", import.meta.url), "utf8");
 managedStatements.push(...(judgingAdminMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
+const participantDriveMigration = readFileSync(new URL("../../db/registration_participant_drive_sync.sql", import.meta.url), "utf8");
+managedStatements.push(...(participantDriveMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
 const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE TABLE")).map((sql) => ({
   name: sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1],
   columns: [...sql.matchAll(/^  (\w+) (?:TEXT|INTEGER)\b/gm)].map((match) => match[1]),

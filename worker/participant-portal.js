@@ -2,6 +2,8 @@ import { Buffer } from "node:buffer";
 import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./participant-photo.js";
 import { prepareParticipantDemoPhoto, readParticipantDemoPhotos } from "./participant-demo-media.js";
 import { participantDemoMediaDefinitions } from "../shared/participant-demo-media.js";
+import { syncParticipantDrivePhotos } from "./participant-drive-sync.js";
+import { processParticipantPhoto } from "./participant-photo-process.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
 import { createBlockPublicationGate, getBlockPublication, saveBlockPublicationMode, closeParticipantBlock, reopenParticipantBlock } from "./participant-block-publication.js";
@@ -512,6 +514,45 @@ async function photoTrialContext(db, input) {
   return { event, participant, dances };
 }
 
+async function runPhotoSync(db, env, { participantId, eventId, adminPreview, assertAuthorized, getPhotoDiscovery, getMediaStore }) {
+  return json(await syncParticipantDrivePhotos({ db, env, participantId, eventId, adminPreview,
+    assertAuthorized, getDiscovery: getPhotoDiscovery, getMediaStore: () => resolveMediaStore(env, getMediaStore),
+    processPhoto: ({ bytes, contentType, blur }) => processParticipantPhoto({ images: env.IMAGES, bytes, contentType, blur }),
+    uploadPreview: async ({ eventId: edition, routineId, uploadId, bytes, caption, width, height, storage }) => {
+      await assertAuthorized();
+      const response = await uploadAsset(db, env, { eventId: edition, routineId, uploadId, kind: 'photo',
+        fileName: `${uploadId}.jpg`, contentType: 'image/jpeg', base64Data: Buffer.from(bytes).toString('base64'),
+        caption, width, height, allowDownload: false }, () => storage);
+      return response.json();
+    },
+  }));
+}
+
+/** Seeds one unmarked, approved archival source; generation happens on passport opening. */
+async function prepareAutomaticPhotoDemo(db, env, input, getPhotoDiscovery) {
+  const { event, participant, dances } = await photoTrialContext(db, input);
+  const dance = dances.find(value => value.id === str(input.danceId, 'la coreografía', 100));
+  if (!dance) fault('portal_invalid_routine', 'Selecciona una coreografía de este participante y esta sede.');
+  if (!getPhotoDiscovery || typeof env.ASSETS?.fetch !== 'function') fault('portal_storage_unavailable', 'La conexión de fotos no está disponible.', 503);
+  const source = await env.ASSETS.fetch(new Request('https://levitate.mx/assets/visuals/community-blue-silks.jpg'));
+  if (!source.ok) fault('portal_demo_media_unavailable', 'No pudimos abrir la fotografía de prueba.', 503);
+  const bytes = new Uint8Array(await source.arrayBuffer());
+  if (bytes.length > fileLimit || await hash(bytes) !== 'e4a8b68368dc3c4a8c831bc50798fe128bf874e6c44bb41ed91eafbc937957c2') {
+    fault('portal_demo_media_unavailable', 'No pudimos verificar la fotografía de prueba.', 503);
+  }
+  const discovery = await getPhotoDiscovery();
+  const album = await discovery.prepareDemoSource({ eventId: event.id, danceId: dance.id, danceTitle: dance.title,
+    participantId: participant.id, participantName: participant.full_name, academyId: participant.academy_id,
+    academyName: participant.academy_name, bytes, contentType: 'image/jpeg', fileName: 'AUTO-RAW-DEMO.jpg',
+    sha256: 'e4a8b68368dc3c4a8c831bc50798fe128bf874e6c44bb41ed91eafbc937957c2' });
+  await db.prepare('UPDATE participant_portal_drive_sync SET next_check_at=NULL WHERE event_id=? AND participant_id=?')
+    .bind(event.id, participant.id).run();
+  return json({ folder: { id: album.folderId, name: album.folderName, url: album.folderUrl,
+    accountEmail: env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL }, participantId: participant.id, eventId: event.id,
+    danceId: dance.id, imported: 0, reused: 0,
+    previewUrl: `/admin/mi-levitate/resumen?${new URLSearchParams({ eventId: event.id, participantId: participant.id })}` });
+}
+
 /** An authenticated, explicit trial. No publication, QR rotation or judging writes. */
 async function runPhotoDemoTrial(db, env, input, actorId, getMediaStore) {
   const { event, participant, dances } = await photoTrialContext(db, input);
@@ -620,6 +661,9 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
       await db.prepare(`INSERT INTO participant_portal_events(id,title,season,venue,starts_at,published) VALUES(?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title,season=excluded.season,venue=excluded.venue,starts_at=excluded.starts_at,published=excluded.published,updated_at=datetime('now')`)
         .bind(eventId,str(event.title,"el título"),str(event.season,"la temporada",100),event.venue,startsAt || null,event.published === undefined ? (previous?.published || 0) : bool(event.published) ? 1 : 0).run();
+      if (event.published === true && previous?.published === 0) {
+        await db.prepare('UPDATE participant_portal_drive_sync SET next_check_at=NULL WHERE event_id=?').bind(eventId).run();
+      }
       return json({ eventId });
     }
     case "access.create": {
@@ -662,6 +706,12 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
           result_json=excluded.result_json,judging_json=excluded.judging_json,photos_published=excluded.photos_published,status='draft',revision=excluded.revision,updated_at=datetime('now')`)
           .bind(routineId,event.id,dance.id,sourceEvent || null,sourceRoutine || null,result ? JSON.stringify(result) : null,judging ? JSON.stringify(judging) : null,bool(input.photosPublished) ? 1 : 0,revision),
         revisionStatement(db,{routineId,eventId:event.id,revision,action:'save',snapshot,actorId}),
+        db.prepare(`INSERT INTO participant_portal_drive_album_settings(event_id,dance_id,publication_paused) VALUES(?,?,?)
+          ON CONFLICT(event_id,dance_id) DO UPDATE SET publication_paused=excluded.publication_paused`)
+          .bind(event.id,dance.id,bool(input.photosPublished) ? 0 : 1),
+        db.prepare(`UPDATE participant_portal_drive_sync SET next_check_at=NULL WHERE event_id=?
+          AND participant_id IN(SELECT participant_id FROM registration_dance_participants WHERE dance_id=?)`)
+          .bind(event.id,dance.id),
       ]);
       return json({ routineId });
     }
@@ -684,7 +734,11 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
     case "asset.publish": {
       const asset = await first(db,"SELECT id FROM participant_portal_assets WHERE id=?",str(input.assetId,"el archivo",100));
       if (!asset) fault("portal_asset_not_found","No se encontró el archivo.",404);
-      await db.prepare("UPDATE participant_portal_assets SET published=? WHERE id=?").bind(bool(input.published) ? 1 : 0,asset.id).run();
+      await db.batch([
+        db.prepare("UPDATE participant_portal_assets SET published=? WHERE id=?").bind(bool(input.published) ? 1 : 0,asset.id),
+        db.prepare('UPDATE participant_portal_drive_files SET publication_policy=? WHERE asset_id=?')
+          .bind(bool(input.published) ? 'automatic' : 'held',asset.id),
+      ]);
       return json({ ok:true });
     }
     case "document.assign": {
@@ -700,7 +754,7 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
     default: fault("portal_invalid_action","Selecciona una acción válida.");
   }
 }
-export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore, getJudgingSnapshot, getJudgingEventList, getJudgingDirectory, getJudgingBlockDirectory } = {}) {
+export async function handleParticipantPortal(request, env, { requireAdmin, getMediaStore, getPhotoDiscovery, getJudgingSnapshot, getJudgingEventList, getJudgingDirectory, getJudgingBlockDirectory } = {}) {
   try {
     const db = env.DB;
     if (!db) fault("portal_unavailable","El portal no está disponible por el momento.",503);
@@ -744,7 +798,13 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
           str(url.searchParams.get("participantId"),"el participante",100),str(url.searchParams.get("eventId"),"la edición",100),true,getJudgingSnapshot));
         return await adminList(db,request);
       }
-      return await adminAction(db,env,await body(request),admin?.session?.user?.id,getMediaStore,getJudgingEventList,getJudgingDirectory,getJudgingSnapshot,getJudgingBlockDirectory);
+      const input = await body(request);
+      if (input.action === 'photo.source.demo.prepare') return await prepareAutomaticPhotoDemo(db, env, input, getPhotoDiscovery);
+      if (input.action === 'photo.sync') return await runPhotoSync(db, env, {
+        participantId: str(input.participantId, 'el participante', 100), eventId: str(input.eventId, 'la edición', 100), adminPreview: true,
+        assertAuthorized: () => requireAdmin(request, env, db, { touchLastSeen: false }), getPhotoDiscovery, getMediaStore,
+      });
+      return await adminAction(db,env,input,admin?.session?.user?.id,getMediaStore,getJudgingEventList,getJudgingDirectory,getJudgingSnapshot,getJudgingBlockDirectory);
     }
     if (path === "/api/participant/access/exchange") {
       method(request,["POST"]);
@@ -764,6 +824,21 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
       const token=readCookie(request);
       if (token) await db.prepare("DELETE FROM participant_portal_sessions WHERE token_hash=?").bind(await hash(token)).run();
       return json({ok:true},200,{"set-cookie":cookie("",true)});
+    }
+    if (path === '/api/participant/photos/sync') {
+      method(request, ['POST']);
+      const grant = await session(db, request);
+      const input = await body(request);
+      if (input.eventId && input.eventId !== grant.event_id) fault('portal_event_not_found', 'No se encontró la edición.', 404);
+      if (Object.hasOwn(input, 'participantId') && input.participantId !== grant.participant_id) fault('portal_participant_not_found', 'No se encontró al participante.', 404);
+      return await runPhotoSync(db, env, { participantId: grant.participant_id, eventId: grant.event_id, adminPreview: false,
+        assertAuthorized: async () => {
+          const current = await session(db, request);
+          if (current.id !== grant.id || current.participant_id !== grant.participant_id || current.event_id !== grant.event_id) {
+            fault('portal_session_invalid', 'Tu sesión cambió. Abre nuevamente tu enlace personal.', 401);
+          }
+        }, getPhotoDiscovery, getMediaStore,
+      });
     }
     if (path === "/api/participant/me") { method(request,["GET"]); return await me(db,env,request,getJudgingSnapshot); }
     const assetMatch=path.match(/^\/api\/participant\/assets\/([a-zA-Z0-9_-]{8,100})$/);

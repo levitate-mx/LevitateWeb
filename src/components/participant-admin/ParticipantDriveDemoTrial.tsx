@@ -7,7 +7,7 @@ type Trial = {
   eventId: string;
   participantId: string;
   danceId: string;
-  routineId: string;
+  routineId?: string;
   imported: number;
   reused: number;
   previewUrl: string;
@@ -46,7 +46,7 @@ export function ParticipantDriveDemoTrial({ eventId, participantId, disabled = f
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<(Trial & { folderUrl: string | null }) | null>(null);
+  const [result, setResult] = useState<(Trial & { folderUrl: string | null; automatic: boolean }) | null>(null);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const busyRequest = useRef(false);
@@ -77,7 +77,7 @@ export function ParticipantDriveDemoTrial({ eventId, participantId, disabled = f
     return () => { ++generation.current; request.abort(); controller.current?.abort(); };
   }, [identity]);
 
-  async function prepareTrial() {
+  async function prepareTrial(automatic = false) {
     if (disabled || loading || busyRequest.current || !eventId || !participantId || !routines.some(routine => routine.danceId === danceId)) return;
     busyRequest.current = true;
     const sequence = ++generation.current, selectedIdentity = currentIdentity.current, selectedDanceId = danceId;
@@ -85,10 +85,10 @@ export function ParticipantDriveDemoTrial({ eventId, participantId, disabled = f
     setBusy(true); setResult(null); setError('');
     try {
       const response = await requestRegistrationApi<Trial>(endpoint, { method: 'POST', signal: request.signal,
-        body: JSON.stringify({ action: 'photo.demo.trial', eventId, participantId, danceId: selectedDanceId }) });
+        body: JSON.stringify({ action: automatic ? 'photo.source.demo.prepare' : 'photo.demo.trial', eventId, participantId, danceId: selectedDanceId }) });
       if (request.signal.aborted || sequence !== generation.current || selectedIdentity !== currentIdentity.current) return;
       const links = verifiedLinks(response, eventId, participantId, selectedDanceId);
-      setResult({ ...response, ...links });
+      setResult({ ...response, ...links, automatic });
       onComplete?.();
     } catch (cause) {
       if (request.signal.aborted || sequence !== generation.current || selectedIdentity !== currentIdentity.current) return;
@@ -109,9 +109,10 @@ export function ParticipantDriveDemoTrial({ eventId, participantId, disabled = f
     <button type="button" disabled={disabled || busy || loading || !danceId} aria-busy={busy} onClick={() => void prepareTrial()}>
       {busy ? 'Preparando y comprobando fotos…' : 'Probar carpeta de fotos en Drive'}
     </button>
-    <p>La prueba conserva la visibilidad de la edición y guarda las fotos en borrador para revisión interna. La detección continua de nuevas fotos todavía no está habilitada.</p>
+    {result && !result.automatic && <button type="button" disabled={disabled || busy || loading || !danceId} onClick={() => void prepareTrial(true)}>Preparar foto sin marca para prueba automática</button>}
+    <p>La prueba conserva la visibilidad de la edición y guarda las fotos en borrador para revisión interna. Al abrir el pasaporte se buscan y preparan las fotos nuevas de sus carpetas vinculadas.</p>
     {result && <div role="status">
-      <p>Las dos fotos demo están listas para revisar en su pasaporte. Carpeta: <strong>{result.folder.name}</strong>{result.folder.accountEmail ? ` · ${result.folder.accountEmail}` : ''}.</p>
+      <p>{result.automatic ? 'La foto de prueba está guardada sin marca. Abre su pasaporte para generar automáticamente la preview con marca de agua.' : 'Las dos fotos demo están listas para revisar en su pasaporte.'} Carpeta: <strong>{result.folder.name}</strong>{result.folder.accountEmail ? ` · ${result.folder.accountEmail}` : ''}.</p>
       <div className="pp-admin-actions">
         {result.folderUrl && <a className="pp-admin-preview-link" href={result.folderUrl} target="_blank" rel="noreferrer">Abrir carpeta de prueba ↗</a>}
         <a className="pp-admin-preview-link" href={result.previewUrl} target="_blank" rel="noreferrer">Ver previews en su pasaporte ↗</a>
