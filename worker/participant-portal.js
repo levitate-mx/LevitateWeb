@@ -3,6 +3,7 @@ import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./par
 import { prepareParticipantDemoPhoto, readParticipantDemoPhotos } from "./participant-demo-media.js";
 import { participantDemoMediaDefinitions } from "../shared/participant-demo-media.js";
 import { syncParticipantDrivePhotos } from "./participant-drive-sync.js";
+import { PHOTO_PREVIEW_LIMIT, preferredPhotoDance } from "./participant-photo-priority.js";
 import { processParticipantPhoto } from "./participant-photo-process.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
@@ -160,18 +161,23 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   // Registration membership already identifies the participant's presentations.
   // An edition-specific curated record adds results/assets; its absence should
   // not hide the registered presentation or create records during this GET.
-  const rows = await all(db, `SELECT r.*, d.id AS registration_dance_id, d.title, d.genre, d.subgenre, d.category, d.level, p.division
+  const rows = await all(db, `SELECT r.*, d.id AS registration_dance_id, d.academy_id AS registration_academy_id,
+    d.venue AS registration_venue, d.title, d.genre, d.subgenre, d.category, d.level, p.division,
+    (SELECT COUNT(*) FROM registration_dance_participants members WHERE members.dance_id = d.id) AS participant_count
     FROM registration_dance_participants dp JOIN registration_dances d ON d.id = dp.dance_id
     JOIN registration_participants p ON p.id = dp.participant_id
     LEFT JOIN participant_portal_routines r ON r.dance_id = d.id AND r.event_id = ?
     WHERE dp.participant_id = ? AND (r.id IS NOT NULL OR (? = 1 AND d.venue = ?))
     ORDER BY d.title, d.id`, event.id, participant.id, registrationFallback ? 1 : 0, event.venue);
+  const photoDances = rows.filter(row => row.registration_academy_id === participant.academy_id && row.registration_venue === event.venue);
+  const photoDanceId = preferredPhotoDance(photoDances)?.registration_dance_id ?? null;
   const assets = adminPreview || event.published ? await all(db, `SELECT a.* FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
     WHERE a.event_id = ? AND dp.participant_id = ?
-      ${adminPreview ? "AND a.kind IN ('judge_sheet','photo')" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.photos_published = 1))`}
-    ORDER BY a.created_at DESC,a.id DESC`, event.id, participant.id) : [];
+      AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.dance_id = ?))
+      ${adminPreview ? "" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR r.photos_published = 1)`}
+    ORDER BY a.created_at DESC,a.id DESC`, event.id, participant.id, photoDanceId) : [];
   const document = await first(db, `SELECT d.asset_id FROM participant_portal_documents d
     JOIN participant_portal_assets a ON a.id = d.asset_id
     WHERE d.participant_id = ? AND d.event_id = ? ${adminPreview ? "" : "AND d.published = 1 AND a.published = 1"}
@@ -195,7 +201,8 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       const visible = Boolean(adminPreview || (event.published && (automaticCompletion ? !row.publication_blocked : row.status === "published")));
       const judging = visible ? parsed(row.judging_json) : null;
       const sheet = visible ? assets.find((asset) => asset.routine_id === row.id && asset.kind === "judge_sheet") : null;
-      const photos = visible && (adminPreview || row.photos_published) ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo") : [];
+      const photos = visible && (adminPreview || row.photos_published)
+        ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo").slice(0, PHOTO_PREVIEW_LIMIT) : [];
       return { id: row.id || `registration:${row.registration_dance_id}`, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division: row.division, level: row.level,
         result: portalResult(row, event, adminPreview),
         judging: { status: judging || sheet ? "available" : "pending", judges: judging?.judges || [], ...(sheet ? { assetId: sheet.id, url: link(sheet.id) } : {}) },

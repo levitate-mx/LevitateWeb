@@ -161,16 +161,56 @@ test('Drive trial rejects invalid archival sources before creating a source albu
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 0);
 });
 
-test('personal photo projections put newly prepared previews before older copies without removing either', async t => {
-  const { admin, request, db } = await fixture(t);
-  const saved = await admin({ action: 'routine.save', eventId: 'test-event', danceId: 'dance-a' });
-  for (const uploadId of ['older-preview', 'newer-preview']) await admin({ action: 'asset.upload', eventId: 'test-event',
-    routineId: saved.data.routineId, kind: 'photo', uploadId, fileName: uploadId + '.jpg', contentType: 'image/jpeg', base64Data: photoSource.toString('base64') });
-  db.sqlite.prepare("UPDATE participant_portal_assets SET created_at='2020-01-01 00:00:00' WHERE id='older-preview'").run();
-  db.sqlite.prepare("UPDATE participant_portal_assets SET created_at='2026-11-10 00:00:00' WHERE id='newer-preview'").run();
-  const projection = await request(previewPath(), { cookie: adminCookie });
-  assert.deepEqual(projection.data.routines[0].photos.items.map(photo => photo.id), ['newer-preview', 'older-preview']);
-  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 2);
+test('passport shows up to two newest previews from the smallest choreography without filling from another', async t => {
+  const { admin, request, db, access } = await fixture(t);
+  const { cookie } = await access();
+  db.sqlite.exec(`UPDATE registration_dances SET category='duo' WHERE id='dance-b';
+    INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a');`);
+  async function publishRoutine(danceId) {
+    const { data } = await admin({ action: 'routine.save', eventId: 'test-event', danceId, result: result(), judging, photosPublished: true });
+    await admin({ action: 'routine.publish', routineId: data.routineId });
+    return data.routineId;
+  }
+  const soloId = await publishRoutine('dance-a');
+  const duoId = await publishRoutine('dance-b');
+
+  async function uploadPhoto(routineId, uploadId, createdAt) {
+    const { data } = await admin({ action: 'asset.upload', eventId: 'test-event', routineId, kind: 'photo', uploadId,
+      fileName: uploadId + '.jpg', contentType: 'image/jpeg', base64Data: photoSource.toString('base64') });
+    await admin({ action: 'asset.publish', assetId: data.assetId, published: true });
+    db.sqlite.prepare('UPDATE participant_portal_assets SET created_at=? WHERE id=?').run(createdAt, data.assetId);
+  }
+
+  async function assertPassportPreviews(preferredId, expectedPhotoIds, routineOrder = [duoId, soloId]) {
+    for (const { path, session } of [{ path: '/api/participant/me', session: cookie }, { path: previewPath(), session: adminCookie }]) {
+      const { data } = await request(path, { cookie: session });
+      assert.deepEqual(data.routines.map(routine => routine.id), routineOrder);
+      for (const routine of data.routines) {
+        const expected = routine.id === preferredId ? expectedPhotoIds : [];
+        assert.equal(routine.photos.status, expected.length ? 'available' : 'pending');
+        assert.equal(routine.photos.count, expected.length);
+        assert.deepEqual(routine.photos.items.map(photo => photo.id), expected);
+        assert.equal(routine.result.score, result().score);
+        assert.equal(routine.judging.judges[0].feedback, judging.judges[0].feedback);
+      }
+    }
+  }
+
+  await uploadPhoto(duoId, 'duo-preview-one', '2026-11-10 00:00:04');
+  await uploadPhoto(duoId, 'duo-preview-two', '2026-11-10 00:00:05');
+  await assertPassportPreviews(soloId, []);
+  await uploadPhoto(soloId, 'solo-preview-one', '2026-11-10 00:00:01');
+  await assertPassportPreviews(soloId, ['solo-preview-one']);
+  await uploadPhoto(soloId, 'solo-preview-two', '2026-11-10 00:00:02');
+  await uploadPhoto(soloId, 'solo-preview-three', '2026-11-10 00:00:03');
+  await assertPassportPreviews(soloId, ['solo-preview-three', 'solo-preview-two']);
+
+  db.sqlite.exec(`UPDATE registration_dances SET category='solo' WHERE id='dance-b';
+    DELETE FROM registration_dance_participants WHERE dance_id='dance-b' AND participant_id='person-b';`);
+  await assertPassportPreviews(duoId, ['duo-preview-two', 'duo-preview-one']);
+  db.sqlite.prepare("UPDATE registration_dances SET title='Vuelo' WHERE id='dance-b'").run();
+  await assertPassportPreviews(soloId, ['solo-preview-three', 'solo-preview-two'], [soloId, duoId]);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 5);
 });
 
 test('private portal requires its own QR grant and actual admin session; no CURP entry',async t=>{
@@ -281,7 +321,8 @@ test('admin updates preserve publication when omitted and mapping lookup avoids 
 
 test('group members inherit one routine gallery and losing membership immediately removes access',async t=>{
   const {admin,request,access,db}=await fixture(t);const a=await access(),b=await access('person-b');
-  db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')").run();
+  db.sqlite.exec(`UPDATE registration_dances SET category='duo' WHERE id='dance-a';
+    UPDATE registration_dance_participants SET dance_id='dance-a' WHERE dance_id='dance-b' AND participant_id='person-b';`);
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),photosPublished:true});
   const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'group.jpg',contentType:'image/jpeg',base64Data:photoSource.toString('base64')});
   await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
@@ -291,7 +332,7 @@ test('group members inherit one routine gallery and losing membership immediatel
     assert.equal(me.data.routines.find(routine=>routine.id===saved.data.routineId).photos.items[0].id,photo.data.assetId);
     await request('/api/participant/assets/'+photo.data.assetId,{cookie});
   }
-  db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-b'").run();
+  db.sqlite.prepare("UPDATE registration_dance_participants SET dance_id='dance-b' WHERE dance_id='dance-a' AND participant_id='person-b'").run();
   await request('/api/participant/assets/'+photo.data.assetId,{cookie:b.cookie,expected:404});
   const me=await request('/api/participant/me',{cookie:b.cookie});assert.equal(me.data.routines.length,1);
   assert.equal(me.data.routines[0].id,'registration:dance-b');assert.equal(me.data.routines[0].photos.count,0);
@@ -433,7 +474,8 @@ test('admin preview uses current participant IDs and group membership, independe
   const {db,request,admin,access}=await fixture(t);
   const a=await access(),b=await access('person-b');
   db.sqlite.prepare("UPDATE registration_participants SET full_name='Nombre compartido'").run();
-  db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')").run();
+  db.sqlite.exec(`UPDATE registration_dances SET category='duo' WHERE id='dance-a';
+    UPDATE registration_dance_participants SET dance_id='dance-a' WHERE dance_id='dance-b' AND participant_id='person-b';`);
   const saved=await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result(),photosPublished:false});
   const photo=await admin({action:'asset.upload',eventId:'test-event',kind:'photo',routineId:saved.data.routineId,fileName:'grupo.jpg',contentType:'image/jpeg',base64Data:photoSource.toString('base64')});
   await admin({action:'access.revoke',accessId:a.grant.id});
@@ -447,7 +489,7 @@ test('admin preview uses current participant IDs and group membership, independe
   await request('/api/participant/me?preview=1',{cookie:a.cookie,expected:401});
   await request('/api/participant/me?preview=1',{cookie:b.cookie,expected:401});
   assert.equal(totalChanges(db),before,'admin preview never reactivates participant grants');
-  db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-b'").run();
+  db.sqlite.prepare("UPDATE registration_dance_participants SET dance_id='dance-b' WHERE dance_id='dance-a' AND participant_id='person-b'").run();
   const removed=await request(previewPath('person-b'),{cookie:adminCookie});
   assert.deepEqual(removed.data.routines.map(routine=>routine.id),['registration:dance-b'],'same name and old grant do not provide membership in the shared routine');
 });

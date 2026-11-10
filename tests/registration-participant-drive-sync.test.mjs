@@ -110,6 +110,26 @@ test('one photo per request bounds processing and subsequent opens finish the se
   assert.equal(f.rows('participant_portal_drive_files').length, 2);
 });
 
+test('photo sync requests the smallest choreography and does not fill empty preview slots with a larger one', async t => {
+  for (const photoCount of [0, 1]) {
+    const f = await fixture(t, { photos: 2 });
+    f.db.sqlite.exec("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a')");
+    const duet = { ...f.album, id: 'duet-folder', danceId: 'dance-b', photos: f.album.photos };
+    f.album.photos = f.album.photos.slice(0, photoCount);
+
+    const result = await f.run({ getDiscovery: async () => ({ async discover(context) {
+      f.calls.discovery.push(context);
+      return { albums: [duet, f.album] };
+    } }) });
+
+    assert.deepEqual(f.calls.discovery[0].dances, [{ id: 'dance-a', title: 'Vuelo' }]);
+    assert.equal(result.imported, photoCount);
+    assert.equal(result.hasMore, false);
+    assert.equal(f.calls.reads, photoCount);
+    assert.deepEqual(f.rows('participant_portal_drive_files').map(file => file.dance_id), Array(photoCount).fill('dance-a'));
+  }
+});
+
 test('concurrent openings share the participant lease and process one source only', async t => {
   const f = await fixture(t);
   let proceed;
@@ -124,7 +144,8 @@ test('concurrent openings share the participant lease and process one source onl
 
 test('participants sharing one dance also share the source-file lease', async t => {
   const f = await fixture(t);
-  f.db.sqlite.exec("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')");
+  f.db.sqlite.exec(`DELETE FROM registration_dance_participants WHERE dance_id='dance-b' AND participant_id='person-b';
+    INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-b')`);
   let proceed;
   const waiting = new Promise(resolve => { proceed = resolve; });
   const first = f.run({ processPhoto: async () => { await waiting; return marked; } });
