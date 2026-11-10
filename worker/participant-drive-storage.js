@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { PHOTO_WATERMARK_VERSION } from "../shared/participant-photo-watermark.js";
+import { participantDemoMediaDefinitions } from "../shared/participant-demo-media.js";
 
 const apiBase = "https://www.googleapis.com/drive/v3";
 const uploadBase = "https://www.googleapis.com/upload/drive/v3/files";
@@ -15,6 +16,11 @@ const idPattern = /^[A-Za-z0-9_-]{10,200}$/;
 const aboutFields = "user(emailAddress),storageQuota(limit,usage)";
 const metadataFields = "id,name,mimeType,size,trashed,parents,owners(emailAddress),permissions(type,role,emailAddress,domain),shared,driveId,appProperties,md5Checksum,sha256Checksum,capabilities(canDownload,canAddChildren)";
 const encoder = new TextEncoder();
+const albumMarkerKey = "levitatePhotoAlbum";
+const albumRootMarker = "demo_root_v1";
+const albumMarker = "demo_album_v1";
+const albumPhotoMarker = "demo_photo_v1";
+const albumRootName = "Mi Levitate · Fotos por coreografía";
 
 function fault(message = "No pudimos acceder al almacenamiento privado de Mi Levitate.", code = "portal_storage_unavailable", statusCode = 503) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -41,12 +47,12 @@ async function sha256(value) {
   const bytes = typeof value === "string" ? encoder.encode(value) : value;
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
-function ownFile(metadata, ownerEmail) {
-  if (!metadata || metadata.trashed !== false || metadata.driveId || metadata.appProperties?.[markerKey] !== markerValue
+function ownFile(metadata, ownerEmail, expectedMarkerKey = markerKey, expectedMarkerValue = markerValue) {
+  if (!metadata || metadata.trashed !== false || metadata.driveId || metadata.appProperties?.[expectedMarkerKey] !== expectedMarkerValue
     || !Array.isArray(metadata.owners) || metadata.owners.length !== 1 || email(metadata.owners[0]?.emailAddress) !== ownerEmail) throw fault();
 }
-function privateFile(metadata, ownerEmail) {
-  ownFile(metadata, ownerEmail);
+function privateFile(metadata, ownerEmail, expectedMarkerKey = markerKey, expectedMarkerValue = markerValue) {
+  ownFile(metadata, ownerEmail, expectedMarkerKey, expectedMarkerValue);
   if (metadata.shared === true || !Array.isArray(metadata.permissions) || !metadata.permissions.length
     || metadata.permissions.some(permission => permission.type !== "user" || permission.role !== "owner"
       || email(permission.emailAddress) !== ownerEmail || permission.domain)) throw fault("La carpeta y sus archivos deben permanecer privados en Drive.", "portal_storage_not_private");
@@ -289,6 +295,147 @@ export async function getParticipantDriveStorage({
     createdFiles.delete(id);
     return true;
   };
+  /** A deliberately limited admin trial: copy only the two archival demo
+   * snapshots to a human-readable source album, then read them back from Drive.
+   * It does not watch folders, accept Drive IDs, publish content or touch the
+   * independently managed preview/music/originals folders.
+   */
+  const prepareDemoAlbum = async ({ eventId, danceId, folderName: requestedName, photos } = {}) => {
+    if (![eventId, danceId].every(value => typeof value === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(value))
+      || typeof requestedName !== "string" || !requestedName.trim() || requestedName.trim().length > 220
+      || /[\u0000-\u001f\u007f]/.test(requestedName)
+      || !Array.isArray(photos) || photos.length !== participantDemoMediaDefinitions.length) {
+      throw fault("Revisa los datos del álbum de demostración.", "portal_demo_album_invalid", 400);
+    }
+    const normalizedPhotos = [];
+    for (const expected of participantDemoMediaDefinitions) {
+      const matching = photos.filter(photo => photo?.slot === expected.slot);
+      const photo = matching[0];
+      if (matching.length !== 1 || !(photo.bytes instanceof Uint8Array) || photo.bytes.length !== expected.byteSize
+        || photo.bytes.length > limitFor("image/jpeg") || photo.sha256 !== expected.sha256
+        || photo.width !== expected.width || photo.height !== expected.height || await sha256(photo.bytes) !== expected.sha256) {
+        throw fault("Usa únicamente las dos fotos preparadas de demostración.", "portal_demo_album_invalid", 400);
+      }
+      normalizedPhotos.push({ ...expected, bytes: photo.bytes, md5: createHash("md5").update(photo.bytes).digest("hex") });
+    }
+    const name = /\bDEMO\b/i.test(requestedName) ? requestedName.trim() : `${requestedName.trim()} · DEMO`;
+    const albumMetadata = id => requestJson(`files/${identifier(id)}`, {
+      query: { fields: `${metadataFields},webViewLink`, supportsAllDrives: "true" },
+    });
+    const scopedProperties = { levitateEventId: eventId, levitateDanceId: danceId, demo: "true" };
+    const markerQuery = value => `appProperties has { key='${albumMarkerKey}' and value='${value}' }`;
+    const scopeQuery = Object.entries(scopedProperties).map(([key, value]) => `appProperties has { key='${key}' and value='${value}' }`).join(" and ");
+    const validateFolder = (value, id, kind, parentId) => {
+      privateFile(value, ownerEmail, albumMarkerKey, kind);
+      if (value.id !== id || value.mimeType !== folderMime || typeof value.name !== "string" || !value.name.trim()
+        || value.name.length > 300 || /[\u0000-\u001f\u007f]/.test(value.name)
+        || value.capabilities?.canAddChildren !== true || value.appProperties.demo !== "true"
+        || (parentId && (!Array.isArray(value.parents) || value.parents.length !== 1 || value.parents[0] !== parentId))
+        || (kind === albumMarker && Object.entries(scopedProperties).some(([key, expected]) => value.appProperties[key] !== expected))) throw fault();
+      return value;
+    };
+    const createFolder = async (folderLabel, properties, parentId) => {
+      requireSpace(await about(), 1);
+      const created = await requestJson("files", { method: "POST", query: { fields: "id" }, body: {
+        name: folderLabel, mimeType: folderMime, appProperties: properties, ...(parentId ? { parents: [parentId] } : {}),
+      } });
+      return identifier(created.id);
+    };
+    const roots = await listIds(`'root' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and ${markerQuery(albumRootMarker)}`);
+    const sourceRootId = roots[0] || await createFolder(albumRootName, { [albumMarkerKey]: albumRootMarker, demo: "true" });
+    validateFolder(await albumMetadata(sourceRootId), sourceRootId, albumRootMarker);
+    if (sourceRootId === folderId) throw fault();
+    const albums = await listIds(`'${sourceRootId}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and ${markerQuery(albumMarker)} and ${scopeQuery}`);
+    const albumId = albums[0] || await createFolder(name, { [albumMarkerKey]: albumMarker, ...scopedProperties }, sourceRootId);
+    let album = validateFolder(await albumMetadata(albumId), albumId, albumMarker, sourceRootId);
+    if (albumId === folderId || albumId === sourceRootId) throw fault();
+
+    const validatePhoto = (value, id, expected) => {
+      privateFile(value, ownerEmail, albumMarkerKey, albumPhotoMarker);
+      if (value.id !== id || value.mimeType !== "image/jpeg" || value.size !== String(expected.byteSize)
+        || !Array.isArray(value.parents) || value.parents.length !== 1 || value.parents[0] !== albumId
+        || value.capabilities?.canDownload !== true || value.md5Checksum !== expected.md5
+        || (value.sha256Checksum != null && value.sha256Checksum !== expected.sha256)
+        || value.appProperties[hashProperty] !== expected.sha256 || value.appProperties[md5Property] !== expected.md5
+        || value.appProperties.watermarkVersion !== watermarkVersion || value.appProperties.slot !== expected.slot
+        || Object.entries(scopedProperties).some(([key, expectedValue]) => value.appProperties[key] !== expectedValue)) throw fault();
+    };
+    const verifiedPhotos = [];
+    for (const photo of normalizedPhotos) {
+      const matches = await listIds(`'${albumId}' in parents and 'me' in owners and trashed = false and ${markerQuery(albumPhotoMarker)} and ${scopeQuery} and appProperties has { key='slot' and value='${photo.slot}' }`);
+      let photoId = matches[0];
+      if (!photoId) {
+        requireSpace(await about(), photo.byteSize);
+        const generated = await requestJson("files/generateIds", { query: { count: "1", space: "drive", type: "files" } });
+        if (!Array.isArray(generated.ids) || generated.ids.length !== 1) throw fault();
+        photoId = identifier(generated.ids[0]);
+        const token = await accessToken();
+        await timebox(async signal => {
+          const url = new URL(uploadBase);
+          url.searchParams.set("uploadType", "resumable"); url.searchParams.set("fields", "id");
+          const start = await fetchImpl(url.toString(), { method: "POST", redirect: "manual", signal,
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json; charset=utf-8",
+              "x-upload-content-length": String(photo.byteSize), "x-upload-content-type": "image/jpeg" },
+            body: JSON.stringify({ id: photoId, name: `DEMO-${photo.slot}.jpg`, mimeType: "image/jpeg", parents: [albumId],
+              appProperties: { [albumMarkerKey]: albumPhotoMarker, ...scopedProperties, slot: photo.slot,
+                [hashProperty]: photo.sha256, [md5Property]: photo.md5, watermarkVersion } }) });
+          if (!start.ok) throw fault();
+          let uploadUrl;
+          try { uploadUrl = new URL(start.headers.get("location")); } catch { throw fault(); }
+          if (uploadUrl.origin !== "https://www.googleapis.com" || uploadUrl.pathname !== "/upload/drive/v3/files"
+            || uploadUrl.username || uploadUrl.password || uploadUrl.hash) throw fault();
+          const response = await fetchImpl(uploadUrl.toString(), { method: "PUT", redirect: "manual", signal,
+            headers: { "content-type": "image/jpeg" }, body: photo.bytes });
+          if (!response.ok || (await response.json())?.id !== photoId) throw fault();
+        });
+      }
+      validatePhoto(await albumMetadata(photoId), photoId, photo);
+      const bytes = await timebox(async signal => {
+        const url = new URL(`${apiBase}/files/${photoId}`); url.searchParams.set("alt", "media");
+        const token = await accessToken();
+        const response = await fetchImpl(url.toString(), { method: "GET", redirect: "manual", signal,
+          headers: { authorization: `Bearer ${token}` } });
+        const length = response.headers.get("content-length");
+        if (!response.ok || !response.body || response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "image/jpeg"
+          || (length !== null && length !== String(photo.byteSize))) throw fault();
+        const reader = response.body.getReader(), chunks = [];
+        let received = 0, complete = false;
+        const cancel = () => { void reader.cancel().catch(() => {}); };
+        signal.addEventListener("abort", cancel, { once: true });
+        try {
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            if (!(value instanceof Uint8Array) || (received += value.byteLength) > photo.byteSize) throw fault();
+            chunks.push(value);
+          }
+          if (signal.aborted || received !== photo.byteSize) throw fault();
+          const data = new Uint8Array(received); let offset = 0;
+          for (const chunk of chunks) { data.set(chunk, offset); offset += chunk.byteLength; }
+          if (await sha256(data) !== photo.sha256) throw fault();
+          complete = true;
+          return data;
+        } finally {
+          signal.removeEventListener("abort", cancel);
+          if (!complete) await reader.cancel().catch(() => {});
+          try { reader.releaseLock(); } catch { /* Pending cancellation owns the lock. */ }
+        }
+      });
+      validatePhoto(await albumMetadata(photoId), photoId, photo);
+      verifiedPhotos.push({ slot: photo.slot, bytes, sha256: photo.sha256, width: photo.width, height: photo.height });
+    }
+    validateFolder(await albumMetadata(sourceRootId), sourceRootId, albumRootMarker);
+    album = validateFolder(await albumMetadata(albumId), albumId, albumMarker, sourceRootId);
+    let folderUrl = null;
+    if (typeof album.webViewLink === "string") {
+      try {
+        const url = new URL(album.webViewLink);
+        if (url.origin === "https://drive.google.com" && !url.username && !url.password && !url.hash
+          && url.pathname === `/drive/folders/${albumId}`) folderUrl = url.href;
+      } catch { /* The identifier is still available if Google omits its UI link. */ }
+    }
+    return { folderId: albumId, folderName: album.name, folderUrl, accountEmail: ownerEmail, photos: verifiedPhotos };
+  };
   return { info: { provider: "google_drive", accountEmail: ownerEmail, folderId, folderName: folder.name, ready: true },
-    put, get, getByStorageKey, delete: remove };
+    put, get, getByStorageKey, delete: remove, prepareDemoAlbum };
 }

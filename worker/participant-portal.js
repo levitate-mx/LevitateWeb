@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./participant-photo.js";
-import { prepareParticipantDemoPhoto } from "./participant-demo-media.js";
+import { prepareParticipantDemoPhoto, readParticipantDemoPhotos } from "./participant-demo-media.js";
+import { participantDemoMediaDefinitions } from "../shared/participant-demo-media.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
 import { createBlockPublicationGate, getBlockPublication, saveBlockPublicationMode, closeParticipantBlock, reopenParticipantBlock } from "./participant-block-publication.js";
@@ -502,8 +503,76 @@ async function linkJudgingProgram(db, input, actorId, getJudgingSnapshot) {
   await db.batch(statements);
   return json({ ok: true, linked: links.length });
 }
+async function photoTrialContext(db, input) {
+  const event = await eventById(db, str(input.eventId, "la edición", 100));
+  const participant = await participantById(db, str(input.participantId, "el participante", 100));
+  const dances = await all(db, `SELECT d.id,d.title FROM registration_dances d
+    JOIN registration_dance_participants dp ON dp.dance_id=d.id
+    WHERE dp.participant_id=? AND d.academy_id=? AND d.venue=? ORDER BY d.title,d.id`, participant.id, participant.academy_id, event.venue);
+  return { event, participant, dances };
+}
+
+/** An authenticated, explicit trial. No publication, QR rotation or judging writes. */
+async function runPhotoDemoTrial(db, env, input, actorId, getMediaStore) {
+  const { event, participant, dances } = await photoTrialContext(db, input);
+  const danceId = str(input.danceId, "la coreografía", 100);
+  const dance = dances.find(row => row.id === danceId);
+  if (!dance) fault("portal_invalid_routine", "Selecciona una coreografía de este participante y esta sede.");
+  const storage = await resolveMediaStore(env, getMediaStore);
+  if (storage.info?.provider !== "google_drive" || typeof storage.prepareDemoAlbum !== "function") {
+    fault("portal_storage_unavailable", "Comprueba la carpeta privada de Drive antes de preparar la prueba.", 503);
+  }
+  const photos = await readParticipantDemoPhotos(env);
+  const album = await storage.prepareDemoAlbum({ eventId: event.id, danceId: dance.id,
+    folderName: `${dance.title} · ${participant.full_name}`, photos });
+  // The album method returns bytes downloaded from Drive, not the static input.
+  if (!Array.isArray(album.photos) || album.photos.length !== participantDemoMediaDefinitions.length) {
+    fault("portal_demo_media_unavailable", "No pudimos verificar las fotos de prueba en Drive.", 503);
+  }
+  const verified = [];
+  for (const definition of participantDemoMediaDefinitions) {
+    const matches = album.photos.filter(photo => photo.slot === definition.slot);
+    if (matches.length !== 1) fault("portal_demo_media_unavailable", "No pudimos verificar las fotos de prueba en Drive.", 503);
+    const prepared = await validatePreparedParticipantPhoto(matches[0].bytes);
+    if (prepared.sha256 !== definition.sha256 || prepared.width !== definition.width || prepared.height !== definition.height) {
+      fault("portal_demo_media_unavailable", "No pudimos verificar las fotos de prueba en Drive.", 503);
+    }
+    verified.push({ ...definition, bytes: prepared.bytes });
+  }
+  const current = await photoTrialContext(db, input);
+  if (!current.dances.some(row => row.id === dance.id)) fault("portal_invalid_routine", "La participación cambió. Actualiza el panel antes de continuar.", 409);
+  let routine = await first(db, "SELECT * FROM participant_portal_routines WHERE event_id=? AND dance_id=?", event.id, dance.id);
+  if (!routine) {
+    const candidate = id();
+    const snapshot = JSON.stringify({ danceId: dance.id, sourceEventId: null, sourceRoutineId: null,
+      result: null, judging: null, photosPublished: false, publicationBlocked: false, status: "draft", origin: "drive_demo_trial" });
+    await db.batch([
+      db.prepare("INSERT INTO participant_portal_routines(id,event_id,dance_id) VALUES(?,?,?) ON CONFLICT(event_id,dance_id) DO NOTHING")
+        .bind(candidate, event.id, dance.id),
+      db.prepare(`INSERT INTO participant_portal_routine_revisions(id,routine_id,event_id,revision,action,snapshot_json,actor_id)
+        SELECT ?,id,event_id,revision,'save',?,? FROM participant_portal_routines WHERE id=?`)
+        .bind(id(), snapshot, actorId || null, candidate),
+    ]);
+    routine = await first(db, "SELECT * FROM participant_portal_routines WHERE event_id=? AND dance_id=?", event.id, dance.id);
+  }
+  if (!routine) fault("portal_routine_not_found", "No pudimos preparar la participación de prueba.", 409);
+  let reused = 0;
+  for (const photo of verified) {
+    const uploadId = `demo-drive-${await hash(JSON.stringify([event.id, dance.id, photo.slot, photo.sha256]))}`;
+    const prior = await first(db, "SELECT id FROM participant_portal_assets WHERE id=?", uploadId);
+    await uploadAsset(db, env, { eventId: event.id, routineId: routine.id, kind: "photo", uploadId,
+      fileName: `DEMO-${photo.slot}.jpg`, contentType: "image/jpeg", base64Data: Buffer.from(photo.bytes).toString("base64"),
+      caption: "Foto de demostración — no corresponde a esta participante.", allowDownload: false }, () => storage);
+    if (prior) reused++;
+  }
+  return json({ folder: { id: album.folderId, name: album.folderName, url: album.folderUrl, accountEmail: album.accountEmail },
+    participantId: participant.id, eventId: event.id, danceId: dance.id, routineId: routine.id, imported: verified.length, reused,
+    previewUrl: `/admin/mi-levitate/resumen?${new URLSearchParams({ eventId: event.id, participantId: participant.id })}` });
+}
+
 async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEventList, getJudgingDirectory, getJudgingSnapshot, getJudgingBlockDirectory) {
   switch (input.action) {
+    case "photo.demo.trial": return runPhotoDemoTrial(db, env, input, actorId, getMediaStore);
     case "publication.mode.save": return json(await saveBlockPublicationMode({ db, input, actorId }));
     case "block.close": return json(await closeParticipantBlock({ db, input, actorId, getDirectory: getJudgingBlockDirectory, getSnapshot: getJudgingSnapshot }));
     case "block.reopen": return json(await reopenParticipantBlock({ db, input, actorId }));
@@ -647,6 +716,10 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
         ? await requireAdmin(request,env,db,{touchLastSeen:false})
         : await requireAdmin(request,env,db);
       if (request.method === "GET") {
+        if (url.searchParams.get("photoTrial") === "1") {
+          const context = await photoTrialContext(db, { eventId: url.searchParams.get("eventId"), participantId: url.searchParams.get("participantId") });
+          return json({ routines: context.dances.map(dance => ({ danceId: dance.id, title: dance.title })) });
+        }
         if (url.searchParams.get("publication") === "1") return json(await getBlockPublication({ db,
           eventId: str(url.searchParams.get("eventId"), "la edición", 100),
           blockId: str(url.searchParams.get("blockId"), "el bloque", 200, true),

@@ -67,6 +67,100 @@ const previewPath=(participantId='person-a',eventId='test-event')=>`/api/registr
 const adminCookie='levitate_registration_session=admin-session';
 const totalChanges=(db)=>db.sqlite.prepare('SELECT total_changes() AS count').get().count;
 
+async function photoTrialFixture(t) {
+  const setup = await fixture(t);
+  const { env, bucket } = setup;
+  const calls = [];
+  bucket.info = { provider: 'google_drive', ready: true };
+  bucket.prepareDemoAlbum = async input => {
+    calls.push(input);
+    return { folderId: 'private-demo-album', folderName: input.folderName + ' · DEMO',
+      folderUrl: 'https://drive.google.com/drive/folders/private-demo-album', accountEmail: 'operator@example.test', photos: input.photos };
+  };
+  env.ASSETS = { async fetch(request) {
+    const path = new URL(request.url).pathname;
+    assert.ok(['/assets/participant-demo-photo-prepared.jpg', '/assets/participant-demo-photo-blurred-prepared.jpg'].includes(path));
+    return new Response(await readFile(new URL('../public' + path, import.meta.url)), { headers: { 'content-type': 'image/jpeg' } });
+  } };
+  return { ...setup, calls, trial: (changes = {}) => setup.admin({ action: 'photo.demo.trial', eventId: 'test-event',
+    participantId: 'person-a', danceId: 'dance-a', ...changes }) };
+}
+
+test('Drive photo trial authenticates admins and validates the selected participant membership before storage', async t => {
+  const { request, calls, admin } = await photoTrialFixture(t);
+  const input = { action: 'photo.demo.trial', eventId: 'test-event', participantId: 'person-a', danceId: 'dance-a' };
+  await request('/api/registration/admin/participant-portal', { method: 'POST', body: input, expected: 401 });
+  await request('/api/registration/admin/participant-portal', { method: 'POST', body: input,
+    cookie: 'levitate_registration_session=academy-user-session', expected: 403 });
+  await admin({ ...input, danceId: 'dance-b' }, 400);
+  await request('/api/registration/admin/participant-portal?photoTrial=1&eventId=test-event&participantId=person-a', { expected: 401 });
+  const list = await request('/api/registration/admin/participant-portal?photoTrial=1&eventId=test-event&participantId=person-a', { cookie: adminCookie });
+  assert.deepEqual(list.data, { routines: [{ danceId: 'dance-a', title: 'Vuelo' }] });
+  await request('/api/registration/admin/participant-portal?photoTrial=1&eventId=test-event', { cookie: adminCookie, expected: 400 });
+  assert.equal(calls.length, 0);
+});
+
+test('Drive trial imports two marked snapshots into a hidden edition and serves them only through authenticated admin preview', async t => {
+  const { db, admin, trial, request, access, calls } = await photoTrialFixture(t);
+  const own = await access(), other = await access('person-b');
+  await admin({ action: 'event.upsert', event: { id: 'test-event', title: 'Levitate', season: 'Otoño 2026', venue: 'edomex', published: false } });
+  const qrBefore = db.sqlite.prepare('SELECT * FROM participant_portal_access ORDER BY id').all();
+  const response = await trial();
+  assert.equal(response.data.imported, 2); assert.equal(response.data.reused, 0);
+  assert.equal(calls[0].folderName, 'Vuelo · Mariana Prueba');
+  assert.equal(calls[0].eventId, 'test-event'); assert.equal(calls[0].danceId, 'dance-a');
+  const preview = await request(previewPath(), { cookie: adminCookie });
+  assert.equal(preview.data.routines[0].photos.count, 2);
+  for (const image of preview.data.routines[0].photos.items) {
+    assert.match(image.caption, /demostración/);
+    const content = await request(image.previewUrl, { cookie: adminCookie });
+    assert.equal(content.headers.get('content-type'), 'image/jpeg');
+    assert.ok(content.data.byteLength > 100);
+    await request(image.previewUrl, { expected: 401 });
+    await request('/api/participant/assets/' + image.id, { cookie: own.cookie, expected: 404 });
+  }
+  const otherPreview = await request(previewPath('person-b'), { cookie: adminCookie });
+  assert.equal(otherPreview.data.routines[0].photos.count, 0);
+  assert.equal((await request('/api/participant/me', { cookie: other.cookie })).data.routines[0].photos.count, 0);
+  const routine = db.sqlite.prepare('SELECT * FROM participant_portal_routines').get();
+  assert.equal(routine.status, 'draft'); assert.equal(routine.photos_published, 0); assert.equal(routine.source_event_id, null);
+  assert.equal(db.sqlite.prepare('SELECT published FROM participant_portal_events').get().published, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets WHERE published=1').get().n, 0);
+  assert.deepEqual(db.sqlite.prepare('SELECT * FROM participant_portal_access ORDER BY id').all(), qrBefore);
+});
+
+test('repeating the Drive trial reuses files and preserves existing routine scores, links and publication settings', async t => {
+  const { db, bucket, admin, trial } = await photoTrialFixture(t);
+  const saved = await admin({ action: 'routine.save', eventId: 'test-event', danceId: 'dance-a', result: result(), judging,
+    sourceEventId: 'real-source-event', sourceRoutineId: '45', photosPublished: true });
+  await admin({ action: 'routine.publish', routineId: saved.data.routineId });
+  const routineBefore = db.sqlite.prepare('SELECT * FROM participant_portal_routines').get();
+  const revisionsBefore = db.sqlite.prepare('SELECT * FROM participant_portal_routine_revisions ORDER BY id').all();
+  await trial();
+  const second = await trial();
+  assert.equal(second.data.reused, 2); assert.equal(bucket.objects.size, 2);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 2);
+  assert.deepEqual(db.sqlite.prepare('SELECT * FROM participant_portal_routines').get(), routineBefore);
+  assert.deepEqual(db.sqlite.prepare('SELECT * FROM participant_portal_routine_revisions ORDER BY id').all(), revisionsBefore);
+});
+
+test('Drive trial validates downloaded snapshots before adding any participant routine or asset', async t => {
+  const { db, bucket, admin } = await photoTrialFixture(t);
+  bucket.prepareDemoAlbum = async input => ({ photos: input.photos.map((photo, index) => index ? photo : { ...photo, bytes: rawPhotoSource }) });
+  await admin({ action: 'photo.demo.trial', eventId: 'test-event', participantId: 'person-a', danceId: 'dance-a' }, 400);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_routines').get().n, 0);
+  assert.equal(bucket.objects.size, 0);
+});
+
+test('Drive trial rejects invalid archival sources before creating a source album', async t => {
+  const { db, env, calls, admin } = await photoTrialFixture(t);
+  env.ASSETS = { async fetch() { return new Response(rawPhotoSource, { headers: { 'content-type': 'image/jpeg' } }); } };
+  await admin({ action: 'photo.demo.trial', eventId: 'test-event', participantId: 'person-a', danceId: 'dance-a' }, 503);
+  assert.equal(calls.length, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 0);
+});
+
 test('private portal requires its own QR grant and actual admin session; no CURP entry',async t=>{
   const {request,access,db}=await fixture(t);
   await request('/api/participant/me',{expected:401});

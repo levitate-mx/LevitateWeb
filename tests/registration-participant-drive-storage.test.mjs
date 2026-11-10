@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { getParticipantDriveStorage } from "../worker/participant-drive-storage.js";
+import { participantDemoMediaDefinitions } from "../shared/participant-demo-media.js";
 
 const owner = "ati@example.test";
 const token = "SYNTHETIC_PRIVATE_ACCESS_TOKEN";
@@ -44,29 +46,44 @@ function fixture({ hasFolder = true, aboutOwner = owner, timeoutMs, intercept } 
       const q = url.searchParams.get("q");
       assert.match(q, /appProperties has/);
       assert.doesNotMatch(q, /photo_video|music|QR/);
-      if (q.includes("mimeType")) {
-        assert.match(q, /'root' in parents/);
-        return Response.json({ files: [...files.values()].filter(value => value.mimeType === "application/vnd.google-apps.folder" && !value.trashed).map(({ id }) => ({ id })) });
-      }
-      const keyHash = q.match(/key='levitateStorageKey' and value='([a-f0-9]{64})'/)?.[1];
-      assert.ok(keyHash);
-      assert.ok(q.startsWith(`'${folderId}' in parents`));
-      return Response.json({ files: [...files.values()].filter(value => !value.trashed && value.appProperties.levitateStorageKey === keyHash).map(({ id }) => ({ id })) });
+      const properties = [...q.matchAll(/appProperties has \{ key='([^']+)' and value='([^']+)' \}/g)];
+      const parent = q.match(/^'([^']+)' in parents/)?.[1];
+      assert.ok(parent);
+      return Response.json({ files: [...files.values()].filter(value => !value.trashed
+        && (!q.includes("mimeType") || value.mimeType === "application/vnd.google-apps.folder")
+        && (parent === "root" ? value.parents?.includes("root_actual_1234567890") : value.parents?.includes(parent))
+        && properties.every(([, key, expected]) => value.appProperties?.[key] === expected)).map(({ id }) => ({ id })) });
     }
     if (url.pathname === "/drive/v3/files" && request.method === "POST") {
       const body = JSON.parse(request.body);
-      assert.equal(body.name, "Mi Levitate · Vistas previas privadas");
       assert.equal(body.mimeType, "application/vnd.google-apps.folder");
-      assert.equal(body.parents, undefined, "a new preview folder goes directly into My Drive root");
-      assert.deepEqual(body.appProperties, marker);
-      files.set(folderId, privateMetadata(folderId, { name: body.name }));
-      return Response.json({ id: folderId });
+      let id;
+      if (body.appProperties.levitateParticipantStorage) {
+        assert.equal(body.name, "Mi Levitate · Vistas previas privadas");
+        assert.equal(body.parents, undefined, "a new preview folder goes directly into My Drive root");
+        assert.deepEqual(body.appProperties, marker);
+        id = folderId;
+      } else {
+        assert.match(body.appProperties.levitatePhotoAlbum, /^demo_(root|album)_v1$/);
+        assert.equal(body.appProperties.demo, "true");
+        state.nextId++;
+        id = `new_album_folder_${String(state.nextId).padStart(10, "0")}`;
+      }
+      files.set(id, privateMetadata(id, { ...body, parents: body.parents || ["root_actual_1234567890"], webViewLink: `https://drive.google.com/drive/folders/${id}` }));
+      return Response.json({ id });
     }
     if (url.pathname === "/upload/drive/v3/files" && request.method === "POST") {
       const metadata = JSON.parse(request.body);
-      assert.deepEqual(metadata.parents, [folderId]);
       assert.equal(metadata.permissions, undefined);
-      assert.match(metadata.name, /^lv-[a-f0-9]{32}\.(jpg|pdf)$/);
+      if (metadata.appProperties.levitatePhotoAlbum) {
+        assert.equal(metadata.parents.length, 1);
+        assert.notEqual(metadata.parents[0], folderId);
+        assert.equal(files.get(metadata.parents[0]).appProperties.levitatePhotoAlbum, "demo_album_v1");
+        assert.match(metadata.name, /^DEMO-foto-[12]\.jpg$/);
+      } else {
+        assert.deepEqual(metadata.parents, [folderId]);
+        assert.match(metadata.name, /^lv-[a-f0-9]{32}\.(jpg|pdf)$/);
+      }
       const session = `session_${sessions.size + 1}`;
       sessions.set(session, metadata);
       return new Response(null, { status: 200, headers: { location: `https://www.googleapis.com/upload/drive/v3/files?upload_id=${session}` } });
@@ -93,7 +110,8 @@ function fixture({ hasFolder = true, aboutOwner = owner, timeoutMs, intercept } 
         headers: { "content-type": metadata.mimeType, "content-length": metadata.size },
       });
       assert.equal(url.searchParams.get("supportsAllDrives"), "true");
-      assert.doesNotMatch(url.searchParams.get("fields"), /webViewLink|webContentLink|thumbnailLink/);
+      if (metadata.appProperties?.levitatePhotoAlbum) assert.match(url.searchParams.get("fields"), /webViewLink/);
+      else assert.doesNotMatch(url.searchParams.get("fields"), /webViewLink|webContentLink|thumbnailLink/);
       const { bytes: _bytes, ...safe } = metadata;
       return Response.json(safe);
     }
@@ -230,6 +248,8 @@ test("storage-key lookup rechecks live ownership, privacy and key hash before re
     const f = fixture(), store = await f.store();
     const uploaded = await store.put("approved-demo-key", prepared, options);
     Object.assign(f.files.get(uploaded.objectKey.split(":")[1]), change);
+    if (change.parents) f.state.intercept = ({ url }) => url.pathname === "/drive/v3/files" && !url.searchParams.get("q").includes("mimeType")
+      ? Response.json({ files: [{ id: uploaded.objectKey.split(":")[1] }] }) : undefined;
     await assert.rejects(store.getByStorageKey("approved-demo-key"), error => error.statusCode === 503);
     assert.equal(mediaCalls(f.calls).length, 0);
   }
@@ -384,4 +404,135 @@ test("provider failures and timeouts produce controlled errors without credentia
   const auth = fixture();
   await assert.rejects(auth.store({ getAccessToken: async () => { throw new Error(token); } }), controlled("portal_storage_unavailable"));
   assert.equal(auth.calls.length, 0);
+});
+
+async function demoAlbumInput() {
+  return { eventId: "edomex-2026-otono", danceId: "dance_demo_1234567890", folderName: "Aire Norte · Ana Pérez",
+    photos: await Promise.all(participantDemoMediaDefinitions.map(async photo => ({
+      slot: photo.slot, sha256: photo.sha256, width: photo.width, height: photo.height,
+      bytes: new Uint8Array(await readFile(new URL(`../public${photo.sourcePath}`, import.meta.url))),
+    }))) };
+}
+const albumFiles = f => [...f.files.values()].filter(value => value.appProperties?.levitatePhotoAlbum === "demo_photo_v1");
+const albumFolder = f => [...f.files.values()].find(value => value.appProperties?.levitatePhotoAlbum === "demo_album_v1");
+const albumRoot = f => [...f.files.values()].find(value => value.appProperties?.levitatePhotoAlbum === "demo_root_v1");
+
+test("the demo source album is separate from preview/music folders and returns bytes actually read from Drive", async () => {
+  const f = fixture(), store = await f.store(), input = await demoAlbumInput();
+  f.files.set("music_folder_1234567890", privateMetadata("music_folder_1234567890", {
+    name: "Existing music", appProperties: { purpose: "music" },
+  }));
+  const oldFiles = [...f.files].map(([id, metadata]) => [id, structuredClone(metadata)]);
+  const result = await store.prepareDemoAlbum(input);
+  const root = albumRoot(f), album = albumFolder(f);
+  assert.equal(root.name, "Mi Levitate · Fotos por coreografía");
+  assert.equal(root.parents[0], "root_actual_1234567890");
+  assert.deepEqual(album.parents, [root.id]);
+  assert.equal(album.name, `${input.folderName} · DEMO`);
+  assert.equal(album.appProperties.levitateEventId, input.eventId);
+  assert.equal(album.appProperties.levitateDanceId, input.danceId);
+  assert.equal(result.folderId, album.id);
+  assert.equal(result.folderUrl, album.webViewLink);
+  assert.equal(result.accountEmail, owner);
+  assert.equal(result.photos.length, 2);
+  assert.equal(mediaCalls(f.calls).length, 2, "each photo must be downloaded from actual Drive after creating its source copy");
+  for (const photo of result.photos) {
+    assert.deepEqual(photo.bytes, input.photos.find(value => value.slot === photo.slot).bytes);
+    assert.deepEqual(Object.keys(photo).sort(), ["bytes", "height", "sha256", "slot", "width"]);
+  }
+  for (const [id, metadata] of oldFiles) assert.deepEqual(f.files.get(id), metadata, "existing music and preview files remain untouched");
+  assert.equal(f.sessions.size, 2);
+  assert.equal(f.files.size, oldFiles.length + 4);
+  assert.ok(writeCalls(f.calls).every(({ request, url }) => ["POST", "PUT"].includes(request.method) && !url.pathname.includes("permissions")));
+  assert.doesNotMatch(JSON.stringify({ ...result, photos: [] }), /SYNTHETIC_|accessToken|refreshToken/);
+});
+
+test("repeated demo album preparation reuses its folder/files and tolerates human renaming", async () => {
+  const f = fixture(), input = await demoAlbumInput();
+  const first = await (await f.store()).prepareDemoAlbum(input);
+  const writes = writeCalls(f.calls).length;
+  albumFolder(f).name = "Aire Norte · Ana Pérez · Renombrada DEMO";
+  const again = await (await f.store()).prepareDemoAlbum(input);
+  assert.equal(again.folderId, first.folderId);
+  assert.equal(again.folderName, albumFolder(f).name);
+  assert.equal(writeCalls(f.calls).length, writes);
+  assert.equal(f.sessions.size, 2);
+  assert.equal(mediaCalls(f.calls).length, 4);
+  assert.equal((await f.store()).info.folderId, folderId, "source album markers never pollute private-preview discovery");
+});
+
+test("demo album input is bounded and only permits both known archival snapshots before any Drive writes", async () => {
+  const f = fixture(), store = await f.store(), input = await demoAlbumInput(), callsBefore = f.calls.length;
+  const mutations = [
+    { eventId: "bad'query" }, { danceId: "https://evil.test/id" }, { folderName: "bad\nname" },
+    { folderName: "a".repeat(221) }, { photos: [input.photos[0]] }, { photos: [input.photos[0], input.photos[0]] },
+    { photos: [{ ...input.photos[0], slot: "foto-3" }, input.photos[1]] },
+    { photos: [{ ...input.photos[0], sha256: "0".repeat(64) }, input.photos[1]] },
+    { photos: [{ ...input.photos[0], width: 1 }, input.photos[1]] },
+    { photos: [{ ...input.photos[0], bytes: new Uint8Array(input.photos[0].bytes.length) }, input.photos[1]] },
+  ];
+  for (const change of mutations) await assert.rejects(store.prepareDemoAlbum({ ...input, ...change }), controlled("portal_demo_album_invalid", 400));
+  assert.equal(f.calls.length, callsBefore);
+});
+
+test("demo folders fail on sharing, foreign ownership and incorrect parent without modifying or replacing them", async () => {
+  const input = await demoAlbumInput();
+  for (const [target, change] of [
+    [albumRoot, { shared: true }], [albumFolder, { owners: [{ emailAddress: "other@example.test" }] }],
+    [albumFolder, { permissions: [{ type: "anyone", role: "reader" }] }],
+    [albumFolder, { parents: ["different_parent_1234567890"] }],
+  ]) {
+    const f = fixture(), store = await f.store();
+    await store.prepareDemoAlbum(input);
+    const value = target(f), writesBefore = writeCalls(f.calls).length, callsBefore = mediaCalls(f.calls).length;
+    if (change.parents) {
+      f.state.intercept = ({ url }) => url.pathname === `/drive/v3/files/${value.id}` && url.searchParams.get("alt") !== "media"
+        ? Response.json({ ...value, ...change }) : undefined;
+    } else Object.assign(value, change);
+    await assert.rejects(store.prepareDemoAlbum(input), error => error.statusCode === 503);
+    assert.equal(writeCalls(f.calls).length, writesBefore);
+    assert.equal(mediaCalls(f.calls).length, callsBefore);
+  }
+});
+
+test("demo photo checks reject checksum, permission and source-mapping mismatches before downloading media", async () => {
+  const input = await demoAlbumInput();
+  for (const change of [
+    { md5Checksum: "0".repeat(32) }, { sha256Checksum: "0".repeat(64) },
+    { permissions: [{ type: "user", role: "writer", emailAddress: "staff@example.test" }] },
+    { owners: [{ emailAddress: "other@example.test" }] }, { parents: [folderId] },
+    { appProperties: { levitatePhotoAlbum: "demo_photo_v1", demo: "true", levitateEventId: "wrong-edition" } },
+  ]) {
+    const f = fixture(), store = await f.store();
+    await store.prepareDemoAlbum(input);
+    const value = albumFiles(f)[0], before = mediaCalls(f.calls).length, writesBefore = writeCalls(f.calls).length;
+    f.state.intercept = ({ url }) => url.pathname === `/drive/v3/files/${value.id}` && url.searchParams.get("alt") !== "media"
+      ? Response.json({ ...value, ...change }) : undefined;
+    await assert.rejects(store.prepareDemoAlbum(input), error => error.statusCode === 503);
+    assert.equal(mediaCalls(f.calls).length, before);
+    assert.equal(writeCalls(f.calls).length, writesBefore);
+  }
+});
+
+test("the demo import verifies actual downloaded bytes and rechecks folder privacy after the read", async () => {
+  const input = await demoAlbumInput();
+  for (const corruption of ["body", "sharing"]) {
+    const f = fixture(), store = await f.store();
+    await store.prepareDemoAlbum(input);
+    f.state.intercept = ({ url }) => {
+      if (url.searchParams.get("alt") !== "media") return undefined;
+      if (corruption === "sharing") { albumRoot(f).shared = true; return undefined; }
+      const value = f.files.get(url.pathname.split("/").pop()), bytes = new Uint8Array(value.bytes);
+      bytes[bytes.length - 1] ^= 1;
+      return new Response(bytes, { headers: { "content-type": "image/jpeg", "content-length": value.size } });
+    };
+    await assert.rejects(store.prepareDemoAlbum(input), controlled(corruption === "sharing" ? "portal_storage_not_private" : "portal_storage_unavailable"));
+  }
+});
+
+test("unsafe Drive folder links are omitted from the demo result", async () => {
+  const f = fixture(), store = await f.store(), input = await demoAlbumInput();
+  await store.prepareDemoAlbum(input);
+  albumFolder(f).webViewLink = "https://evil.test/private-link";
+  assert.equal((await store.prepareDemoAlbum(input)).folderUrl, null);
 });

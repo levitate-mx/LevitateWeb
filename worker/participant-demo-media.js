@@ -1,4 +1,4 @@
-import { getParticipantDemoMediaByPath, getParticipantDemoMediaBySlot } from "../shared/participant-demo-media.js";
+import { participantDemoMediaDefinitions, getParticipantDemoMediaByPath, getParticipantDemoMediaBySlot } from "../shared/participant-demo-media.js";
 import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "../shared/participant-photo-watermark.js";
 
 const genericMessage = "Esta imagen de ejemplo no está disponible por el momento.";
@@ -59,6 +59,16 @@ async function driveStore(getMediaStore) {
   const storage = await getMediaStore();
   if (storage?.info?.provider !== "google_drive") throw fault();
   return storage;
+}
+
+/** Only the two approved, already reduced and marked archival snapshots. */
+export async function readParticipantDemoPhotos(env) {
+  if (typeof env?.ASSETS?.fetch !== "function") throw fault();
+  return Promise.all(participantDemoMediaDefinitions.map(async photo => {
+    const response = await env.ASSETS.fetch(new Request(`https://levitate.mx${photo.sourcePath}`, { redirect: "manual" }));
+    const prepared = await verifyResponse(response, photo);
+    return { slot: photo.slot, bytes: prepared.bytes, sha256: photo.sha256, width: photo.width, height: photo.height };
+  }));
 }
 
 /** Internal helper, called only after the existing admin POST route authenticates.

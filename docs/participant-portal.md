@@ -30,6 +30,14 @@ Los originales permanecen en Drive. Vincular su carpeta no importa automáticame
 
 La relación entre archivo, edición, coreografía y participantes se conserva en D1. Drive almacena los bytes; no se emparejan fotografías por nombre de archivo, nombre de persona o CURP. Las copias incluyen un registro de preparación `levitate-preview-v2`, con dimensiones e integridad. El servidor comprueba ese registro y la integridad del archivo antes de servirlo, sin procesar sus píxeles. Este registro previene cargas equivocadas o modificaciones del JPEG; no prueba por sí solo que los píxeles contengan una marca. La preparación pertenece al flujo de administradores autenticados y confiables, mediante el navegador o `participant-portal-media.py --for-upload`.
 
+### Prueba de carpeta por coreografía y participante
+
+En administración, seleccionar una persona y **Probar fotos desde Drive** permite elegir únicamente una de sus coreografías de la sede. La acción `photo.demo.trial` crea o reutiliza una carpeta `coreografía · participante · DEMO` en una raíz independiente **Mi Levitate · Fotos por coreografía**, usando la cuenta OAuth configurada para las fotos. Los identificadores de edición y coreografía se guardan en `appProperties` privados de la misma aplicación; el nombre de la carpeta sirve al operador y no determina la identidad.
+
+La prueba copia exclusivamente las dos fotografías archivadas de demostración, ya reducidas y marcadas. Las descarga otra vez desde Drive, verifica contenido y privacidad y las incorpora como archivos en borrador a la presentación. Las copias de entrega permanecen en la raíz privada de previews: no se mueven los archivos de la demo actual ni se modifica música, originales, notas, QR o visibilidad de la edición. Una ficha de presentación existente se conserva íntegra. Repetir la operación reutiliza los archivos mediante una clave estable.
+
+El resultado ofrece enlaces a la carpeta de Drive y al resumen administrativo del participante. Las imágenes están rotuladas como demostración y exigen sesión administrativa mientras estén en borrador. Esta prueba verifica carpeta → asociación → lectura desde Drive → previews protegidas. No es un importador general ni activa vigilancia continua de archivos: subir fotografías nuevas manualmente a esa carpeta todavía no las incorpora al pasaporte.
+
 ## Flujo para operar el evento
 
 1. Crear la edición en `/admin/mi-levitate`, inicialmente oculta.

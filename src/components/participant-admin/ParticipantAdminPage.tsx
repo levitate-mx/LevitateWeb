@@ -4,6 +4,7 @@ import { MediaDriveConnectionPanel } from '../admin/MediaDriveConnectionPanel';
 import { prepareParticipantPhoto } from './prepareParticipantPhoto';
 import { ParticipantJudgingProgram } from './ParticipantJudgingProgram';
 import { ParticipantBlockPublication, type ParticipantPublicationMode } from './ParticipantBlockPublication';
+import { ParticipantDriveDemoTrial } from './ParticipantDriveDemoTrial';
 import './ParticipantAdminPage.css';
 
 type Event = { id: string; title: string; season: string; venue: string; startsAt: string; published: boolean };
@@ -213,6 +214,8 @@ export function ParticipantAdminPage() {
             <div className="pp-admin-actions"><a className="pp-admin-preview-link" href={`/admin/mi-levitate/resumen?${new URLSearchParams({ eventId, participantId: person.id })}`} target="_blank" rel="noreferrer">Revisar su resumen de Mi Levitate ↗</a></div>
             <p>Vista interna con los borradores y archivos de esta persona. Abrirla no genera un acceso ni publica contenido.</p>
             <p>El reconocimiento se genera automáticamente en su resumen. Conserva el QR que ya recibió; no necesitas reemplazarlo para preparar su diploma.</p>
+            <ParticipantDriveDemoTrial eventId={eventId} participantId={person.id} disabled={busy || !authorized}
+              onComplete={() => { void refresh().catch(reportError); void refreshAssets().catch(reportError); }} onError={reportError} />
             <details><summary>Accesos y documentos anteriores</summary>
             <div className="pp-admin-actions"><button onClick={() => perform(async () => { const value = await api<{ entryUrl: string }>('', { action: 'access.create', eventId, participantId: personId, rotate: person.accesses?.some(a => a.active && a.eventId === eventId) || false }); setQr(new URL(value.entryUrl, location.origin).href); }, 'Acceso individual creado. Guarda su QR antes de salir.')}>{person.accesses?.some(a => a.active && a.eventId === eventId) ? 'Reemplazar acceso y generar nuevo QR' : 'Crear enlace y QR individual'}</button>
               <button disabled={!qr} onClick={() => perform(async () => {
