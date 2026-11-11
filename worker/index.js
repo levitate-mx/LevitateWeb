@@ -6478,6 +6478,23 @@ async function assertRegistrationDanceBelongsToAcademy(db, academyId, danceId) {
   }
 }
 
+function parseRegistrationDanceProgram(value) {
+  if (!value) return null;
+  try {
+    const program = JSON.parse(value);
+    if (!program || typeof program !== "object" || Array.isArray(program)
+      || typeof program.eventId !== "string" || !program.eventId
+      || typeof program.blockId !== "string" || !program.blockId
+      || typeof program.blockTitle !== "string"
+      || !Number.isInteger(program.blockOrder) || program.blockOrder < 1
+      || !Number.isInteger(program.position) || program.position < 1
+      || typeof program.division !== "string" || !program.division) return null;
+    return program;
+  } catch {
+    return null;
+  }
+}
+
 async function serializeRegistrationDances(db, academyId, dances) {
   if (dances.length === 0) {
     return [];
@@ -6533,6 +6550,7 @@ async function serializeRegistrationDances(db, academyId, dances) {
     genre: dance.genre,
     subgenre: dance.subgenre,
     subgenreDetail: dance.subgenre_detail || null,
+    program: parseRegistrationDanceProgram(dance.program_json),
     isReleve: Boolean(Number(dance.is_releve || 0)),
     category: dance.category,
     level: dance.level,
@@ -6596,6 +6614,7 @@ async function serializeRegistrationProgramDances(db, dances) {
     genre: dance.genre,
     subgenre: dance.subgenre,
     subgenreDetail: dance.subgenre_detail || null,
+    program: parseRegistrationDanceProgram(dance.program_json),
     isReleve: Boolean(Number(dance.is_releve || 0)),
     category: dance.category,
     level: dance.level,

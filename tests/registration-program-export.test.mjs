@@ -48,7 +48,31 @@ function environment({ issue = (_path, options) => ({ registrationEventId: issue
     danceCategories: [],
   };
   vm.runInNewContext(javascript, scope);
-  return { ...scope.program, downloads, blobs, requests };
+  return { ...scope.program, downloads, blobs, requests, scope };
+}
+
+function officialEnvironment(options) {
+  const app = environment(options);
+  const names = ['getDanceProgramDivision','isReleveDance','getProgramBlock','compareProgramRows','buildProgramBlocks'];
+  const declarations = names.map(name => syntax.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name).getText(syntax)).join('\n');
+  app.scope.getProgramDivisionFromParticipants = participants => participants[0]?.division || '';
+  app.scope.getProgramDivisionRank = () => 0;
+  app.scope.getAerialSubgenreRank = () => 0;
+  app.scope.getAerialLevelRank = () => 0;
+  app.scope.getMotionSubgenreRank = () => 0;
+  app.scope.getProgramCategoryRank = () => 0;
+  vm.runInNewContext(ts.transpileModule(declarations + `\nObject.assign(program,{${names.join(',')}});`, {
+    compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None},
+  }).outputText, app.scope);
+  return {...app,...app.scope.program};
+}
+
+function programme(overrides = {}) {
+  return {eventId:'edomex-2026-otono',sourceFile:'PROGRAMA PREVIO.xlsx',sourceSheet:'DOMINGO',sourceRow:128,
+    number:'194 a',position:82,blockId:'4b',blockTitle:'BLOQUE 4 B: AERIAL PETITE',blockOrder:4,
+    division:'petite',divisionLabel:'PETITE: 7 A 10 AÑOS',subgenreLabel:'OPEN: CUNA',categoryLabel:'SOLO',levelLabel:'',
+    choreographers:'Docente según Excel',participants:'Persona según Excel',state:'COSTA RICA',
+    scheduledDate:'2026-11-15',scheduledTime:'08:00:00',durationSeconds:180,marginSeconds:200,...overrides};
 }
 
 function dance(overrides = {}) {
@@ -168,4 +192,45 @@ test("empty, duplicate or mixed-venue programmes fail before requesting an issua
     await assert.rejects(() => app.downloadProgramXls([{ id: 1, title: "Programa", rows: app.buildProgramRows(input) }]));
     assert.equal(app.requests.length, 0); assert.equal(app.downloads.length, 0);
   }
+});
+
+test('official programme uses per-dance source division, people and block order while retaining unlisted registrations',()=>{
+  const app = officialEnvironment();
+  const input = [
+    dance({id:'later',title:'A Primero por alfabeto',genre:'aereo',program:programme({position:84,number:'84'})}),
+    dance({id:'earlier',title:'Z Último por alfabeto',genre:'aereo',program:programme({position:83,number:'83'})}),
+    dance({id:'part-a',title:'Parte A',genre:'aereo',program:programme({blockId:'4a',blockTitle:'BLOQUE 4 A',blockOrder:3,position:47,scheduledDate:'2026-11-14'})}),
+    dance({id:'unlisted',title:'Registro fuera del programa'}),
+  ];
+  const before = structuredClone(input);
+  const rows = app.buildProgramRows(input);
+  assert.deepEqual(Array.from(rows,row=>row.danceId),['part-a','earlier','later']);
+  assert.equal(app.getDanceProgramDivision(input[0]),'petite');
+  assert.deepEqual(Array.from(app.buildProgramBlocks(rows),block=>block.id),['4a','4b']);
+  assert.deepEqual(Array.from(app.buildProgramBlocks(rows),block=>block.order),[3,4]);
+  const display = Array.from(app.getProgramRowDisplay(rows[1],true,true));
+  assert.equal(display[0],'83');
+  assert.ok(display.includes('PETITE: 7 A 10 AÑOS'));
+  assert.ok(display.includes('Docente según Excel'));assert.ok(display.includes('Persona según Excel'));
+  assert.ok(display.includes('COSTA RICA'));assert.ok(display.includes('2026-11-15'));assert.ok(display.includes('08:00:00'));
+  assert.ok(display.includes('03:00'));assert.ok(display.includes('03:20'));
+  assert.deepEqual(input,before,'source programme rendering preserves all registration rows and demographic divisions');
+  const legacy = dance({id:'legacy-puebla',venue:'puebla',participants:[{fullName:'Persona',division:'junior'}]});
+  assert.equal(app.buildProgramRows([legacy]).length,1,'venues without official metadata retain the legacy programme');
+  assert.equal(app.buildProgramRows([input[0],legacy]).length,2);
+});
+
+test('official XLS preserves display order and source schedules separately from stable judging IDs and real audio duration',async()=>{
+  const app = officialEnvironment({issue:()=>({registrationEventId:issuedEdition,token:issuedToken,
+    links:[{danceId:'dance-01',sourceRoutineId:'42'}]})});
+  const input = [dance({title:'Rise SLOW',genre:'aereo',program:programme(),musicUpload:{durationSeconds:127.2}})];
+  const rows = app.buildProgramRows(input);
+  await app.downloadProgramXls(app.buildProgramBlocks(rows));
+  const html = await app.blobs[0].text();
+  assert.match(html, /<th>#<\/th>/);
+  assert.match(html, /<td>194 a<\/td><td>Rise SLOW<\/td>/);
+  assert.match(html,/FECHA/);assert.match(html,/DURACIÓN PROGRAMA \(MM:SS\)/);assert.match(html,/MARGEN \(MM:SS\)/);
+  assert.match(html,/<td>2026-11-15<\/td><td>08:00:00<\/td><td>03:00<\/td><td>03:20<\/td><td>02:07<\/td><td>42<\/td>/);
+  assert.deepEqual(parseParticipantJudgingProgram(html),[{danceId:'dance-01',sourceRoutineId:'42'}]);
+  assert.equal(input[0].musicUpload.durationSeconds,127.2);
 });

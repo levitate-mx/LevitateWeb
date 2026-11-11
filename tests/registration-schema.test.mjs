@@ -13,7 +13,7 @@ const removableColumns = {
   registration_users: ["role"],
   registration_participants: ["is_international", "is_releve_teacher"],
   registration_choreographers: ["is_releve_teacher"],
-  registration_dances: ["subgenre_detail", "is_releve"],
+  registration_dances: ["subgenre_detail", "is_releve", "program_json"],
   registration_inscription_orders: ["buyer_phone_country_code", "buyer_phone_number", "buyer_phone"],
   registration_shop_orders: ["access_token", "buyer_name", "buyer_email"],
   registration_music_uploads: ["duration_seconds", "storage_provider", "drive_file_id", "drive_web_view_link", "drive_web_content_link"],
@@ -97,6 +97,27 @@ test("fresh canonical schema is already prepared and rechecking does not write",
   assert.deepEqual(writes, []);
   seed(sqlite);
   assert.equal(sqlite.prepare("SELECT role FROM registration_users").get().role, "academy");
+});
+
+test("programme metadata preparation preserves identities and demographic data and validates JSON", async t => {
+  const { db, sqlite, writes } = fixture(t, removeColumns(baseSchema, "registration_dances", ["program_json"]));
+  seed(sqlite);
+  sqlite.exec("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-1','participant-1')");
+  const participantBefore = rows(sqlite, 'registration_participants');
+  const ordersBefore = rows(sqlite, 'registration_inscription_orders');
+  const linksBefore = sqlite.prepare('SELECT * FROM registration_dance_participants').all();
+  const result = await prepareRegistrationSchema(db, { apply: true });
+  assert.equal(result.applied, 1);
+  assert.equal(sqlite.prepare('SELECT program_json FROM registration_dances').get().program_json, null);
+  assert.throws(() => sqlite.prepare("UPDATE registration_dances SET program_json='{invalid'").run(), /CHECK/);
+  const snapshot = JSON.stringify({eventId:'edomex-2026-otono',division:'petite',number:'194 a'});
+  sqlite.prepare('UPDATE registration_dances SET program_json=? WHERE id=?').run(snapshot,'dance-1');
+  assert.equal(sqlite.prepare('SELECT program_json FROM registration_dances').get().program_json, snapshot);
+  assert.deepEqual(rows(sqlite, 'registration_participants'), participantBefore);
+  assert.deepEqual(rows(sqlite, 'registration_inscription_orders'), ordersBefore);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM registration_dance_participants').all(), linksBefore);
+  assert.equal((await prepareRegistrationSchema(db, {apply:true})).applied, 0);
+  assert.equal(writes.length, 1);
 });
 
 test("Drive synchronization preparation only adds its three metadata tables and index, preserving participants and QR grants", async (t) => {

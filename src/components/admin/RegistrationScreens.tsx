@@ -288,6 +288,30 @@ type RegistrationMusicUpload = {
   uploadedAt: string;
 };
 
+type RegistrationDanceProgram = {
+  eventId: string;
+  sourceFile?: string;
+  sourceSheet?: string;
+  sourceRow?: number;
+  number?: string;
+  position: number;
+  blockId: string;
+  blockTitle: string;
+  blockOrder: number;
+  division: string;
+  divisionLabel?: string;
+  subgenreLabel?: string;
+  categoryLabel?: string;
+  levelLabel?: string;
+  choreographers?: string;
+  participants?: string;
+  state?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  durationSeconds?: number | null;
+  marginSeconds?: number | null;
+};
+
 type RegistrationDance = {
   academyName?: string;
   academyOriginCountry?: string | null;
@@ -298,6 +322,7 @@ type RegistrationDance = {
   genre: string;
   subgenre: string;
   subgenreDetail?: string | null;
+  program?: RegistrationDanceProgram | null;
   isReleve?: boolean;
   category: string;
   level: string | null;
@@ -1108,7 +1133,8 @@ type ProgramRow = {
   academyOriginCountry?: string | null;
   academyOriginState?: string | null;
   academyOriginType?: string | null;
-  blockId: number;
+  blockId: string;
+  blockOrder: number;
   blockTitle: string;
   category: string;
   choreographers: string;
@@ -1123,10 +1149,12 @@ type ProgramRow = {
   subgenre: string;
   subgenreDetail?: string | null;
   venue: string;
+  program?: RegistrationDanceProgram | null;
 };
 
 type ProgramBlock = {
-  id: number;
+  id: string;
+  order: number;
   title: string;
   rows: ProgramRow[];
 };
@@ -1327,6 +1355,7 @@ function getProgramDivisionFromParticipants(participants: RegistrationDanceRelat
 }
 
 function getDanceProgramDivision(dance: RegistrationDance) {
+  if (dance.program) return dance.program.division;
   if (isReleveDance(dance)) {
     return "releve";
   }
@@ -1393,6 +1422,7 @@ function getMusicDurationCheck(dance: RegistrationDance, durationSeconds: number
 }
 
 function getProgramBlock(dance: RegistrationDance, division: string) {
+  if (dance.program) return { id: dance.program.blockId, title: dance.program.blockTitle, order: dance.program.blockOrder };
   const normalizedDivision = normalizeProgramDivision(division);
 
   if (dance.genre === "aereo") {
@@ -1459,9 +1489,9 @@ function getProgramCategoryRank(category: string) {
 }
 
 function compareProgramRows(firstRow: ProgramRow, secondRow: ProgramRow) {
-  if (firstRow.blockId !== secondRow.blockId) {
-    return firstRow.blockId - secondRow.blockId;
-  }
+  const blockDifference = firstRow.blockOrder - secondRow.blockOrder;
+  if (blockDifference) return blockDifference;
+  if (firstRow.program && secondRow.program) return firstRow.program.position - secondRow.program.position;
 
   const divisionDiff = getProgramDivisionRank(firstRow.division) - getProgramDivisionRank(secondRow.division);
 
@@ -1511,7 +1541,9 @@ function toProgramHtmlValue(value: unknown, preserveCase = false) {
 }
 
 function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "") {
+  const officialVenues = new Set(dances.filter((dance) => dance.program).map((dance) => dance.venue));
   return dances
+    .filter((dance) => !officialVenues.has(dance.venue) || dance.program)
     .map((dance) => {
       const division = getDanceProgramDivision(dance);
       const block = getProgramBlock(dance, division);
@@ -1521,10 +1553,11 @@ function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "")
         academyOriginCountry: dance.academyOriginCountry,
         academyOriginState: dance.academyOriginState,
         academyOriginType: dance.academyOriginType,
-        blockId: block.id,
+        blockId: String(block.id),
+        blockOrder: dance.program?.blockOrder ?? Number(block.id),
         blockTitle: block.title,
         category: dance.category,
-        choreographers: dance.choreographers.map((choreographer) => choreographer.fullName).join(", "),
+        choreographers: dance.program?.choreographers ?? dance.choreographers.map((choreographer) => choreographer.fullName).join(", "),
         danceId: dance.id,
         danceTitle: dance.title,
         division,
@@ -1532,25 +1565,26 @@ function buildProgramRows(dances: RegistrationDance[], fallbackAcademyName = "")
         level: dance.level || "",
         hasMusicUpload: Boolean(dance.musicUpload),
         musicDurationSeconds: dance.musicUpload?.durationSeconds ?? null,
-        participants: dance.participants.map((participant) => participant.fullName).join(", "),
+        participants: dance.program?.participants ?? dance.participants.map((participant) => participant.fullName).join(", "),
         subgenre: dance.subgenre,
         subgenreDetail: dance.subgenreDetail || "",
         venue: dance.venue,
+        program: dance.program,
       };
     })
     .sort(compareProgramRows);
 }
 
 function buildProgramBlocks(rows: ProgramRow[]) {
-  const blocks = new Map<number, ProgramBlock>();
+  const blocks = new Map<string, ProgramBlock>();
 
   for (const row of rows) {
-    const current = blocks.get(row.blockId) ?? { id: row.blockId, title: row.blockTitle, rows: [] };
+    const current = blocks.get(row.blockId) ?? { id: row.blockId, order: row.blockOrder, title: row.blockTitle, rows: [] };
     current.rows.push(row);
     blocks.set(row.blockId, current);
   }
 
-  return Array.from(blocks.values()).sort((left, right) => left.id - right.id);
+  return Array.from(blocks.values()).sort((left, right) => left.order - right.order);
 }
 
 const adminCurrencyFormatters = new Map<string, Intl.NumberFormat>();
@@ -5256,8 +5290,9 @@ function isAerialProgramBlock(block: ProgramBlock) {
   return block.rows.some((row) => row.genre === "aereo");
 }
 
-function getProgramHeaders(includeLevel = false, includeAction = false) {
+function getProgramHeaders(includeLevel = false, includeAction = false, includeProgram = false) {
   return [
+    ...(includeProgram ? ["#"] : []),
     "COREOGRAFÍA",
     "ACADEMIA",
     "DIVISIÓN",
@@ -5267,27 +5302,38 @@ function getProgramHeaders(includeLevel = false, includeAction = false) {
     "COREÓGRAFOS",
     "PARTICIPANTE",
     "ESTADO",
+    ...(includeProgram ? ["FECHA", "HORARIO", "DURACIÓN PROGRAMA (MM:SS)", "MARGEN (MM:SS)"] : []),
     ...(includeAction ? ["ACCIÓN"] : []),
   ];
 }
 
-function getProgramRowDisplay(row: ProgramRow, includeLevel = false) {
+function getProgramRowDisplay(row: ProgramRow, includeLevel = false, includeProgram = false) {
   const isReleveRow = normalizeProgramDivision(row.division) === "releve";
+  const program = row.program;
+  const duration = program?.durationSeconds;
+  const margin = program?.marginSeconds;
 
   return [
+    ...(includeProgram ? [program?.number ?? ""] : []),
     row.danceTitle,
     row.academyName,
-    getProgramDivisionLabel(row.division),
-    getDanceSubgenreLabel(row),
-    isReleveRow ? "Relevé" : getOptionLabel(danceCategories, row.category),
-    ...(includeLevel ? [isReleveRow ? "No aplica" : getDanceLevelLabel(row.level)] : []),
+    program?.divisionLabel ?? getProgramDivisionLabel(row.division),
+    program?.subgenreLabel ?? getDanceSubgenreLabel(row),
+    program?.categoryLabel ?? (isReleveRow ? "Relevé" : getOptionLabel(danceCategories, row.category)),
+    ...(includeLevel ? [program?.levelLabel ?? (isReleveRow ? "No aplica" : getDanceLevelLabel(row.level))] : []),
     row.choreographers,
-    isReleveRow ? "Registro Relevé" : row.participants,
-    getAcademyOriginLabel({
+    program?.participants ?? (isReleveRow ? "Registro Relevé" : row.participants),
+    program?.state ?? getAcademyOriginLabel({
       originCountry: row.academyOriginCountry,
       originState: row.academyOriginState,
       originType: row.academyOriginType,
     }),
+    ...(includeProgram ? [
+      program?.scheduledDate ?? "",
+      program?.scheduledTime ?? "",
+      typeof duration === "number" && Number.isFinite(duration) && duration >= 0 ? formatMusicDuration(duration).padStart(5, "0") : "",
+      typeof margin === "number" && Number.isFinite(margin) && margin >= 0 ? formatMusicDuration(margin).padStart(5, "0") : "",
+    ] : []),
   ];
 }
 
@@ -5331,12 +5377,13 @@ async function downloadProgramXls(blocks: ProgramBlock[]) {
   }
   const rows = blocks.flatMap((block) => {
     const includeLevel = isAerialProgramBlock(block);
-    const headers = [...getProgramHeaders(includeLevel), "DURACIÓN CANCIÓN (MM:SS)", "ID", "ID INSCRIPCIÓN", "ID EDICIÓN", "TOKEN VINCULACIÓN"];
+    const includeProgram = block.rows.some((row) => row.program);
+    const headers = [...getProgramHeaders(includeLevel, false, includeProgram), "DURACIÓN CANCIÓN (MM:SS)", "ID", "ID INSCRIPCIÓN", "ID EDICIÓN", "TOKEN VINCULACIÓN"];
 
     return [
       `<tr><td colspan="${headers.length - 3}" style="font-weight:700;background:#f0f0f0;">${toProgramHtmlValue(block.title)}</td></tr>`,
       `<tr>${headers.map((header,index) => `<th${index>=headers.length-3 ? ' style="display:none;mso-hide:all"' : ''}>${toProgramHtmlValue(header)}</th>`).join("")}</tr>`,
-      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel), getProgramMusicDurationLabel(row), issuedIds.get(row.danceId)].map((value) => `<td>${toProgramHtmlValue(value)}</td>`).join("")}${[row.danceId, issued.registrationEventId, issued.token].map(value => `<td style="display:none;mso-hide:all">${toProgramHtmlValue(value, true)}</td>`).join("")}</tr>`),
+      ...block.rows.map((row) => `<tr>${[...getProgramRowDisplay(row, includeLevel, includeProgram), getProgramMusicDurationLabel(row), issuedIds.get(row.danceId)].map((value) => `<td>${toProgramHtmlValue(value, Boolean(row.program))}</td>`).join("")}${[row.danceId, issued.registrationEventId, issued.token].map(value => `<td style="display:none;mso-hide:all">${toProgramHtmlValue(value, true)}</td>`).join("")}</tr>`),
     ];
   });
   const worksheet = `<!doctype html>
@@ -9182,7 +9229,7 @@ function ProgramPanel({
 }) {
   const [venueFilter, setVenueFilter] = useState("all");
   const [genreFilter, setGenreFilter] = useState("all");
-  const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(() => new Set());
+  const [expandedBlocks, setExpandedBlocks] = useState<Set<string>>(() => new Set());
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const availableVenues = useMemo(
@@ -9192,20 +9239,20 @@ function ProgramPanel({
     ])).sort((left, right) => getVenueLabel(left).localeCompare(getVenueLabel(right), "es")),
     [dances, venueFilter],
   );
-  const filteredDances = useMemo(
-    () => dances.filter((dance) => (venueFilter === "all" || dance.venue === venueFilter) && (genreFilter === "all" || dance.genre === genreFilter)),
-    [dances, genreFilter, venueFilter],
+  const allProgramRows = useMemo(() => buildProgramRows(dances, academyName), [academyName, dances]);
+  const programRows = useMemo(
+    () => allProgramRows.filter((row) => (venueFilter === "all" || row.venue === venueFilter) && (genreFilter === "all" || row.genre === genreFilter)),
+    [allProgramRows, genreFilter, venueFilter],
   );
-  const programRows = useMemo(() => buildProgramRows(filteredDances, academyName), [academyName, filteredDances]);
   const programBlocks = useMemo(() => buildProgramBlocks(programRows), [programRows]);
   const totalRows = programRows.length;
-  const assignedBlockCount = programBlocks.filter((block) => block.id !== 99).length;
+  const assignedBlockCount = programBlocks.filter((block) => block.id !== "99").length;
   const hasDeleteAction = Boolean(onDanceDeleted);
   const hasFilters = venueFilter !== "all" || genreFilter !== "all";
   const allBlocksExpanded = programBlocks.length > 0 && programBlocks.every((block) => expandedBlocks.has(block.id));
   const anyBlockExpanded = programBlocks.some((block) => expandedBlocks.has(block.id));
 
-  const toggleBlock = (blockId: number) => {
+  const toggleBlock = (blockId: string) => {
     setExpandedBlocks((current) => {
       const next = new Set(current);
       if (next.has(blockId)) next.delete(blockId);
@@ -9262,11 +9309,13 @@ function ProgramPanel({
 
       {programBlocks.map((block) => {
         const includeLevel = isAerialProgramBlock(block);
-        const headers = getProgramHeaders(includeLevel, hasDeleteAction);
+        const includeProgram = block.rows.some((row) => row.program);
+        const headers = getProgramHeaders(includeLevel, hasDeleteAction, includeProgram);
+        const rowStyle = includeProgram ? { gridTemplateColumns: headers.map((header) => header === "#" ? "64px" : header === "ACCIÓN" ? "44px" : "minmax(140px, 1fr)").join(" ") } : undefined;
         const isExpanded = expandedBlocks.has(block.id);
-        const isUnassigned = block.id === 99;
+        const isUnassigned = block.id === "99";
         const discipline = isUnassigned ? "Revisar división" : includeLevel ? "Aerial" : "Motion";
-        const title = block.title.replace(/^BLOQUE \d+:\s*/, "");
+        const title = block.title.replace(/^BLOQUE\s+\d+\s*[AB]?\s*:\s*/i, "");
         const regionId = `admin-program-block-${block.id}`;
         const headingId = `${regionId}-heading`;
 
@@ -9281,9 +9330,9 @@ function ProgramPanel({
                 onClick={() => toggleBlock(block.id)}
                 type="button"
               >
-                <span className="levitate-admin-program-block__number" aria-hidden="true">{isUnassigned ? "—" : String(block.id).padStart(2, "0")}</span>
+                <span className="levitate-admin-program-block__number" aria-hidden="true">{isUnassigned ? "—" : block.id.toUpperCase().padStart(2, "0")}</span>
                 <span className="levitate-admin-program-block__label">
-                  <span className="levitate-admin-program-block__eyebrow">{isUnassigned ? "Sin asignar" : `Bloque ${block.id}`} <span>· {discipline}</span></span>
+                  <span className="levitate-admin-program-block__eyebrow">{isUnassigned ? "Sin asignar" : `Bloque ${block.id.toUpperCase()}`} <span>· {discipline}</span></span>
                   <span className="levitate-admin-program-block__title">{title}</span>
                 </span>
                 <span className="levitate-admin-program-block__count">{block.rows.length} {block.rows.length === 1 ? "coreografía" : "coreografías"}</span>
@@ -9302,15 +9351,16 @@ function ProgramPanel({
                 <div
                   className={["levitate-admin-program-table", includeLevel ? "levitate-admin-program-table--aerial" : "", hasDeleteAction ? "levitate-admin-program-table--with-action" : ""].filter(Boolean).join(" ")}
                   role="table"
+                  style={includeProgram ? { minWidth: `${headers.length * 145}px` } : undefined}
                   aria-label={`Programa ${block.title}`}
                 >
-                  <div className="levitate-admin-program-table__head" role="row">
+                  <div className="levitate-admin-program-table__head" role="row" style={rowStyle}>
                     {headers.map((header) => <span key={header} role="columnheader">{header}</span>)}
                   </div>
                   {block.rows.map((row) => (
-                    <div className="levitate-admin-program-table__row" key={row.danceId} role="row">
-                      {getProgramRowDisplay(row, includeLevel).map((value, index) => (
-                        <span key={`${row.danceId}-${index}`} role="cell">{toProgramUpper(value)}</span>
+                    <div className="levitate-admin-program-table__row" key={row.danceId} role="row" style={rowStyle}>
+                      {getProgramRowDisplay(row, includeLevel, includeProgram).map((value, index) => (
+                        <span key={`${row.danceId}-${index}`} role="cell">{row.program ? value : toProgramUpper(value)}</span>
                       ))}
                       {hasDeleteAction ? (
                         <span role="cell"><DeleteIconButton label={`Eliminar ${row.danceTitle}`} onClick={() => onDanceDeleted?.(row)} /></span>

@@ -50,6 +50,7 @@ const additions = {
   },
   registration_dances: {
     subgenre_detail: "TEXT",
+    program_json: "TEXT CHECK (program_json IS NULL OR json_valid(program_json))",
     is_releve: "INTEGER NOT NULL DEFAULT 0 CHECK (is_releve IN (0, 1))",
   },
   registration_inscription_orders: {

@@ -67,6 +67,21 @@ const previewPath=(participantId='person-a',eventId='test-event')=>`/api/registr
 const adminCookie='levitate_registration_session=admin-session';
 const totalChanges=(db)=>db.sqlite.prepare('SELECT total_changes() AS count').get().count;
 
+test('passport uses the choreography programme division while retaining the participant demographic division',async t=>{
+  const {db,request,access}=await fixture(t);
+  const original=db.sqlite.prepare("SELECT division FROM registration_participants WHERE id='person-a'").get().division;
+  db.sqlite.prepare("UPDATE registration_dances SET program_json=? WHERE id='dance-a'")
+    .run(JSON.stringify({eventId:'test-event',division:'senior'}));
+  const {cookie}=await access();
+  const {data}=await request('/api/participant/me',{cookie});
+  assert.equal(data.routines[0].division,'senior');
+  assert.equal(db.sqlite.prepare("SELECT division FROM registration_participants WHERE id='person-a'").get().division,original);
+  db.sqlite.prepare("UPDATE registration_dances SET program_json=? WHERE id='dance-a'")
+    .run(JSON.stringify({eventId:'other-event',division:'senior'}));
+  const refreshed=await request('/api/participant/me',{cookie});
+  assert.equal(refreshed.data.routines[0].division,original);
+});
+
 async function photoTrialFixture(t) {
   const setup = await fixture(t);
   const { env, bucket } = setup;

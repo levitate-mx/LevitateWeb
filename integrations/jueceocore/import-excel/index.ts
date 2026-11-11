@@ -795,6 +795,8 @@ function entryColumnMap(row: unknown[], aliases: EntryColumnAliases): Partial<Re
       }
     }
   });
+  const nativeID = row.findIndex((value) => ["ID", "ROUTINEID", "ENTRYID"].includes(headerCompactKey(value)));
+  if (nativeID >= 0) columnMap.entryID = nativeID;
   return columnMap;
 }
 

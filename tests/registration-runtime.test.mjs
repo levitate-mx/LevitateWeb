@@ -2195,6 +2195,11 @@ test('program returns known and legacy song durations as metadata only behind ad
   const { dance: known } = await createDance(f, academy);
   const { dance: legacy } = await createDance(f, legacyAcademy, curpB);
   const { dance: empty } = await createDance(f, emptyAcademy, 'CCCC100101MDFBBB01');
+  const programme = {eventId:'edomex-2026-otono',blockId:'4a',blockTitle:'BLOQUE 4 A',blockOrder:3,
+    position:61,number:'194 a',division:'petite',divisionLabel:'PETITE: 7 A 10 AÑOS',
+    scheduledDate:'2026-11-14',scheduledTime:'13:00:00',durationSeconds:180,marginSeconds:200};
+  f.db.sqlite.prepare('UPDATE registration_dances SET program_json=? WHERE id=?').run(JSON.stringify(programme),known.id);
+  const originalDivision = f.db.sqlite.prepare('SELECT division FROM registration_participants WHERE academy_id=?').get(academy.academyId).division;
   await f.request('/music', { method: 'POST', cookie: academy.cookie, body: {
     danceId: known.id, fileName: 'known.mp3', contentType: 'audio/mpeg',
     dataUrl: 'data:audio/mpeg;base64,AQID', fileSize: 3, durationSeconds: 183.75,
@@ -2207,6 +2212,9 @@ test('program returns known and legacy song durations as metadata only behind ad
     .run(legacyAcademy.academyId, legacy.id);
   const { json: legacyBootstrap } = await f.request('/bootstrap', { cookie: legacyAcademy.cookie });
   assert.equal(legacyBootstrap.dances[0].musicUpload.durationSeconds, null);
+  const { json: knownBootstrap } = await f.request('/bootstrap', { cookie: academy.cookie });
+  assert.deepEqual(knownBootstrap.dances[0].program,programme);
+  assert.equal(legacyBootstrap.dances[0].program,null);
 
   for (const [cookie, status] of [[undefined, 401], [academy.cookie, 403]]) {
     const queryStart = f.db.runtimeQueries.length;
@@ -2219,6 +2227,8 @@ test('program returns known and legacy song durations as metadata only behind ad
   const programById = new Map(program.dances.map(dance => [dance.id, dance]));
   assert.equal(programById.get(known.id).musicUpload.durationSeconds, 183.75);
   assert.equal(programById.get(known.id).musicUpload.fileName, 'known.mp3');
+  assert.deepEqual(programById.get(known.id).program,programme);
+  assert.equal(f.db.sqlite.prepare('SELECT division FROM registration_participants WHERE academy_id=?').get(academy.academyId).division,originalDivision);
   assert.equal(programById.get(legacy.id).musicUpload.durationSeconds, null);
   assert.equal(programById.get(legacy.id).musicUpload.storageProvider, 'google_drive');
   assert.equal(programById.get(empty.id).musicUpload, null);

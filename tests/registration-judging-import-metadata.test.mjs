@@ -88,6 +88,16 @@ test('dedicated aliases do not match or override the app ID column',()=>{
   assert.equal(hostileColumns.entryID,2);assert.equal(hostileColumns.name,3);assert.equal(hostileColumns.registrationToken,1);
 });
 
+test('linked programmes retain the stable ID when an alphanumeric display order precedes it',()=>{
+  const view=harness([
+    ['#',...headers],
+    ['194 a',...row],
+  ]);
+  const parsed=view.parse();
+  assert.equal(parsed[0].routines[0].id,'1');
+  assert.equal(registration.collectRegistrationLink(parsed[0].routines).routines[0].sourceRoutineId,'1');
+});
+
 test('linked HTML programmes skip block separators and refresh changing repeated headers',()=>{
   const aerialHeaders=[...headers.slice(0,5),'NIVEL',...headers.slice(5)];
   const aerialRow=['Orbita','Academia Una','Junior','Jazz','Solo','Inicial','2','dance-0002','edomex-2026-otono',token];

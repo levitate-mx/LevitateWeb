@@ -162,7 +162,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   // An edition-specific curated record adds results/assets; its absence should
   // not hide the registered presentation or create records during this GET.
   const rows = await all(db, `SELECT r.*, d.id AS registration_dance_id, d.academy_id AS registration_academy_id,
-    d.venue AS registration_venue, d.title, d.genre, d.subgenre, d.category, d.level, p.division,
+    d.venue AS registration_venue, d.program_json AS registration_program_json, d.title, d.genre, d.subgenre, d.category, d.level, p.division,
     (SELECT COUNT(*) FROM registration_dance_participants members WHERE members.dance_id = d.id) AS participant_count
     FROM registration_dance_participants dp JOIN registration_dances d ON d.id = dp.dance_id
     JOIN registration_participants p ON p.id = dp.participant_id
@@ -198,12 +198,14 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
         preview: Boolean(adminPreview), templateUrl: '/assets/participant-recognition-template.pdf',
       } } : { status: "pending", assetId: null, url: null },
     routines: rows.map((row) => {
+      const program = parsed(row.registration_program_json);
+      const division = program?.eventId === event.id && typeof program.division === "string" ? program.division : row.division;
       const visible = Boolean(adminPreview || (event.published && (automaticCompletion ? !row.publication_blocked : row.status === "published")));
       const judging = visible ? parsed(row.judging_json) : null;
       const sheet = visible ? assets.find((asset) => asset.routine_id === row.id && asset.kind === "judge_sheet") : null;
       const photos = visible && (adminPreview || row.photos_published)
         ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo").slice(0, PHOTO_PREVIEW_LIMIT) : [];
-      return { id: row.id || `registration:${row.registration_dance_id}`, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division: row.division, level: row.level,
+      return { id: row.id || `registration:${row.registration_dance_id}`, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division, level: row.level,
         result: portalResult(row, event, adminPreview),
         judging: { status: judging || sheet ? "available" : "pending", judges: judging?.judges || [], ...(sheet ? { assetId: sheet.id, url: link(sheet.id) } : {}) },
         photos: { status: photos.length ? "available" : "pending", count: photos.length,
