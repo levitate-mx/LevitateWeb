@@ -87,6 +87,7 @@ type AppData = {
   routines: Routine[];
   templates: Template[];
   judges: string[];
+  warnings: string[];
 };
 
 type AccessCodeDelivery = {
@@ -241,8 +242,10 @@ const DEFAULT_TEMPLATE_COLUMN_ALIASES: TemplateColumnAliases = {
 const TEMPLATE_ALIASES: Record<string, string> = {
   ARO: "DANZA AEREA",
   TELA: "DANZA AEREA",
+  TRAPECIO: "DANZA AEREA",
   URBANOS: "HIP HOP",
   OPEN: "CONTEMPORANEO",
+  "BELLY DANCE": "BELLYDANCE",
 };
 
 class HTTPError extends Error {
@@ -309,6 +312,7 @@ Deno.serve(async (request) => {
         admin_access_code: "",
         access_codes: [],
         dry_run: true,
+        warnings: appData.warnings,
       });
     }
 
@@ -334,6 +338,7 @@ Deno.serve(async (request) => {
       templates: appData.templates.length,
       admin_access_code: adminAccessCode,
       access_codes: accessCodes,
+      warnings: appData.warnings,
       ...(registrationLink ? { registration_linked: true } : {}),
     });
   } catch (error) {
@@ -478,13 +483,6 @@ function routineIDText(value: unknown): string {
   return Number.isFinite(number) && Number.isInteger(number) ? String(number) : text.replace(/\.0$/, "");
 }
 
-function titleCase(value: string): string {
-  return value.toLocaleLowerCase("es-MX").replace(/\p{L}+/gu, (word) => {
-    const [first = "", ...rest] = Array.from(word);
-    return first.toLocaleUpperCase("es-MX") + rest.join("");
-  });
-}
-
 function parseWorkbook(
   sourceName: string,
   payloadBase64: string,
@@ -502,9 +500,22 @@ function parseWorkbook(
   const warnings: string[] = [];
   const errors: string[] = [];
 
+  const hasDailySchedule = workbook.SheetNames.some((sheetName) => {
+    if (!/^(?:SABADO|DOMINGO)(?:\b|_)/.test(normalized(sheetName))) return false;
+    const rows = sheetRows(workbook.Sheets[sheetName]);
+    const header = rows.find((row) => hasMinimumEntryColumns(entryColumnMap(row, options.fieldAliases)));
+    const columns = entryColumnMap(header || [], options.fieldAliases);
+    return columns.time !== undefined && rows.some((row) => programSectionTitle(row, columns))
+      && parseBlocks(sheetName, workbook.Sheets[sheetName], options.fieldAliases).some((block) => block.routines.length);
+  });
+
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    blocks.push(...parseBlocks(sheetName, sheet, options.fieldAliases));
+    if (hasDailySchedule && /^LEVITATE[ _-]+PROGRAMA(?:\s*\(\d+\))?$/.test(normalized(sheetName))) {
+      warnings.push(`Se omitió la hoja de referencia ${sheetName}. Se usan las hojas del programa diario.`);
+      continue;
+    }
+    blocks.push(...parseBlocks(sheetName, sheet, options.fieldAliases, warnings));
 
     const template = parseTemplate(sheetName, sheet);
     if (template) {
@@ -544,6 +555,7 @@ function parseWorkbook(
     routines,
     templates,
     judges,
+    warnings,
   };
 }
 
@@ -646,7 +658,21 @@ function mergeBlocks(blocks: DanceBlock[]): DanceBlock[] {
   });
 }
 
-function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryColumnAliases): DanceBlock[] {
+function programSectionTitle(row: unknown[], columns: Partial<Record<EntryColumn, number>>): string {
+  if (rowText(row, columns.name)
+    && [columns.academy, columns.division, columns.genre, columns.category].some((index) => rowText(row, index))) return "";
+  return row.map(cleanText).find((value) => /^(?:BLOQUE|BLOCK)\s+\d+\s*[A-Z]?(?:\b|\s|:)/i.test(value)) || "";
+}
+
+function repeatedEntryHeader(row: unknown[], aliases: EntryColumnAliases): Partial<Record<EntryColumn, number>> | null {
+  const columns = entryColumnMap(row, aliases);
+  if (!aliases.name.some((alias) => headerCompactKey(alias) === headerCompactKey(rowText(row, columns.name)))) return null;
+  const matchingLabels = Object.entries(columns).filter(([column, index]) =>
+    aliases[column as EntryColumn].some((alias) => headerCompactKey(alias) === headerCompactKey(row[index])));
+  return matchingLabels.length >= 3 ? columns : null;
+}
+
+function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryColumnAliases, warnings: string[] = []): DanceBlock[] {
   if (isNonEntrySheet(sheetName)) {
     return [];
   }
@@ -661,9 +687,6 @@ function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryCol
   }
 
   let columnMap = entryColumnMap(rows[headerIndex], aliases);
-  const linkedProgram = ["registrationDanceID", "registrationEventID", "registrationToken"]
-    .some(column => columnMap[column as EntryColumn] !== undefined);
-
   const missing = Object.entries(REQUIRED_ENTRY_COLUMNS)
     .filter(([key]) => columnMap[key as EntryColumn] === undefined)
     .map(([, label]) => label);
@@ -676,27 +699,44 @@ function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryCol
     .join(" · ");
   const routinesBySegment = new Map<string, Routine[]>();
   const segmentOrder = new Map<string, number>();
-  const sectionTitle = (row: unknown[]) => {
-    const values = row.map(cleanText).filter(Boolean);
-    return values.length === 1 && /^(?:BLOQUE|BLOCK)\s+\d+[A-Z]?(?:\b|\s|:)/i.test(values[0]) ? values[0] : "";
-  };
-  let currentSegment = linkedProgram
-    ? rows.slice(0,headerIndex).map(sectionTitle).filter(Boolean).at(-1) || sheetName : sheetName;
+  const segmentTitles = new Map<string, string>();
+  let exhibitionCount = 0;
+  let currentTitle = sheetTitle;
+  let currentSegment = rows.slice(0, headerIndex)
+    .map((row) => programSectionTitle(row, columnMap)).filter(Boolean).at(-1) || sheetName;
   for (let rowIndex = headerIndex + 1; rowIndex < rows.length; rowIndex += 1) {
     const row = rows[rowIndex];
-    if (linkedProgram) {
-      const nextHeader = entryColumnMap(row,aliases);
-      if (hasMinimumEntryColumns(nextHeader)) {
-        // The web's Motion/Aerial sections can have different column counts.
-        // Metadata remains mandatory on every actual data row.
-        columnMap=nextHeader;
-        continue;
-      }
-      const title=sectionTitle(row);
-      if (title) { currentSegment=title; continue; }
+    const nextHeader = repeatedEntryHeader(row, aliases);
+    if (nextHeader) {
+      columnMap = nextHeader;
+      continue;
+    }
+    const title = programSectionTitle(row, columnMap);
+    if (title) {
+      currentSegment = title;
+      currentTitle = row.map(cleanText).filter(Boolean).join(" · ");
+      continue;
+    }
+    if ([columnMap.division, columnMap.category].some((index) =>
+      /\b(?:EXHIBICION|EXHIBITION)\b/.test(headerKey(rowText(row, index))))) {
+      exhibitionCount += 1;
+      continue;
     }
     const name = rowText(row, columnMap.name);
+    const explicitID = columnMap.entryID !== undefined
+      ? rowText(row, columnMap.entryID)
+      : columnMap.name === 0 ? "" : routineIDText(row[0]);
     if (!name) {
+      if (explicitID && rowText(row, columnMap.academy)
+        && [columnMap.division, columnMap.genre, columnMap.category].some((index) => rowText(row, index))) {
+        const sourceRow = XLSX.utils.decode_range(sheet["!ref"] || "A1").s.r + rowIndex + 1;
+        throw new HTTPError(422, `${sheetName}, fila ${sourceRow}: falta el nombre de la coreografía #${explicitID}.`);
+      }
+      continue;
+    }
+    const hasEntryDetails = [columnMap.academy, columnMap.division, columnMap.genre, columnMap.category, columnMap.participant]
+      .some((index) => rowText(row, index));
+    if (!explicitID && !hasEntryDetails && /^(?:PREMIACION(?:ES)?|RECESO|DESCANSO|INTERMEDIO|BREAK)(?:\b|$)/.test(headerKey(name))) {
       continue;
     }
 
@@ -706,19 +746,15 @@ function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryCol
     if (!routinesBySegment.has(segmentName)) {
       routinesBySegment.set(segmentName, routines);
       segmentOrder.set(segmentName, segmentOrder.size + 1);
+      segmentTitles.set(segmentName, currentTitle);
     }
-    const explicitID = columnMap.entryID !== undefined
-      ? rowText(row, columnMap.entryID)
-      : columnMap.name === 0
-      ? ""
-      : routineIDText(row[0]);
     const routineID = routineIDText(explicitID) || `${blockID}-${routines.length + 1}`;
     const duration = rowText(row, columnMap.duration) || inferredDuration(sheet, rowIndex + 1, columnMap.time);
     routines.push({
       id: routineID,
       blockID,
       block: segmentName,
-      name: titleCase(name),
+      name,
       academy: rowText(row, columnMap.academy),
       division: rowText(row, columnMap.division),
       genre: rowText(row, columnMap.genre),
@@ -733,10 +769,11 @@ function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryCol
     });
   }
 
+  if (exhibitionCount) warnings.push(`${sheetName}: se omitieron ${exhibitionCount} presentaciones de exhibición.`);
   return Array.from(routinesBySegment.entries()).map(([segmentName, routines]) => ({
     blockID: stableID(segmentName),
     name: segmentName,
-    title: sheetTitle,
+    title: segmentTitles.get(segmentName) || sheetTitle,
     sortOrder: Number.parseInt(routines[0]?.id ?? "", 10) || segmentOrder.get(segmentName) || 0,
     isActive: false,
     routines,
@@ -975,6 +1012,7 @@ function heroImageForPerson(name: string): string {
 
 function aliasBaseForGenre(genre: string): string | undefined {
   const genreKey = normalized(genre);
+  if (headerCompactKey(genre) === "OPENMOTION") return "CONTEMPORANEO";
   if (genreKey.startsWith("OPEN:")) {
     return "DANZA AEREA";
   }
