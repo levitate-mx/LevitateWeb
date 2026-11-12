@@ -45,7 +45,6 @@ export function ReleveVotingAdminPanel({ refreshToken, onChanged }: { refreshTok
       </div>
       {confirmOpen && data?.poll.status !== 'open' ? <div className="ja-releve-confirm" role="group" aria-label="Confirmar apertura de votación">
         <p>Se recibirán votos reales por los cinco participantes. No se pueden cambiar ni reiniciar los votos guardados.</p>
-        <p>La foto de Mariana sigue pendiente; su opción también estará disponible para votar.</p>
         <div className="ja-releve-buttons"><button className="ja-primary" disabled={busy} onClick={() => void change('open')}>Confirmar apertura</button><button disabled={busy} onClick={() => setConfirmOpen(false)}>Cancelar</button></div>
       </div> : null}
     </div>

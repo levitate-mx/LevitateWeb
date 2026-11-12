@@ -12,9 +12,9 @@ Incluye cinco opciones: Estrella Mística, Queen of Cosmic Fever, Con amor,
 Guardiana del mar y Reloj de los 70s y 80s. La galería conserva la distribución
 2–1–2 y muestra academia, coreografía y nombre completo, en ese orden.
 
-La foto de Mariana sigue pendiente. Su opción es seleccionable cuando la
-votación está abierta, para no excluir a una participante confirmada por faltar
-su foto. La confirmación vuelve a mostrar la identidad elegida.
+Las cinco opciones tienen su fotografía aprobada. La foto de Mariana Álvarez
+Dorado se incorporó el 12 de noviembre de 2026 a Reloj de los 70s y 80s, de
+CREA. La confirmación vuelve a mostrar la foto y la identidad elegida.
 
 ## Voto único aproximado por dispositivo
 

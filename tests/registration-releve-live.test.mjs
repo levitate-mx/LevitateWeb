@@ -80,7 +80,7 @@ test('same-cookie fingerprint changes cannot replace identity; distinct devices 
   const modified=await f.connect('b'.repeat(32),a.cookie);assert.equal(modified.data.voter.hasVoted,true);
   const b=await f.connect('b'.repeat(32));assert.equal(b.data.voter.hasVoted,false);await f.vote(b.cookie,'mariana');
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM releve_voting_ballots').get().n,2);
-  assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM releve_voting_ballots WHERE candidate_id='mariana'").get().n,1,'a missing photo never excludes a confirmed candidate');
+  assert.equal(f.sqlite.prepare("SELECT COUNT(*) n FROM releve_voting_ballots WHERE candidate_id='mariana'").get().n,1,'the confirmed candidate remains eligible');
 });
 
 test('concurrent submissions create one immutable ballot and closure is enforced in the insert itself',async t=>{
