@@ -35,7 +35,7 @@
     "PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL": "musica.levitate@gmail.com",
     "JUDGING_SUPABASE_URL": "https://twazfaytgmgeyqeopgut.supabase.co",
     "JUDGING_SELECTABLE_JUDGE_USER_IDS": "ad8fa4eb-3095-4b73-a34f-b8b596f588bf",
-    "JUDGING_LEVITATE_EVENT_IDS": "0bea286d-31ad-462c-968a-2744c57ea9c3,25cf168b-4bf1-423f-b2c2-42897d3f8110,ef1dc272-99d5-425e-b930-6f3959b7c8b2,a62f724b-9d66-47ea-8dee-d54294783130"
+    "JUDGING_LEVITATE_EVENT_IDS": "a62f724b-9d66-47ea-8dee-d54294783130"
   },
   "d1_databases": [
     {
