@@ -6,6 +6,9 @@ El ejemplo público muestra la experiencia con datos ilustrativos. El material r
 
 `/mi-levitate` abre el espacio individual desde el QR del diploma. El nombre es el protagonista; los colores, Inter, botones y proporciones siguen la web actual. No hay folio visible ni foto grupal en la portada.
 
+Los [invitados sin CURP](participant-portal-guests.md) utilizan el mismo portal
+y diseño, con su identidad y sus presentaciones guardadas aparte del registro.
+
 Cada presentación conserva su puntaje y escala, medalla, hoja de jueceo y galería. Un selector cambia estos contenidos juntos. El lugar se muestra únicamente si el resultado publicado declara competencia directa, al menos dos presentaciones elegibles y un lugar oficial entre 1 y 3. La medalla no se calcula a partir del lugar ni se adivina a partir de una escala fija.
 
 El diploma pertenece al participante y la edición. La galería y el jueceo pertenecen a la presentación: los integrantes de una pieza grupal reciben el mismo álbum sin duplicar archivos.

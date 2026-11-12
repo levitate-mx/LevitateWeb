@@ -8,6 +8,7 @@ import { processParticipantPhoto } from "./participant-photo-process.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
 import { createBlockPublicationGate, getBlockPublication, saveBlockPublicationMode, closeParticipantBlock, reopenParticipantBlock } from "./participant-block-publication.js";
+import { ensureParticipantGuest, issueParticipantGuestAccess, linkRegisteredReleve } from "./participant-guests.js";
 
 const cookieName = "levitate_participant_session";
 const sessionSeconds = 60 * 60 * 24 * 7;
@@ -82,7 +83,7 @@ async function eventById(db, eventId) {
   return event;
 }
 async function participantById(db, participantId) {
-  const participant = await first(db, `SELECT p.*, a.name AS academy_name FROM registration_participants p
+  const participant = await first(db, `SELECT p.*, a.name AS academy_name FROM participant_portal_people p
     JOIN registration_academies a ON a.id = p.academy_id WHERE p.id = ?`, participantId);
   if (!participant) fault("portal_participant_not_found", "No se encontró al participante.", 404);
   return participant;
@@ -95,9 +96,8 @@ async function routineById(db, routineId) {
 async function session(db, request) {
   const token = readCookie(request);
   if (!token || !/^[\w-]{43}$/.test(token)) fault("portal_session_missing", "Abre el enlace personal de tu diploma.", 401);
-  const grant = await first(db, `SELECT a.* FROM participant_portal_sessions s
-    JOIN participant_portal_access a ON a.id = s.access_id
-    WHERE s.token_hash = ? AND s.expires_at > datetime('now') AND a.active = 1`, await hash(token));
+  const grant = await first(db, `SELECT * FROM participant_portal_authenticated_access
+    WHERE session_token_hash = ? AND expires_at > datetime('now') AND active = 1`, await hash(token));
   if (!grant) fault("portal_session_invalid", "Tu acceso expiró o fue reemplazado. Abre tu enlace personal.", 401);
   return grant;
 }
@@ -149,6 +149,7 @@ async function me(db, env, request, getJudgingSnapshot) {
 async function participantData(db, env, participantId, eventId, adminPreview = false, getJudgingSnapshot) {
   const participant = await participantById(db, participantId);
   const event = await eventById(db, eventId);
+  if (participant.is_guest && participant.portal_event_id !== event.id) fault("portal_event_not_found", "No se encontró la edición.", 404);
   const link = adminPreview ? adminAssetUrl : assetUrl;
   const publication = adminPreview ? null : await createBlockPublicationGate({ db, eventId: event.id });
   const automaticCompletion = publication?.mode === "block_complete";
@@ -164,8 +165,8 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   const rows = await all(db, `SELECT r.*, d.id AS registration_dance_id, d.academy_id AS registration_academy_id,
     d.venue AS registration_venue, d.program_json AS registration_program_json, d.title, d.genre, d.subgenre, d.category, d.level, p.division,
     (SELECT COUNT(*) FROM registration_dance_participants members WHERE members.dance_id = d.id) AS participant_count
-    FROM registration_dance_participants dp JOIN registration_dances d ON d.id = dp.dance_id
-    JOIN registration_participants p ON p.id = dp.participant_id
+    FROM participant_portal_memberships dp JOIN registration_dances d ON d.id = dp.dance_id
+    JOIN participant_portal_people p ON p.id = dp.participant_id
     LEFT JOIN participant_portal_routines r ON r.dance_id = d.id AND r.event_id = ?
     WHERE dp.participant_id = ? AND (r.id IS NOT NULL OR (? = 1 AND d.venue = ?))
     ORDER BY d.title, d.id`, event.id, participant.id, registrationFallback ? 1 : 0, event.venue);
@@ -173,7 +174,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   const photoDanceId = preferredPhotoDance(photoDances)?.registration_dance_id ?? null;
   const assets = adminPreview || event.published ? await all(db, `SELECT a.* FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
-    JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
+    JOIN participant_portal_memberships dp ON dp.dance_id = r.dance_id
     WHERE a.event_id = ? AND dp.participant_id = ?
       AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.dance_id = ?))
       ${adminPreview ? "" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR r.photos_published = 1)`}
@@ -186,7 +187,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   // Existing issued QR grants also explicitly associate records without a
   // choreography to this edition; keep those participants in the automation.
   const issuedParticipant = registrationFallback && !rows.length && (adminPreview || event.published)
-    ? await first(db,'SELECT id FROM participant_portal_access WHERE participant_id=? AND event_id=? AND active=1 LIMIT 1',participant.id,event.id) : null;
+    ? await first(db,'SELECT id FROM participant_portal_grants WHERE participant_id=? AND event_id=? AND active=1 LIMIT 1',participant.id,event.id) : null;
   const automaticDiploma = Boolean(!document && (adminPreview || event.published) && registrationFallback && (rows.length || issuedParticipant));
   const data = { ...(adminPreview ? { adminPreview: true } : {}),
     participant: { id: participant.id, name: participant.full_name, academy: participant.academy_name },
@@ -247,11 +248,11 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       const [currentRows, currentAssets] = await Promise.all([
         all(db, `SELECT r.id,r.photos_published FROM participant_portal_routines r
           JOIN participant_portal_events e ON e.id=r.event_id
-          JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
+          JOIN participant_portal_memberships dp ON dp.dance_id=r.dance_id
           WHERE r.event_id=? AND dp.participant_id=? AND e.published=1 AND ${routineVisibility}`, event.id, participant.id),
         all(db, `SELECT a.id,a.allow_download FROM participant_portal_assets a
           JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
-          JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
+          JOIN participant_portal_memberships dp ON dp.dance_id=r.dance_id
           WHERE a.event_id=? AND dp.participant_id=? AND a.published=1`, event.id, participant.id),
       ]);
       const confirmed = await publication.confirm();
@@ -320,7 +321,7 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
       publication = await createBlockPublicationGate({ db, eventId: event.id });
       const routineVisibility = publication.mode === "block_complete" ? "coalesce(r.publication_blocked,0)=0" : "r.status='published'";
       const membership = await first(db, `SELECT r.id,r.dance_id,r.source_event_id,r.source_routine_id,r.photos_published FROM participant_portal_routines r
-        JOIN registration_dance_participants dp ON dp.dance_id = r.dance_id
+        JOIN participant_portal_memberships dp ON dp.dance_id = r.dance_id
         WHERE r.id = ? AND r.event_id = ? AND ${routineVisibility} AND dp.participant_id = ?`, asset.routine_id, grant.event_id, grant.participant_id);
       if (!membership || (asset.kind === "photo" && !membership.photos_published)) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
       if (publication.mode === "block_close" || publication.mode === "block_complete") {
@@ -352,8 +353,8 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
     const current = await first(db, `SELECT a.id FROM participant_portal_assets a
       JOIN participant_portal_events e ON e.id=a.event_id
       JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
-      JOIN registration_dance_participants dp ON dp.dance_id=r.dance_id
-      JOIN participant_portal_access g ON g.event_id=e.id AND g.participant_id=dp.participant_id
+      JOIN participant_portal_memberships dp ON dp.dance_id=r.dance_id
+      JOIN participant_portal_grants g ON g.event_id=e.id AND g.participant_id=dp.participant_id
       WHERE a.id=? AND g.id=? AND g.active=1 AND e.published=1 AND ${routineVisibility} AND a.published=1
         AND (a.kind='judge_sheet' OR (a.kind='photo' AND r.photos_published=1 AND (?=0 OR a.allow_download=1)))`,
       asset.id, grant.id, new URL(request.url).searchParams.get("download") === "1" ? 1 : 0);
@@ -370,10 +371,11 @@ async function adminList(db, request) {
   const q = (params.get("q") || "").slice(0, 100);
   const participantId = (params.get("participantId") || "").slice(0, 100);
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(params.get("offset") || "0", 10) || 0));
-  const people = await all(db, `SELECT p.id, p.full_name AS name, a.name AS academy FROM registration_participants p
-    JOIN registration_academies a ON a.id = p.academy_id WHERE (p.full_name LIKE ? OR a.name LIKE ?) AND (? = '' OR p.id = ?) ORDER BY p.full_name, p.id LIMIT 101 OFFSET ?`, `%${q}%`, `%${q}%`, participantId, participantId, offset);
+  const people = await all(db, `SELECT p.id, p.full_name AS name, a.name AS academy FROM participant_portal_people p
+    JOIN registration_academies a ON a.id = p.academy_id WHERE (p.full_name LIKE ? OR a.name LIKE ?) AND (? = '' OR p.id = ?)
+      AND (p.portal_event_id IS NULL OR p.portal_event_id=?) ORDER BY p.full_name, p.id LIMIT 101 OFFSET ?`, `%${q}%`, `%${q}%`, participantId, participantId, eventId, offset);
   const visiblePeople = people.slice(0, 100);
-  const accesses = visiblePeople.length ? await all(db, `SELECT id, participant_id, event_id, active FROM participant_portal_access
+  const accesses = visiblePeople.length ? await all(db, `SELECT id, participant_id, event_id, active FROM participant_portal_grants
     WHERE participant_id IN (${visiblePeople.map(() => "?").join(",")}) ORDER BY created_at DESC`, ...visiblePeople.map((person) => person.id)) : [];
   const selected = eventId ? await eventById(db, eventId) : null;
   const routineOffset = Math.max(0, Math.min(1000000, Number.parseInt(params.get("routineOffset") || "0", 10) || 0));
@@ -409,6 +411,7 @@ async function uploadAsset(db, env, input, getMediaStore) {
   if (!assetKinds.has(input.kind)) fault("portal_invalid_asset", "Revisa el tipo de archivo.");
   const routine = input.kind !== "diploma" ? await routineById(db, str(input.routineId, "la participación", 100)) : null;
   const participant = input.kind === "diploma" ? await participantById(db, str(input.participantId, "el participante", 100)) : null;
+  if (participant?.is_guest) fault("portal_guest_document", "Los invitados utilizan su reconocimiento automático.");
   if (routine && routine.event_id !== event.id) fault("portal_invalid_asset", "El archivo no corresponde a esta edición.");
   if (typeof input.base64Data !== "string" || input.base64Data.length > Math.ceil(fileLimit / 3) * 4 || input.base64Data.length % 4 !== 0) fault("portal_invalid_asset", "No pudimos leer el archivo.");
   if (input.kind === "photo" && input.base64Data.length > Math.ceil(photoFileLimit / 3) * 4) fault("portal_file_too_large", "Prepara la foto desde administración antes de cargarla.", 413);
@@ -525,6 +528,14 @@ async function photoTrialContext(db, input) {
 }
 
 async function runPhotoSync(db, env, { participantId, eventId, adminPreview, assertAuthorized, getPhotoDiscovery, getMediaStore }) {
+  await assertAuthorized();
+  const guest = await first(db, 'SELECT event_id FROM participant_portal_guests WHERE id=?', participantId);
+  if (guest) {
+    if (guest.event_id !== eventId) fault('portal_event_not_found', 'No se encontró la edición.', 404);
+    // Guests can read approved photos of their explicitly assigned dances. Do
+    // not run registration-only Drive discovery or create registration records.
+    return json({ participantId, eventId, status: 'unavailable', hasMore: false, imported: 0 });
+  }
   return json(await syncParticipantDrivePhotos({ db, env, participantId, eventId, adminPreview,
     assertAuthorized, getDiscovery: getPhotoDiscovery, getMediaStore: () => resolveMediaStore(env, getMediaStore),
     processPhoto: ({ bytes, contentType, blur }) => processParticipantPhoto({ images: env.IMAGES, bytes, contentType, blur }),
@@ -676,9 +687,14 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
       }
       return json({ eventId });
     }
+    case "guest.create":
+      return json(await ensureParticipantGuest({ db, input, actorId }));
+    case "releve.link":
+      return json(await linkRegisteredReleve({ db, input, actorId }));
     case "access.create": {
       const event = await eventById(db, str(input.eventId,"la edición",100));
       const participant = await participantById(db,str(input.participantId,"el participante",100));
+      if (participant.is_guest) return json(await issueParticipantGuestAccess({ db, guestId: participant.id, eventId: event.id, rotate: input.rotate === true }));
       const previous = await first(db,"SELECT id FROM participant_portal_access WHERE participant_id = ? AND event_id = ? AND active = 1",participant.id,event.id);
       if (previous && input.rotate !== true) fault("portal_access_exists","Ya existe un enlace activo. Elige reemplazarlo para crear otro.",409);
       const accessId = id(), token = randomToken();
@@ -693,9 +709,13 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
       }
       return json({ id: accessId, token, entryUrl: `/mi-levitate#access=${token}` });
     }
-    case "access.revoke":
-      await db.prepare("UPDATE participant_portal_access SET active=0,revoked_at=datetime('now') WHERE id=?").bind(str(input.accessId,"el acceso",100)).run();
+    case "access.revoke": {
+      const accessId = str(input.accessId,"el acceso",100);
+      const access = await first(db, 'SELECT is_guest FROM participant_portal_grants WHERE id=?', accessId);
+      const table = access?.is_guest ? 'participant_portal_guest_access' : 'participant_portal_access';
+      await db.prepare(`UPDATE ${table} SET active=0,revoked_at=datetime('now') WHERE id=?`).bind(accessId).run();
       return json({ ok:true });
+    }
     case "routine.save": {
       const event = await eventById(db,str(input.eventId,"la edición",100));
       const dance = await first(db,"SELECT id,venue FROM registration_dances WHERE id=?",str(input.danceId,"la coreografía",100));
@@ -820,19 +840,23 @@ export async function handleParticipantPortal(request, env, { requireAdmin, getM
       method(request,["POST"]);
       const input = await body(request);
       if (typeof input.token !== "string" || !/^[\w-]{43}$/.test(input.token)) fault("portal_access_invalid","El enlace personal no es válido.",401);
-      const grant = await first(db,"SELECT id FROM participant_portal_access WHERE token_hash=? AND active=1",await hash(input.token));
+      const grant = await first(db,"SELECT id,is_guest FROM participant_portal_grants WHERE token_hash=? AND active=1",await hash(input.token));
       if (!grant) fault("portal_access_invalid","El enlace personal expiró o fue reemplazado.",401);
       const token = randomToken();
+      const table = grant.is_guest ? 'participant_portal_guest_sessions' : 'participant_portal_sessions';
       await db.batch([
-        db.prepare("DELETE FROM participant_portal_sessions WHERE expires_at <= datetime('now')"),
-        db.prepare("INSERT INTO participant_portal_sessions(token_hash,access_id,expires_at) VALUES(?,?,datetime('now','+7 days'))").bind(await hash(token),grant.id),
+        db.prepare(`DELETE FROM ${table} WHERE expires_at <= datetime('now')`),
+        db.prepare(`INSERT INTO ${table}(token_hash,access_id,expires_at) VALUES(?,?,datetime('now','+7 days'))`).bind(await hash(token),grant.id),
       ]);
       return json({ ok:true },200,{"set-cookie":cookie(token)});
     }
     if (path === "/api/participant/logout" || path === "/api/participant/access/logout") {
       method(request,["POST"]);
       const token=readCookie(request);
-      if (token) await db.prepare("DELETE FROM participant_portal_sessions WHERE token_hash=?").bind(await hash(token)).run();
+      if (token) await db.batch([
+        db.prepare("DELETE FROM participant_portal_sessions WHERE token_hash=?").bind(await hash(token)),
+        db.prepare("DELETE FROM participant_portal_guest_sessions WHERE token_hash=?").bind(await hash(token)),
+      ]);
       return json({ok:true},200,{"set-cookie":cookie("",true)});
     }
     if (path === '/api/participant/photos/sync') {

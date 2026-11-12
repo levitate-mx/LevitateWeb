@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import worker from '../worker/index.js';
 import { handleParticipantPortal } from '../worker/participant-portal.js';
+import { issueParticipantGuestAccess } from '../worker/participant-guests.js';
 const photoSource = await readFile(new URL('./fixtures/participant-photo-prepared.jpg', import.meta.url));
 const rawPhotoSource = await readFile(new URL('./fixtures/participant-photo-source.png', import.meta.url));
 
@@ -813,4 +814,132 @@ test('automatic source sheets derive ownership from QR, need edition release and
   assert.equal(bucket.objects.size,0);assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_assets').get().n,0);
   db.sqlite.prepare('UPDATE participant_portal_judging_sources SET enabled=0').run();
   const previousReads=reads;data=await call();assert.equal(reads,previousReads);assert.equal(data.routines[0].judging.status,'pending');
+});
+
+async function guestFixture(t) {
+  const f = await fixture(t);
+  f.db.sqlite.exec(`INSERT INTO registration_choreographers(id,academy_id,full_name) VALUES('guest-teacher','academy','Maestra Invitada');
+    INSERT INTO registration_academies(id,name,contact_name,email) VALUES('other-academy','Otra academia','Otra','other@example.test');
+    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,is_releve) VALUES
+    ('guest-dance','academy','Relevé de invitada','aereo','tela','solo','intermedio','edomex',1),
+    ('guest-student-dance','academy','Grupo del programa','motion','jazz','grupo',NULL,'edomex',0),
+    ('foreign-guest-dance','other-academy','Rutina ajena','motion','jazz','solo',NULL,'edomex',0);
+    INSERT INTO registration_dance_choreographers(dance_id,choreographer_id) VALUES('guest-dance','guest-teacher');`);
+  for (const [dance, participants] of [['guest-dance','REGISTRO RELEVÉ'], ['guest-student-dance','Participante Invitada'], ['foreign-guest-dance','Participante Invitada']]) {
+    f.db.sqlite.prepare('UPDATE registration_dances SET program_json=? WHERE id=?')
+      .run(JSON.stringify({eventId:'test-event',division:dance==='guest-dance'?'releve':'petite',participants}),dance);
+  }
+  f.guestInput = {action:'guest.create',eventId:'test-event',academyId:'academy',role:'releve',choreographerId:'guest-teacher',danceIds:['guest-dance']};
+  f.studentInput = {action:'guest.create',eventId:'test-event',academyId:'academy',role:'participant',name:'Participante Invitada',danceIds:['guest-student-dance']};
+  f.guestAccess = async (input=f.guestInput) => {
+    const {data:person} = await f.admin(input);
+    const access = await f.access(person.guestId);
+    return {...access,person};
+  };
+  return f;
+}
+
+test('guest creation is admin-only, programme-bound and does not create registrations or identity documents', async t => {
+  const f = await guestFixture(t), baseline = f.db.sqlite.prepare('SELECT COUNT(*) n FROM registration_participants').get().n;
+  await f.request('/api/registration/admin/participant-portal',{method:'POST',body:f.guestInput,expected:401});
+  await f.request('/api/registration/admin/participant-portal',{method:'POST',body:f.guestInput,cookie:'levitate_registration_session=academy-user-session',expected:403});
+  for (const input of [
+    {...f.guestInput,academyId:'other-academy'}, {...f.guestInput,danceIds:['dance-b']},
+    {...f.guestInput,danceIds:['foreign-guest-dance']}, {...f.guestInput,danceIds:['guest-dance','guest-dance']},
+    {...f.guestInput,eventId:{bad:true}}, {...f.studentInput,name:'Persona no acreditada'},
+    {...f.studentInput,danceIds:['foreign-guest-dance']},
+  ]) await f.admin(input,400);
+  const first = await f.admin(f.guestInput), again = await f.admin(f.guestInput);
+  assert.equal(again.data.guestId,first.data.guestId); assert.equal(again.data.reused,true);
+  await f.admin({...f.guestInput,danceIds:['guest-dance','guest-student-dance']},400);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM registration_participants').get().n,baseline);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_guests').get().n,1);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM registration_inscription_orders').get().n,0);
+  f.db.sqlite.prepare('UPDATE registration_choreographers SET full_name=? WHERE id=?').run('Mariana Prueba','guest-teacher');
+  await f.admin(f.guestInput,409);
+});
+
+test('guest QR opens the same private portal, scoped to its own person, edition and explicit presentations', async t => {
+  const f = await guestFixture(t), guest = await f.guestAccess(), student = await f.guestAccess(f.studentInput);
+  assert.match(guest.grant.entryUrl,/^\/mi-levitate#access=[\w-]{43}$/);
+  assert.match(guest.headers.get('set-cookie'),/HttpOnly; Secure; SameSite=Strict/);
+  const own = await f.request('/api/participant/me',{cookie:guest.cookie});
+  assert.equal(own.data.participant.name,'Maestra Invitada');
+  assert.deepEqual(own.data.routines.map(row=>row.title),['Relevé de invitada']);
+  assert.equal(own.data.diploma.generator.name,'Maestra Invitada');
+  assert.doesNotMatch(JSON.stringify(own.data),/curp|token_hash|Otra Persona|Mariana Prueba/);
+  const child = await f.request('/api/participant/me',{cookie:student.cookie});
+  assert.deepEqual(child.data.routines.map(row=>row.title),['Grupo del programa']);
+  await f.request('/api/participant/me?eventId=another-event',{cookie:guest.cookie,expected:404});
+  await f.request('/api/participant/photos/sync',{method:'POST',cookie:guest.cookie,body:{eventId:'test-event',participantId:student.person.guestId},expected:404});
+  const sync = await f.request('/api/participant/photos/sync',{method:'POST',cookie:guest.cookie,body:{eventId:'test-event'}});
+  assert.deepEqual(sync.data,{participantId:guest.person.guestId,eventId:'test-event',status:'unavailable',hasMore:false,imported:0});
+  f.db.sqlite.prepare('INSERT INTO participant_portal_guest_dances(guest_id,dance_id) VALUES(?,?)').run(guest.person.guestId,'foreign-guest-dance');
+  const defended = await f.request('/api/participant/me',{cookie:guest.cookie});
+  assert.deepEqual(defended.data.routines.map(row=>row.title),['Relevé de invitada']);
+  const list = await f.request('/api/registration/admin/participant-portal?eventId=test-event&q=Invitada',{cookie:adminCookie});
+  assert.equal(list.data.participants.length,2);
+  assert.ok(list.data.participants.every(person=>person.accesses.some(access=>access.active)));
+});
+
+test('guest data obeys publication and its media cannot be opened by another guest or participant', async t => {
+  const f = await guestFixture(t), guest = await f.guestAccess(), other = await f.guestAccess(f.studentInput), regular = await f.access();
+  const saved = await f.admin({action:'routine.save',eventId:'test-event',danceId:'guest-dance',photosPublished:true,result:result(),judging});
+  const uploaded = await f.admin({action:'asset.upload',eventId:'test-event',routineId:saved.data.routineId,kind:'photo',fileName:'guest.jpg',contentType:'image/jpeg',base64Data:photoSource.toString('base64')});
+  const url = '/api/participant/assets/'+uploaded.data.assetId;
+  await f.request(url,{cookie:guest.cookie,expected:404});
+  await f.admin({action:'asset.publish',assetId:uploaded.data.assetId,published:true});
+  await f.admin({action:'routine.publish',routineId:saved.data.routineId});
+  await f.request(url,{cookie:guest.cookie});
+  await f.request(url,{cookie:other.cookie,expected:404});
+  await f.request(url,{cookie:regular.cookie,expected:404});
+  await f.request(url,{expected:401});
+  await f.admin({action:'event.upsert',event:{id:'test-event',title:'Levitate',season:'Otoño',venue:'edomex',published:false}});
+  const hidden = await f.request('/api/participant/me',{cookie:guest.cookie});
+  assert.equal(hidden.data.diploma.status,'pending');
+  assert.equal(hidden.data.routines[0].result.status,'pending');
+  assert.equal(hidden.data.routines[0].photos.count,0);
+  await f.request(url,{cookie:guest.cookie,expected:404});
+});
+
+test('guest duplicate issue refuses rotation, explicit rotation/revocation invalidate only that guest', async t => {
+  const f = await guestFixture(t), guest = await f.guestAccess(), regular = await f.access();
+  await f.admin({action:'access.create',eventId:'test-event',participantId:guest.person.guestId},409);
+  const rotated = await f.admin({action:'access.create',eventId:'test-event',participantId:guest.person.guestId,rotate:true});
+  await f.request('/api/participant/me',{cookie:guest.cookie,expected:401});
+  await f.request('/api/participant/access/exchange',{method:'POST',body:{token:guest.grant.token},expected:401});
+  const exchanged = await f.request('/api/participant/access/exchange',{method:'POST',body:{token:rotated.data.token}});
+  const cookie = exchanged.headers.get('set-cookie').split(';')[0];
+  await f.admin({action:'access.revoke',accessId:rotated.data.id});
+  await f.request('/api/participant/me',{cookie,expected:401});
+  await f.request('/api/participant/me',{cookie:regular.cookie});
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_access WHERE active=1').get().n,1);
+});
+
+test('an existing participant can receive its verified Relevé presentation while preserving the original QR and registration', async t => {
+  const f = await guestFixture(t), existing = await f.access();
+  f.db.sqlite.prepare('UPDATE registration_choreographers SET full_name=? WHERE id=?').run('Mariana Prueba','guest-teacher');
+  const input = {action:'releve.link',eventId:'test-event',participantId:'person-a',choreographerId:'guest-teacher',danceId:'guest-dance'};
+  await f.admin({...input,participantId:'person-b'},400);
+  await f.admin(input); await f.admin(input);
+  const data = await f.request('/api/participant/me',{cookie:existing.cookie});
+  assert.deepEqual(data.data.routines.map(row=>row.title).sort(),['Relevé de invitada','Vuelo']);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_additional_dances').get().n,1);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM registration_dance_participants').get().n,2);
+  assert.equal(f.db.sqlite.prepare('SELECT id FROM participant_portal_access WHERE active=1').get().id,existing.grant.id);
+});
+
+test('guest issuance stops before a database write if its private QR cannot be saved and concurrent issue cannot create two active grants', async t => {
+  const f = await guestFixture(t), {data:person} = await f.admin(f.guestInput);
+  let prepared;
+  await assert.rejects(issueParticipantGuestAccess({db:f.db,guestId:person.guestId,eventId:'test-event',beforeInsert: async grant=>{
+    prepared=grant;
+    throw new Error('Private destination unavailable');
+  }}));
+  assert.equal(prepared.token.length,43); assert.equal(prepared.tokenHash.length,64);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_guest_access').get().n,0);
+  const results = await Promise.allSettled([1,2].map(()=>issueParticipantGuestAccess({db:f.db,guestId:person.guestId,eventId:'test-event'})));
+  assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal(results.find(result=>result.status==='rejected').reason.statusCode,409);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_guest_access WHERE active=1').get().n,1);
 });

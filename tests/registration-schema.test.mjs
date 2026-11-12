@@ -599,3 +599,21 @@ for (const migration of ["prepare", "standalone"]) {
     assert.equal(writes.length, writeCount);
   });
 }
+
+test('guest preparation is additive and preserves existing registrations and QR hashes on every run', async t => {
+  const migration = readFileSync(new URL('../db/registration_participant_guests.sql',import.meta.url),'utf8');
+  assert.ok(baseSchema.includes(migration));
+  const {sqlite,db} = fixture(t,baseSchema.replace(migration,''));
+  seed(sqlite);
+  sqlite.exec(`INSERT INTO participant_portal_events(id,title,season,venue,starts_at) VALUES('event','Edición','Otoño','edomex','2026-11-14');
+    INSERT INTO participant_portal_access(id,participant_id,event_id,token_hash) VALUES('original-access','participant-1','event','original-private-qr-hash');`);
+  const original = sqlite.prepare('SELECT * FROM participant_portal_access').all();
+  const participants = sqlite.prepare('SELECT * FROM registration_participants').all();
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.filter(step=>/CREATE VIEW/.test(step.sql)).length,4);
+  await prepareRegistrationSchema(db,{apply:true});
+  assert.deepEqual(sqlite.prepare('SELECT * FROM participant_portal_access').all(),original);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM registration_participants').all(),participants);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_guests').get().n,0);
+  assert.equal((await prepareRegistrationSchema(db,{apply:true})).applied,0);
+});

@@ -6,6 +6,8 @@ const workshopStatements = workshopMigration.match(/CREATE TABLE[\s\S]*?\n\);|CR
 const participantPortalMigration = readFileSync(new URL("../../db/registration_participant_portal.sql", import.meta.url), "utf8");
 const participantPortalStatements = participantPortalMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE TRIGGER[\s\S]*?\nEND;/g) || [];
 const managedStatements = [...workshopStatements, ...participantPortalStatements];
+const participantGuestMigration = readFileSync(new URL("../../db/registration_participant_guests.sql", import.meta.url), "utf8");
+managedStatements.push(...(participantGuestMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;|CREATE VIEW[\s\S]*?;/g) || []));
 const participantBlockMigration = readFileSync(new URL("../../db/registration_participant_block_publication.sql", import.meta.url), "utf8");
 managedStatements.push(...(participantBlockMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
 const judgeMigration = readFileSync(new URL("../../db/registration_judge_workspace.sql", import.meta.url), "utf8");
@@ -294,7 +296,7 @@ const indexes = [
 export async function planRegistrationSchema(db) {
   const tableNames = [...new Set([...Object.keys(prerequisites), ...Object.keys(createdTables), ...managedTables.map((table) => table.name)])];
   const [objects, ...columnResults] = await db.read([
-    "SELECT name, type, tbl_name FROM sqlite_schema WHERE type IN ('table', 'index', 'trigger')",
+    "SELECT name, type, tbl_name FROM sqlite_schema WHERE type IN ('table', 'index', 'trigger', 'view')",
     ...tableNames.map((name) => `PRAGMA table_info(${name})`),
   ]);
   const tables = new Set(objects.filter((row) => row.type === "table").map((row) => row.name));
@@ -371,7 +373,7 @@ export async function planRegistrationSchema(db) {
     }
   }
   for (const sql of managedStatements) {
-    const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER) IF NOT EXISTS (\w+)/);
+    const [, type, name] = sql.match(/^CREATE (?:UNIQUE )?(TABLE|INDEX|TRIGGER|VIEW) IF NOT EXISTS (\w+)/);
     const existing = objects.find((row) => row.name === name);
     if (existing && existing.type !== type.toLowerCase()) throw new Error(`Unexpected schema object ${name}. No changes applied.`);
     if (!existing) steps.push({ description: `Create ${name}`, sql });
