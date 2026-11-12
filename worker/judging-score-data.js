@@ -1,4 +1,5 @@
 import { buildJudgingResultReport } from "./judging-result-report.js";
+import { levitateJudgesForRoutine } from "./judging-roster.js";
 
 // Server-confirmed judging sheets stay available alongside the per-block final
 // report derived with the new iOS application's configured official rules.
@@ -115,7 +116,7 @@ function expectedForBlock(judges, block, routine) {
   return matches.length ? matches : judges;
 }
 
-export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toISOString()) {
+export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toISOString(), { judgeRoster } = {}) {
   const sourceEvent = object(input.event);
   const eventId = text(sourceEvent.id);
   const warnings = new Set();
@@ -126,6 +127,16 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
   const blocks = uniqueRows(ordered(scoped("blocks")), (row) => text(row.block_id), "blocks", warn);
   const allJudges = uniqueRows(ordered(scoped("judges")), (row) => text(row.judge_id), "judges", warn);
   const judges = [...allJudges.values()].filter((judge) => normalized(judge.role) !== "ADMIN");
+  const blockFor = routine => blocks.get(text(routine.block_id))
+    ?? [...blocks.values()].find((item) => text(item.name) === text(routine.block))
+    ?? (text(routine.block_id) || text(routine.block)
+      ? { block_id: text(routine.block_id), name: text(routine.block), title: "" } : null);
+  const expectedByRoutine = new Map([...routines].map(([id, routine]) => {
+    const block = blockFor(routine);
+    if (judgeRoster === "levitate") return [id, levitateJudgesForRoutine(judges, routine, block, warn)];
+    const expected = expectedForBlock(judges, block, routine);
+    return [id, { judges: expected, expectedCount: expected.length, unavailable: false }];
+  }));
   const templates = uniqueRows(ordered(scoped("templates")), (row) => text(row.template_id), "templates", warn);
   const criterionRows = scoped("criteria");
   const criteriaByTemplate = new Map();
@@ -152,7 +163,10 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
     const rows = scoped(table).filter((row) => {
       const known = routines.has(text(row.routine_id)) && allJudges.has(text(row.judge_id));
       if (!known) warn(`Se omitieron filas de ${table} que no pertenecen a una rutina y juez del evento seleccionado.`);
-      return known;
+      // Ignore the other area's sheets before duplicate/invalid data can affect
+      // availability, progress, penalties, comments or the official admin score.
+      return known && (judgeRoster !== "levitate" || expectedByRoutine.get(text(row.routine_id)).judges
+        .some(judge => text(judge.judge_id) === text(row.judge_id)));
     });
     return uniqueRows(rows, idFor, table, warn, (row) => {
       if (table === "scores" || table === "penalties") unavailableRoutineIds.add(text(row.routine_id));
@@ -175,11 +189,9 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
   const usedScores = new Set();
   const rows = [...routines.values()].map((routine) => {
     const routineId = text(routine.routine_id);
-    const block = blocks.get(text(routine.block_id))
-      ?? [...blocks.values()].find((item) => text(item.name) === text(routine.block))
-      ?? (text(routine.block_id) || text(routine.block)
-        ? { block_id: text(routine.block_id), name: text(routine.block), title: "" } : null);
-    const expected = expectedForBlock(judges, block, routine);
+    const block = blockFor(routine);
+    const selection = expectedByRoutine.get(routineId);
+    const expected = selection.judges;
     const template = selectTemplate(routine, [...templates.values()]);
     const criteria = template ? criteriaByTemplate.get(text(template.template_id)) : null;
     if (!criteria?.length) warn("Hay rutinas sin una plantilla de evaluación reconocida con criterios válidos.");
@@ -242,9 +254,9 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
       id: routineId, name: text(routine.name), academy: text(routine.academy), state: text(routine.state), genre: text(routine.genre),
       division: text(routine.division), category: text(routine.category), level: text(routine.level),
       blockId: text(routine.block_id) || text(block?.block_id), blockName: text(block?.name) || text(routine.block),
-      status: unavailable ? "unavailable" : completedJudges === expected.length ? "complete"
+      status: unavailable || selection.unavailable ? "unavailable" : completedJudges === selection.expectedCount ? "complete"
         : judgeResults.some((judge) => judge.status === "partial" || judge.status === "complete") ? "partial" : "pending",
-      completedJudges, expectedJudges: expected.length, recordedScores, judges: judgeResults,
+      completedJudges, expectedJudges: selection.expectedCount, recordedScores, judges: judgeResults,
     };
   });
   if ([...scoreRows.keys()].some((scoreKey) => !usedScores.has(scoreKey))) {

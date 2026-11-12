@@ -203,10 +203,10 @@ test('judging admin routes authenticate before upstream reads and never write to
       { id: 'f3c2e100-1234-4567-8abc-987654321abc', name: 'Prisma Aurora Sandbox', is_active: true, event_type: 'event' }],
     blocks: [{ event_id: eventId, block_id: 'b1', name: 'Bloque 1' }],
     routines: [{ event_id: eventId, routine_id: 'r1', name: 'Pieza de prueba', genre: 'Jazz', block_id: 'b1' }],
-    judges: [{ event_id: eventId, judge_id: 'j1', name: 'Juez de prueba', role: 'judge' }],
+    judges: ['Eva Carrillo', 'Daniel Montalvo', 'Jorge Díaz'].map((name, index) => ({ event_id: eventId, judge_id: `j${index + 1}`, name, role: 'judge' })),
     criteria_templates: [{ event_id: eventId, template_id: 'jazz', genre: 'Jazz' }],
     criteria: [{ event_id: eventId, template_id: 'jazz', criterion_id: 1, label: 'Técnica', section: 'Arte', max_score: 10 }],
-    scores: [{ event_id: eventId, routine_id: 'r1', judge_id: 'j1', criterion_id: 1, value: 8 }],
+    scores: ['j1', 'j2', 'j3'].map(judge_id => ({ event_id: eventId, routine_id: 'r1', judge_id, criterion_id: 1, value: 8 })),
     penalties: [], feedback: [], special_awards: [],
   };
   const calls = [];

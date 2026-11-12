@@ -538,6 +538,12 @@ export function JudgingAdminWorkspace() {
     (r) => r.block_id === blockId,
   );
   const scores = new Map(bundle?.snapshot.rows.map((row) => [row.id, row]));
+  const scoreJudgeIds = new Set(
+    routines.flatMap((routine) =>
+      (scores.get(routine.routine_id)?.judges || []).map((judge) => judge.id),
+    ),
+  );
+  const scoreJudges = judges.filter((judge) => scoreJudgeIds.has(judge.judge_id));
   const blockReport = bundle?.snapshot.report.blocks.find(
     (b) => b.id === blockId,
   );
@@ -1126,7 +1132,7 @@ export function JudgingAdminWorkspace() {
                     <th>
                       Coreografía <small>{visible.length}</small>
                     </th>
-                    {judges.map((j) => (
+                    {scoreJudges.map((j) => (
                       <th key={j.judge_id}>
                         <JudgeAvatar judge={j} />
                         <span className="ja-column-label">Juez</span>
@@ -1177,14 +1183,12 @@ export function JudgingAdminWorkspace() {
                             ))}
                           </div>
                         </th>
-                        {judges.map((j) => {
+                        {scoreJudges.map((j) => {
                           const js = row?.judges.find(
                             (s) => s.id === j.judge_id,
                           );
-                          const assigned =
-                            !j.assigned_block_ids.length ||
-                            j.assigned_block_ids.includes(r.block_id);
-                          const active = activity.some(
+                          const assigned = Boolean(js);
+                          const active = assigned && activity.some(
                             (a) =>
                               a.judge_id === j.judge_id &&
                               a.routine_id === r.routine_id &&

@@ -31,10 +31,10 @@ function scoreData(id = eventId, value = 8) {
     events: [event(id)],
     blocks: [{ event_id: id, block_id: 'b1', name: 'Bloque 1', sort_order: 1 }],
     routines: [{ event_id: id, routine_id: 'r1', name: 'Pieza de prueba', state: 'Estado de México', genre: 'Jazz', block_id: 'b1' }],
-    judges: [{ event_id: id, judge_id: 'j1', name: 'Juez de prueba', role: 'judge', access_code: 'PRIVATE-CODE', photo: 'PRIVATE-PHOTO' }],
+    judges: ['Eva Carrillo', 'Daniel Montalvo', 'Jorge Díaz'].map((name, index) => ({ event_id: id, judge_id: `j${index + 1}`, name, role: 'judge', access_code: 'PRIVATE-CODE', photo: 'PRIVATE-PHOTO' })),
     criteria_templates: [{ event_id: id, template_id: 'jazz', genre: 'Jazz' }],
     criteria: [{ event_id: id, template_id: 'jazz', criterion_id: 1, label: 'Técnica', section: 'Arte', max_score: 10 }],
-    scores: [{ event_id: id, routine_id: 'r1', judge_id: 'j1', criterion_id: 1, value }],
+    scores: ['j1', 'j2', 'j3'].map(judge_id => ({ event_id: id, routine_id: 'r1', judge_id, criterion_id: 1, value })),
     penalties: [], feedback: [], special_awards: [],
   };
 }
@@ -137,7 +137,7 @@ test('judging score reads are isolated to one validated event and never expose j
   assert.equal(result.event.id, eventId);
   assert.equal(result.rows.length, 1, 'foreign event routines are excluded even if an upstream response includes them');
   assert.equal(result.rows[0].judges[0].total, 8, 'identically keyed scores from another event cannot enter the selected event');
-  assert.equal(result.rows[0].judges.length, 1);
+  assert.equal(result.rows[0].judges.length, 3);
   for (const { url } of server.calls) {
     const table = url.pathname.split('/').at(-1);
     assert.equal(url.searchParams.get(table === 'events' ? 'id' : 'event_id'), `eq.${eventId}`);
@@ -272,6 +272,23 @@ test('participant sheets fetch only requested routine evaluations instead of the
       assert.equal(url.searchParams.get('event_id'),`eq.${eventId}`);
     }
   }
+});
+
+test('admin score reads apply the confirmed area roster while participant sheets retain the native expected judges', async () => {
+  const data = scoreData();
+  for (const [index, name] of ['Daniel Herrera', 'Renata Pinal', 'Ana Karen Rojas'].entries()) {
+    const judge_id = `aerial-${index}`;
+    data.judges.push({ event_id: eventId, judge_id, name, role: 'judge' });
+    data.scores.push({ event_id: eventId, routine_id: 'r1', judge_id, criterion_id: 1, value: 1 });
+  }
+  const adminResult = await getJudgingScores(env, eventId, upstream(data));
+  assert.deepEqual(adminResult.rows[0].judges.map(judge => judge.name), ['Eva Carrillo', 'Daniel Montalvo', 'Jorge Díaz']);
+  assert.equal(adminResult.rows[0].expectedJudges, 3);
+  assert.equal(adminResult.rows[0].completedJudges, 3);
+  const sheets = upstream(data);
+  const participantResult = await getJudgingSheets(env, eventId, { routineIds: ['r1'], fetcher: sheets.fetcher });
+  assert.equal(participantResult.rows[0].judges.length, 6);
+  assert.equal(participantResult.rows[0].expectedJudges, 6);
 });
 
 test('sheet routine filters are bounded and cannot inject another PostgREST scope',async()=>{

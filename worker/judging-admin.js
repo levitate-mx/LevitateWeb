@@ -340,7 +340,7 @@ export async function readAdminSnapshot(
     ...raw,
     templates: raw.criteria_templates,
     specialAwards: raw.special_awards,
-  });
+  }, undefined, { judgeRoster: "levitate" });
   const { results: accounts } = await env.DB.prepare(
     `SELECT a.judge_id,a.enabled,u.username,u.id user_id FROM registration_judge_assignments a
     JOIN registration_users u ON u.id=a.user_id WHERE a.event_id=? AND u.is_judge=1

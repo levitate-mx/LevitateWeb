@@ -137,7 +137,7 @@ function fixture(t) {
       {
         event_id: eventId,
         judge_id: "one",
-        name: "ONE",
+        name: "Eva Carrillo",
         role: "judge",
         assigned_block_ids: ["b1"],
         updated_at: rev,
@@ -145,7 +145,15 @@ function fixture(t) {
       {
         event_id: eventId,
         judge_id: "two",
-        name: "TWO",
+        name: "Daniel Montalvo",
+        role: "judge",
+        assigned_block_ids: [],
+        updated_at: rev,
+      },
+      {
+        event_id: eventId,
+        judge_id: "three",
+        name: "Jorge Díaz",
         role: "judge",
         assigned_block_ids: [],
         updated_at: rev,
@@ -289,7 +297,8 @@ test("admin lists only authorized Levitate events and private snapshots retain o
   const snapshot = await response.json();
   assert.equal(snapshot.snapshot.rows[0].judges[0].total, 0);
   assert.equal(snapshot.snapshot.rows[0].judges[0].status, "complete");
-  assert.equal(snapshot.judges.length, 2);
+  assert.equal(snapshot.judges.length, 3);
+  assert.equal(snapshot.snapshot.rows[0].expectedJudges, 3);
   assert.equal(
     snapshot.judges[0].photo_data,
     "data:image/jpeg;base64,/9j/AA==",

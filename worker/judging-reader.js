@@ -323,5 +323,5 @@ export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
     event, blocks: data.blocks, routines: data.routines, judges: data.judges,
     templates: data.criteria_templates, criteria: data.criteria, scores: data.scores, penalties: data.penalties, feedback: data.feedback,
     specialAwards: data.special_awards,
-  }, new Date().toISOString());
+  }, new Date().toISOString(), { judgeRoster: "levitate" });
 }
