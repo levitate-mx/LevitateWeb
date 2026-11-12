@@ -88,6 +88,20 @@ by their original event/judge, even after changing selections; one profile's
 notes or favorites cannot be sent under the subsequently selected judge.
 Removing the server grant restores assignment-only access on the next request.
 
+### Estado de México · Otoño 2026 tablet accounts
+
+The event has three explicitly authorized shared tablet logins: `juez1`,
+`juez2`, and `juez3`. Each has a distinct generated password, stored only in
+the private operational delivery file. They use the existing judge-selection
+mode to choose among the six real Motion and Aerial judges. Select the person
+who is actually evaluating before opening a sheet; scores remain attached to
+that Core judge, rather than to the tablet's generic login name.
+
+All three are judge-only accounts, not administrators. Their fallback database
+assignments reference the definitive event and its existing Motion judges;
+the explicit server selector grants allow using either discipline. No extra
+Core judge profiles, test routines or access codes are created.
+
 ## Data and compatibility
 
 All browser reads/writes go to same-origin `/api/registration/judge/*` endpoints,

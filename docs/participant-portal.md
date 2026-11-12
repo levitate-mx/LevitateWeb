@@ -97,6 +97,14 @@ La configuración y el historial se guardan en las tablas aditivas de `db/regist
 
 ## Configuración y activación
 
+El 12 de noviembre de 2026 se habilitó la edición real `edomex-2026-otono`
+con 236 presentaciones vinculadas al programa definitivo y publicación
+automática al completar cada bloque. Se conservaron los 268 accesos QR, las
+presentaciones y las aprobaciones de archivos. Nueve QR originales, incluidos
+perfiles sin CURP, abrieron sus reconocimientos y 13 presentaciones; sin notas
+del evento, sus resultados siguieron pendientes y las fotos de demostración
+sin aprobar permanecieron ocultas. No se cargaron notas de prueba en el evento.
+
 La configuración usa `PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL = "musica.levitate@gmail.com"` y reutiliza la autorización existente de Google Drive. El perfil Ati de Chrome es independiente de la cuenta OAuth que almacena archivos de la web. El 9 de noviembre de 2026 se verificaron la cuenta y la cuota y se creó la carpeta **Mi Levitate · Vistas previas privadas** mediante la sesión administrativa normal. Esta ruta aprovecha el Drive, D1 y el plan gratuito del Worker actuales. No requiere contratar R2 ni Workers Paid ni activar ampliaciones de almacenamiento o facturación.
 
 1. Confirmar que la autorización existente de Drive corresponde a `musica.levitate@gmail.com` y permite crear archivos de la aplicación. El servidor debe rechazar otra cuenta antes de crear o cargar material. Se reutilizan las credenciales descritas en [la conexión de Drive](media-drive-connection.md), sin enviarlas al navegador ni ampliar sus alcances automáticamente.

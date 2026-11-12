@@ -34,7 +34,7 @@
     "PARTICIPANT_REGISTRATION_EVENT_IDS": "edomex-2026-otono",
     "PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL": "musica.levitate@gmail.com",
     "JUDGING_SUPABASE_URL": "https://twazfaytgmgeyqeopgut.supabase.co",
-    "JUDGING_SELECTABLE_JUDGE_USER_IDS": "ad8fa4eb-3095-4b73-a34f-b8b596f588bf",
+    "JUDGING_SELECTABLE_JUDGE_USER_IDS": "ad8fa4eb-3095-4b73-a34f-b8b596f588bf,b766adee-9ffa-4b3e-b11e-c545c79052f8,68d7c8ee-951d-4f58-a14a-47b3a461833d,f625f810-af48-43db-84fe-1039196df83b",
     "JUDGING_LEVITATE_EVENT_IDS": "a62f724b-9d66-47ea-8dee-d54294783130"
   },
   "d1_databases": [
