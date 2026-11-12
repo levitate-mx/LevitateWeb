@@ -2349,7 +2349,7 @@ function ActivityPanel({
             <details>
             <summary>
               <JudgeAvatar judge={j} />
-              <span><strong>{j.name}</strong><small>{scoring ? routine ? `Calificando #${routine.program_number?.trim() || routine.routine_id} · ${routine.name}` : "Calificando" : presence ? presence.state === "left_sheet" ? "Salió de la hoja" : "En inicio" : devices.length ? "Sin actividad reciente" : "Sin actividad registrada"}</small></span>
+              <span className="ja-activity-person"><strong>{j.name}</strong><small>{scoring ? routine ? `Calificando #${routine.program_number?.trim() || routine.routine_id} · ${routine.name}` : "Calificando" : presence ? presence.state === "left_sheet" ? "Salió de la hoja" : "En inicio" : devices.length ? "Sin actividad reciente" : "Sin actividad registrada"}</small></span>
               <span
                 className={`ja-status ${presence ? "is-complete" : "is-pending"}`}
               >

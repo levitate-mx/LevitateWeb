@@ -1643,7 +1643,7 @@
   list-style: none;
 }
 .ja-activity summary::-webkit-details-marker { display: none; }
-.ja-activity summary > span:first-of-type { flex: 1; min-width: 0; }
+.ja-activity-person { flex: 1; min-width: 0; }
 .ja-activity summary strong,
 .ja-activity summary small { display: block; overflow-wrap: anywhere; }
 .ja-activity summary strong { font-size: 12px; }
