@@ -63,7 +63,7 @@ function fixture() {
     specialAwards: [{ id: "award_1", title: "Mejor vestuario", displayValue: "Academia premiada", isAssigned: true, routineId: null }],
     topScore: { routineId: "1", score: 140 },
   };
-  return { event: { id: "levitate-fixture", name: "Levitate de prueba" }, snapshot: { rows, report: { maximumScore: 150, blocks: [report] } } };
+  return { event: { id: "levitate-fixture", name: "Levitate de prueba" }, blocks: [{block_id: "b1", name: "Bloque 1", title: "Final de prueba"}, {block_id: "b2", name: "Bloque 2", title: "Segundo bloque"}], snapshot: { rows, report: { maximumScore: 150, blocks: [report] } } };
 }
 
 function findElement(element, predicate) {
@@ -78,8 +78,9 @@ function findElement(element, predicate) {
   return predicate(element) ? element : findElement(element.props?.children, predicate);
 }
 
-function harness(bundle = fixture(), ranking = false) {
+function harness(bundle = fixture()) {
   const state = [];
+  const selectedBlocks = [];
   let cursor = 0;
   const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, ChevronDown, Trophy, X,
     useState(initial) {
@@ -91,10 +92,12 @@ function harness(bundle = fixture(), ranking = false) {
   vm.runInNewContext(javascript, scope);
   const tree = () => {
     cursor = 0;
-    return scope.renderReport({ report: bundle.snapshot.report.blocks[0], bundle, ranking });
+    return scope.renderReport({ report: bundle.snapshot.report.blocks[0], bundle, blockId: "b1", onBlockChange: value => selectedBlocks.push(value) });
   };
   return {
     html: () => renderToStaticMarkup(tree()),
+    tree,
+    selectedBlocks,
     change(field, value) {
       const element = findElement(tree(), (node) => field === "query" ? node.type === "input"
         : node.type === "select" && node.props.value === state[field === "discipline" ? 1 : 2]
@@ -233,14 +236,17 @@ test("empty filters show an explicit state without hiding block-wide top score a
   assert.doesNotMatch(ui, /aria-expanded/);
 });
 
-test("live ranking keeps descending server scores, filters and the original category places", () => {
-  const view = harness(fixture(), true);
-  let ui = view.html();
-  assert.match(ui, /Ranking en vivo/);
-  assert.ok(ui.indexOf("Ver detalle de Vuelo 1") < ui.indexOf("Ver detalle de Danza Áurea"));
-  view.change("discipline", "TELA");
-  ui = view.html();
-  assert.match(ui, /Ver detalle de Danza Áurea/);
-  assert.match(ui, /3\.º lugar/);
-  assert.doesNotMatch(ui, /Ver detalle de Vuelo 1/);
+test("the block selector and all report filters share one group, including blocks without a report", () => {
+  const bundle = fixture(), view = harness(bundle);
+  const group = findElement(view.tree(), node => node.props?.["aria-label"] === "Filtros del dictamen");
+  const block = findElement(group, node => node.type === "select" && node.props.value === "b1");
+  assert.ok(block);
+  assert.ok(findElement(group, node => node.type === "input" && node.props.type === "search"));
+  block.props.onChange({target: {value: "b2"}});
+  assert.deepEqual(view.selectedBlocks, ["b2"]);
+  assert.doesNotMatch(view.html(), /Ranking en vivo/);
+  bundle.snapshot.report.blocks = [];
+  const empty = harness(bundle);
+  assert.match(empty.html(), /Segundo bloque/);
+  assert.match(empty.html(), /No hay resultados disponibles/);
 });

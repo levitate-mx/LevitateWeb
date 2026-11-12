@@ -121,8 +121,6 @@ type View =
   | "report"
   | "favorites"
   | "import"
-  | "activity"
-  | "ranking"
   | "settings";
 type Modal = { title: string; content: ReactNode } | null;
 const primary = [
@@ -167,6 +165,14 @@ const time = (v: string | undefined) =>
         minute: "2-digit",
       })
     : "Sin registro";
+function currentJudgeActivity(activity: Presence[], judgeId: string) {
+  const latest = activity.filter((row) => row.judge_id === judgeId)
+    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
+  const age = latest ? Date.now() - Date.parse(latest.updated_at) : NaN;
+  return age >= -60000 && age < 600000 ? latest : undefined;
+}
+const isScoring = (presence: Presence | undefined) =>
+  presence?.state === "viewing_sheet" || presence?.state === "judging";
 function IconButton({
   label,
   children,
@@ -296,11 +302,13 @@ export function JudgingAdminWorkspace() {
     [eventId, setEventId] = useState(params.get("event") || ""),
     [bundle, setBundle] = useState<Bundle | null>(null);
   const [view, setView] = useState<View>(
-    ([...primary.map((p) => p.id), "activity", "ranking", "settings"].includes(
-      params.get("view") || "",
-    )
-      ? params.get("view")
-      : "home") as View,
+    (params.get("view") === "activity"
+      ? "scores"
+      : params.get("view") === "ranking"
+        ? "report"
+        : [...primary.map((p) => p.id), "settings"].includes(params.get("view") || "")
+          ? params.get("view")
+          : "home") as View,
   );
   const [blockId, setBlockId] = useState(""),
     [query, setQuery] = useState(""),
@@ -566,11 +574,9 @@ export function JudgingAdminWorkspace() {
     primary.find((p) => p.id === view)?.label ||
     (
       {
-        activity: "Actividad",
-        ranking: "Ranking en vivo",
         settings: "Configuración",
       } as const
-    )[view as "activity"];
+    )[view as "settings"];
   async function downloadSheets() {
     if (!visible.length) return;
     setBusy("Preparando hojas de jueceo");
@@ -736,20 +742,6 @@ export function JudgingAdminWorkspace() {
           ))}
         </nav>
         <div className="ja-sidebar-bottom">
-          <button
-            aria-pressed={view === "activity"}
-            onClick={() => setView("activity")}
-          >
-            <Activity size={21} />
-            <span>Actividad</span>
-          </button>
-          <button
-            aria-pressed={view === "ranking"}
-            onClick={() => setView("ranking")}
-          >
-            <Trophy size={21} />
-            <span>Ranking en vivo</span>
-          </button>
           {canManagePrograms ? (
             <button aria-pressed={view === "settings"} onClick={() => setView("settings")}>
               <Settings size={21} />
@@ -822,14 +814,6 @@ export function JudgingAdminWorkspace() {
               <MoreHorizontal size={22} />
             </summary>
             <nav>
-              <button onClick={() => setView("activity")}>
-                <Activity size={18} />
-                Actividad
-              </button>
-              <button onClick={() => setView("ranking")}>
-                <Trophy size={18} />
-                Ranking en vivo
-              </button>
               {canManagePrograms ? (
                 <button onClick={() => setView("settings")}>
                   <Settings size={18} />
@@ -854,7 +838,7 @@ export function JudgingAdminWorkspace() {
               <h1>{title}</h1>
             </div>
             <div className="ja-heading-actions">
-              {view === "report" || view === "ranking" ? (
+              {view === "report" ? (
                 <IconButton
                   label="Descargar dictamen PDF"
                   disabled={!blockReport || !!busy}
@@ -893,7 +877,7 @@ export function JudgingAdminWorkspace() {
           view !== "import" &&
           view !== "judges" &&
           view !== "settings" &&
-          view !== "activity" ? (
+          view !== "report" ? (
             <div className={`ja-toolbar${view === "home" ? " ja-toolbar-overview" : ""}`}>
               <label className="ja-block">
                 Bloque
@@ -912,7 +896,7 @@ export function JudgingAdminWorkspace() {
                   ))}
                 </select>
               </label>
-              {view !== "home" && view !== "report" && view !== "ranking" ? (
+              {view !== "home" ? (
                 <label className="ja-search">
                   <Search size={18} />
                   <input
@@ -950,7 +934,7 @@ export function JudgingAdminWorkspace() {
             </div>
           ) : null}
           {bundle?.snapshot.warnings.length &&
-          ["report", "scores", "ranking"].includes(view) ? (
+          ["report", "scores"].includes(view) ? (
             <details className="ja-warnings">
               <summary>
                 {bundle.snapshot.warnings.length} avisos del programa
@@ -1014,7 +998,7 @@ export function JudgingAdminWorkspace() {
                 <article>
                   <Users />
                   <div><strong>{judges.length}</strong><span>Jueces del evento</span></div>
-                  <button onClick={() => setView("activity")}>
+                  <button onClick={() => setView("scores")}>
                     Ver actividad
                     <ChevronRight size={16} />
                   </button>
@@ -1066,6 +1050,12 @@ export function JudgingAdminWorkspace() {
                 ) : null}
               </section>
             </>
+          ) : null}
+          {bundle && view === "scores" ? (
+            <section className="ja-score-activity" aria-label="Actividad de jueces">
+              <header><Activity size={18} /><h2>Actividad de jueces</h2><span>En vivo · cada 10 s</span></header>
+              <ActivityPanel judges={scoreJudges} activity={activity} routines={bundle.routines} />
+            </section>
           ) : null}
           {bundle && view === "scores" ? (
             <div className="ja-export-actions">
@@ -1182,12 +1172,8 @@ export function JudgingAdminWorkspace() {
                             (s) => s.id === j.judge_id,
                           );
                           const assigned = Boolean(js);
-                          const active = assigned && activity.some(
-                            (a) =>
-                              a.judge_id === j.judge_id &&
-                              a.routine_id === r.routine_id &&
-                              Date.now() - Date.parse(a.updated_at) < 120000,
-                          );
+                          const presence = currentJudgeActivity(activity, j.judge_id);
+                          const active = assigned && isScoring(presence) && presence?.routine_id === r.routine_id;
                           return (
                             <td key={j.judge_id}>
                               <button
@@ -1199,7 +1185,7 @@ export function JudgingAdminWorkspace() {
                                 <strong>{number(js?.total)}</strong>
                                 <small>
                                   {assigned
-                                    ? labels[js?.status || "pending"]
+                                    ? active ? "Calificando" : labels[js?.status || "pending"]
                                     : "No asignado"}
                                 </small>
                                 {js?.penalty ? (
@@ -1207,9 +1193,7 @@ export function JudgingAdminWorkspace() {
                                     {number(js.penalty)}
                                   </span>
                                 ) : null}
-                                {active ? (
-                                  <span className="ja-presence">Evaluando</span>
-                                ) : null}
+                                {active ? <LoaderCircle className="ja-presence ja-spin" size={14} aria-label="Juez calificando" /> : null}
                               </button>
                             </td>
                           );
@@ -1262,12 +1246,13 @@ export function JudgingAdminWorkspace() {
               refresh={() => refresh(true)}
             />
           ) : null}
-          {bundle && (view === "report" || view === "ranking") ? (
+          {bundle && view === "report" ? (
             <ReportPanel
               key={`${eventId}:${blockId}:${view}`}
               report={blockReport}
               bundle={bundle}
-              ranking={view === "ranking"}
+              blockId={blockId}
+              onBlockChange={setBlockId}
             />
           ) : null}
           {bundle && view === "favorites" ? (
@@ -1326,13 +1311,6 @@ export function JudgingAdminWorkspace() {
                   ),
                 });
               }}
-            />
-          ) : null}
-          {bundle && view === "activity" ? (
-            <ActivityPanel
-              judges={judges}
-              activity={activity}
-              routines={bundle.routines}
             />
           ) : null}
           {canManagePrograms && bundle && view === "settings" ? (
@@ -2015,30 +1993,31 @@ function JudgeForm({
 function ReportPanel({
   report,
   bundle,
-  ranking,
+  blockId,
+  onBlockChange,
 }: {
   report: ReportBlock | undefined;
   bundle: Bundle;
-  ranking: boolean;
+  blockId: string;
+  onBlockChange: (blockId: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [discipline, setDiscipline] = useState("all");
   const [status, setStatus] = useState("all");
   const [expandedId, setExpandedId] = useState("");
   const lookup = new Map(bundle.snapshot.rows.map((r) => [r.id, r]));
-  if (!report) return <Empty>No hay un bloque seleccionado.</Empty>;
-  const sections = filterReportSections(report, bundle.snapshot.rows, {
+  const sections = report ? filterReportSections(report, bundle.snapshot.rows, {
     query,
     discipline,
     status,
-  });
+  }) : [];
   const visibleCount = sections.reduce(
     (total, section) =>
       total +
       section.categories.reduce((sum, category) => sum + category.rows.length, 0),
     0,
   );
-  const totalCount = report.sections.reduce(
+  const totalCount = (report?.sections || []).reduce(
     (total, section) =>
       total +
       section.categories.reduce((sum, category) => sum + category.rows.length, 0),
@@ -2061,7 +2040,7 @@ function ReportPanel({
         row={row}
         maximumScore={bundle.snapshot.report.maximumScore}
         eventId={bundle.event.id}
-        blockId={report.id}
+        blockId={blockId}
         expanded={expandedId === row.id}
         onToggle={() => setExpandedId(expandedId === row.id ? "" : row.id)}
         showMetadata
@@ -2070,15 +2049,18 @@ function ReportPanel({
   };
   return (
     <section className="ja-report judging-scores">
-      <header>
-        <h2>{report.title || report.name}</h2>
-        <span>{ranking ? "Ranking en vivo" : "Dictamen final"}</span>
-      </header>
       <div
         className="ja-report-filters"
         role="group"
         aria-label="Filtros del dictamen"
       >
+        <label>
+          Bloque
+          <select value={blockId} onChange={(e) => onBlockChange(e.target.value)} disabled={!bundle.blocks.length}>
+            {!bundle.blocks.length ? <option value="">Sin bloques registrados</option> : null}
+            {bundle.blocks.map((block) => <option key={block.block_id} value={block.block_id}>{block.title || block.name}</option>)}
+          </select>
+        </label>
         <label>
           Buscar coreografía
           <input
@@ -2101,7 +2083,7 @@ function ReportPanel({
             }}
           >
             <option value="all">Todas</option>
-            {report.sections.map((section) => (
+            {(report?.sections || []).map((section) => (
               <option key={section.id} value={section.id}>
                 {section.label}
               </option>
@@ -2126,6 +2108,9 @@ function ReportPanel({
           </select>
         </label>
       </div>
+      <header>
+        <h2>{report?.title || report?.name || "Dictamen final"}</h2>
+      </header>
       {hasFilters ? (
         <div className="ja-report-filter-summary">
           <p role="status">
@@ -2137,17 +2122,7 @@ function ReportPanel({
           </button>
         </div>
       ) : null}
-      {ranking ? (
-        <div className="judging-scores__standings">
-          {sections
-            .flatMap((s) => s.categories.flatMap((c) => c.rows))
-            .sort(
-              (a, b) => (b.standing.score ?? -1) - (a.standing.score ?? -1),
-            )
-            .map(({ standing }) => render(standing))}
-        </div>
-      ) : (
-        sections.map((section) => (
+      {sections.map((section) => (
           <section key={section.id}>
             <h2>{section.label}</h2>
             {section.categories.map((c) => (
@@ -2159,8 +2134,7 @@ function ReportPanel({
               </section>
             ))}
           </section>
-        ))
-      )}
+        ))}
       {!visibleCount ? (
         <Empty>
           {hasFilters
@@ -2168,7 +2142,7 @@ function ReportPanel({
             : "No hay resultados disponibles para mostrar en este bloque."}
         </Empty>
       ) : null}
-      {report.topScore ? (
+      {report?.topScore ? (
         <div className="ja-top-score">
           <Trophy size={24} />
           <div>
@@ -2182,7 +2156,7 @@ function ReportPanel({
       ) : null}
       <section className="ja-awards-report">
         <h2>Premios especiales</h2>
-        {report.specialAwards.map((a) => (
+        {(report?.specialAwards || []).map((a) => (
           <div key={a.id}>
             <span>{a.title}</span>
             <strong>{a.displayValue || "Sin asignar"}</strong>
@@ -2367,20 +2341,22 @@ function ActivityPanel({
     <section className="ja-activity">
       {judges.map((j) => {
         const devices = activity.filter((a) => a.judge_id === j.judge_id);
-        const online = devices.some(
-          (a) => Date.now() - Date.parse(a.updated_at) < 600000,
-        );
+        const presence = currentJudgeActivity(activity, j.judge_id);
+        const scoring = isScoring(presence);
+        const routine = routines.find((r) => r.routine_id === presence?.routine_id);
         return (
           <article key={j.judge_id}>
-            <header>
+            <details>
+            <summary>
               <JudgeAvatar judge={j} />
-              <h2>{j.name}</h2>
+              <span><strong>{j.name}</strong><small>{scoring ? routine ? `Calificando #${routine.program_number?.trim() || routine.routine_id} · ${routine.name}` : "Calificando" : presence ? presence.state === "left_sheet" ? "Salió de la hoja" : "En inicio" : devices.length ? "Sin actividad reciente" : "Sin actividad registrada"}</small></span>
               <span
-                className={`ja-status ${online ? "is-complete" : "is-pending"}`}
+                className={`ja-status ${presence ? "is-complete" : "is-pending"}`}
               >
-                {online ? "Activo" : "Inactivo"}
+                {presence ? "Activo" : "Inactivo"}
               </span>
-            </header>
+              <ChevronRight className="ja-activity-chevron" size={14} aria-hidden="true" />
+            </summary>
             {devices.map((a) => {
               const stale =
                 !a.sync_reported_at ||
@@ -2389,7 +2365,7 @@ function ActivityPanel({
                 <div className="ja-device" key={a.device_id}>
                   <strong>
                     {a.platform || "Dispositivo"} ·{" "}
-                    {a.state === "judging" ? "Evaluando" : "Home"}
+                    {isScoring(a) ? "Calificando" : a.state === "left_sheet" ? "Salió de la hoja" : "En inicio"}
                   </strong>
                   <small>{a.device_id}</small>
                   <dl>
@@ -2429,6 +2405,7 @@ function ActivityPanel({
               );
             })}
             {!devices.length ? <Empty>Sin actividad registrada.</Empty> : null}
+            </details>
           </article>
         );
       })}

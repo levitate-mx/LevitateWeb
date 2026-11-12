@@ -91,6 +91,7 @@ function harness(bundle = fixture()) {
   return {
     tree,
     navigation,
+    activity(value) {state[7] = value;},
     header() {
       const matrix = find(tree(), (element) => element.type === "table" && element.props.className === "ja-matrix");
       return renderToStaticMarkup(find(matrix, (element) => element.type === "thead"));
@@ -113,6 +114,27 @@ test("score columns follow the selected block's snapshot judges and preserve bot
   for (const name of motion) assert.ok(!html.includes(name), name);
   view.block("empty");
   assert.doesNotMatch(view.header(), /ja-column-label/);
+});
+
+test("activity lives in score editing and iOS viewing_sheet presence marks only the current assigned cell", () => {
+  const view = harness();
+  const presence = (state, minutes=0) => ({judge_id: "j0", device_id: "ios", state, routine_id: "m1", updated_at: new Date(Date.now()-minutes*60000).toISOString()});
+  view.activity([presence("viewing_sheet", 5)]);
+  const cell = () => find(view.tree(), node => node.type === "button" && node.props.title === "Editar hoja de EVA CARRILLO · Jazz primero");
+  assert.match(cell().props.className, /is-active/);
+  assert.match(renderToStaticMarkup(cell()), /Calificando/);
+  const html = renderToStaticMarkup(view.tree());
+  assert.match(html, /Actividad de jueces/);
+  assert.doesNotMatch(html, /Ranking en vivo/);
+  assert.ok(!find(view.tree(), node => node.props?.["aria-pressed"] !== undefined && /Actividad/.test(renderToStaticMarkup(node))));
+  view.activity([presence("viewing_sheet", 11)]);
+  assert.doesNotMatch(cell().props.className, /is-active/);
+  view.activity([presence("viewing_sheet", 5), presence("home")]);
+  assert.doesNotMatch(cell().props.className, /is-active/, "a newer home report ends the old sheet presence");
+  view.activity([presence("left_sheet")]);
+  assert.doesNotMatch(cell().props.className, /is-active/);
+  view.activity([{...presence("viewing_sheet"),routine_id:"m2"}]);
+  assert.doesNotMatch(cell().props.className, /is-active/);
 });
 
 test("search and status filters do not remove the block's judge columns", () => {
