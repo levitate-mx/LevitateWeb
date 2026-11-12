@@ -1,0 +1,153 @@
+diff --git a/lib/levitate_web_workspace.dart b/lib/levitate_web_workspace.dart
+index 4449ef3..b0c08e8 100644
+--- a/lib/levitate_web_workspace.dart
++++ b/lib/levitate_web_workspace.dart
+@@ -615,16 +615,18 @@ extension _WebJudgingLayout on _JudgingPageState {
+                     routine: routine, criterion: criterion, compact: narrow)),
+         ],
+       ]);
++      final feedback = Padding(
++        key: const ValueKey('web-judging-feedback'),
++        padding: const EdgeInsets.symmetric(vertical: 24),
++        child:
++            _buildFeedbackControl(routine: routine, scoringJudge: scoringJudge),
++      );
+       final details = Padding(
+         key: const ValueKey('web-judging-details'),
+         padding: EdgeInsets.symmetric(horizontal: narrow ? 0 : 20),
+         child:
+             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+           const SizedBox(height: 24),
+-          const _WebEyebrow('OBSERVACIONES Y DISTINCIONES'),
+-          const SizedBox(height: 18),
+-          _buildFeedbackControl(routine: routine, scoringJudge: scoringJudge),
+-          const SizedBox(height: 12),
+           _buildPenaltyControl(context),
+           const SizedBox(height: 12),
+           FavoriteButtonsPanel(
+@@ -647,7 +649,7 @@ extension _WebJudgingLayout on _JudgingPageState {
+               header,
+               Padding(
+                   padding: EdgeInsets.symmetric(horizontal: padding),
+-                  child: Column(children: [criteria, details])),
++                  child: Column(children: [criteria, feedback, details])),
+             ],
+           )),
+           actions,
+@@ -656,28 +658,40 @@ extension _WebJudgingLayout on _JudgingPageState {
+       final asideWidth = (constraints.maxWidth * 0.29).clamp(320.0, 360.0);
+       return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+         Expanded(
+-            child: SingleChildScrollView(
+-          key: const ValueKey('web-judging-criteria'),
+-          controller: sheetScrollController,
+-          child:
+-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+-            header,
+-            Padding(
+-                padding: EdgeInsets.fromLTRB(padding, 0, 26, 32),
+-                child: criteria),
++          child: Column(children: [
++            Expanded(
++              child: SingleChildScrollView(
++                key: const ValueKey('web-judging-criteria'),
++                controller: sheetScrollController,
++                child: Column(
++                    crossAxisAlignment: CrossAxisAlignment.start,
++                    children: [
++                      header,
++                      Padding(
++                        padding: EdgeInsets.fromLTRB(padding, 0, 26, 8),
++                        child: Column(
++                            crossAxisAlignment: CrossAxisAlignment.stretch,
++                            children: [criteria, feedback]),
++                      ),
++                    ]),
++              ),
++            ),
++            actions,
+           ]),
+-        )),
++        ),
+         Container(
+           key: const ValueKey('web-judging-observations'),
+           width: asideWidth,
+           decoration: BoxDecoration(
+               border: Border(left: BorderSide(color: scheme.outlineVariant))),
+           child: Column(children: [
++            Padding(
++                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
++                child: _WebRoutineSelector(store: store, routine: routine)),
+             Expanded(
+                 child: SingleChildScrollView(
+                     key: const ValueKey('web-judging-details-scroll'),
+                     child: details)),
+-            actions,
+           ]),
+         ),
+       ]);
+@@ -701,7 +715,8 @@ extension _WebJudgingLayout on _JudgingPageState {
+           mainAxisSize: MainAxisSize.min,
+           crossAxisAlignment: CrossAxisAlignment.stretch,
+           children: [
+-            _WebRoutineSelector(store: widget.store, routine: routine),
++            if (compact)
++              _WebRoutineSelector(store: widget.store, routine: routine),
+             if (errorMessage != null)
+               Padding(
+                   padding: const EdgeInsets.only(top: 10),
+@@ -710,7 +725,7 @@ extension _WebJudgingLayout on _JudgingPageState {
+                           .textTheme
+                           .bodySmall
+                           ?.copyWith(color: scheme.error))),
+-            const SizedBox(height: 12),
++            if (compact) const SizedBox(height: 12),
+             FilledButton.icon(
+               key: const ValueKey('web-save-score'),
+               onPressed: isSaving
+diff --git a/test/levitate_web_appearance_test.dart b/test/levitate_web_appearance_test.dart
+index a7aa5e7..b794cb5 100644
+--- a/test/levitate_web_appearance_test.dart
++++ b/test/levitate_web_appearance_test.dart
+@@ -818,9 +818,15 @@ void _expectSaveVisible(WidgetTester tester, Size size) {
+ void _expectObservationPlacement(WidgetTester tester, Size size) {
+   final criteria = find.byKey(const ValueKey('web-judging-criteria'));
+   final details = find.byKey(const ValueKey('web-judging-details'));
++  final feedback = find.byKey(const ValueKey('web-judging-feedback'));
+   final actions = find.byKey(const ValueKey('web-judging-actions'));
+   expect(criteria, findsOneWidget);
+   expect(details, findsOneWidget);
++  expect(feedback, findsOneWidget);
++  expect(find.descendant(of: criteria, matching: feedback), findsOneWidget);
++  final lastCriterion = find.byType(ScoreStepperField).last;
++  expect(tester.getRect(feedback).top,
++      greaterThanOrEqualTo(tester.getRect(lastCriterion).bottom));
+   expect(actions, findsOneWidget);
+   if (size.width >= 900) {
+     final aside = find.byKey(const ValueKey('web-judging-observations'));
+@@ -829,16 +835,21 @@ void _expectObservationPlacement(WidgetTester tester, Size size) {
+         lessThanOrEqualTo(tester.getRect(aside).left));
+     expect(find.descendant(of: aside, matching: details), findsOneWidget);
+     expect(find.descendant(of: criteria, matching: details), findsNothing);
++    expect(find.descendant(of: aside, matching: feedback), findsNothing);
++    expect(
++        find.descendant(of: aside, matching: _routinePicker()), findsOneWidget);
++    expect(find.descendant(of: aside, matching: actions), findsNothing);
++    expect(
++        find.descendant(of: actions, matching: _routinePicker()), findsNothing);
+   } else {
+     expect(
+         find.byKey(const ValueKey('web-judging-observations')), findsNothing);
+     expect(find.descendant(of: criteria, matching: details), findsOneWidget);
+-    final lastCriterion = find.byType(ScoreStepperField).last;
+     expect(tester.getRect(details).top,
+-        greaterThanOrEqualTo(tester.getRect(lastCriterion).bottom));
++        greaterThanOrEqualTo(tester.getRect(feedback).bottom));
++    expect(find.descendant(of: actions, matching: _routinePicker()),
++        findsOneWidget);
+   }
+-  expect(
+-      find.descendant(of: actions, matching: _routinePicker()), findsOneWidget);
+   expect(
+       find.descendant(
+           of: actions, matching: find.byKey(const ValueKey('web-save-score'))),

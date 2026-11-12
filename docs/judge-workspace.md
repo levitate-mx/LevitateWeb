@@ -21,12 +21,14 @@ The web theme also installs a `LevitateWebPresentation` theme extension. It sele
 the web-specific workspace and judging-sheet composition, while native themes
 continue through the original layouts. Navigation, programme/judge selection,
 score fields, validation, drafts and save callbacks still use the existing store.
-The judging action bar stays outside the scrolling criteria so routine selection
-and saving remain reachable on desktop and mobile. Desktop feedback, penalties
-and favorites use a separate scrolling side panel; mobile keeps those controls
-after the criteria. The visual score summary is omitted without changing score
-calculation or validation. While a judging sheet is
-open, sidebar and mobile navigation are hidden; its Back action returns to the
+The save action stays outside the scrolling criteria. Choreography selection
+and saving remain reachable on desktop and mobile. Desktop feedback appears
+below the criteria in the main scrolling column.
+The right panel holds a fixed choreography selector, penalties and favorites.
+Mobile places feedback, penalties and favorites after the criteria and retains
+the choreography selector with the save button at the bottom. The visual score
+summary is omitted without changing score calculation or validation. While a
+judging sheet is open, sidebar and mobile navigation are hidden; its Back action returns to the
 workspace and restores navigation without clearing the draft.
 
 Judge portraits reuse the public jury files under `/assets/`, with exact
@@ -173,3 +175,15 @@ The Flutter source change is recorded in
 above to the same Android/web source before rebuilding this checkout. Installed
 Android/iPad apps are outside this change; native builds retain a no-op control.
 The API follows the [Fullscreen Standard](https://fullscreen.spec.whatwg.org/).
+
+### Judging sheet columns
+
+On desktop, feedback follows the last scoring criterion in the left column,
+with the save button fixed below that column. The right column contains only
+the fixed choreography selector and independently scrolling penalties/favorites.
+Drafts, penalties, favorites, validation and save callbacks are unchanged. Mobile
+retains one scrolling column and the fixed choreography/save controls.
+
+Apply `docs/patches/judge-web-sheet-layout.patch` after the assigned-block and
+fullscreen patches above when rebuilding from the shared Flutter source. The
+existing appearance and draft-persistence tests cover both column arrangements.
