@@ -1,5 +1,6 @@
 .releve-voting-page {
   color-scheme: light;
+  padding: 30px 20px max(28px, env(safe-area-inset-bottom));
   font-family: var(--font-body);
 }
 
@@ -8,147 +9,82 @@
   outline-offset: 5px;
 }
 
-.releve-voting-hero {
-  position: relative;
-  background:
-    radial-gradient(ellipse at 88% 12%, #f0d8e3 0, transparent 55%),
-    var(--home-bg);
-  border-bottom: 1px solid var(--home-line);
-}
+.releve-voting-page__header { display: grid; justify-items: center; gap: 18px; margin: 0 auto 28px; }
+.releve-voting-page__header a { display: block; }
+.releve-voting-page__header img { display: block; width: 118px; height: 42px; object-fit: contain; }
+.releve-voting-page__header h1 { margin: 0; color: var(--home-ink); font-size: 32px; font-weight: 550; line-height: 1.1; letter-spacing: -0.045em; }
+.releve-voting-page__header h1 span { color: var(--home-pink); }
+.releve-voting-page__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.releve-voting-hero__content {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-  align-items: end;
-  gap: clamp(40px, 6vw, 96px);
-  width: min(100%, 1440px);
-  margin: 0 auto;
-  padding: 150px var(--container-pad) var(--levitate-hero-bottom-pad);
-}
-
-.releve-voting-page__kicker {
-  margin: 0 0 26px;
-  color: #a93468;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.5;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.releve-voting-page .releve-voting-hero h1 {
+.releve-photo-grid {
   display: grid;
-  gap: 0.08em;
-  margin: 0;
-  color: var(--home-ink);
-}
-
-.releve-voting-hero h1 em {
-  color: var(--home-pink);
-  font-style: normal;
-}
-
-.releve-voting-page .releve-voting-hero__description {
-  max-width: 520px;
-  margin: 28px 0;
-  color: var(--home-soft-ink);
-}
-
-.releve-voting-hero__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-  min-height: 54px;
-  padding: 16px 26px;
-  border-radius: 999px;
-  background: #ad376c;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 650;
-  text-decoration: none;
-  transition: background 180ms ease;
-}
-
-.releve-voting-hero__button:hover { background: #8e2956; }
-.releve-voting-hero__guide > svg { color: var(--home-pink); }
-.releve-voting-hero__guide > p { margin: 20px 0 28px; font-size: 30px; font-weight: 550; line-height: 1.12; letter-spacing: -0.04em; }
-.releve-voting-hero__guide ol { display: grid; gap: 15px; margin: 0; padding: 0; list-style: none; }
-.releve-voting-hero__guide li { display: flex; align-items: baseline; gap: 14px; font-size: 13px; line-height: 1.5; }
-.releve-voting-hero__guide li span { color: #a93468; font-size: 10px; font-weight: 700; }
-.releve-voting-hero__guide small { display: block; max-width: 260px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--home-line); color: var(--home-soft-ink); font-size: 11px; line-height: 1.7; }
-
-.releve-voting-page__ballot {
-  width: min(100%, 1440px);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  width: min(100%, 580px);
+  min-width: 0;
   margin: 0 auto;
-  padding: clamp(56px, 7vw, 100px) var(--container-pad);
-  scroll-margin-top: 100px;
+  padding: 0;
+  border: 0;
 }
 
-.releve-voting-page .releve-voting-preview--standalone { gap: 24px; color: var(--home-ink); }
-.releve-voting-preview--standalone .releve-voting-preview__stage { overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.releve-voting-preview--standalone .releve-voting-preview__panel { padding: 0; }
-.releve-voting-preview--standalone .releve-voting-preview__tabs { width: min(100%, 520px); max-width: none; margin: 0 auto 56px; padding: 0; gap: 0; border: 0; border-bottom: 1px solid var(--home-line); border-radius: 0; background: transparent; }
-.releve-voting-preview--standalone .releve-voting-preview__tabs button { min-height: 58px; padding: 16px; border-bottom: 2px solid transparent; border-radius: 0; color: var(--home-soft-ink); font-size: 16px; }
-.releve-voting-preview--standalone .releve-voting-preview__tabs button[aria-selected="true"] { border-color: var(--home-pink); background: transparent; box-shadow: none; color: #a93468; }
-.releve-voting-preview--standalone .releve-voting-preview__section-heading { margin-bottom: 32px; }
-.releve-voting-preview--standalone .releve-voting-preview__eyebrow { color: #a93468; }
-.releve-voting-preview--standalone .releve-voting-preview__section-heading h2 { max-width: 700px; margin: 16px 0 0; color: var(--home-ink); font-size: clamp(32px, 4.5vw, 60px); font-weight: 550; line-height: 1.08; letter-spacing: -0.045em; }
-.releve-voting-preview--standalone .releve-voting-preview__section-heading h2 span { color: var(--home-pink); }
-.releve-voting-preview--standalone .releve-voting-preview__section-heading > p { color: var(--home-soft-ink); font-size: 13px; line-height: 1.6; }
-.releve-voting-preview--standalone .releve-voting-preview__candidates { gap: 24px; }
-.releve-voting-preview--standalone .releve-voting-preview__candidates > legend { margin-bottom: 20px; color: var(--home-soft-ink); font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__candidate { padding: 26px; border-color: var(--home-line); border-radius: 22px; background: #ffffff80; transition: border-color 180ms ease, background 180ms ease; }
-.releve-voting-preview--standalone .releve-voting-preview__candidate:hover { border-color: #d94c8c80; }
-.releve-voting-preview--standalone .releve-voting-preview__candidate.is-selected { border-color: var(--home-pink); background: #fff4f8; box-shadow: 0 0 0 1px var(--home-pink); }
-.releve-voting-preview--standalone .releve-voting-preview__candidate-top { color: var(--home-soft-ink); font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__portrait { width: 110px; height: 110px; margin: 24px 0; border: 0; background: #f3e1e8; color: #ad376c; }
-.releve-voting-preview--standalone .releve-voting-preview__demo-label { color: var(--home-soft-ink); font-size: 9px; }
-.releve-voting-preview--standalone .releve-voting-preview__candidate > strong { margin-top: 12px; color: var(--home-ink); font-size: 23px; font-weight: 600; }
-.releve-voting-preview--standalone .releve-voting-preview__academy { color: var(--home-soft-ink); font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__piece { margin-top: 24px; padding: 20px 0; border-color: var(--home-line); }
-.releve-voting-preview--standalone .releve-voting-preview__piece > span { color: var(--home-soft-ink); font-size: 9px; }
-.releve-voting-preview--standalone .releve-voting-preview__piece b { color: var(--home-ink); font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__candidate-action { padding-top: 16px; color: #a93468; font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__selection { margin-top: 32px; padding: 26px 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
-.releve-voting-preview--standalone .releve-voting-preview__selection span { color: var(--home-soft-ink); font-size: 10px; }
-.releve-voting-preview--standalone .releve-voting-preview__selection strong { color: var(--home-ink); font-size: 16px; }
-.releve-voting-preview--standalone .releve-voting-preview__selection small { color: var(--home-soft-ink); font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__primary { min-height: 52px; padding: 16px 24px; border-radius: 999px; background: #ad376c; font-size: 14px; }
-.releve-voting-preview--standalone .releve-voting-preview__confirmation,
-.releve-voting-preview--standalone .releve-voting-preview__receipt { margin-top: 32px; padding: 32px; border-color: #e6cbd7; border-radius: 22px; background: #f9e8ef; }
-.releve-voting-preview--standalone .releve-voting-preview__confirmation h4,
-.releve-voting-preview--standalone .releve-voting-preview__receipt h4 { color: var(--home-ink); font-size: 26px; }
-.releve-voting-preview--standalone .releve-voting-preview__confirmation p,
-.releve-voting-preview--standalone .releve-voting-preview__receipt p,
-.releve-voting-preview--standalone .releve-voting-preview__receipt > span { color: var(--home-soft-ink); }
-.releve-voting-preview--standalone .releve-voting-preview__public-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 48px; }
-.releve-voting-preview--standalone .releve-voting-preview__public-actions button,
-.releve-voting-preview--standalone .releve-voting-preview__receipt button { min-height: 48px; padding: 12px 20px; border-color: var(--home-line); border-radius: 999px; background: #ffffff80; color: var(--home-ink); font-size: 13px; }
-.releve-voting-preview--standalone .releve-voting-preview__footer { gap: 10px; margin-top: 32px; padding: 24px 0 0; border-color: var(--home-line); background: transparent; color: var(--home-soft-ink); }
-.releve-voting-preview--standalone .releve-voting-preview__footer p { font-size: 11px; }
-.releve-voting-preview--standalone .releve-voting-preview__results { border-color: var(--home-line); background: #ffffff80; }
-.releve-voting-preview--standalone .releve-voting-preview__results h4 { color: var(--home-ink); }
+.releve-photo-card {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  grid-column: span 2;
+  min-width: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #eadfe3;
+  cursor: pointer;
+  transition: box-shadow 160ms ease;
+}
 
-.releve-voting-page .levitate-footer { border-top: 1px solid var(--home-line); background: var(--home-bg); color: var(--home-ink); }
-.releve-voting-page .levitate-footer__brand,
-.releve-voting-page .levitate-footer__contact,
-.releve-voting-page .levitate-footer__socials,
-.releve-voting-page .levitate-footer__socials a { color: var(--home-ink); }
-.releve-voting-page .levitate-footer__socials > span { color: var(--home-soft-ink); }
+/* The middle photo is intentionally centered, following the supplied 2–1–2 sketch. */
+.releve-photo-card:nth-of-type(3) { grid-column: 2 / span 2; }
+.releve-photo-card:nth-of-type(4) { grid-column: 1 / span 2; }
+.releve-photo-card > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.releve-photo-card > input { position: absolute; z-index: 2; width: 1px; height: 1px; opacity: 0; inset: 16px 16px auto auto; }
+.releve-photo-card:focus-within { outline: 3px solid var(--home-pink); outline-offset: 5px; }
+.releve-photo-card.is-selected { box-shadow: 0 0 0 3px var(--home-pink); }
+.releve-photo-card__name { position: absolute; right: 0; bottom: 0; left: 0; padding: 44px 16px 16px; background: linear-gradient(transparent, #000b); color: #fff; font-size: 13px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
+.releve-photo-card__check { position: absolute; top: 12px; right: 12px; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--home-pink); color: #fff; }
+.releve-photo-card.is-pending { border: 1px dashed #cebcc4; background: #eee7e7; cursor: default; }
+.releve-photo-card__pending { display: grid; height: 100%; align-content: center; justify-items: center; gap: 10px; padding-bottom: 20px; color: #8e6576; font-size: 12px; }
+.releve-photo-card.is-pending .releve-photo-card__name { padding-top: 16px; background: none; color: #765c67; }
 
-@media (max-width: 760px) {
-  .releve-voting-hero__content { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-top: 132px; }
-  .releve-voting-page__kicker { margin-bottom: 22px; font-size: 10px; }
-  .releve-voting-page .releve-voting-hero__description { margin: 24px 0; }
-  .releve-voting-hero__guide { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-items: end; }
-  .releve-voting-hero__guide > svg { display: none; }
-  .releve-voting-hero__guide > p { margin: 0; font-size: 25px; }
-  .releve-voting-hero__guide ol { gap: 12px; }
-  .releve-voting-hero__guide li { align-items: flex-start; gap: 8px; font-size: 11px; }
-  .releve-voting-hero__guide small { grid-column: 1 / -1; max-width: none; margin-top: 24px; }
-  .releve-voting-preview--standalone .releve-voting-preview__tabs { margin-bottom: 40px; }
-  .releve-voting-preview--standalone .releve-voting-preview__tabs button { padding: 16px 8px; font-size: 14px; }
-  .releve-voting-preview--standalone .releve-voting-preview__candidate { padding: 24px; }
-  .releve-voting-preview--standalone .releve-voting-preview__confirmation,
-  .releve-voting-preview--standalone .releve-voting-preview__receipt { padding: 28px 20px; }
+.releve-voting-page__action { display: grid; justify-items: center; gap: 12px; max-width: 580px; margin: 30px auto 0; }
+.releve-voting-page__action > p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--home-ink); font-size: 14px; line-height: 1.5; }
+.releve-voting-page__action > p svg { flex-shrink: 0; color: var(--home-pink); }
+.releve-voting-page button { min-height: 48px; padding: 12px 24px; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; color: var(--home-ink); font: 600 14px/1.4 var(--font-body); cursor: pointer; }
+.releve-voting-page .releve-voting-page__vote { min-width: 168px; border-color: transparent; background: #ad376c; color: #fff; }
+.releve-voting-page__vote:disabled { opacity: 0.4; cursor: default; }
+.releve-voting-page .releve-voting-page__reset { min-height: 36px; padding: 4px 12px; border: 0; color: #a93468; font-size: 12px; }
+.releve-voting-page small { color: var(--home-soft-ink); font-size: 10px; line-height: 1.5; }
+
+.releve-vote-dialog { position: fixed; inset: 0; width: min(360px, calc(100% - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 32px 24px 20px; overflow: auto; border: 0; border-radius: 24px; background: var(--home-bg); color: var(--home-ink); text-align: center; }
+.releve-vote-dialog::backdrop { background: #211b246e; backdrop-filter: blur(5px); }
+.releve-voting-page .releve-vote-dialog__close { position: absolute; top: 8px; right: 8px; display: grid; width: 40px; min-height: 40px; padding: 0; place-items: center; border: 0; }
+.releve-vote-dialog > img { display: block; width: 124px; height: 124px; margin: 4px auto 18px; border-radius: 16px; object-fit: cover; }
+.releve-vote-dialog > p { margin: 0 0 14px; color: #a93468; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.releve-vote-dialog h2 { margin: 0 0 24px; font-size: 24px; font-weight: 550; line-height: 1.15; letter-spacing: -0.035em; }
+.releve-vote-dialog__actions { display: flex; justify-content: center; gap: 10px; }
+.releve-voting-page .releve-vote-dialog__actions .releve-voting-page__vote { min-width: 0; }
+.releve-vote-dialog > small { display: block; margin-top: 16px; }
+
+@media (max-width: 600px) {
+  .releve-voting-page { padding: 22px 16px max(24px, env(safe-area-inset-bottom)); }
+  .releve-voting-page__header { gap: 14px; margin-bottom: 24px; }
+  .releve-voting-page__header img { width: 100px; height: 36px; }
+  .releve-voting-page__header h1 { font-size: 28px; }
+  .releve-photo-grid { gap: 12px; }
+  .releve-photo-card { border-radius: 14px; }
+  .releve-photo-card__name { padding: 32px 12px 12px; font-size: 11px; }
+  .releve-photo-card__check { top: 9px; right: 9px; width: 26px; height: 26px; }
+  .releve-voting-page__action { gap: 10px; margin-top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .releve-photo-card { transition: none; }
 }

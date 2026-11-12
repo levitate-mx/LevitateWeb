@@ -13,26 +13,34 @@ también sin acceso a la base de datos.
 
 ## Alcance actual
 
-- Dos ramas separadas: Relevé Motion y Relevé Aerial.
-- Seis participaciones ficticias, identificadas como ejemplos; no se consultan
-  inscripciones, maestros ni academias reales.
-- Selección de candidato, confirmación y recibo de voto simulado.
-- La página pública permite elegir directamente, con el encabezado, fondo crema
-  y tipografía del sitio. Los controles de apertura y cierre de la simulación
-  quedan en la vista administrativa; no aparecen en la experiencia pública.
-- Los votos y resultados de prueba viven únicamente en la memoria de la página.
+- La página pública muestra una galería de cinco opciones, distribuida como el
+  boceto proporcionado: dos fotos, una centrada y dos fotos.
+- Cuatro fotografías proporcionadas por la organización, en el orden indicado:
+  ESTRELLA MÍSTICA, QUEEN OF COSMIC FEVER, Damar y Hazel. Se prepararon en WebP
+  sin modificar su contenido. El encuadre cuadrado se ajusta en la página.
+- Falta la foto de Mariana Álvarez Dorado, de «Reloj de los 70s y 80s». Su espacio
+  aparece como «Foto pendiente» y no se puede seleccionar en esta revisión.
+- Cada foto permite seleccionar una opción; «Votar» abre una confirmación breve.
+  La confirmación indica que es una elección de prueba. No hay resultados ni
+  controles administrativos en la página pública.
+- Las elecciones de prueba viven únicamente en la memoria de la página.
   No se envían, comparten ni guardan en una base de datos o en el navegador.
   Recargar o salir de la sección reinicia la simulación.
 
-La página carga los datos ficticios del módulo compartido
-`shared/releve-voting-preview.js`, sin consultar sesiones ni endpoints de
-administración. Las rutas de jueceo y sus APIs conservan su autenticación.
+La página carga un catálogo estático en `src/data/releveVotingCandidates.ts`,
+sin consultar sesiones, inscripciones ni endpoints de administración. Solo se
+publican las fotos y los nombres indicados para esta galería. No se incluye la
+imagen del boceto entre los candidatos.
+
+La vista administrativa mantiene sus seis candidatos ficticios en
+`shared/releve-voting-preview.js` y sus controles de simulación. Las rutas de
+jueceo y sus APIs conservan su autenticación.
 `GET /api/registration/admin/releve-voting/preview` sigue exigiendo un rol
 `admin` o `judging_admin` en el servidor. Su respuesta utiliza
 `Cache-Control: private, no-store` y `Vary: Cookie`; no actualiza la sesión
 ni otros registros durante la consulta.
 
-Los datos compartidos indican explícitamente `mode: "preview"` y
+Los datos de la API administrativa indican explícitamente `mode: "preview"` y
 `publicVotingEnabled: false`. No existen rutas de emisión de votos. Cambiar el
 estado del prototipo no habilita la votación pública.
 
@@ -53,4 +61,6 @@ esta prueba.
 Las pruebas cubren la página sin sesión ni base de datos, los alias y encabezados
 de no indexación, el acceso protegido a la API administrativa, ausencia de
 escrituras, rechazo de otros métodos y de rutas de votos, datos ficticios y
-comportamiento de la simulación. La revisión visual incluye 1280×720 y 390×844.
+comportamiento de la simulación. La revisión visual de la galería incluye
+1280×720 y 390×844, el encuadre de cada foto, la distribución 2–1–2, la selección
+con teclado y la confirmación de prueba sin persistencia.
