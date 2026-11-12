@@ -39,6 +39,7 @@ import type {
 } from "../admin/JudgingScoresPanel";
 import "./JudgingAdminWorkspace.css";
 import { resolveJudgePortrait } from "./judgePortraits";
+import { ReleveVotingAdminPanel } from '../releve/ReleveVotingAdminPanel';
 
 type Event = {
   id: string;
@@ -120,6 +121,7 @@ type View =
   | "judges"
   | "report"
   | "favorites"
+  | "releve"
   | "import"
   | "settings";
 type Modal = { title: string; content: ReactNode } | null;
@@ -129,6 +131,7 @@ const primary = [
   { id: "judges", label: "Jueces", icon: Users },
   { id: "report", label: "Dictamen final", icon: Trophy },
   { id: "favorites", label: "Favoritos", icon: Star },
+  { id: "releve", label: "Votación Relevé", icon: Check },
   { id: "import", label: "Importar Excel", icon: FileSpreadsheet },
 ] as const;
 const compactNavLabels: Record<(typeof primary)[number]["id"], string> = {
@@ -137,6 +140,7 @@ const compactNavLabels: Record<(typeof primary)[number]["id"], string> = {
   judges: "Jueces",
   report: "Dictamen",
   favorites: "Favoritos",
+  releve: "Relevé",
   import: "Excel",
 };
 const base = "/api/registration/admin/judging/workspace/";
@@ -877,6 +881,7 @@ export function JudgingAdminWorkspace() {
           view !== "import" &&
           view !== "judges" &&
           view !== "settings" &&
+          view !== "releve" &&
           view !== "report" ? (
             <div className={`ja-toolbar${view === "home" ? " ja-toolbar-overview" : ""}`}>
               <label className="ja-block">
@@ -1051,6 +1056,7 @@ export function JudgingAdminWorkspace() {
               </section>
             </>
           ) : null}
+          {view === 'releve' ? <ReleveVotingAdminPanel refreshToken={bundle?.snapshot.fetchedAt || ''} /> : null}
           {bundle && view === "scores" ? (
             <section className="ja-score-activity" aria-label="Actividad de jueces">
               <header><Activity size={18} /><h2>Actividad de jueces</h2><span>En vivo · cada 10 s</span></header>

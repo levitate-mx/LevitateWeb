@@ -9,7 +9,7 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
 
 - Navegacion con etiquetas en escritorio y barra compacta en movil: Home,
   Editar calificaciones, Jueces, Dictamen final, Favoritos e Importar Excel;
-  actividad, ranking y configuracion secundarios. El tablero prioriza el bloque,
+  Votacion Releve y configuracion. La actividad se integra a Editar calificaciones. El tablero prioriza el bloque,
   el avance de evaluacion y las proximas coreografias con la identidad de Levitate.
 - Matriz por coreografia y juez, estados completos/incompletos, filtros,
   metadatos editables, movimiento entre bloques y eliminacion confirmada.
@@ -26,10 +26,10 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
   sincronizados. Una nota pendiente en una tablet aun no aparece en la web.
 - Favoritos multiples compatibles con los aliases anteriores, votos por juez
   y cuatro premios especiales manuales por bloque.
-- Dictamen, ranking y PDF reutilizan el calculo oficial y la presentacion de
+- Dictamen y PDF reutilizan el calculo oficial y la presentacion de
   lugares ya aprobada para la web; `/admin/puntuaciones` sigue siendo de solo
   lectura y conserva sus reglas. No se cambiaron las reglas de los clientes iOS.
-- Dictamen y ranking comparten el detalle por juez y los filtros del admin
+- Dictamen conserva el detalle por juez y los filtros del admin
   anterior: busqueda, disciplina y estado. Filtrar no recalcula lugares ni
   modifica el PDF, Top Score o premios del bloque. Cambiar evento, bloque o
   vista limpia esos filtros y cierra el detalle; actualizar datos conserva la
@@ -38,6 +38,10 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
   sin activar ni reemplazar otros programas. Los eventos anteriores se pueden
   activar, archivar y restaurar con confirmacion. Activar solo afecta al alcance
   verificado de Levitate, nunca a otras marcas.
+
+Releve permite abrir y cerrar la votacion real y consultar resultados privados.
+La instalacion queda cerrada. Ver `releve-voting-preview.md` para el control
+aproximado por dispositivo y la persistencia.
 
 ## Escrituras y seguridad
 

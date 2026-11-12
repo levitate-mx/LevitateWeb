@@ -54,7 +54,11 @@
 .releve-candidate-info__choreography { color: var(--home-ink); font-size: 14px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
 .releve-candidate-info__participant { color: var(--home-soft-ink); font-size: 12px; line-height: 1.45; text-wrap: balance; }
 .releve-photo-card__check { position: absolute; top: 12px; right: 12px; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--home-pink); color: #fff; }
-.releve-photo-card.is-pending { border: 1px dashed #cebcc4; background: #eee7e7; cursor: default; }
+.releve-photo-card.is-pending { border: 1px dashed #cebcc4; background: #eee7e7; }
+.releve-photo-grid:disabled .releve-photo-card { cursor: default; }
+.releve-voting-error { width: 100%; max-width: 420px; padding: 14px; border-radius: 12px; background: #fff8; text-align: center; }
+.releve-voting-error p { font-size: 13px; line-height: 1.6; margin: 0 0 10px; }
+.releve-voting-page button:disabled { cursor: default; opacity: .5; }
 .releve-photo-card__pending { display: grid; height: 100%; align-content: center; justify-items: center; gap: 10px; color: #8e6576; font-size: 12px; }
 
 .releve-voting-page__action { display: grid; justify-items: center; gap: 12px; max-width: 580px; margin: 30px auto 0; }

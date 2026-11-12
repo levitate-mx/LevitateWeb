@@ -617,3 +617,21 @@ test('guest preparation is additive and preserves existing registrations and QR 
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM participant_portal_guests').get().n,0);
   assert.equal((await prepareRegistrationSchema(db,{apply:true})).applied,0);
 });
+
+test('Releve installation adds empty closed voting storage and preserves existing participants and access grants', async t => {
+  const migration = readFileSync(new URL('../db/registration_releve_voting.sql',import.meta.url),'utf8');
+  assert.ok(baseSchema.includes(migration));
+  const {sqlite,db} = fixture(t,baseSchema.replace(migration,''));
+  seed(sqlite);
+  sqlite.exec(`INSERT INTO participant_portal_events(id,title,season,venue,starts_at) VALUES('event','Edición','Otoño','edomex','2026-11-14');
+    INSERT INTO participant_portal_access(id,participant_id,event_id,token_hash) VALUES('original-access','participant-1','event','original-private-qr-hash');`);
+  const original = sqlite.prepare('SELECT * FROM participant_portal_access').all();
+  const people = sqlite.prepare('SELECT * FROM registration_participants').all();
+  const applied = await prepareRegistrationSchema(db,{apply:true});
+  assert.equal(applied.applied,8);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM participant_portal_access').all(),original);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM registration_participants').all(),people);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM releve_voting_polls').get().n,0);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM releve_voting_ballots').get().n,0);
+  assert.equal((await prepareRegistrationSchema(db,{apply:true})).applied,0);
+});

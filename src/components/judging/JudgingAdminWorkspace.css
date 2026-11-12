@@ -1345,6 +1345,20 @@
   border-radius: 12px;
   background: var(--ja-surface);
 }
+.ja-releve-admin { display: grid; gap: 22px; }
+.ja-releve-control { border: 1px solid var(--ja-line); border-radius: 14px; padding: 22px; background: var(--ja-surface); }
+.ja-releve-control > header, .ja-releve-results > header { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ja-releve-control > header p { font-size: 10px; color: var(--ja-pink); letter-spacing: .08em; margin-bottom: 8px; }
+.ja-releve-control > p, .ja-releve-results > p, .ja-releve-confirm p { color: var(--ja-muted); font-size: 13px; line-height: 1.6; margin: 14px 0; max-width: 680px; }
+.ja-releve-buttons { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.ja-releve-buttons a { color: var(--ja-pink); font-size: 12px; padding: 10px; }
+.ja-releve-confirm { border-top: 1px solid var(--ja-line); margin-top: 20px; padding-top: 6px; }
+.ja-releve-results > header > span { color: var(--ja-muted); font-size: 13px; }
+.ja-releve-results > article { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--ja-line); }
+.ja-releve-results article small { color: var(--ja-pink); font-size: 10px; }
+.ja-releve-results article h3 { font-size: 16px; margin: 6px 0; }
+.ja-releve-results article p { color: var(--ja-muted); font-size: 12px; }
+.ja-releve-results article > strong { font-size: 30px; color: var(--ja-pink); }
 .ja-report.judging-scores label {
   color: var(--ja-muted);
   font-size: 12px;

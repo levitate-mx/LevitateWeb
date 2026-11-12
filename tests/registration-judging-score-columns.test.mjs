@@ -76,6 +76,7 @@ function harness(bundle = fixture()) {
       if (name.endsWith("registrationApi")) return { requestRegistrationApi() { throw new Error("Unexpected API call"); } };
       if (name.endsWith("JudgingScoresPanel")) return {};
       if (name.endsWith("judgePortraits")) return { resolveJudgePortrait: () => undefined };
+      if (name.endsWith('ReleveVotingAdminPanel')) return { ReleveVotingAdminPanel: () => null };
       if (name.endsWith("registrationAccess")) return { judgingRelevePath: "/jueceo/releve" };
       if (name.endsWith(".css")) return {};
       return require(name);

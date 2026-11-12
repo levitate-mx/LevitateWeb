@@ -9,6 +9,7 @@ import { handleJudgeWorkspace, handleAdminJudgeEditor } from "./judge-workspace.
 import { handleJudgingAdmin, requireJudgingAdmin } from "./judging-admin.js";
 import {handleJudgingExports,serveJudgingExport} from './judging-admin-exports.js';
 import { getReleveVotingPreview } from "./releve-voting-preview.js";
+import { handleReleveVoting } from "./releve-voting.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
 import { handleParticipantPortal } from "./participant-portal.js";
@@ -385,6 +386,14 @@ const registrationShopProducts = new Map([
 export default {
   async fetch(request, env, context) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/api/releve-voting' || url.pathname.startsWith('/api/releve-voting/') || url.pathname === '/api/registration/admin/releve-voting') {
+      return handleReleveVoting(request, env, { requireAdmin: async request => {
+        const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+        requireJudgingAdmin(session);
+        return session;
+      } });
+    }
 
     if(url.pathname==='/api/judging-export') {
       try{return await serveJudgingExport(request,env,{getMediaStore:()=>getParticipantMediaStorage(env)});}catch(error){return sendRegistrationError(error);}
