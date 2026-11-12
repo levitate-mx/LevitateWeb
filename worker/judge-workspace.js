@@ -5,7 +5,7 @@ import {
 } from "./judging-authority.js";
 
 const routineColumns =
-  "event_id,routine_id,block_id,block,block_title,sort_order,name,academy,division,genre,level,category,choreographer,state,scheduled_time,duration,participant";
+  "event_id,routine_id,program_number,block_id,block,block_title,sort_order,name,academy,division,genre,level,category,choreographer,state,scheduled_time,duration,participant";
 const orders = {
   blocks: "sort_order.asc,block_id.asc",
   routines: "sort_order.asc,routine_id.asc",
@@ -546,7 +546,7 @@ async function handleSelectableWorkspace(
       ),
       read(
         "routines",
-        "event_id,routine_id,block_id,block,name,academy,division,genre,level,category",
+        "event_id,routine_id,program_number,block_id,block,name,academy,division,genre,level,category",
         "event_id.asc,sort_order.asc,routine_id.asc",
       ),
     ]);

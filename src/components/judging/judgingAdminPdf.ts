@@ -4,7 +4,7 @@ import fontkit from "@pdf-lib/fontkit";
 type Bundle = {
   event: { name: string };
   snapshot: {
-    rows: { id: string; name: string; academy: string; status: string }[];
+    rows: { id: string; programNumber?: string; name: string; academy: string; status: string }[];
     report: {
       blocks: {
         id: string;
@@ -132,7 +132,7 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
       for (const standing of category.rows) {
         const row = lookup.get(standing.routineId);
         if (!row) continue;
-        const lines = wrapped(`#${row.id} · ${row.name}`, 316, 10),
+        const lines = wrapped(`#${row.programNumber || row.id} · ${row.name}`, 316, 10),
           academy = wrapped(row.academy, 316, 8),
           place = wrapped(standing.placement?.label || "Sin lugar", 90, 8);
         const h = Math.max(

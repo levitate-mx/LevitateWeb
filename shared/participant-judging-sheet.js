@@ -81,6 +81,8 @@ export async function generateParticipantJudgingPdf({ eventTitle, routine, judge
     logo = bytes[0] === 0x89 ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   }
   const [width, height] = A4;
+  const programNumber = typeof routine.programNumber === 'string' && routine.programNumber.trim()
+    ? routine.programNumber.trim() : routine.id;
   const contentWidth = width - margin * 2;
   const bottom = height - 45;
   const documentPages = [];
@@ -124,7 +126,7 @@ export async function generateParticipantJudgingPdf({ eventTitle, routine, judge
       eventLines.forEach((line, index) => drawText(page, line, margin + 10, top + 8 + index * 11, 8.2, bold, palette.white));
       top += 26 + eventLines.length * 11;
       if (sheetPage > 1) {
-        const label = `${routine.id ? `#${routine.id} - ` : ''}${routine.title || 'Presentación'} / ${judge.name || 'Juez'}`;
+        const label = `${programNumber ? `#${programNumber} - ` : ''}${routine.title || 'Presentación'} / ${judge.name || 'Juez'}`;
         const lines = wrap(label, bold, 9, contentWidth);
         lines.forEach(line => { drawText(page, line, margin, top, 9, bold, palette.white); top += 13; });
         top += 9;
@@ -156,7 +158,7 @@ export async function generateParticipantJudgingPdf({ eventTitle, routine, judge
       top += 25;
     };
     newPage();
-    paragraph(`${routine.id ? `#${routine.id} - ` : ''}${routine.title || 'Presentación'}`, { size: 17, font: bold, leading: 23 });
+    paragraph(`${programNumber ? `#${programNumber} - ` : ''}${routine.title || 'Presentación'}`, { size: 17, font: bold, leading: 23 });
     paragraph(routine.academy || 'Academia sin especificar', { size: 10, font: bold, color: palette.muted });
     paragraph(`Juez: ${judge.name || 'Sin nombre'}`, { size: 10, font: bold, color: palette.pink });
     for (const label of [

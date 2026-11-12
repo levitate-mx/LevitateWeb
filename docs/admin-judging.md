@@ -80,10 +80,12 @@ desde el navegador.
 - El botón **Actualizar** vuelve a consultar eventos, notas y premios. No hay
   sondeo periódico ni consultas en segundo plano desde esta sección.
 
-La identidad es `(event_id, routine_id)` de JueceoCore. La web de registros usa
-otros UUID: no se asocian coreografías de ambas bases por coincidencia de nombre.
-Una futura relación entre ambos programas debe guardar un identificador
-explícito y verificado.
+La identidad es `(event_id, routine_id)` de JueceoCore. `program_number` conserva
+el número impreso del programa, como `194 a` o `237`, y solo se usa para mostrarlo.
+Las consultas, ediciones, notas y asociaciones conservan el ID interno estable.
+La exportación del programa incluye los UUID de inscripción y una autorización
+acotada al archivo. El importador confirma esa relación con Mi Levitate y
+verifica el programa completo por IDs; no asocia por coincidencia de nombre.
 
 La consulta lee todas las páginas dentro de un límite acotado. Si se supera el
 límite o falla una tabla, no presenta un conjunto truncado como completo.

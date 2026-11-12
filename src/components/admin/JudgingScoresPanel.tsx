@@ -26,6 +26,7 @@ type JudgeScore = {
 };
 export type ChoreographyScore = {
   id: string | number;
+  programNumber?: string;
   name: string;
   academy: string;
   state: string;
@@ -143,7 +144,7 @@ export function filterReportSections(block: ReportBlock | null, rows: Choreograp
       rows: category.rows.flatMap((standing) => {
         const row = rowLookup.get(String(standing.routineId));
         if (!row) return [];
-        const text = normalizeAdminSearch(`${row.id} ${row.name} ${row.academy} ${row.state} ${row.division} ${row.category} ${row.level}`);
+        const text = normalizeAdminSearch(`${row.programNumber || ""} ${row.id} ${row.name} ${row.academy} ${row.state} ${row.division} ${row.category} ${row.level}`);
         const matches = text.includes(search)
           && (filters.discipline === "all" || section.id === filters.discipline)
           && (filters.status === "all" || row.status === filters.status);
@@ -177,7 +178,7 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
         <div className="judging-scores__entry-info">
           <h5>{row.name || "Coreografía sin nombre"}</h5>
           <p className="judging-scores__academy">{row.academy || "Sin academia"}</p>
-          {showMetadata ? <div className="judging-scores__entry-metadata"><span>#{row.id}</span>{row.level ? <span>{row.level}</span> : null}{row.category ? <span>{row.category}</span> : null}<span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></div>
+          {showMetadata ? <div className="judging-scores__entry-metadata"><span>#{row.programNumber || row.id}</span>{row.level ? <span>{row.level}</span> : null}{row.category ? <span>{row.category}</span> : null}<span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></div>
             : row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
           <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button>
         </div>

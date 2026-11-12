@@ -8,7 +8,7 @@ import {
 const fields = {
   blocks: "event_id,block_id,name,title,sort_order,is_active,updated_at",
   routines:
-    "event_id,routine_id,block_id,block,block_title,sort_order,name,academy,division,genre,level,category,choreographer,state,scheduled_time,duration,updated_at",
+    "event_id,routine_id,program_number,block_id,block,block_title,sort_order,name,academy,division,genre,level,category,choreographer,state,scheduled_time,duration,updated_at",
   judges:
     "event_id,judge_id,name,role,sort_order,photo_data,hero_image_name,assigned_block_ids,updated_at",
   criteria_templates:

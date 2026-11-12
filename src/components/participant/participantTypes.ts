@@ -21,6 +21,7 @@ export interface ParticipantJudgingPdfDescriptor {
   eventTitle: string;
   routine: {
     id: string;
+    programNumber?: string;
     title: string;
     academy: string;
     genre: string;

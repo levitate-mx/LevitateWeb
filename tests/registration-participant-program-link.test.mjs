@@ -203,6 +203,34 @@ test("large programme associations stay inside D1 bind limits without losing any
   assert.equal(new Set(f.rows("participant_portal_routines").map(row => row.source_routine_id)).size, 70);
 });
 
+test("linking the complete 236-routine event preserves Alison's existing passport, photos and routine identity", async t => {
+  const f=await fixture(t,236);
+  f.db.sqlite.prepare("UPDATE registration_participants SET full_name='ALISON LIKE MANCILLA MORALES' WHERE id='person-one'").run();
+  f.db.sqlite.prepare(`INSERT INTO participant_portal_routines(id,event_id,dance_id,result_json,judging_json,photos_published,status,revision)
+    VALUES('alison-existing-routine',?,'dance-001','{"score":123}','{"judges":["approved"]}',1,'draft',7)`).run(eventId);
+  const photo=f.db.sqlite.prepare(`INSERT INTO participant_portal_assets(id,event_id,routine_id,kind,object_key,file_name,content_type,sha256,byte_size,caption,published)
+    VALUES(?,?,'alison-existing-routine','photo',?,?,'image/jpeg',?,1024,'Preview de Alison',1)`);
+  for(const index of [1,2])photo.run(`alison-photo-${index}`,eventId,`private/alison/photo-${index}.jpg`,`foto-${index}.jpg`,String(index).repeat(64));
+  const previousRoutine=f.rows('participant_portal_routines')[0];
+  const protectedTables=['participant_portal_assets','participant_portal_access','registration_music_uploads','registration_participants','registration_dance_participants'];
+  const before=protectedTables.map(table=>f.rows(table));
+  const issued=await f.issue();
+  const result=await f.complete(issued);
+  assert.deepEqual(result,{ok:true,linked:236});
+  const bound=f.rows('participant_portal_routines');
+  assert.equal(bound.length,236);
+  assert.equal(new Set(bound.map(routine=>routine.source_routine_id)).size,236);
+  for(const link of issued.links)assert.ok(bound.some(routine=>routine.dance_id===link.danceId&&routine.source_event_id===sourceId&&routine.source_routine_id===link.sourceRoutineId));
+  const alison=bound.find(routine=>routine.dance_id==='dance-001');
+  for(const field of ['id','result_json','judging_json','photos_published','status','revision'])assert.equal(alison[field],previousRoutine[field]);
+  assert.deepEqual(protectedTables.map(table=>f.rows(table)),before);
+  const stableIds=bound.map(routine=>routine.id);
+  assert.deepEqual(await f.complete(issued),{ok:true,linked:236},'retry only confirms the same imported event');
+  assert.deepEqual(f.rows('participant_portal_routines').map(routine=>routine.id),stableIds);
+  assert.deepEqual(protectedTables.map(table=>f.rows(table)),before);
+  assert.ok(f.db.parameterCounts.every(count=>count<=100));
+});
+
 test("a failed atomic callback batch leaves its capability unclaimed and existing records intact", async t => {
   const f = await fixture(t), issued = await f.issue(); f.db.failBatchAt = 2;
   await assert.rejects(() => f.complete(issued), error => error.code === "portal_program_link_conflict" && error.statusCode === 409 && !/Simulated atomic/.test(error.message));

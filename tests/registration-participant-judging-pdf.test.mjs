@@ -34,6 +34,17 @@ test('all explicitly scored zeros are complete and remain zero even with a posit
   assert.doesNotMatch(text, /Pendiente|VISTA PREVIA/);
 });
 
+test('PDF sheets display original programme numbers while keeping legacy ID fallback', async () => {
+  for (const programNumber of ['194 a', '237', undefined]) {
+    const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({
+      eventTitle: 'Levitate MX', routine: { ...routine, programNumber }, judges: [judge()],
+    }));
+    const text = contentText(pdf);
+    assert.ok(text.includes(`#${programNumber || routine.id} - ${routine.title}`));
+    if (programNumber) assert.ok(!text.includes(`#${routine.id} - ${routine.title}`));
+  }
+});
+
 test('null and partial evaluations stay pending and always carry a preview mark', async () => {
   for (const pending of [judge({ criteria: [criterion(1, null)] }), judge({ status: 'partial' }), judge({ penalty: null }), judge({ criteria: [] })]) {
     const summary = summarizeParticipantJudgingSheet(pending);

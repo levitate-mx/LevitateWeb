@@ -9,7 +9,7 @@ const eventIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const eventColumns = "id,name,source_name,starts_at,is_active,event_type,competition_config,created_at";
 const tableColumns = {
   blocks: "event_id,block_id,name,title,sort_order,is_active",
-  routines: "event_id,routine_id,name,academy,state,genre,division,category,level,block_id,block,block_title,sort_order",
+  routines: "event_id,routine_id,program_number,name,academy,state,genre,division,category,level,block_id,block,block_title,sort_order",
   judges: "event_id,judge_id,name,role,sort_order,assigned_block_ids",
   criteria_templates: "event_id,template_id,genre,title,max_score,sort_order,template_version,applies_to",
   criteria: "event_id,template_id,criterion_id,section,label,max_score,sort_order,is_required",

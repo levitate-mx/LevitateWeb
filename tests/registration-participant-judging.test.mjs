@@ -37,6 +37,15 @@ test("authoritative complete sheets replace stale manual assets without changing
   assert.equal(f.input.routines[0].judging.url, manual.url, "input remains untouched");
 });
 
+test("participant PDF descriptors carry the programme number separately from the verified source identity", async () => {
+  const f = fixture({ snapshots: { [sourceEvent]: snapshot([nativeRoutine({ programNumber: "194 a" })]) } });
+  const result = await f.run();
+  assert.deepEqual(f.calls, [sourceEvent]);
+  assert.equal(result.routines[0].judging.pdf.routine.id, "source-routine");
+  assert.equal(result.routines[0].judging.pdf.routine.programNumber, "194 a");
+  assert.equal(result.routines[0].judging.pdf.routine.title, "Vuelo");
+});
+
 test("hidden editions and draft curated routines do not consult the source at all", async () => {
   for (const f of [fixture({ event: { published: 0 } }), fixture({ rows: [portalRow({ status: "draft" })] })]) {
     const result = await f.run(); assert.deepEqual(f.calls, []);

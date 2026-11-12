@@ -55,6 +55,7 @@ function find(element, predicate) {
 
 function harness(bundle = fixture()) {
   const state = [ [bundle.event], bundle.event.id, bundle, "scores", "motion", "", "all", [], false, "", "", "", "Admin", "judging_admin", null, "", [], "dark" ];
+  const navigation = [];
   let cursor = 0;
   const mockedReact = {
     useState(initial) {
@@ -68,7 +69,7 @@ function harness(bundle = fixture()) {
   };
   const scope = {
     exports: {}, URLSearchParams, Date, Map, Set,
-    location: { search: "?event=event&view=scores" },
+    location: { search: "?event=event&view=scores", assign: url => navigation.push(url) },
     localStorage: { getItem: () => "dark" },
     require(name) {
       if (name === "react") return mockedReact;
@@ -89,6 +90,7 @@ function harness(bundle = fixture()) {
   };
   return {
     tree,
+    navigation,
     header() {
       const matrix = find(tree(), (element) => element.type === "table" && element.props.className === "ja-matrix");
       return renderToStaticMarkup(find(matrix, (element) => element.type === "thead"));
@@ -146,4 +148,21 @@ test("judge management retains the event roster when the score columns are narro
   assert.ok(panel.props.judges.some((judge) => judge.name === "Otra jueza"));
   for (const name of [...motion, ...aerial]) assert.ok(panel.props.judges.some((judge) => judge.name === name));
   assert.ok(!panel.props.judges.some((judge) => judge.name === "Admin"));
+});
+
+test("programme numbers are visible and searchable while opening the editor uses the stable internal ID", () => {
+  const bundle = fixture();
+  bundle.routines[0].program_number = "194 a";
+  bundle.snapshot.rows[0].programNumber = "194 a";
+  const view = harness(bundle);
+  view.query("194 a");
+  const html = renderToStaticMarkup(view.tree());
+  assert.match(html, />#194 a</);
+  assert.match(html, /Jazz primero/);
+  assert.doesNotMatch(html, /Lírico segundo/);
+  const edit = find(view.tree(), element => element.type === "button"
+    && element.props.title === "Editar hoja de EVA CARRILLO · Jazz primero");
+  assert.ok(edit);
+  edit.props.onClick();
+  assert.equal(new URL(view.navigation[0], "https://levitate.mx").searchParams.get("routine"), "m1");
 });

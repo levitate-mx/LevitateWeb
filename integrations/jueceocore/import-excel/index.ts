@@ -53,6 +53,7 @@ type TemplateSource = {
 
 type Routine = {
   id: string;
+  programNumber: string | null;
   blockID: string;
   block: string;
   name: string;
@@ -100,6 +101,7 @@ type AccessCodeDelivery = {
 
 type EntryColumn =
   | "entryID"
+  | "programNumber"
   | "segment"
   | "name"
   | "academy"
@@ -154,6 +156,7 @@ const DEFAULT_ADMIN_EVALUATOR_IDS = [DEFAULT_ADMIN_ID];
 const DEFAULT_ENTRY_COLUMN_ALIASES: EntryColumnAliases = {
   ...REGISTRATION_COLUMN_ALIASES,
   entryID: ["#", "ID", "N", "NO", "NRO", "NUMERO", "NÚMERO", "ORDEN", "ENTRY ID", "ROUTINE ID", "CODIGO", "CÓDIGO"],
+  programNumber: ["#", "NÚMERO DE PROGRAMA", "NUMERO PROGRAMA", "PROGRAM NUMBER"],
   segment: ["BLOQUE", "SEGMENTO", "RONDA", "ROUND", "SEGMENT", "HEAT", "GRUPO DE COMPETENCIA"],
   name: [
     "COREOGRAFIA",
@@ -749,9 +752,15 @@ function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryCol
       segmentTitles.set(segmentName, currentTitle);
     }
     const routineID = routineIDText(explicitID) || `${blockID}-${routines.length + 1}`;
+    const programNumber = rowText(row, columnMap.programNumber) || null;
+    if (programNumber !== null && (programNumber.length > 32 || !/^[A-Za-z0-9][A-Za-z0-9 ._/-]*$/.test(programNumber))) {
+      const sourceRow = XLSX.utils.decode_range(sheet["!ref"] || "A1").s.r + rowIndex + 1;
+      throw new HTTPError(422, `${sheetName}, fila ${sourceRow}: el número de programa admite hasta 32 letras, números, espacios y separadores (punto, guion, guion bajo o barra).`);
+    }
     const duration = rowText(row, columnMap.duration) || inferredDuration(sheet, rowIndex + 1, columnMap.time);
     routines.push({
       id: routineID,
+      programNumber,
       blockID,
       block: segmentName,
       name,
@@ -783,6 +792,13 @@ function parseBlocks(sheetName: string, sheet: XLSX.WorkSheet, aliases: EntryCol
 function entryColumnMap(row: unknown[], aliases: EntryColumnAliases): Partial<Record<EntryColumn, number>> {
   const columnMap: Partial<Record<EntryColumn, number>> = {};
   row.forEach((value, index) => {
+    // The printed programme number is separate from the persistent app ID.
+    // Unlike alphanumeric aliases, a literal # has no compact header key.
+    if (cleanText(value) === "#") {
+      if (columnMap.programNumber === undefined) columnMap.programNumber = index;
+      if (columnMap.entryID === undefined) columnMap.entryID = index;
+      return;
+    }
     const reserved = Object.entries(REGISTRATION_COLUMN_ALIASES)
       .find(([, values]) => columnMatches(value, values))?.[0] as EntryColumn | undefined;
     if (reserved) {
@@ -1103,6 +1119,7 @@ async function uploadToSupabase(
   const routineRows = appData.routines.map((routine, index) => ({
     event_id: eventID,
     routine_id: routine.id,
+    program_number: routine.programNumber,
     block_id: routine.blockID || blockIDs.get(routine.block) || stableID(routine.block),
     block: routine.block,
     block_title: blockTitles.get(routine.block) || "",

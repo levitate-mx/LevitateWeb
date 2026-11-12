@@ -50,6 +50,21 @@ test("judging snapshot preserves exact per-judge sheets alongside the separate b
   assert.ok(Math.abs(result.report.blocks[0].sections[0].categories[0].rows[0].score - 110) < 1e-10);
 });
 
+test("original programme numbers are display metadata and never replace score or report identities", () => {
+  const input = fixture();
+  const before = snapshot(input);
+  for (const programNumber of ["194 a", "237"]) {
+    input.routines[0].program_number = ` ${programNumber} `;
+    const result = snapshot(input);
+    assert.equal(result.rows[0].id, "routine-1");
+    assert.equal(result.rows[0].programNumber, programNumber);
+    assert.deepEqual(result.rows[0].judges, before.rows[0].judges);
+    assert.deepEqual(result.report, before.report, "programme numbers cannot alter scoring or placements");
+  }
+  input.routines[0].program_number = null;
+  assert.deepEqual(snapshot(input), before, "legacy routines retain the previous display fallback");
+});
+
 test("recorded zero is complete data while an absent criterion remains null and incomplete", () => {
   const input = fixture();
   input.scores = [score(1, 0)];

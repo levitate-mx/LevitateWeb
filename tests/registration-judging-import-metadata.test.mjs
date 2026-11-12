@@ -95,7 +95,49 @@ test('linked programmes retain the stable ID when an alphanumeric display order 
   ]);
   const parsed=view.parse();
   assert.equal(parsed[0].routines[0].id,'1');
+  assert.equal(parsed[0].routines[0].programNumber,'194 a');
   assert.equal(registration.collectRegistrationLink(parsed[0].routines).routines[0].sourceRoutineId,'1');
+});
+
+test('original programme numbers are written independently of app IDs without altering registration links',async()=>{
+  const view=harness([
+    ['#',...headers],
+    ['194 a',...row],
+    ['237','Reloj de los 70s y 80s',...row.slice(1,5),'2','dance-0002',...row.slice(7)],
+  ]);
+  const response=await view.request();
+  assert.equal(response.status,200);
+  const routineWrite=view.calls.find(call=>call.url.pathname==='/rest/v1/routines' && call.options.method==='POST');
+  const values=JSON.parse(routineWrite.options.body);
+  assert.deepEqual(values.map(item=>({id:item.routine_id,number:item.program_number})),[
+    {id:'1',number:'194 a'},{id:'2',number:'237'},
+  ]);
+  assert.deepEqual(view.callbacks[0].link.routines,[
+    {danceId:'dance-0001',sourceRoutineId:'1'},{danceId:'dance-0002',sourceRoutineId:'2'},
+  ]);
+});
+
+test('legacy IDs never become invented programme numbers when there is no printed-number column',async()=>{
+  const view=harness([headers,row]);
+  assert.equal(view.parse()[0].routines[0].programNumber,null);
+  const response=await view.request();assert.equal(response.status,200);
+  const routineWrite=view.calls.find(call=>call.url.pathname==='/rest/v1/routines' && call.options.method==='POST');
+  assert.equal(JSON.parse(routineWrite.options.body)[0].program_number,null);
+});
+
+test('programme numbers preserve valid short labels and reject invalid values before any write',async()=>{
+  for(const value of ['194 a','237','A-1','12/B','01.2','A_3','1'.repeat(32)]) {
+    const parsed=harness([['#',...headers],[value,...row]]).parse();
+    assert.equal(parsed[0].routines[0].programNumber,value);
+  }
+  assert.equal(harness([['#',...headers],['',...row]]).parse()[0].routines[0].programNumber,null);
+  for(const value of ['1'.repeat(33),'194\na','<194>','194;DROP','194\\a']) {
+    const view=harness([['#',...headers],[value,...row]]);
+    const response=await view.request();
+    assert.equal(response.status,422,value);
+    assert.match((await response.json()).error,/número de programa/);
+    assert.equal(view.calls.length,0,'invalid display numbers fail before querying or writing to Core');
+  }
 });
 
 test('linked HTML programmes skip block separators and refresh changing repeated headers',()=>{

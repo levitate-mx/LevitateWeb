@@ -75,7 +75,8 @@ function projectedJudging(snapshot, row, adminPreview) {
     preview: Boolean(adminPreview), judges,
     pdf: {
       eventTitle: text(snapshot.event?.name),
-      routine: { id: text(row.id), title: text(row.name), academy: text(row.academy), genre: text(row.genre),
+      routine: { id: text(row.id), ...(text(row.programNumber) ? { programNumber: text(row.programNumber) } : {}),
+        title: text(row.name), academy: text(row.academy), genre: text(row.genre),
         category: text(row.category), division: text(row.division), level: text(row.level), block: text(row.blockName) },
       judges: sheet.judges, preview: Boolean(adminPreview),
     } };

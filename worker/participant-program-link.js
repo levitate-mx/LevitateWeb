@@ -115,12 +115,14 @@ export async function completeParticipantProgramLink({db,env,input,getJudgingDir
       .bind(sourceEventId,exported.id,sourceEventId)];
   for(let offset=0;offset<links.length;offset+=32){
     const group=links.slice(offset,offset+32);
+    const incoming=group.map(link=>({id:previous.find(row=>row.dance_id===link.danceId)?.id||crypto.randomUUID(),danceId:link.danceId,sourceRoutineId:link.sourceRoutineId}));
     statements.push(db.prepare(`WITH authorized AS (SELECT e.event_id,e.source_event_id FROM participant_portal_program_exports e JOIN participant_portal_judging_sources s ON s.event_id=e.event_id AND s.source_event_id=e.source_event_id WHERE e.id=? AND e.source_event_id=?)
       INSERT INTO participant_portal_routines(id,event_id,dance_id,source_event_id,source_routine_id)
-      ${group.map(()=>`SELECT ?,a.event_id,?,a.source_event_id,? FROM authorized a WHERE 1`).join(' UNION ALL ')}
+      SELECT json_extract(item.value,'$.id'),a.event_id,json_extract(item.value,'$.danceId'),a.source_event_id,json_extract(item.value,'$.sourceRoutineId')
+      FROM json_each(?) item JOIN authorized a ON 1=1 WHERE 1
       ON CONFLICT(event_id,dance_id) DO UPDATE SET source_event_id=excluded.source_event_id,source_routine_id=excluded.source_routine_id,updated_at=datetime('now')
       WHERE participant_portal_routines.source_event_id IS NULL OR (participant_portal_routines.source_event_id=excluded.source_event_id AND participant_portal_routines.source_routine_id=excluded.source_routine_id)`)
-      .bind(exported.id,sourceEventId,...group.flatMap(link=>[previous.find(row=>row.dance_id===link.danceId)?.id||crypto.randomUUID(),link.danceId,link.sourceRoutineId])));
+      .bind(exported.id,sourceEventId,JSON.stringify(incoming)));
   }
   try{await db.batch(statements);}catch{fault('portal_program_link_conflict','La asociación cambió durante la importación. No se reemplazó el programa.',409);}
   const bound=await first(db,'SELECT source_event_id FROM participant_portal_judging_sources WHERE event_id=?',exported.event_id);

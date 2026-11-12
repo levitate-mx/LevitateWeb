@@ -26,6 +26,7 @@ export function generateParticipantJudgingPdf(options: {
   eventTitle: string;
   routine: {
     id?: string | number;
+    programNumber?: string;
     title: string;
     academy?: string;
     genre?: string;

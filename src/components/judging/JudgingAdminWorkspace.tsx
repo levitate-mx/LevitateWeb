@@ -52,6 +52,7 @@ type Event = {
 type Block = { block_id: string; name: string; title: string };
 type Routine = {
   routine_id: string;
+  program_number?: string | null;
   block_id: string;
   name: string;
   academy: string;
@@ -475,7 +476,7 @@ export function JudgingAdminWorkspace() {
   function metadata(routine: Routine, field = "level") {
     if (!canManagePrograms) return;
     setModal({
-      title: `#${routine.routine_id} · Datos de coreografía`,
+      title: `#${routine.program_number?.trim() || routine.routine_id} · Datos de coreografía`,
       content: (
         <MetadataForm
           routine={routine}
@@ -516,7 +517,7 @@ export function JudgingAdminWorkspace() {
         <ConfirmForm
           danger
           message={`Se eliminarán ${routine.name}, sus notas, devoluciones, penalizaciones y favoritos. Esta acción no se puede deshacer desde la web.`}
-          label={`Escribe ${routine.routine_id} para confirmar`}
+          label={`Escribe el ID interno ${routine.routine_id} para confirmar`}
           onConfirm={async (confirmation) => {
             await mutate("delete-routine", {
               routine_id: routine.routine_id,
@@ -554,7 +555,7 @@ export function JudgingAdminWorkspace() {
   const visible = routines.filter(
     (r) =>
       norm(
-        `${r.routine_id} ${r.name} ${r.academy} ${r.genre} ${r.division} ${r.level} ${r.category}`,
+        `${r.program_number || ""} ${r.routine_id} ${r.name} ${r.academy} ${r.genre} ${r.division} ${r.level} ${r.category}`,
       ).includes(norm(query)) &&
       (status === "all" || scores.get(r.routine_id)?.status === status),
   );
@@ -590,6 +591,7 @@ export function JudgingAdminWorkspace() {
           routine: {
             ...r,
             id: r.routine_id,
+            programNumber: r.program_number?.trim() || undefined,
             title: r.name,
             block: bundle!.blocks.find((b) => b.block_id === blockId)?.name,
           },
@@ -655,6 +657,7 @@ export function JudgingAdminWorkspace() {
           routine: {
             ...r,
             id: r.routine_id,
+            programNumber: r.program_number?.trim() || undefined,
             title: r.name,
             block: bundle!.blocks.find((b) => b.block_id === blockId)?.name,
           },
@@ -1036,7 +1039,7 @@ export function JudgingAdminWorkspace() {
                   .slice(0, 3)
                   .map((r) => (
                     <article key={r.routine_id}>
-                      <b>#{r.routine_id}</b>
+                      <b>#{r.program_number?.trim() || r.routine_id}</b>
                       <div>
                         <strong>{r.name}</strong>
                         <small>{r.academy}</small>
@@ -1145,7 +1148,7 @@ export function JudgingAdminWorkspace() {
                       <tr key={r.routine_id}>
                         <th scope="row">
                           <div className="ja-routine-heading">
-                            <b>#{r.routine_id}</b>
+                            <b>#{r.program_number?.trim() || r.routine_id}</b>
                             {canManagePrograms ? <IconButton
                               label={`Editar datos de ${r.name}`}
                               onClick={() => metadata(r, "name")}
@@ -1578,7 +1581,7 @@ function MoveForm({
       }}
     >
       <p>
-        #{routine.routine_id} · {routine.name}
+        #{routine.program_number?.trim() || routine.routine_id} · {routine.name}
       </p>
       <label>
         Bloque destino
@@ -2248,7 +2251,7 @@ function FavoritesPanel({
                 </b>
                 <div>
                   <strong>
-                    #{r.routine_id} · {r.name}
+                    #{r.program_number?.trim() || r.routine_id} · {r.name}
                   </strong>
                   <p>{r.academy}</p>
                   <small>

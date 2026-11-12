@@ -251,7 +251,8 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
     });
     const completedJudges = judgeResults.filter((judge) => judge.status === "complete").length;
     return {
-      id: routineId, name: text(routine.name), academy: text(routine.academy), state: text(routine.state), genre: text(routine.genre),
+      id: routineId, ...(text(routine.program_number) ? { programNumber: text(routine.program_number) } : {}),
+      name: text(routine.name), academy: text(routine.academy), state: text(routine.state), genre: text(routine.genre),
       division: text(routine.division), category: text(routine.category), level: text(routine.level),
       blockId: text(routine.block_id) || text(block?.block_id), blockName: text(block?.name) || text(routine.block),
       status: unavailable || selection.unavailable ? "unavailable" : completedJudges === selection.expectedCount ? "complete"
