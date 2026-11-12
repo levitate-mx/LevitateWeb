@@ -1,3 +1,4 @@
+import { selectJudgingTemplate, minimumJudgingScore } from './judging-template.js';
 import { judgingConnection, readJudgingRows } from "./judging-reader.js";
 import {
   requireJudgingEvent,
@@ -21,7 +22,7 @@ const orders = {
 const columns = {
   blocks: "event_id,block_id,name,title,sort_order,is_active",
   routines: routineColumns,
-  criteria_templates: "event_id,template_id,genre,title,max_score,sort_order",
+  criteria_templates: "event_id,template_id,genre,title,max_score,sort_order,template_version,applies_to",
   criteria:
     "event_id,template_id,criterion_id,section,label,max_score,sort_order",
   scores: "event_id,block_id,routine_id,judge_id,criterion_id,value,updated_at",
@@ -237,16 +238,6 @@ async function readBundle(scope) {
   };
 }
 
-function templateFor(routine, templates) {
-  return (
-    templates.find((t) => normalize(t.genre) === normalize(routine.genre)) ||
-    (normalize(routine.genre).includes("TELA") ||
-    normalize(routine.genre).includes("ARO")
-      ? templates.find((t) => normalize(t.genre) === "DANZA AEREA")
-      : null) ||
-    templates[0]
-  );
-}
 
 export function validateJudgeRows(
   kind,
@@ -289,7 +280,7 @@ export function validateJudgeRows(
       updated_at: new Date().toISOString(),
     };
     if (kind === "scores") {
-      const template = templateFor(routine, templates);
+      const template = selectJudgingTemplate(routine, templates);
       const criterion = criteria.find(
         (c) =>
           c.template_id === template?.template_id &&
@@ -298,7 +289,7 @@ export function validateJudgeRows(
       if (
         !criterion ||
         !Number.isInteger(row.value) ||
-        row.value < 0 ||
+        row.value < minimumJudgingScore(template) ||
         row.value > Number(criterion.max_score)
       ) {
         fail(

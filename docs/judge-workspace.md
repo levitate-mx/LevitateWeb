@@ -187,3 +187,22 @@ retains one scrolling column and the fixed choreography/save controls.
 Apply `docs/patches/judge-web-sheet-layout.patch` after the assigned-block and
 fullscreen patches above when rebuilding from the shared Flutter source. The
 existing appearance and draft-persistence tests cover both column arrangements.
+
+### Relevé evaluation rubric
+
+The definitive event has its own `releve` template: Técnica y control,
+Composición coreográfica, Musicalidad, Interpretación artística and Presencia
+escénica, each scored as an integer from 1 to 3 (15 points per judge). The
+rubric applies by division and apparatus; it does not replace the ordinary Tela,
+Aro or Trapecio sheets. The same template selection rules are used by the web
+client, score validation and result/PDF readers. Applicability is retained in
+the offline programme cache.
+
+The existing 150-point normalization and five-point audience bonus are retained.
+The targeted data update is in `db/judging/edomex-2026-releve-rubric.sql`; it
+refuses to run once any of the five Relevé routines has saved scores. It does
+not update or delete existing scores or apparatus rubrics. Deploy the new web
+client and validator before applying it, then reload judging browser tabs.
+
+For a rebuild from the shared Flutter source, apply
+`docs/patches/judge-web-releve-rubric.patch` after the sheet-layout patch above.

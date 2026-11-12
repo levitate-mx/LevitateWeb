@@ -1,0 +1,270 @@
+diff --git a/lib/judging_store.dart b/lib/judging_store.dart
+index a74c433..a9e9fe2 100644
+--- a/lib/judging_store.dart
++++ b/lib/judging_store.dart
+@@ -566,11 +566,16 @@ class JudgingStore extends ChangeNotifier {
+ 
+   JudgingTemplate templateFor(Routine routine) {
+     final templates = appData?.templates ?? const <JudgingTemplate>[];
++    JudgingTemplate? selected;
++    var bestScore = -1;
+     for (final template in templates) {
+-      if (normalizedKey(template.genre) == normalizedKey(routine.genre)) {
+-        return template;
++      final score = template.matchScore(routine);
++      if (score > bestScore) {
++        selected = template;
++        bestScore = score;
+       }
+     }
++    if (selected != null) return selected;
+     if (ObligatoryChecklist.isAerialApparatusGenre(routine.genre)) {
+       for (final template in templates) {
+         if (normalizedKey(template.genre) == 'DANZA AEREA') {
+diff --git a/lib/local_judging_codec.dart b/lib/local_judging_codec.dart
+index c1f105a..2fc6a8c 100644
+--- a/lib/local_judging_codec.dart
++++ b/lib/local_judging_codec.dart
+@@ -56,6 +56,7 @@ Map<String, dynamic> encodeAppData(AppData data) => {
+                 'genre': t.genre,
+                 'title': t.title,
+                 'max_score': t.maxScore,
++                'applies_to': t.appliesTo,
+                 'criteria': t.criteria
+                     .map((c) => {
+                           'id': c.id,
+diff --git a/lib/models.dart b/lib/models.dart
+index ff23f90..ecdd55b 100644
+--- a/lib/models.dart
++++ b/lib/models.dart
+@@ -287,6 +287,7 @@ class JudgingTemplate {
+     required this.title,
+     required this.maxScore,
+     required this.criteria,
++    this.appliesTo = const {},
+   });
+ 
+   final String templateId;
+@@ -294,6 +295,44 @@ class JudgingTemplate {
+   final String title;
+   final double maxScore;
+   final List<Criterion> criteria;
++  final Map<String, dynamic> appliesTo;
++
++  int matchScore(Routine routine) {
++    final dimensions = <String, List<String>>{
++      'primary_categories': [routine.genre],
++      'divisions': [routine.division],
++      'levels': [routine.level],
++      'categories': [routine.category],
++      'segments': [routine.blockId, routine.block],
++    };
++    bool same(String left, String right) =>
++        left.trim().isNotEmpty &&
++        right.trim().isNotEmpty &&
++        (normalizedKey(left) == normalizedKey(right) ||
++            stableRemoteId(left) == stableRemoteId(right));
++    var specificity = 0;
++    for (final dimension in dimensions.entries) {
++      final raw = appliesTo[dimension.key] ??
++          (dimension.key == 'primary_categories'
++              ? appliesTo['primaryCategories']
++              : null);
++      final allowed = raw is List
++          ? raw
++              .whereType<String>()
++              .where((value) => value.trim().isNotEmpty)
++              .toList()
++          : <String>[];
++      if (allowed.isEmpty) continue;
++      specificity++;
++      if (!allowed.any((candidate) =>
++          dimension.value.any((value) => same(candidate, value)))) return -1;
++    }
++    return specificity > 0
++        ? 100 + specificity
++        : [genre, templateId].any((value) => same(value, routine.genre))
++            ? 10
++            : -1;
++  }
+ 
+   factory JudgingTemplate.fromJson(Map<String, dynamic> json) =>
+       JudgingTemplate(
+@@ -304,6 +343,8 @@ class JudgingTemplate {
+         title: json['title'] as String? ?? '',
+         maxScore: (json['max_score'] as num? ?? json['maxScore'] as num? ?? 0)
+             .toDouble(),
++        appliesTo:
++            Map<String, dynamic>.from(json['applies_to'] as Map? ?? const {}),
+         criteria: (json['criteria'] as List<dynamic>? ?? const [])
+             .cast<Map<String, dynamic>>()
+             .map(Criterion.fromJson)
+diff --git a/lib/supabase_api.dart b/lib/supabase_api.dart
+index e50886e..8f0d7d0 100644
+--- a/lib/supabase_api.dart
++++ b/lib/supabase_api.dart
+@@ -175,6 +175,8 @@ class SupabaseApi {
+         title: row['title'] as String? ?? '',
+         maxScore: (row['max_score'] as num? ?? 0).toDouble(),
+         criteria: criteriaByTemplate[templateID] ?? const [],
++        appliesTo:
++            Map<String, dynamic>.from(row['applies_to'] as Map? ?? const {}),
+       );
+     }).toList();
+ 
+diff --git a/test/releve_rubric_test.dart b/test/releve_rubric_test.dart
+new file mode 100644
+index 0000000..ccbbd02
+--- /dev/null
++++ b/test/releve_rubric_test.dart
+@@ -0,0 +1,150 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:jueceo_coreografias_tablet/judging_store.dart';
++import 'package:jueceo_coreografias_tablet/local_judging_codec.dart';
++import 'package:jueceo_coreografias_tablet/models.dart';
++import 'package:jueceo_coreografias_tablet/main.dart';
++import 'package:jueceo_coreografias_tablet/levitate_web_theme.dart';
++import 'package:shared_preferences/shared_preferences.dart';
++import 'support/judging_fixture.dart';
++import 'support/memory_judging_repository.dart';
++
++const labels = [
++  'Técnica y control',
++  'Composición coreográfica',
++  'Musicalidad',
++  'Interpretación artística',
++  'Presencia escénica'
++];
++AppData releveProgram() {
++  final data = encodeAppData(program());
++  data['routines'] = [
++    {
++      'routine_id': '232',
++      'name': 'Relevé',
++      'division': 'RELEVÉ',
++      'genre': 'TELA',
++      'block_id': 'block-1',
++      'block': 'Block 1'
++    },
++    {
++      'routine_id': 'ordinary',
++      'name': 'Aerial Senior',
++      'division': 'SENIOR',
++      'genre': 'TELA',
++      'block_id': 'block-1',
++      'block': 'Block 1'
++    },
++  ];
++  data['templates'] = [
++    {
++      'template_id': 'tela',
++      'genre': 'TELA',
++      'title': 'TELA',
++      'max_score': 70,
++      'applies_to': {
++        'primary_categories': ['TELA']
++      },
++      'criteria': List.generate(
++          15,
++          (index) => {
++                'id': index + 1,
++                'label': 'Criterio de tela ${index + 1}',
++                'section': 'Técnica',
++                'max_score': index < 10 ? 5 : 4
++              })
++    },
++    {
++      'template_id': 'releve',
++      'genre': 'RELEVÉ',
++      'title': 'HOJA DE JUECEO RELEVÉ',
++      'max_score': 15,
++      'applies_to': {
++        'divisions': ['RELEVÉ'],
++        'primary_categories': ['TELA', 'ARO', 'TRAPECIO']
++      },
++      'criteria': List.generate(
++          5,
++          (index) => {
++                'id': index + 1,
++                'label': labels[index],
++                'section': 'RELEVÉ',
++                'max_score': 3
++              })
++    },
++  ];
++  return AppData.fromJson(data);
++}
++
++void main() {
++  TestWidgetsFlutterBinding.ensureInitialized();
++  test(
++      'the remote bundle and offline codec retain division-specific Relevé rubric selection',
++      () async {
++    final input = releveProgram();
++    final raw = encodeAppData(input);
++    final templateRows =
++        (raw['templates'] as List).cast<Map<String, dynamic>>();
++    final api = FakeJudgingApi();
++    final bundle = api.bundleFromRows(event('event-a'),
++        blockRows: raw['blocks'] as List,
++        routineRows: raw['routines'] as List,
++        judgeRows: raw['judgeProfiles'] as List,
++        templateRows: templateRows,
++        criterionRows: [
++          for (final template in templateRows)
++            for (final criterion in template['criteria'] as List)
++              {
++                ...criterion as Map<String, dynamic>,
++                'template_id': template['template_id']
++              }
++        ],
++        scoreRows: [],
++        feedbackRows: [],
++        penaltyRows: [],
++        favoriteRows: []);
++    final restored = AppData.fromJson(encodeAppData(bundle.appData));
++    final store = JudgingStore(api,
++        automaticSync: false, localRepository: MemoryJudgingRepository())
++      ..appData = restored;
++    final releve = store.templateFor(restored.routines.first);
++    expect(releve.templateId, 'releve');
++    expect(releve.maxScore, 15);
++    expect(releve.criteria.map((criterion) => criterion.label), labels);
++    expect(
++        releve.criteria.every((criterion) => criterion.maxScore == 3), isTrue);
++    expect(store.templateFor(restored.routines.last).templateId, 'tela');
++    expect(store.templateFor(restored.routines.last).criteria.length, 15);
++    await store.close();
++  });
++
++  testWidgets(
++      'the Relevé sheet shows only five rubric labels and each score range is 1 to 3',
++      (tester) async {
++    SharedPreferences.setMockInitialValues(
++        {'selectedJudge': 'DANIEL.H', 'selectedRoutineId': '232'});
++    final api = FakeJudgingApi()..programData = releveProgram();
++    final store = JudgingStore(api,
++        automaticSync: false, localRepository: MemoryJudgingRepository());
++    store.appData = releveProgram();
++    store.selectedEvent = event('event-a');
++    store.selectedJudge = 'DANIEL.H';
++    store.selectedRoutineId = '232';
++    store.selectedBlockId = 'block-1';
++    tester.view.devicePixelRatio = 1;
++    tester.view.physicalSize = const Size(1280, 720);
++    addTearDown(tester.view.resetPhysicalSize);
++    addTearDown(tester.view.resetDevicePixelRatio);
++    await tester.pumpWidget(MaterialApp(
++        theme: levitateWebTheme(Brightness.dark),
++        home: Scaffold(body: JudgingPage(store: store))));
++    await tester.pump();
++    expect(find.byType(ScoreStepperField), findsNWidgets(5));
++    for (final label in labels) expect(find.text(label), findsOneWidget);
++    expect(find.text('1 a 3 puntos'), findsNWidgets(5));
++    expect(find.textContaining('Criterio de tela'), findsNothing);
++    expect(tester.takeException(), isNull);
++    await tester.pumpWidget(const SizedBox());
++    await store.close();
++  });
++}

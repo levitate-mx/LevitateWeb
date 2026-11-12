@@ -1,3 +1,4 @@
+import { selectJudgingTemplate, minimumJudgingScore } from './judging-template.js';
 import { buildJudgingResultReport } from "./judging-result-report.js";
 import { levitateJudgesForRoutine } from "./judging-roster.js";
 
@@ -51,43 +52,6 @@ function uniqueRows(rows, idFor, table, warn, onAmbiguous = () => {}) {
   return result;
 }
 
-function selectTemplate(routine, templates) {
-  const dimensions = [
-    ["primary_categories", "primaryCategories", [routine.genre]],
-    ["divisions", "divisions", [routine.division]],
-    ["levels", "levels", [routine.level]],
-    ["categories", "categories", [routine.category]],
-    ["segments", "segments", [routine.block_id, routine.block]],
-  ];
-  let selected = null;
-  let bestScore = -1;
-  for (const template of templates) {
-    const applicability = object(template.applies_to);
-    let specificity = 0;
-    let matches = true;
-    for (const [snake, camel, values] of dimensions) {
-      const candidates = array(applicability[snake] ?? applicability[camel]).filter((item) => text(item));
-      if (!candidates.length) continue;
-      specificity += 1;
-      if (!candidates.some((candidate) => values.some((value) => sameKey(candidate, value)))) matches = false;
-    }
-    const matchScore = specificity
-      ? (matches ? 100 + specificity : -1)
-      : ([template.template_id, template.genre].some((value) => sameKey(value, routine.genre)) ? 10 : -1);
-    if (matchScore > bestScore) {
-      bestScore = matchScore;
-      selected = template;
-    }
-  }
-  if (selected) return selected;
-  // This is the explicit iOS fallback for the supported aerial apparatuses.
-  // An unrelated first template is deliberately not used for unknown genres.
-  const genre = normalized(routine.genre);
-  if (genre.includes("TELA") || genre.includes("ARO")) {
-    return templates.find((template) => normalized(template.genre) === "DANZA AEREA") ?? null;
-  }
-  return null;
-}
 
 function criterionWeight(criterion, weights, warn) {
   const candidates = [String(criterion.id), criterion.label, normalized(criterion.label), stable(criterion.label)];
@@ -192,7 +156,7 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
     const block = blockFor(routine);
     const selection = expectedByRoutine.get(routineId);
     const expected = selection.judges;
-    const template = selectTemplate(routine, [...templates.values()]);
+    const template = selectJudgingTemplate(routine, [...templates.values()]);
     const criteria = template ? criteriaByTemplate.get(text(template.template_id)) : null;
     if (!criteria?.length) warn("Hay rutinas sin una plantilla de evaluación reconocida con criterios válidos.");
     if (!expected.length) warn("Hay rutinas sin jueces disponibles para consultar sus puntuaciones.");
@@ -218,7 +182,8 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
           usedScores.add(scoreKey);
           attemptedScore = true;
           const parsed = number(row.value);
-          if (parsed !== null && parsed >= 0 && parsed <= criterion.maximumScore) {
+          if (parsed !== null && parsed >= minimumJudgingScore(template) && parsed <= criterion.maximumScore
+            && (minimumJudgingScore(template) === 0 || Number.isInteger(parsed))) {
             value = parsed;
             recorded += 1;
           } else {
