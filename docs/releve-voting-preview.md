@@ -1,8 +1,15 @@
-# Prueba privada de votación Relevé
+# Prueba de votación Relevé por enlace
 
-La sección **Pruebas → Votación Relevé** del panel administrativo está en
-`/admin/releve/votacion`. Es un prototipo para revisar el recorrido del público
-antes de definir y habilitar una votación real.
+La página independiente está en `/votacion-releve` y no requiere iniciar sesión.
+Es un prototipo para revisar el recorrido del público antes de definir y
+habilitar una votación real. No hay enlaces hacia ella en los menús públicos,
+el portal de academias ni el espacio de jueceo. Tanto el encabezado HTTP
+`X-Robots-Tag` como la etiqueta `robots` de la página indican `noindex, nofollow`.
+La ruta es pública para quien conozca el enlace; no es una página privada.
+
+Los enlaces anteriores `/jueceo/releve` y `/admin/releve/votacion` redirigen a
+la nueva página. El alias de jueceo se resuelve antes de comprobar sesiones,
+también sin acceso a la base de datos.
 
 ## Alcance actual
 
@@ -11,20 +18,19 @@ antes de definir y habilitar una votación real.
   inscripciones, maestros ni academias reales.
 - Selección de candidato, confirmación y recibo de voto simulado.
 - Estados de apertura y cierre para probar la experiencia.
-- Los votos y resultados de prueba viven únicamente en la memoria del panel.
+- Los votos y resultados de prueba viven únicamente en la memoria de la página.
   No se envían, comparten ni guardan en una base de datos o en el navegador.
   Recargar o salir de la sección reinicia la simulación.
 
-La ruta no está enlazada desde el sitio público ni desde el portal de academias.
-El panel verifica la sesión normal y rechaza a usuarios sin rol `admin` antes
-de montar el prototipo. Además, `GET /api/registration/admin/releve-voting/preview`
-exige autenticación administrativa en el servidor antes de devolver los
-candidatos de ejemplo. La respuesta utiliza `Cache-Control: private, no-store`
-y `Vary: Cookie`; no actualiza la sesión ni otros registros durante la consulta.
-La aplicación pública puede servir el mismo HTML base del sitio, pero ese HTML
-no contiene la maqueta ni sus candidatos.
+La página carga los datos ficticios del módulo compartido
+`shared/releve-voting-preview.js`, sin consultar sesiones ni endpoints de
+administración. Las rutas de jueceo y sus APIs conservan su autenticación.
+`GET /api/registration/admin/releve-voting/preview` sigue exigiendo un rol
+`admin` o `judging_admin` en el servidor. Su respuesta utiliza
+`Cache-Control: private, no-store` y `Vary: Cookie`; no actualiza la sesión
+ni otros registros durante la consulta.
 
-El servidor devuelve explícitamente `mode: "preview"` y
+Los datos compartidos indican explícitamente `mode: "preview"` y
 `publicVotingEnabled: false`. No existen rutas de emisión de votos. Cambiar el
 estado del prototipo no habilita la votación pública.
 
@@ -42,7 +48,7 @@ esta prueba.
 
 ## Verificación
 
-Las pruebas cubren acceso sin sesión, acceso de academia, acceso administrativo,
-ausencia de escrituras, rechazo de otros métodos y de rutas de votos, datos
-ficticios y comportamiento de la simulación. La revisión visual incluye
-1280×720 y 390×844.
+Las pruebas cubren la página sin sesión ni base de datos, los alias y encabezados
+de no indexación, el acceso protegido a la API administrativa, ausencia de
+escrituras, rechazo de otros métodos y de rutas de votos, datos ficticios y
+comportamiento de la simulación. La revisión visual incluye 1280×720 y 390×844.

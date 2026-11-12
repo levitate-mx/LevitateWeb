@@ -183,7 +183,7 @@ test("judging pages enforce private HTML access and send each role to its correc
   const f = fixture(t);
   for (const username of ["adminjueceo", "globaladmin"]) {
     const { cookie } = await f.login(username);
-    for (const path of ["/jueceo/admin", "/jueceo/admin/", "/jueceo/releve", "/jueceo/releve/", "/jueceo/app/?mode=admin-editor"]) {
+    for (const path of ["/jueceo/admin", "/jueceo/admin/", "/jueceo/app/?mode=admin-editor"]) {
       const page = await f.request(path, { cookie });
       assert.equal(page.status, 200, `${username} ${path}`);
       assert.equal(await page.text(), "authenticated judging interface");
@@ -199,7 +199,7 @@ test("judging pages enforce private HTML access and send each role to its correc
   for (const username of [null, "academy", "judge"]) {
     const cookie = username ? (await f.login(username)).cookie : undefined;
     const assetsBefore = f.assetCalls.length;
-    for (const path of ["/jueceo/admin", "/jueceo/releve", "/jueceo/releve/", "/jueceo/app/?mode=admin-editor"]) {
+    for (const path of ["/jueceo/admin", "/jueceo/app/?mode=admin-editor"]) {
       const page = await f.request(path, { cookie });
       assert.equal(page.status, 302, `${username} ${path}`);
       assert.equal(page.headers.get("location"), "/login");
@@ -210,6 +210,61 @@ test("judging pages enforce private HTML access and send each role to its correc
     assert.equal(entry.headers.get("location"), username === "judge" ? "/jueceo/app/" : "/login");
   }
   assert.equal(f.externalCalls.length, 0);
+});
+
+test("the unlisted Relevé page and its former judging links work without a session for every role", async t => {
+  const f = fixture(t);
+  for (const username of [null, "academy", "judge", "adminjueceo", "globaladmin"]) {
+    const cookie = username ? (await f.login(username)).cookie : undefined;
+    const changesBefore = f.sqlite.prepare("SELECT total_changes() total").get().total;
+    f.queries.length = 0;
+    for (const [path, destination] of [
+      ["/jueceo/releve", "/votacion-releve"],
+      ["/jueceo/releve/", "/votacion-releve"],
+      ["/jueceo/releve?from=shared%20link&mode=admin-editor", "/votacion-releve?from=shared%20link&mode=admin-editor"],
+    ]) {
+      const assetsBefore = f.assetCalls.length;
+      const page = await f.request(path, { cookie });
+      assert.equal(page.status, 302, `${username || "anonymous"} ${path}`);
+      assert.equal(page.headers.get("location"), destination);
+      assert.match(page.headers.get("cache-control"), /no-store/);
+      assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
+      assert.equal(page.headers.get("set-cookie"), null);
+      assert.equal(f.assetCalls.length, assetsBefore, "the old URL redirects before serving assets");
+    }
+    for (const path of ["/votacion-releve", "/votacion-releve/", "/votacion-releve?mode=admin-editor"]) {
+      const assetsBefore = f.assetCalls.length;
+      const page = await f.request(path, { cookie });
+      assert.equal(page.status, 200, `${username || "anonymous"} ${path}`);
+      assert.equal(await page.text(), "authenticated judging interface");
+      assert.equal(page.headers.get("location"), null);
+      assert.match(page.headers.get("cache-control"), /no-store/);
+      assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
+      assert.equal(page.headers.get("set-cookie"), null);
+      assert.equal(f.assetCalls.length, assetsBefore + 1);
+    }
+    assert.equal(f.queries.length, 0, "reading the demo must not query sessions or registration data");
+    assert.equal(f.sqlite.prepare("SELECT total_changes() total").get().total, changesBefore,
+      "reading the demo must not change registrations, votes or session timestamps");
+  }
+  assert.equal(f.externalCalls.length, 0);
+});
+
+test("anonymous Relevé links remain available when registration storage is unavailable", async () => {
+  let assetCalls = 0;
+  const env = {
+    get DB() { throw new Error("the public demonstration must not access registration storage"); },
+    ASSETS: { fetch: async () => { assetCalls++; return new Response("public Relevé demo"); } },
+  };
+  const legacy = await worker.fetch(new Request("https://levitate.mx/jueceo/releve/"), env);
+  assert.equal(legacy.status, 302);
+  assert.equal(legacy.headers.get("location"), "/votacion-releve");
+  assert.equal(assetCalls, 0);
+  const page = await worker.fetch(new Request("https://levitate.mx/votacion-releve"), env);
+  assert.equal(page.status, 200);
+  assert.equal(await page.text(), "public Relevé demo");
+  assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
+  assert.equal(assetCalls, 1);
 });
 
 test("the dedicated account cannot read or change global registration, payment, scanning or Drive administration", async t => {

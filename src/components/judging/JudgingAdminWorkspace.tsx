@@ -39,7 +39,6 @@ import type {
 } from "../admin/JudgingScoresPanel";
 import "./JudgingAdminWorkspace.css";
 import { resolveJudgePortrait } from "./judgePortraits";
-import { judgingRelevePath } from "../admin/registrationAccess";
 
 type Event = {
   id: string;
@@ -754,10 +753,6 @@ export function JudgingAdminWorkspace() {
               <span>Configuración</span>
             </button>
           ) : null}
-          <button onClick={() => location.assign(judgingRelevePath)}>
-            <Trophy size={21} />
-            <span>Votación Relevé</span>
-          </button>
         </div>
         <div className="ja-profile">
           <span className="ja-profile-initial" aria-hidden="true">
@@ -838,10 +833,6 @@ export function JudgingAdminWorkspace() {
                   Configuración
                 </button>
               ) : null}
-              <a href={judgingRelevePath}>
-                <Trophy size={18} />
-                Votación Relevé
-              </a>
               <a href={homePath}>
                 <ArrowLeft size={18} />
                 {homeLabel}

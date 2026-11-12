@@ -1,26 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowRight, Check, CheckCircle2, Eye, LockKeyhole, RotateCcw, Sparkles, Trophy, UserRound } from "lucide-react";
 import { requestRegistrationApi } from "./registrationApi";
+import { getReleveVotingPreview } from "../../../shared/releve-voting-preview.js";
+import type { RelevePreviewCandidate as PreviewCandidate, RelevePreviewDivision as PreviewDivision, ReleveVotingPreviewPayload as PreviewPayload } from "../../../shared/releve-voting-preview.js";
 import "./ReleveVotingPreview.css";
 
-type PreviewDivision = "motion" | "aerial";
 type PreviewPhase = "upcoming" | "open" | "closed";
-type PreviewCandidate = {
-  id: string;
-  division: PreviewDivision;
-  teacherName: string;
-  academyName: string;
-  choreographyTitle: string;
-  entryNumber: number;
-};
-type PreviewPayload = {
-  mode: "preview";
-  publicVotingEnabled: false;
-  title: string;
-  description: string;
-  candidates: PreviewCandidate[];
-  fetchedAt: string;
-};
 type PreviewVotes = Record<PreviewDivision, string | null>;
 
 const divisions: { id: PreviewDivision; label: string; shortLabel: string }[] = [
@@ -29,7 +14,7 @@ const divisions: { id: PreviewDivision; label: string; shortLabel: string }[] = 
 ];
 const phaseLabels: Record<PreviewPhase, string> = { upcoming: "Próximamente", open: "Abierta", closed: "Cerrada" };
 
-function recordPreviewVote(candidates: PreviewCandidate[], votes: PreviewVotes, division: PreviewDivision, selectedId: string, phase: PreviewPhase): PreviewVotes {
+function recordPreviewVote(candidates: readonly PreviewCandidate[], votes: PreviewVotes, division: PreviewDivision, selectedId: string, phase: PreviewPhase): PreviewVotes {
   if (phase !== "open") throw new Error("Abre la simulación para confirmar un voto de prueba.");
   if (votes[division]) throw new Error("Ya confirmaste un voto de prueba en esta modalidad. Reinícialo para probar otra elección.");
   const candidate = candidates.find((item) => item.id === selectedId && item.division === division);
@@ -37,7 +22,7 @@ function recordPreviewVote(candidates: PreviewCandidate[], votes: PreviewVotes, 
   return { ...votes, [division]: candidate.id };
 }
 
-function simulatedResults(candidates: PreviewCandidate[], votes: PreviewVotes, division: PreviewDivision) {
+function simulatedResults(candidates: readonly PreviewCandidate[], votes: PreviewVotes, division: PreviewDivision) {
   return candidates.filter((candidate) => candidate.division === division).map((candidate) => ({
     candidate, votes: votes[division] === candidate.id ? 1 : 0,
   }));
@@ -77,7 +62,7 @@ function PreviewVoteReceipt({ candidate, divisionLabel, onReset }: { candidate: 
   );
 }
 
-export function ReleveVotingPreview({ refreshKey = 0, onUpdated }: { refreshKey?: number; onUpdated?: (date: string) => void }) {
+export function ReleveVotingPreview({ refreshKey = 0, onUpdated, standalone = false }: { refreshKey?: number; onUpdated?: (date: string) => void; standalone?: boolean }) {
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -102,7 +87,10 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated }: { refreshKey?
     setLoading(true); setLoadError(""); setPreview(null);
     setSelected({ motion: null, aerial: null }); setVotes({ motion: null, aerial: null });
     setReviewing(false); setFeedback(""); setVoteError("");
-    void requestRegistrationApi<PreviewPayload>("/api/registration/admin/releve-voting/preview", { signal: controller.signal, cache: "no-store" })
+    const previewRequest = standalone
+      ? Promise.resolve(getReleveVotingPreview())
+      : requestRegistrationApi<PreviewPayload>("/api/registration/admin/releve-voting/preview", { signal: controller.signal, cache: "no-store" });
+    void previewRequest
       .then((payload) => {
         if (controller.signal.aborted) return;
         if (payload.mode !== "preview" || payload.publicVotingEnabled !== false || typeof payload.title !== "string" || typeof payload.description !== "string"
@@ -111,7 +99,7 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated }: { refreshKey?
             || !["motion", "aerial"].includes(candidate.division) || !Number.isFinite(candidate.entryNumber)
             || typeof candidate.teacherName !== "string" || typeof candidate.academyName !== "string" || typeof candidate.choreographyTitle !== "string")
           || new Set(payload.candidates.map((candidate) => candidate.id)).size !== payload.candidates.length) {
-          throw new Error("No pudimos leer la vista previa privada. Vuelve a cargar la prueba.");
+          throw new Error("No pudimos leer la vista previa. Vuelve a cargar la prueba.");
         }
         setPreview(payload);
         updatedCallback.current?.(payload.fetchedAt);
@@ -121,7 +109,7 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated }: { refreshKey?
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [refreshKey, retry]);
+  }, [refreshKey, retry, standalone]);
 
   const candidates = preview?.candidates.filter((candidate) => candidate.division === division) || [];
   const divisionLabel = divisions.find((item) => item.id === division)?.label || "Relevé";
@@ -170,8 +158,8 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated }: { refreshKey?
   };
 
   return (
-    <section className="releve-voting-preview" aria-label="Vista previa privada de votación Relevé" aria-busy={loading}>
-      <div className="releve-voting-preview__private-bar"><span><LockKeyhole aria-hidden="true" size={16} /><strong>Vista previa privada</strong><small>Solo administradores · Votación pública deshabilitada</small></span><span className="releve-voting-preview__demo-tag">Modo prueba</span></div>
+    <section className="releve-voting-preview" aria-label={standalone ? "Vista previa de votación Relevé" : "Vista previa privada de votación Relevé"} aria-busy={loading}>
+      <div className="releve-voting-preview__private-bar"><span>{standalone ? <Sparkles aria-hidden="true" size={16} /> : <LockKeyhole aria-hidden="true" size={16} />}<strong>{standalone ? "Vista previa de Relevé" : "Vista previa privada"}</strong><small>{standalone ? "Candidatos de ejemplo · Sin votos reales" : "Solo administradores · Votación pública deshabilitada"}</small></span><span className="releve-voting-preview__demo-tag">Modo prueba</span></div>
       <div className="releve-voting-preview__controls">
         <label><span>Estado de la simulación</span><select value={phase} onChange={(event) => { setPhase(event.target.value as PreviewPhase); setReviewing(false); setVoteError(""); setFeedback(`Simulación ${phaseLabels[event.target.value as PreviewPhase].toLowerCase()}.`); }} disabled={loading || !preview}>
           <option value="upcoming">Próximamente</option><option value="open">Abierta</option><option value="closed">Cerrada</option>
@@ -197,7 +185,7 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated }: { refreshKey?
           {voteError ? <p className="releve-voting-preview__vote-error" role="alert">{voteError}</p> : null}
           {showResults ? <section className="releve-voting-preview__results" aria-label={`Resultados simulados de ${divisionLabel}`}><header><div><span className="releve-voting-preview__eyebrow">Resultados simulados</span><h4>Así se vería el conteo</h4></div><strong>{localVoteCount} {localVoteCount === 1 ? "voto de prueba" : "votos de prueba"}</strong></header><p>Este conteo incluye únicamente los votos que confirmaste durante esta prueba. Se borra al salir o recargar.</p><ul>{localResults.map((result) => <li key={result.candidate.id}><div><strong>{result.candidate.teacherName}</strong><span>{result.votes} {result.votes === 1 ? "voto" : "votos"}</span></div><span className="releve-voting-preview__result-bar" aria-hidden="true"><span style={{ width: result.votes ? "100%" : "0%" }} /></span></li>)}</ul></section> : null}
         </div>
-        <footer className="releve-voting-preview__footer"><LockKeyhole aria-hidden="true" size={14} /><p>Maqueta privada con datos de demostración. Las selecciones viven únicamente en esta vista y no cuentan para ningún resultado real.</p></footer>
+        <footer className="releve-voting-preview__footer"><Sparkles aria-hidden="true" size={14} /><p>Vista previa con datos de demostración. Las selecciones viven únicamente en esta vista y no cuentan para ningún resultado real.</p></footer>
       </div> : null}
     </section>
   );

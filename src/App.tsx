@@ -34,14 +34,15 @@ import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 
 const JudgingAdminWorkspace = lazy(() => import("./components/judging/JudgingAdminWorkspace").then(module => ({ default: module.JudgingAdminWorkspace })));
-const JudgingRelevePage = lazy(() => import("./components/judging/JudgingRelevePage").then(module => ({ default: module.JudgingRelevePage })));
+const ReleveVotingPage = lazy(() => import("./components/releve/ReleveVotingPage").then(module => ({ default: module.ReleveVotingPage })));
 const guardAdminRoute = (screen: ReactNode) => (
   <LevitateAdminAccessBoundary>{() => screen}</LevitateAdminAccessBoundary>
 );
 
 export default function App() {
   if (["/jueceo/admin", "/jueceo/admin/"].includes(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando jueceo...</main>}><JudgingAdminWorkspace /></Suspense>;
-  if (/^\/jueceo\/releve\/?$/.test(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando Relevé...</main>}><JudgingRelevePage /></Suspense>;
+  if (/^\/votacion-releve\/?$/.test(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando Relevé...</main>}><ReleveVotingPage /></Suspense>;
+  if (/^\/jueceo\/releve\/?$/.test(window.location.pathname)) return <JudgingReleveEntry />;
   if (/^\/jueceo\/?$/.test(window.location.pathname)) return <JudgeWorkspaceEntry />;
   const searchParams = new URLSearchParams(window.location.search);
   const participantMatch = window.location.pathname.match(/^\/mi-levitate(?:\/demo\.?)?\/?$/);

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { judgingReportPath, judgingRelevePath } from "../admin/registrationAccess";
+import { judgingReportPath, releveVotingPath } from "../admin/registrationAccess";
 
 function JudgingModuleEntry({ destination, label }: { destination: string; label: string }) {
   useEffect(() => {
@@ -14,5 +14,5 @@ export function JudgingReportEntry() {
 }
 
 export function JudgingReleveEntry() {
-  return <JudgingModuleEntry destination={judgingRelevePath} label="Abrir votación Relevé" />;
+  return <JudgingModuleEntry destination={`${releveVotingPath}${window.location.search}${window.location.hash}`} label="Abrir votación Relevé" />;
 }

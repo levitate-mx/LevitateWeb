@@ -2,7 +2,7 @@ export type RegistrationRole = "academy" | "admin" | "judge" | "judging_admin";
 
 export const judgingAdminPath = "/jueceo/admin";
 export const judgingReportPath = `${judgingAdminPath}?view=report`;
-export const judgingRelevePath = "/jueceo/releve";
+export const releveVotingPath = "/votacion-releve";
 
 export function getRegistrationHomePath(role?: RegistrationRole): string {
   if (role === "judging_admin") return judgingAdminPath;

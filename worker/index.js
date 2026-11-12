@@ -390,10 +390,29 @@ export default {
       try{return await serveJudgingExport(request,env,{getMediaStore:()=>getParticipantMediaStorage(env)});}catch(error){return sendRegistrationError(error);}
     }
 
-    if (["/jueceo", "/jueceo/", "/jueceo/admin", "/jueceo/admin/", "/jueceo/releve", "/jueceo/releve/", "/jueceo/app", "/jueceo/app/", "/jueceo/app/index.html"].includes(url.pathname)) {
+    if (["/jueceo/releve", "/jueceo/releve/"].includes(url.pathname)) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `/votacion-releve${url.search}`,
+          "cache-control": "no-store",
+          "x-robots-tag": "noindex, nofollow",
+        },
+      });
+    }
+
+    if (["/votacion-releve", "/votacion-releve/"].includes(url.pathname)) {
+      const response = await env.ASSETS.fetch(request);
+      const headers = new Headers(response.headers);
+      headers.set("cache-control", "no-store");
+      headers.set("x-robots-tag", "noindex, nofollow");
+      return new Response(response.body, { status: response.status, headers });
+    }
+
+    if (["/jueceo", "/jueceo/", "/jueceo/admin", "/jueceo/admin/", "/jueceo/app", "/jueceo/app/", "/jueceo/app/index.html"].includes(url.pathname)) {
       try {
         const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
-        const admin = url.pathname.startsWith('/jueceo/admin') || url.pathname.startsWith('/jueceo/releve') || url.searchParams.get('mode') === 'admin-editor';
+        const admin = url.pathname.startsWith('/jueceo/admin') || url.searchParams.get('mode') === 'admin-editor';
         const judgingAdmin = ["admin", "judging_admin"].includes(session.user.role);
         if (admin) requireJudgingAdmin(session);
         else if (!judgingAdmin && session.user.role !== "judge") throwHttpError("judge_forbidden", "Esta cuenta no tiene acceso a esta seccion.", 403);

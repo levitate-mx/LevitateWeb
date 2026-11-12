@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { getReleveVotingPreview } from '../worker/releve-voting-preview.js';
 import { getAdminSectionFromPath } from '../src/components/admin/adminNavigation.ts';
 
-test('the private Relevé preview contains only explicitly fictitious candidates and never enables a public ballot', t => {
+test('the Relevé preview contains only explicitly fictitious candidates and never enables a public ballot', t => {
   t.mock.method(globalThis, 'fetch', () => { throw new Error('preview data must never contact a real service'); });
   const preview = getReleveVotingPreview();
   assert.equal(preview.mode, 'preview');
@@ -26,7 +26,7 @@ test('the private Relevé preview contains only explicitly fictitious candidates
   assert.doesNotMatch(JSON.stringify(preview), /curp|payment|proof|ticket|accessToken|data:audio/i);
 });
 
-test('one admin simulation cannot alter the shared server preview or introduce a persistent ballot', () => {
+test('one simulation cannot alter the shared preview or introduce a persistent ballot', () => {
   const first = getReleveVotingPreview();
   const before = structuredClone(first.candidates);
   assert.throws(() => { first.candidates[0].teacherName = 'Changed candidate'; }, TypeError);
@@ -38,10 +38,10 @@ test('one admin simulation cannot alter the shared server preview or introduce a
   assert.equal(Object.hasOwn(next, 'results'), false);
 });
 
-test('the Relevé preview is an exact admin section and has no public voting route alias', () => {
+test('the legacy Relevé admin section remains distinct from the standalone page', () => {
   assert.equal(getAdminSectionFromPath('/admin/releve/votacion'), 'releveVoting');
   assert.equal(getAdminSectionFromPath('/admin/releve/votacion/'), 'releveVoting');
-  for (const path of ['/releve/votacion', '/votacion/releve', '/admin/releve/votacion/publica']) {
+  for (const path of ['/votacion-releve', '/votacion-releve/', '/releve/votacion', '/votacion/releve', '/admin/releve/votacion/publica']) {
     assert.equal(getAdminSectionFromPath(path), null);
   }
 });
