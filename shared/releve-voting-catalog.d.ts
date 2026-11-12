@@ -3,6 +3,7 @@ export type ReleveVotingCandidate = {
   academy: string;
   choreography: string;
   participantName: string;
+  participantDisplayName: string;
   photo: string | null;
   photoPosition: string;
 };

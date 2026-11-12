@@ -9,8 +9,10 @@ publican resultados. La página y sus alias conservan `noindex, nofollow`.
 El catálogo aprobado de Estado de México · Otoño 2026 vive en
 `shared/releve-voting-catalog.js`, compartido por servidor y navegador.
 Incluye cinco opciones: Estrella Mística, Queen of Cosmic Fever, Con amor,
-Guardiana del mar y Reloj de los 70s y 80s. La galería conserva la distribución
-2–1–2 y muestra academia, coreografía y nombre completo, en ese orden.
+Guardiana del mar y Reloj de los 70s y 80s. La galería muestra cinco tarjetas
+horizontales, una debajo de otra, con foto a la izquierda y academia,
+coreografía y nombre a la derecha, en ese orden. El nombre visible usa solo
+un nombre y un apellido; la identidad completa se conserva en el catálogo.
 
 Las cinco opciones tienen su fotografía aprobada. La foto de Mariana Álvarez
 Dorado se incorporó el 12 de noviembre de 2026 a Reloj de los 70s y 80s, de

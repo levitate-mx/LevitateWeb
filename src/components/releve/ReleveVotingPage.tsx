@@ -10,7 +10,7 @@ function CandidateInfo({ candidate }: { candidate: ReleveVotingCandidate }) {
   return <span className="releve-candidate-info">
     <span className="releve-candidate-info__academy">{candidate.academy}</span>
     <strong className="releve-candidate-info__choreography">{candidate.choreography}</strong>
-    <span className="releve-candidate-info__participant">{candidate.participantName}</span>
+    <span className="releve-candidate-info__participant">{candidate.participantDisplayName}</span>
   </span>;
 }
 
