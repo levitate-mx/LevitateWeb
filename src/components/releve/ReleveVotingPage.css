@@ -30,13 +30,13 @@
 .releve-photo-card {
   position: relative;
   isolation: isolate;
-  display: block;
+  display: flex;
+  flex-direction: column;
   grid-column: span 2;
   min-width: 0;
-  aspect-ratio: 1;
   overflow: hidden;
   border-radius: 18px;
-  background: #eadfe3;
+  background: #fff8;
   cursor: pointer;
   transition: box-shadow 160ms ease;
 }
@@ -44,15 +44,18 @@
 /* The middle photo is intentionally centered, following the supplied 2–1–2 sketch. */
 .releve-photo-card:nth-of-type(3) { grid-column: 2 / span 2; }
 .releve-photo-card:nth-of-type(4) { grid-column: 1 / span 2; }
-.releve-photo-card > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.releve-photo-card__photo { display: block; aspect-ratio: 1; overflow: hidden; background: #eadfe3; }
+.releve-photo-card__photo > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .releve-photo-card > input { position: absolute; z-index: 2; width: 1px; height: 1px; opacity: 0; inset: 16px 16px auto auto; }
 .releve-photo-card:focus-within { outline: 3px solid var(--home-pink); outline-offset: 5px; }
 .releve-photo-card.is-selected { box-shadow: 0 0 0 3px var(--home-pink); }
-.releve-photo-card__name { position: absolute; right: 0; bottom: 0; left: 0; padding: 44px 16px 16px; background: linear-gradient(transparent, #000b); color: #fff; font-size: 13px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
+.releve-candidate-info { display: grid; gap: 4px; padding: 14px 14px 16px; text-align: center; overflow-wrap: anywhere; }
+.releve-candidate-info__academy { color: #a93468; font-size: 10px; font-weight: 600; line-height: 1.4; letter-spacing: 0.055em; text-transform: uppercase; }
+.releve-candidate-info__choreography { color: var(--home-ink); font-size: 14px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
+.releve-candidate-info__participant { color: var(--home-soft-ink); font-size: 12px; line-height: 1.45; text-wrap: balance; }
 .releve-photo-card__check { position: absolute; top: 12px; right: 12px; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--home-pink); color: #fff; }
 .releve-photo-card.is-pending { border: 1px dashed #cebcc4; background: #eee7e7; cursor: default; }
-.releve-photo-card__pending { display: grid; height: 100%; align-content: center; justify-items: center; gap: 10px; padding-bottom: 20px; color: #8e6576; font-size: 12px; }
-.releve-photo-card.is-pending .releve-photo-card__name { padding-top: 16px; background: none; color: #765c67; }
+.releve-photo-card__pending { display: grid; height: 100%; align-content: center; justify-items: center; gap: 10px; color: #8e6576; font-size: 12px; }
 
 .releve-voting-page__action { display: grid; justify-items: center; gap: 12px; max-width: 580px; margin: 30px auto 0; }
 .releve-voting-page__action > p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--home-ink); font-size: 14px; line-height: 1.5; }
@@ -67,7 +70,7 @@
 .releve-vote-dialog::backdrop { background: #211b246e; backdrop-filter: blur(5px); }
 .releve-voting-page .releve-vote-dialog__close { position: absolute; top: 8px; right: 8px; display: grid; width: 40px; min-height: 40px; padding: 0; place-items: center; border: 0; }
 .releve-vote-dialog > img { display: block; width: 124px; height: 124px; margin: 4px auto 18px; border-radius: 16px; object-fit: cover; }
-.releve-vote-dialog > p { margin: 0 0 14px; color: #a93468; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.releve-vote-dialog .releve-candidate-info { padding: 0 0 18px; }
 .releve-vote-dialog h2 { margin: 0 0 24px; font-size: 24px; font-weight: 550; line-height: 1.15; letter-spacing: -0.035em; }
 .releve-vote-dialog__actions { display: flex; justify-content: center; gap: 10px; }
 .releve-voting-page .releve-vote-dialog__actions .releve-voting-page__vote { min-width: 0; }
@@ -80,7 +83,9 @@
   .releve-voting-page__header h1 { font-size: 28px; }
   .releve-photo-grid { gap: 12px; }
   .releve-photo-card { border-radius: 14px; }
-  .releve-photo-card__name { padding: 32px 12px 12px; font-size: 11px; }
+  .releve-candidate-info { padding: 12px 10px 14px; }
+  .releve-candidate-info__choreography { font-size: 12px; }
+  .releve-candidate-info__participant { font-size: 11px; }
   .releve-photo-card__check { top: 9px; right: 9px; width: 26px; height: 26px; }
   .releve-voting-page__action { gap: 10px; margin-top: 24px; }
 }

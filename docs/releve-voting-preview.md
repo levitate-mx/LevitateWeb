@@ -21,6 +21,8 @@ también sin acceso a la base de datos.
 - Falta la foto de Mariana Álvarez Dorado, de «Reloj de los 70s y 80s». Su espacio
   aparece como «Foto pendiente» y no se puede seleccionar en esta revisión.
 - Cada foto permite seleccionar una opción; «Votar» abre una confirmación breve.
+  Debajo de la foto y en la confirmación se muestran, en este orden, academia,
+  coreografía y nombre completo del participante.
   La confirmación indica que es una elección de prueba. No hay resultados ni
   controles administrativos en la página pública.
 - Las elecciones de prueba viven únicamente en la memoria de la página.
