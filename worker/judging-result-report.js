@@ -1,6 +1,7 @@
 // Official numeric scores follow the new iOS CompetitionScoringEngine. The web
 // announcer report keeps category groups and awards fixed first/second/third places.
 // This module only derives a report from already authorized, event-scoped data.
+import { releveStanding } from './releve-competition.js';
 const EPSILON = 0.0001;
 const MAXIMUM_SCORE = 150;
 const array = (value) => Array.isArray(value) ? value : [];
@@ -137,7 +138,7 @@ function placement(rank) {
 function categoryRows(results) {
   // Missing sheets may have a numeric zero under the official missing-score
   // policy. They cannot receive a place until at least one note is recorded.
-  const eligible = results.filter((item) => item.score !== null && item.row.status !== "pending" && item.row.recordedScores > 0)
+  const eligible = results.filter((item) => item.score !== null && item.audience?.ready !== false && item.row.status !== "pending" && item.row.recordedScores > 0)
     .sort((a, b) => Math.abs(a.score - b.score) < EPSILON ? routineOrder(a.row, b.row) : b.score - a.score);
   const byId = new Map();
   let rank = 0;
@@ -150,7 +151,8 @@ function categoryRows(results) {
   return [...results].sort((a, b) => {
     if (a.score === null || b.score === null) return a.score === b.score ? routineOrder(a.row, b.row) : a.score === null ? -1 : 1;
     return Math.abs(a.score - b.score) < EPSILON ? routineOrder(a.row, b.row) : a.score - b.score;
-  }).map((item) => ({ routineId: item.row.id, score: item.score, placement: byId.get(item.row.id) ?? null }));
+  }).map((item) => ({ routineId: item.row.id, score: item.score, placement: byId.get(item.row.id) ?? null,
+    ...(item.audience ? { juryScore: item.juryScore, maximumScore: item.maximumScore, audience: item.audience } : {}) }));
 }
 
 function genrePriority(label) {
@@ -165,9 +167,9 @@ function isBlockFour(rows) {
 function sectionsFor(results, config) {
   const groups = new Map();
   for (const item of results) {
-    const label = groupLabel(config.primary, item.row, config.danceAliases);
+    const label = item.audience ? "RELEVÉ" : groupLabel(config.primary, item.row, config.danceAliases);
     if (!groups.has(label)) groups.set(label, new Map());
-    const values = config.secondary.map((field) => groupLabel(field, item.row));
+    const values = item.audience ? ["RELEVÉ"] : config.secondary.map((field) => groupLabel(field, item.row));
     const id = [label, ...values].map(normalized).join("|");
     const group = groups.get(label);
     if (!group.has(id)) group.set(id, { id, title: categoryTitle(values), items: [] });
@@ -264,16 +266,19 @@ export function buildJudgingResultReport(input, warn = () => {}) {
     rowsByBlock.get(id).push(row);
   }
   const blocks = [...blocksById.values()].map((block) => {
-    const results = (rowsByBlock.get(block.id) ?? []).map((row) => ({ row, score: officialScore(row, scoring, unavailable, warn) }));
+    const results = (rowsByBlock.get(block.id) ?? []).map((row) => {
+      const score = officialScore(row, scoring, unavailable, warn);
+      return { row, score, ...releveStanding(text(event.id), row, score, input.releveVoting, warn) };
+    });
     const sections = validGrouping ? sectionsFor(results, config) : [];
-    const top = results.filter((item) => item.score !== null).sort((a, b) => Math.abs(a.score - b.score) < EPSILON
+    const top = results.filter((item) => item.score !== null && item.audience?.ready !== false && (!item.audience || item.row.recordedScores > 0)).sort((a, b) => Math.abs(a.score - b.score) < EPSILON
       ? (minimumNumber(a.row.id) < minimumNumber(b.row.id) ? -1 : minimumNumber(a.row.id) > minimumNumber(b.row.id) ? 1 : textOrder.compare(a.row.name, b.row.name))
       : b.score - a.score)[0];
     return {
       ...block, sections,
       specialAwards: option(rawReport, "showSpecialAwards", "show_special_awards", true) !== false ? awardsFor(block, input, configuration, warn) : [],
       counts: { disciplines: sections.length, categories: sections.reduce((sum, section) => sum + section.categories.length, 0),
-        scored: results.filter((item) => item.score !== null && item.score > 0).length, total: results.length },
+        scored: results.filter((item) => item.score !== null && item.score > 0 && (!item.audience || item.row.recordedScores > 0)).length, total: results.length },
       topScore: option(rawReport, "showTopScore", "show_top_score", true) !== false && top ? { routineId: top.row.id, score: top.score } : null,
     };
   });

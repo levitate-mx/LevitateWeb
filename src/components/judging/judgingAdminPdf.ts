@@ -17,6 +17,8 @@ type Bundle = {
             rows: {
               routineId: string;
               score: number | null;
+              juryScore?: number | null;
+              audience?: { votes: number | null; bonus: number; ready: boolean; status: string };
               placement: null | { label: string };
             }[];
           }[];
@@ -134,9 +136,11 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
         if (!row) continue;
         const lines = wrapped(`#${row.programNumber || row.id} · ${row.name}`, 316, 10),
           academy = wrapped(row.academy, 316, 8),
-          place = wrapped(standing.placement?.label || "Sin lugar", 90, 8);
+          place = wrapped(standing.audience?.ready === false ? "Pendiente del público" : standing.placement?.label || "Sin lugar", 90, 8);
+        const audience = standing.audience;
+        const publicLines = audience ? wrapped(`Jurado: ${standing.juryScore == null ? 'Pendiente' : new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(standing.juryScore)} · Público: ${audience.votes ?? '—'} votos · Bono: ${audience.ready ? `+${audience.bonus}` : audience.status === 'tie_pending' ? 'Empate por definir' : 'Pendiente'}${audience.ready ? ' · Final hasta 155 puntos' : ''}`, 316, 8) : [];
         const h = Math.max(
-          (lines.length + academy.length) * 14 + 18,
+          (lines.length + academy.length + publicLines.length) * 14 + 18,
           place.length * 13 + 18,
           46,
         );
@@ -147,6 +151,10 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
           top += 14;
         }
         for (const l of academy) {
+          draw(l, 43, top, 8, muted);
+          top += 12;
+        }
+        for (const l of publicLines) {
           draw(l, 43, top, 8, muted);
           top += 12;
         }

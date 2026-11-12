@@ -61,6 +61,31 @@ Las modificaciones comprueban una revisión para no pisar a otro administrador.
 Cada apertura y cierre registra actor, revisión y transición en una bitácora
 privada. No se alteran registros, CURP, QR de acceso, pagos ni notas de jueces.
 
+## Bono en el dictamen final
+
+El dictamen del evento definitivo de Estado de México conecta los votos con
+las cinco rutinas Relevé mediante sus IDs de origen verificados, no mediante
+los números editables del programa. Las cinco aparecen juntas en una categoría
+Relevé, con jurado, votos, bono y puntaje final, también en el PDF.
+
+El favorito único recibe **5 puntos fijos** después de calcular el puntaje
+normalizado del jurado sobre 150: el total puede llegar a **155**. Los votos
+no se convierten proporcionalmente en puntos. El bono se deriva del recuento
+guardado; actualizar o volver a cerrar no lo acumula ni modifica las notas.
+
+La apertura y el cierre siguen siendo manuales desde administración. El estado
+y los totales se consultan en una sola lectura consistente. Mientras la
+votación no haya comenzado, esté abierta o no pueda comprobarse, Relevé no
+recibe lugares finales ni se publica automáticamente en Mi Levitate. Reabrir
+retira la condición de resultado final hasta volver a cerrar. Una votación
+abierta y luego cerrada sin votos termina sin bono.
+
+Por decisión de la organización, un **empate del público queda por definir**:
+se muestran las opciones empatadas, no se otorga un bono automático y el
+dictamen de Relevé permanece pendiente. No se inventa una regla de desempate.
+Mi Levitate usa la escala de 155 únicamente para las rutinas Relevé; las demás
+rutinas conservan su escala y sus reglas.
+
 ## Endpoints y almacenamiento
 
 - `GET /api/releve-voting`: estado, catálogo público y comprobante de la sesión;

@@ -266,6 +266,7 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
   const report = buildJudgingResultReport({
     event: sourceEvent, blocks: [...blocks.values()], routines: [...routines.values()], rows,
     specialAwards: scoped("specialAwards"), unavailableRoutineIds,
+    releveVoting: input.releveVoting,
   }, warn);
   return {
     event: {

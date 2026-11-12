@@ -1476,6 +1476,8 @@
 .ja-report .judging-scores__status.is-complete {
   color: var(--ja-green);
 }
+.ja-report .judging-scores__audience { color: var(--ja-muted); }
+.ja-report .judging-scores__audience > span { color: var(--ja-pink); }
 .ja-report :is(.judging-scores__status.is-partial, .judging-scores__incomplete) {
   color: var(--ja-pink);
 }

@@ -1056,7 +1056,7 @@ export function JudgingAdminWorkspace() {
               </section>
             </>
           ) : null}
-          {view === 'releve' ? <ReleveVotingAdminPanel refreshToken={bundle?.snapshot.fetchedAt || ''} /> : null}
+          {view === 'releve' ? <ReleveVotingAdminPanel refreshToken={bundle?.snapshot.fetchedAt || ''} onChanged={() => void refresh(true)} /> : null}
           {bundle && view === "scores" ? (
             <section className="ja-score-activity" aria-label="Actividad de jueces">
               <header><Activity size={18} /><h2>Actividad de jueces</h2><span>En vivo · cada 10 s</span></header>

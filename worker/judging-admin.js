@@ -1,5 +1,6 @@
 import { judgingConnection, readJudgingRows } from "./judging-reader.js";
 import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
+import { readReleveVotingResult } from './releve-competition.js';
 import {
   levitateJudgingEventIds,
   requireJudgingEvent,
@@ -340,6 +341,7 @@ export async function readAdminSnapshot(
     ...raw,
     templates: raw.criteria_templates,
     specialAwards: raw.special_awards,
+    releveVoting: await readReleveVotingResult(env.DB, scope.eventId),
   }, undefined, { judgeRoster: "levitate" });
   const { results: accounts } = await env.DB.prepare(
     `SELECT a.judge_id,a.enabled,u.username,u.id user_id FROM registration_judge_assignments a

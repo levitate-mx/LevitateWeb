@@ -250,3 +250,17 @@ test("the block selector and all report filters share one group, including block
   assert.match(empty.html(), /Segundo bloque/);
   assert.match(empty.html(), /No hay resultados disponibles/);
 });
+
+test('Relevé shows jury, audience votes and the five-point bonus separately, and keeps ties pending', () => {
+  const bundle = fixture(), standing = bundle.snapshot.report.blocks[0].sections[0].categories[0].rows.find(row => row.routineId === '1');
+  standing.juryScore = 150; standing.score = 155; standing.maximumScore = 155;
+  standing.audience = { candidateId: 'estrella-mistica', votes: 28, bonus: 5, ready: true, status: 'closed' };
+  const view = harness(bundle), final = view.html();
+  assert.match(final, /Puntaje final/); assert.match(final, /Jurado: 150/); assert.match(final, /Público: 28 votos/); assert.match(final, /Bono: \+5/);
+  assert.match(final, />155</);
+  standing.audience = { ...standing.audience, bonus: 0, ready: false, status: 'tie_pending' };
+  standing.score = 150; standing.placement = null;
+  const tied = view.html();
+  assert.match(tied, /Empate del público · bono por definir/); assert.match(tied, /Bono: Pendiente/);
+  assert.doesNotMatch(tied, /Puntaje final/);
+});

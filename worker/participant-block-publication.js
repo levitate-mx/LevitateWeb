@@ -93,7 +93,9 @@ function scoreEntries(block, maximumScore, sourceIds) {
       if (!Array.isArray(category?.rows) || !category.rows.length) return false;
       for (const entry of category.rows) {
         const id = text(entry?.routineId);
-        if (!sourceIds.includes(id) || seen.has(id) || !finite(entry.score) || entry.score < 0 || entry.score > maximumScore) return false;
+        const effectiveMaximum = entry.maximumScore ?? maximumScore;
+        if (!sourceIds.includes(id) || seen.has(id) || entry.audience?.ready === false || !finite(effectiveMaximum) || effectiveMaximum <= 0
+          || !finite(entry.score) || entry.score < 0 || entry.score > effectiveMaximum) return false;
         seen.add(id);
       }
     }

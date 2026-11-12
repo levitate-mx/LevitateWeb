@@ -1,4 +1,5 @@
 import { releveVotingCandidates } from '../shared/releve-voting-catalog.js';
+import { readReleveVotingResult, releveJudgingEventId } from './releve-competition.js';
 
 export const relevePollId = 'edomex-2026-otono-releve';
 const eventId = 'edomex-2026-otono';
@@ -61,7 +62,8 @@ async function adminState(db) {
   const poll = await readPoll(db);
   const totals = await all(db, 'SELECT candidate_id,COUNT(*) AS votes FROM releve_voting_ballots WHERE poll_id=? GROUP BY candidate_id', poll.id);
   const byId = new Map(totals.map(row => [row.candidate_id, row.votes]));
-  return { poll: publicPoll(poll), candidates: releveVotingCandidates.map(candidate => ({ ...candidate, votes: byId.get(candidate.id) || 0 })), totalVotes: totals.reduce((sum, row) => sum + row.votes, 0) };
+  return { poll: publicPoll(poll), candidates: releveVotingCandidates.map(candidate => ({ ...candidate, votes: byId.get(candidate.id) || 0 })), totalVotes: totals.reduce((sum, row) => sum + row.votes, 0),
+    result: await readReleveVotingResult(db, releveJudgingEventId) };
 }
 async function adminAction(db, actorId, input) {
   if (!actorId) fail('releve_admin', 'Inicia sesión en administración.', 401);

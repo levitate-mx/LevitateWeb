@@ -39,7 +39,7 @@ test('a fresh installation stays closed, exposes only the five approved candidat
   const f=fixture(t), result=await f.call();
   assert.equal(result.response.status,200);assert.equal(result.data.poll.status,'closed');assert.equal(result.data.poll.voterMode,'device');
   assert.equal(result.data.candidates.length,5);assert.equal(result.data.voter.hasVoted,false);
-  assert.doesNotMatch(JSON.stringify(result.data),/totalVotes|token_hash|voter_hash|curp|source_order|accessId/);
+  assert.doesNotMatch(JSON.stringify(result.data),/totalVotes|juryScore|bonus|tiePolicy|token_hash|voter_hash|curp|source_order|accessId/);
   assert.equal((await f.vote('', 'mariana')).response.status,409);
   assert.equal((await f.connect()).response.status,409);
   assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM releve_voting_ballots').get().n,0);
@@ -120,4 +120,25 @@ test('rate limits return a retry delay and public responses do not leak storage 
   const status=await f.call();assert.equal(status.response.headers.get('cache-control'),'private, no-store');assert.equal(status.data.totalVotes,undefined);
   const failed=await worker.fetch(new Request(origin+publicPath),{DB:{prepare(){throw new Error('PRIVATE DATABASE DETAILS');}}},{});
   assert.equal(failed.status,500);assert.doesNotMatch(await failed.text(),/PRIVATE DATABASE DETAILS/);
+});
+
+test('manual close connects the fixed bonus; reopening or a public tie withholds it without changing ballots', async t => {
+  const f = fixture(t), opened = await f.open(), first = await f.connect();
+  await f.vote(first.cookie, 'hazel');
+  let state = await f.call(adminPath, { cookie: f.cookies.judging });
+  assert.equal(state.data.result.status, 'open'); assert.ok(state.data.result.candidates.every(row => row.bonus === 0));
+  const closed = await f.admin({ action: 'close', revision: opened.poll.revision });
+  assert.equal(closed.data.result.ready, true);
+  assert.equal(closed.data.result.candidates.find(row => row.id === 'hazel').bonus, 5);
+  const reopened = await f.open();
+  state = await f.call(adminPath, { cookie: f.cookies.judging });
+  assert.equal(state.data.result.ready, false); assert.ok(state.data.result.candidates.every(row => row.bonus === 0));
+  const second = await f.connect('d'.repeat(32)); await f.vote(second.cookie, 'mariana');
+  const tied = await f.admin({ action: 'close', revision: reopened.poll.revision });
+  assert.equal(tied.data.result.status, 'tie_pending'); assert.equal(tied.data.result.ready, false);
+  assert.ok(tied.data.result.candidates.every(row => row.bonus === 0));
+  assert.equal(tied.data.totalVotes, 2);
+  const publicly = await f.call();
+  assert.equal(publicly.data.result, undefined); assert.equal(publicly.data.totalVotes, undefined);
+  assert.ok(publicly.data.candidates.every(row => row.votes === undefined && row.bonus === undefined));
 });

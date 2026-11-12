@@ -67,8 +67,11 @@ export function projectParticipantResult({ snapshot, routineId } = {}) {
   }
   if (matches.length !== 1) return pending;
   const { block, category, standing } = matches[0];
+  if (standing.audience?.ready === false) return pending;
+  const effectiveMaximum = standing.maximumScore ?? maximum;
+  if (!finite(effectiveMaximum) || effectiveMaximum <= 0) return pending;
   if (!text(block.id) || !scope.blockIds.includes(block.id) || text(ownRows[0].blockId) !== text(block.id)) return pending;
-  const medal = participantMedalForScore(standing.score, maximum);
+  const medal = participantMedalForScore(standing.score, effectiveMaximum);
   if (!medal || !category.rows.length) return pending;
   const categoryIds = new Set();
   let categoryComplete = true;
@@ -78,7 +81,9 @@ export function projectParticipantResult({ snapshot, routineId } = {}) {
     categoryIds.add(peerId);
     const peers = snapshot.rows.filter(row => row?.id === peerId);
     if (peers.length !== 1 || text(peers[0].blockId) !== text(block.id)) return pending;
-    if (!completeRoutine(peers[0]) || !finite(entry.score) || entry.score < 0 || entry.score > maximum) categoryComplete = false;
+    const peerMaximum = entry.maximumScore ?? maximum;
+    if (!completeRoutine(peers[0]) || entry.audience?.ready === false || !finite(peerMaximum) || peerMaximum <= 0
+      || !finite(entry.score) || entry.score < 0 || entry.score > peerMaximum) categoryComplete = false;
   }
   const eligibleCount = category.rows.length;
   const directCompetition = eligibleCount >= 2;
@@ -92,6 +97,6 @@ export function projectParticipantResult({ snapshot, routineId } = {}) {
     if (rank === null && standing.placement?.isParticipation !== true) return pending;
     place = rank;
   }
-  return { status: "published", score: standing.score, maxScore: maximum, medal,
+  return { status: "published", score: standing.score, maxScore: effectiveMaximum, medal,
     directCompetition, eligibleCount, place };
 }

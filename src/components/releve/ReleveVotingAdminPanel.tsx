@@ -4,7 +4,7 @@ import { requestRegistrationApi } from '../admin/registrationApi';
 import type { ReleveVotingAdminState } from './releveVotingApi';
 
 const endpoint = '/api/registration/admin/releve-voting';
-export function ReleveVotingAdminPanel({ refreshToken }: { refreshToken: string }) {
+export function ReleveVotingAdminPanel({ refreshToken, onChanged }: { refreshToken: string; onChanged?: () => void }) {
   const [data, setData] = useState<ReleveVotingAdminState | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -18,6 +18,9 @@ export function ReleveVotingAdminPanel({ refreshToken }: { refreshToken: string 
     finally { if (version === generation.current) setBusy(false); }
   }, []);
   useEffect(() => { void read(); }, [read, refreshToken]);
+  const audienceWinner = data?.result.ready ? data.candidates.find(candidate => data.result.candidates.some(result => result.id === candidate.id && result.bonus === 5)) : null;
+  const highestVotes = Math.max(0, ...(data?.candidates.map(candidate => candidate.votes) ?? []));
+  const tiedNames = data?.candidates.filter(candidate => highestVotes > 0 && candidate.votes === highestVotes).map(candidate => candidate.choreography).join(' · ');
   async function change(action: 'open' | 'close') {
     if (!data) return;
     writing.current = true; generation.current++;
@@ -25,6 +28,7 @@ export function ReleveVotingAdminPanel({ refreshToken }: { refreshToken: string 
     try {
       setData(await requestRegistrationApi<ReleveVotingAdminState>(endpoint, { method: 'POST', body: JSON.stringify({ action, revision: data.poll.revision, ...(action === 'open' ? { confirmation: 'ABRIR' } : {}) }) }));
       setConfirmOpen(false); setNotice(action === 'open' ? 'La votación está abierta y recibe votos reales.' : 'Votación cerrada. Los votos registrados se conservan.');
+      onChanged?.();
     } catch (error) { setError(error instanceof Error ? error.message : 'No pudimos actualizar la votación. Actualiza para comprobar su estado.'); }
     finally { writing.current = false; setBusy(false); }
   }
@@ -32,6 +36,7 @@ export function ReleveVotingAdminPanel({ refreshToken }: { refreshToken: string 
     <div className="ja-releve-control">
       <header><div><p>ESTADO DE MÉXICO · OTOÑO 2026</p><h2>El público elige.</h2></div><span className={`ja-status ${data?.poll.status === 'open' ? 'is-complete' : 'is-pending'}`}>{data ? data.poll.status === 'open' ? 'Abierta' : 'Cerrada' : 'Conectando…'}</span></header>
       <p>Sin código. Un voto por dispositivo, con un control aproximado que puede fallar al cambiar de navegador o usar protecciones de privacidad.</p>
+      <p>Al cerrar, el favorito del público recibe 5 puntos adicionales en el dictamen de Relevé. Si hay empate, el bono queda por definir.</p>
       <div className="ja-releve-buttons">
         {data?.poll.status === 'open' ? <button disabled={busy} className="ja-primary" onClick={() => void change('close')}>Cerrar votación</button> : <button disabled={busy || !data} className="ja-primary" onClick={() => setConfirmOpen(true)}>Abrir votación</button>}
         <button disabled={busy} onClick={() => void read()}><RefreshCw size={16} />Actualizar resultados</button>
@@ -49,6 +54,12 @@ export function ReleveVotingAdminPanel({ refreshToken }: { refreshToken: string 
     {data ? <section className="ja-releve-results" aria-label="Resultados privados de Relevé">
       <header><h2>Resultados</h2><span>{data.totalVotes} votos registrados</span></header>
       <p>Solo administración puede consultar estos resultados.</p>
+      <p role="status">{data.result.status === 'tie_pending' ? `Empate del público: ${tiedNames}. Bono por definir; el dictamen de Relevé sigue pendiente.`
+        : audienceWinner ? `Favorito del público: ${audienceWinner.choreography}. +5 puntos incorporados al dictamen.`
+          : data.result.ready ? 'Votación cerrada sin votos. No se asigna bono.'
+            : data.result.status === 'open' ? 'Recuento provisional. El bono se asignará al cerrar la votación.'
+              : data.result.status === 'unavailable' ? 'No pudimos comprobar el bono. Actualiza antes de consultar el dictamen.'
+                : 'La votación todavía no comenzó. El bono está pendiente.'}</p>
       {[...data.candidates].sort((a,b) => b.votes - a.votes).map(candidate => <article key={candidate.id}>
         <div><small>{candidate.academy}</small><h3>{candidate.choreography}</h3><p>{candidate.participantName}</p></div><strong>{candidate.votes}</strong>
       </article>)}
