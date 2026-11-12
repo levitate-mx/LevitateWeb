@@ -44,4 +44,3 @@ export function selectJudgingTemplate(routine, templates) {
   }
   return null;
 }
-

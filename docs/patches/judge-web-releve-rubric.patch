@@ -3,7 +3,7 @@ index a74c433..a9e9fe2 100644
 --- a/lib/judging_store.dart
 +++ b/lib/judging_store.dart
 @@ -566,11 +566,16 @@ class JudgingStore extends ChangeNotifier {
- 
+
    JudgingTemplate templateFor(Routine routine) {
      final templates = appData?.templates ?? const <JudgingTemplate>[];
 +    JudgingTemplate? selected;
@@ -43,7 +43,7 @@ index ff23f90..ecdd55b 100644
      required this.criteria,
 +    this.appliesTo = const {},
    });
- 
+
    final String templateId;
 @@ -294,6 +295,44 @@ class JudgingTemplate {
    final String title;
@@ -87,7 +87,7 @@ index ff23f90..ecdd55b 100644
 +            ? 10
 +            : -1;
 +  }
- 
+
    factory JudgingTemplate.fromJson(Map<String, dynamic> json) =>
        JudgingTemplate(
 @@ -304,6 +343,8 @@ class JudgingTemplate {
@@ -111,7 +111,7 @@ index e50886e..8f0d7d0 100644
 +            Map<String, dynamic>.from(row['applies_to'] as Map? ?? const {}),
        );
      }).toList();
- 
+
 diff --git a/test/releve_rubric_test.dart b/test/releve_rubric_test.dart
 new file mode 100644
 index 0000000..ccbbd02
