@@ -158,3 +158,18 @@ the Relevé results: the other 42 routines in the definitive event's block 7 may
 publish normally. Closing the poll releases the five Relevé results when its
 outcome is ready; a tie or reopened poll keeps those five pending. Manual block
 closure retains its whole-block completion rule.
+
+### Browser fullscreen
+
+The judge workspace header and the administrative sheet editor include a
+fullscreen toggle, also available while grading. The administrator dashboard
+has the same control in its top bar. The control follows the browser's
+`fullscreenchange` event, so its label updates when fullscreen ends externally
+(for example with Escape). Changing display mode does not navigate, reload the
+programme, submit scores or clear drafts. Unsupported browsers omit the toggle.
+
+The Flutter source change is recorded in
+`docs/patches/judge-web-fullscreen.patch`. Apply it after the assigned-block patch
+above to the same Android/web source before rebuilding this checkout. Installed
+Android/iPad apps are outside this change; native builds retain a no-op control.
+The API follows the [Fullscreen Standard](https://fullscreen.spec.whatwg.org/).

@@ -1,0 +1,147 @@
+diff --git a/lib/fullscreen_button.dart b/lib/fullscreen_button.dart
+new file mode 100644
+index 0000000..b3929fb
+--- /dev/null
++++ b/lib/fullscreen_button.dart
+@@ -0,0 +1,2 @@
++export 'fullscreen_button_stub.dart'
++    if (dart.library.js_interop) 'fullscreen_button_web.dart';
+diff --git a/lib/fullscreen_button_stub.dart b/lib/fullscreen_button_stub.dart
+new file mode 100644
+index 0000000..d356afd
+--- /dev/null
++++ b/lib/fullscreen_button_stub.dart
+@@ -0,0 +1,8 @@
++import 'package:flutter/widgets.dart';
++
++// Browser fullscreen is intentionally absent from the installed apps.
++class FullscreenButton extends StatelessWidget {
++  const FullscreenButton({super.key});
++  @override
++  Widget build(BuildContext context) => const SizedBox.shrink();
++}
+diff --git a/lib/fullscreen_button_web.dart b/lib/fullscreen_button_web.dart
+new file mode 100644
+index 0000000..afd35a3
+--- /dev/null
++++ b/lib/fullscreen_button_web.dart
+@@ -0,0 +1,73 @@
++import 'dart:js_interop';
++
++import 'package:flutter/material.dart';
++import 'package:web/web.dart' as web;
++
++class FullscreenButton extends StatefulWidget {
++  const FullscreenButton({super.key});
++
++  @override
++  State<FullscreenButton> createState() => _FullscreenButtonState();
++}
++
++class _FullscreenButtonState extends State<FullscreenButton> {
++  late final JSFunction _onFullscreenChange;
++  bool _fullscreen = web.document.fullscreenElement != null;
++  bool _busy = false;
++
++  @override
++  void initState() {
++    super.initState();
++    _onFullscreenChange = ((web.Event event) {
++      if (mounted) {
++        setState(() => _fullscreen = web.document.fullscreenElement != null);
++      }
++    }).toJS;
++    web.document.addEventListener('fullscreenchange', _onFullscreenChange);
++  }
++
++  @override
++  void dispose() {
++    web.document.removeEventListener('fullscreenchange', _onFullscreenChange);
++    super.dispose();
++  }
++
++  Future<void> _toggle() async {
++    if (_busy) return;
++    setState(() => _busy = true);
++    try {
++      // Request immediately inside the click: browsers require user activation.
++      if (web.document.fullscreenElement != null) {
++        await web.document.exitFullscreen().toDart;
++      } else {
++        await web.document.documentElement!.requestFullscreen().toDart;
++      }
++    } catch (_) {
++      if (mounted) {
++        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
++            content:
++                Text('El navegador no permitió cambiar a pantalla completa.')));
++      }
++    } finally {
++      if (mounted) {
++        setState(() {
++          _busy = false;
++          _fullscreen = web.document.fullscreenElement != null;
++        });
++      }
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    if (!web.document.fullscreenEnabled && !_fullscreen) {
++      return const SizedBox.shrink();
++    }
++    return IconButton(
++      tooltip: _fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa',
++      onPressed: _busy ? null : _toggle,
++      icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
++      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
++    );
++  }
++}
+diff --git a/lib/levitate_web_workspace.dart b/lib/levitate_web_workspace.dart
+index 8349fb5..4449ef3 100644
+--- a/lib/levitate_web_workspace.dart
++++ b/lib/levitate_web_workspace.dart
+@@ -93,6 +93,7 @@ class _WebWorkspaceState extends State<_WebWorkspace> {
+             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+           ),
+         const SizedBox(width: 8),
++        const FullscreenButton(),
+         IconButton(
+             tooltip: 'Actualizar',
+             onPressed: () {
+diff --git a/lib/main.dart b/lib/main.dart
+index f166978..ca9f9ae 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
+ import 'app_update_service.dart';
+ import 'google_drive_service.dart';
+ import 'judging_store.dart';
++import 'fullscreen_button.dart';
+ import 'levitate_theme.dart';
+ import 'levitate_web_theme.dart' show usesLevitateWebPresentation;
+ import 'models.dart';
+diff --git a/lib/main_web.dart b/lib/main_web.dart
+index 0f07faf..87516cc 100644
+--- a/lib/main_web.dart
++++ b/lib/main_web.dart
+@@ -8,6 +8,7 @@ import 'package:web/web.dart' as web;
+ 
+ import 'indexeddb_judging_repository.dart';
+ import 'judging_store.dart';
++import 'fullscreen_button.dart';
+ import 'main.dart'
+     show
+         JueceoTabletApp,
+@@ -220,7 +221,8 @@ class _JudgeWebEntryState extends State<JudgeWebEntry> {
+                             icon: const Icon(Icons.arrow_back),
+                             onPressed: () => unawaited(_returnToAdmin())),
+                         title: const Text(
+-                            'Editar calificaciones · Administracion')),
++                            'Editar calificaciones · Administracion'),
++                        actions: const [FullscreenButton()]),
+                     body: AnimatedBuilder(
+                         animation: _store!,
+                         builder: (context, _) => JudgingPage(

@@ -12,6 +12,8 @@ import {
   CloudUpload,
   Mail,
   MoreHorizontal,
+  Maximize,
+  Minimize,
   FileSpreadsheet,
   Home,
   ImagePlus,
@@ -177,6 +179,36 @@ function currentJudgeActivity(activity: Presence[], judgeId: string) {
 }
 const isScoring = (presence: Presence | undefined) =>
   presence?.state === "viewing_sheet" || presence?.state === "judging";
+function useJudgingFullscreen(onError: (message: string) => void) {
+  const [available, setAvailable] = useState(false);
+  const [active, setActive] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const update = () => setActive(Boolean(document.fullscreenElement));
+    setAvailable(document.fullscreenEnabled === true);
+    update();
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
+
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      // Keep the request in the original click so user activation is preserved.
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      onError('El navegador no permitió cambiar a pantalla completa.');
+    } finally {
+      setActive(Boolean(document.fullscreenElement));
+      setBusy(false);
+    }
+  };
+  return { available, active, busy, toggle };
+}
+
 function IconButton({
   label,
   children,
@@ -325,6 +357,7 @@ export function JudgingAdminWorkspace() {
     [user, setUser] = useState("Admin"),
     [userRole, setUserRole] = useState<"admin" | "judging_admin" | undefined>(),
     [modal, setModal] = useState<Modal>(null);
+  const fullscreen = useJudgingFullscreen(setNotice);
   const [exportId, setExportId] = useState("");
   const [exports, setExports] = useState<
     { id: string; block_id: string; created_at: string; files: number }[]
@@ -807,6 +840,14 @@ export function JudgingAdminWorkspace() {
               </small>
             </span>
           </div>
+          {fullscreen.available && <IconButton
+            label={fullscreen.active ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            aria-pressed={fullscreen.active}
+            disabled={fullscreen.busy}
+            onClick={() => void fullscreen.toggle()}
+          >
+            {fullscreen.active ? <Minimize size={21} /> : <Maximize size={21} />}
+          </IconButton>}
           <IconButton
             label={theme === "dark" ? "Modo claro" : "Modo oscuro"}
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
