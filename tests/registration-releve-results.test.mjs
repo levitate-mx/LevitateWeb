@@ -85,6 +85,7 @@ test('initial closure, open voting, missing counts and unresolved ties never est
 });
 
 test('a completed poll with no ballots has no favorite and awards no bonus', () => {
+  assert.ok(deriveReleveVotingResult([]).candidates.every(row => row.votes === 0 && row.bonus === 0));
   const voting = deriveReleveVotingResult(pollRows({}));
   assert.equal(voting.ready, true); assert.equal(voting.totalVotes, 0);
   assert.ok(voting.candidates.every(row => row.votes === 0 && row.bonus === 0));

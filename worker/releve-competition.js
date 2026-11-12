@@ -20,7 +20,9 @@ export function releveCandidateForRoutine(eventId, row) {
 export function deriveReleveVotingResult(rows) {
   const tiePolicy = releveTiePolicy;
   const pending = status => ({ pollId: releveCompetitionPollId, eventId: releveJudgingEventId,
-    status, ready: false, totalVotes: 0, candidates: [], tiePolicy });
+    status, ready: false, totalVotes: 0, tiePolicy,
+    candidates: status === 'not_started' ? releveVotingCandidates.map(candidate => ({ id: candidate.id,
+      routineId: routineIds[candidate.id], votes: 0, bonus: 0 })) : [] });
   if (!Array.isArray(rows) || !rows.length) return pending('not_started');
   const poll = rows[0];
   if (poll.id !== releveCompetitionPollId || poll.event_id !== editionId
