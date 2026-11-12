@@ -236,3 +236,18 @@ test('authorization failures clear the review and stop additional requests', asy
   view.click('Actualizar revisión'); assert.equal(view.requests.length, 2);
   view.unmount();
 });
+
+
+test('automatic mixed blocks distinguish published results from pending Relevé without marking jury sheets incomplete', async () => {
+  const view = harness();
+  const automatic = publication({ mode: 'block_complete' });
+  Object.assign(automatic.selectedBlock, { state: 'open', complete: false, completedRoutines: 47, totalRoutines: 47, publishableRoutines: 42 });
+  await view.resolve(0, automatic);
+  assert.match(text(view.tree), /Votación del público pendiente/);
+  assert.match(text(view.tree), /47 de 47 coreografías/);
+  assert.match(text(view.tree), /42 resultados listos para publicarse/);
+  assert.match(text(view.tree), /Relevé esperan el resultado de la votación/);
+  assert.doesNotMatch(text(view.tree), /Evaluaciones pendientes|Las notas permanecen pendientes/);
+  assert.equal(nodes(view.tree).some(node => node.type === 'button' && /cerrar|reabrir/i.test(text(node))), false);
+  view.unmount();
+});

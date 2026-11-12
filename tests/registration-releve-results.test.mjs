@@ -7,7 +7,7 @@ import { buildJudgingScoreSnapshot } from '../worker/judging-score-data.js';
 import { projectParticipantResult } from '../worker/participant-results.js';
 import { getJudgingScores, getJudgingSheets } from '../worker/judging-reader.js';
 import { readAdminSnapshot } from '../worker/judging-admin.js';
-import { getBlockPublication } from '../worker/participant-block-publication.js';
+import { createBlockPublicationGate, getBlockPublication } from '../worker/participant-block-publication.js';
 import { deriveReleveVotingResult, readReleveVotingResult, releveJudgingEventId as eventId, releveCompetitionPollId as pollId } from '../worker/releve-competition.js';
 
 const blockId = 'bloque-7-aerial-seniors-releve', edition = 'edomex-2026-otono';
@@ -153,8 +153,7 @@ test('both admin readers and the participant reader include the same trusted aud
   }
 });
 
-test('automatic publication waits for poll closure and unresolved ties, and accepts a legitimate 155-point result', async t => {
-  const f = database(t), data = source();
+function prepareAutomaticPublication(f, data) {
   f.sqlite.exec(`INSERT INTO registration_academies(id,name,contact_name,email) VALUES('a','Academia','Contacto','fixture@example.invalid');`);
   f.sqlite.exec(`INSERT INTO registration_users(id,academy_id,name,username,email,password_hash,role,email_confirmed_at) VALUES('admin','a','Admin','admin','admin@example.invalid','fixture-only-unused','admin',datetime('now'));`);
   f.sqlite.prepare('INSERT INTO participant_portal_judging_sources(event_id,source_event_id,enabled) VALUES(?,?,1)').run(edition, eventId);
@@ -163,6 +162,11 @@ test('automatic publication waits for poll closure and unresolved ties, and acce
     f.sqlite.prepare("INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue) VALUES(?,'a',?,'aereo','tela','solo','intermedio','edomex')").run(routine.routine_id, routine.name);
     f.sqlite.prepare('INSERT INTO participant_portal_routines(id,event_id,dance_id,source_event_id,source_routine_id) VALUES(?,?,?,?,?)').run('portal-' + routine.routine_id, edition, routine.routine_id, eventId, routine.routine_id);
   }
+}
+
+test('automatic publication waits for poll closure and unresolved ties, and accepts a legitimate 155-point result', async t => {
+  const f = database(t), data = source();
+  prepareAutomaticPublication(f, data);
   for (const [voting, complete] of [[deriveReleveVotingResult(pollRows(undefined, { status: 'open' })), false],
     [deriveReleveVotingResult(pollRows({ hazel: 1, mariana: 1 })), false], [deriveReleveVotingResult(pollRows()), true]]) {
     const result = await getBlockPublication({ db: f.db, eventId: edition, blockId,
@@ -171,4 +175,55 @@ test('automatic publication waits for poll closure and unresolved ties, and acce
     assert.equal(result.selectedBlock.complete, complete);
     assert.equal(result.selectedBlock.state, complete ? 'ready' : 'open');
   }
+});
+
+
+test('the 42 ordinary block-7 results publish while the five Relevé results wait for the public poll', async t => {
+  const f = database(t), data = source();
+  data.templates.push(scoped({ template_id: 'senior', genre: 'TELA', max_score: 50 }));
+  data.criteria.push(scoped({ template_id: 'senior', criterion_id: 2, label: 'Técnica', section: 'Evaluación', max_score: 50 }));
+  const ordinary = Array.from({ length: 42 }, (_, index) => `senior-${index}`);
+  for (const id of ordinary) {
+    data.routines.push({ ...data.routines[0], routine_id: id, name: `Rutina ${id}`, division: 'SENIOR', category: 'SOLO' });
+    data.scores.push(scoped({ routine_id: id, judge_id: 'j1', criterion_id: 2, value: 50 }));
+  }
+  prepareAutomaticPublication(f, data);
+  const pendingPolls = [deriveReleveVotingResult([]),
+    deriveReleveVotingResult(pollRows(undefined, { status: 'open' })),
+    deriveReleveVotingResult(pollRows({ hazel: 1, mariana: 1 })),
+    deriveReleveVotingResult(pollRows({ unknown: 1 }))];
+  const assertAllowed = async (current, expected) => {
+    const gate = await createBlockPublicationGate({ db: f.db, eventId: edition });
+    const visible = [];
+    for (const routine of data.routines) {
+      const allowed = await gate.allowsRoutine({ sourceEventId: eventId, sourceRoutineId: routine.routine_id,
+        danceId: routine.routine_id, snapshot: current });
+      if (allowed) {
+        visible.push(routine.routine_id);
+        assert.equal(projectParticipantResult({ snapshot: current, routineId: routine.routine_id }).status, 'published');
+      }
+    }
+    assert.deepEqual(visible.sort(), [...expected].sort());
+    assert.equal(await gate.confirm(), true);
+  };
+  for (const voting of pendingPolls) {
+    const current = snapshot(voting, data);
+    assert.equal(current.rows.filter(row => row.status === 'complete').length, 47);
+    await assertAllowed(current, ordinary);
+    for (const id of Object.values(identities)) assert.equal(projectParticipantResult({ snapshot: current, routineId: id }).status, 'pending');
+    const view = await getBlockPublication({ db: f.db, eventId: edition, blockId,
+      getDirectory: async () => ({ event: { id: eventId }, blocks: [{ id: blockId, name: 'Bloque 7', routineIds: data.routines.map(row => row.routine_id) }] }),
+      getSnapshot: async () => current });
+    assert.equal(view.selectedBlock.complete, false);
+    assert.equal(view.selectedBlock.publishableRoutines, 42);
+  }
+  await assertAllowed(snapshot(deriveReleveVotingResult(pollRows()), data), data.routines.map(row => row.routine_id));
+  // Reopening the poll withdraws only Relevé; normal results stay available.
+  await assertAllowed(snapshot(pendingPolls[1], data), ordinary);
+  const incomplete = structuredClone(data);
+  incomplete.scores = incomplete.scores.filter(row => row.routine_id !== ordinary[0]);
+  await assertAllowed(snapshot(pendingPolls[1], incomplete), []);
+  // Manual block closure still requires the entire final result.
+  f.sqlite.exec("UPDATE participant_portal_publication_settings SET automatic_completion=0");
+  await assertAllowed(snapshot(pendingPolls[1], data), []);
 });

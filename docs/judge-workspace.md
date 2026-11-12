@@ -134,3 +134,27 @@ the native bundled programme from the publicly served assets.
 
 The test event is inactive and separate from existing competitions. No old
 scores, real jury membership or scoring rules are changed by this integration.
+
+### Assigned blocks when changing the selected judge
+
+The web client retains `assigned_block_ids` in judge profiles and its durable
+programme cache. A judge change keeps the current block only when the new judge
+is assigned to it; otherwise it selects an assigned block and its first routine.
+The block menu and sheet selection use the same restriction. Pending notes and
+drafts retain their original event/judge, including after an offline restore.
+Server-side write authorization remains the final check.
+
+The source workspace had existing uncommitted Android/web changes when this fix
+was built, so the build used an isolated copy. The incremental source and regression
+test are preserved in `docs/patches/judge-web-assigned-blocks.patch`. Apply it to
+the Android web source used by this checkout before running the build command
+above. Do not apply it twice or overwrite unrelated local changes.
+
+### Mixed block publication with Relevé
+
+Automatic publication still requires every jury sheet and source association in
+the block to be complete and valid. An unresolved audience result then holds only
+the Relevé results: the other 42 routines in the definitive event's block 7 may
+publish normally. Closing the poll releases the five Relevé results when its
+outcome is ready; a tie or reopened poll keeps those five pending. Manual block
+closure retains its whole-block completion rule.

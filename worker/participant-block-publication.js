@@ -87,6 +87,7 @@ function completeRoutine(row) {
 function scoreEntries(block, maximumScore, sourceIds) {
   if (!Array.isArray(block?.sections) || !block.sections.length) return false;
   const seen = new Set();
+  const pendingAudience = new Set();
   for (const section of block.sections) {
     if (!Array.isArray(section?.categories) || !section.categories.length) return false;
     for (const category of section.categories) {
@@ -94,13 +95,14 @@ function scoreEntries(block, maximumScore, sourceIds) {
       for (const entry of category.rows) {
         const id = text(entry?.routineId);
         const effectiveMaximum = entry.maximumScore ?? maximumScore;
-        if (!sourceIds.includes(id) || seen.has(id) || entry.audience?.ready === false || !finite(effectiveMaximum) || effectiveMaximum <= 0
+        if (!sourceIds.includes(id) || seen.has(id) || !finite(effectiveMaximum) || effectiveMaximum <= 0
           || !finite(entry.score) || entry.score < 0 || entry.score > effectiveMaximum) return false;
         seen.add(id);
+        if (entry.audience?.ready === false) pendingAudience.add(id);
       }
     }
   }
-  return seen.size === sourceIds.length;
+  return seen.size === sourceIds.length ? { pendingAudience } : false;
 }
 
 function reportFingerprint(block) {
@@ -111,7 +113,7 @@ function reportFingerprint(block) {
 }
 
 async function analyzeBlock(edition, blockId, snapshot, mappingRows, expectedIds) {
-  const unavailable = { complete: false, completedRoutines: 0, totalRoutines: expectedIds?.length || 0, fingerprint: '', manifest: null };
+  const unavailable = { complete: false, publishableRoutineIds: [], completedRoutines: 0, totalRoutines: expectedIds?.length || 0, fingerprint: '', manifest: null };
   if (text(snapshot?.event?.id).toLowerCase() !== edition.sourceEventId || snapshot?.resultScope?.complete !== true
     || text(snapshot.resultScope.eventId).toLowerCase() !== edition.sourceEventId || !Array.isArray(snapshot.resultScope.blockIds)
     || !snapshot.resultScope.blockIds.includes(blockId) || !Array.isArray(snapshot.rows) || !Array.isArray(snapshot.report?.blocks)
@@ -126,7 +128,9 @@ async function analyzeBlock(edition, blockId, snapshot, mappingRows, expectedIds
     || (expectedIds && (sourceIds.length !== expectedIds.length || sourceIds.some(id => !expectedIds.includes(id))))) return unavailable;
   const blocks = snapshot.report.blocks.filter(block => text(block?.id) === blockId);
   const maximumScore = snapshot.report.maximumScore;
-  if (blocks.length !== 1 || !finite(maximumScore) || maximumScore <= 0 || !scoreEntries(blocks[0], maximumScore, sourceIds)) return unavailable;
+  if (blocks.length !== 1 || !finite(maximumScore) || maximumScore <= 0) return unavailable;
+  const entries = scoreEntries(blocks[0], maximumScore, sourceIds);
+  if (!entries) return unavailable;
   const manifest = mappingManifest(edition, sourceIds, mappingRows);
   if (!manifest || unavailable.completedRoutines !== sourceIds.length) return unavailable;
   const { isActive, ...event } = snapshot.event;
@@ -136,7 +140,12 @@ async function analyzeBlock(edition, blockId, snapshot, mappingRows, expectedIds
     block: reportFingerprint(blocks[0]), manifest };
   let fingerprint;
   try { fingerprint = await hash(stableJson(payload)); } catch { return unavailable; }
-  return { complete: true, completedRoutines: rows.length, totalRoutines: rows.length, fingerprint, manifest };
+  // Jury completion still applies to the entire block. Only the routines that
+  // depend on the audience bonus wait for that independent result. A pending
+  // poll (including a tie or a reopened poll) cannot hold the other categories.
+  const publishableRoutineIds = sourceIds.filter(id => !entries.pendingAudience.has(id));
+  return { complete: publishableRoutineIds.length === sourceIds.length, publishableRoutineIds,
+    completedRoutines: rows.length, totalRoutines: rows.length, fingerprint, manifest };
 }
 
 function selectedView(block, analysis, publication, mode = 'block_close') {
@@ -144,6 +153,7 @@ function selectedView(block, analysis, publication, mode = 'block_close') {
   const closed = publication?.state === 'closed';
   return { id: block.id, name: block.name, state: automatic ? (analysis.complete ? 'ready' : 'open') : closed ? (analysis.complete && analysis.fingerprint === publication.fingerprint ? 'closed' : 'changed') : 'open',
     complete: analysis.complete, completedRoutines: analysis.completedRoutines, totalRoutines: analysis.totalRoutines,
+    publishableRoutines: analysis.publishableRoutineIds.length,
     closedAt: automatic ? null : publication?.closed_at || null, fingerprint: analysis.fingerprint };
 }
 
@@ -339,9 +349,11 @@ export async function createBlockPublicationGate({ db, eventId }) {
     if (!blocks) { blocks = new Map(); snapshots.set(snapshot, blocks); }
     if (!blocks.has(blockId)) blocks.set(blockId, (async () => {
       const analysis = await analyzeBlock(edition, blockId, snapshot, mappingRows, automatic ? undefined : manifest.map(row => row.sourceRoutineId));
-      return Boolean(analysis.complete && (automatic || (analysis.fingerprint === publication.fingerprint && stableJson(analysis.manifest) === stableJson(manifest))));
-    })().catch(() => false));
-    if (!(await blocks.get(blockId))) return false;
+      return analysis;
+    })().catch(() => null));
+    const analysis = await blocks.get(blockId);
+    if (!analysis || (automatic ? !analysis.publishableRoutineIds.includes(sourceRoutineId)
+      : !(analysis.complete && analysis.fingerprint === publication.fingerprint && stableJson(analysis.manifest) === stableJson(manifest)))) return false;
     // One bounded recheck covers every captured closure and association, even
     // for a participant with many blocks. The final confirm() deliberately
     // does not reuse this promise: Drive/body reads can await after this point.

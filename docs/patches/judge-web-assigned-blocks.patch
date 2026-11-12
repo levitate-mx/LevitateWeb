@@ -1,0 +1,266 @@
+diff --git a/lib/judging_store.dart b/lib/judging_store.dart
+index eab5274..a74c433 100644
+--- a/lib/judging_store.dart
++++ b/lib/judging_store.dart
+@@ -145,7 +145,24 @@ class JudgingStore extends ChangeNotifier {
+       pendingPenaltiesCount +
+       pendingFavoritesCount;
+   List<Routine> get routines => appData?.routines ?? const [];
+-  List<DanceBlock> get blocks => appData?.blocks ?? const [];
++  bool _judgeCanUseBlock(String judge, String blockId) {
++    if (!restrictedJudgeSession) return true;
++    final profile = judgeProfileFor(judge);
++    return profile != null &&
++        (profile.assignedBlockIds.isEmpty ||
++            profile.assignedBlockIds.contains(blockId));
++  }
++
++  bool _canScoreRoutine(Routine routine, String judge) =>
++      !restrictedJudgeSession ||
++      routines.any((item) =>
++          item.id == routine.id &&
++          item.blockId == routine.blockId &&
++          _judgeCanUseBlock(judge, item.blockId));
++
++  List<DanceBlock> get blocks => (appData?.blocks ?? const <DanceBlock>[])
++      .where((block) => _judgeCanUseBlock(selectedJudge, block.blockId))
++      .toList();
+   List<String> get judges {
+     final source = appData?.judges ?? const <String>[];
+     if (androidAdminUserEnabled) return source;
+@@ -195,14 +212,14 @@ class JudgingStore extends ChangeNotifier {
+ 
+   List<Routine> get visibleRoutines {
+     final block = selectedBlock;
+-    if (block == null) return routines;
++    if (block == null) return restrictedJudgeSession ? [] : routines;
+     final routineIds = block.routines.map((routine) => routine.id).toSet();
+     final visible = routines.where((routine) {
+       return routineIds.contains(routine.id) ||
+           routine.blockId == block.blockId ||
+           routine.block == block.name;
+     }).toList();
+-    return visible.isEmpty ? routines : visible;
++    return visible.isEmpty && !restrictedJudgeSession ? routines : visible;
+   }
+ 
+   List<DanceBlock> blocksForProgram(EventSummary event) {
+@@ -211,7 +228,9 @@ class JudgingStore extends ChangeNotifier {
+   }
+ 
+   Routine? get selectedRoutine {
+-    final source = visibleRoutines.isEmpty ? routines : visibleRoutines;
++    final source = visibleRoutines.isEmpty && !restrictedJudgeSession
++        ? routines
++        : visibleRoutines;
+     if (source.isEmpty) return null;
+     return source.firstWhere(
+       (routine) => routine.id == selectedRoutineId,
+@@ -660,6 +679,7 @@ class JudgingStore extends ChangeNotifier {
+       adminScoringJudge = null;
+     }
+     _prefs?.setString('selectedJudge', judge);
++    _normalizeCurrentSelection();
+     _persistInBackground();
+     notifyListeners();
+     unawaited(reportHome());
+@@ -745,6 +765,7 @@ class JudgingStore extends ChangeNotifier {
+   }
+ 
+   void selectBlock(DanceBlock block) {
++    if (!blocks.any((item) => item.blockId == block.blockId)) return;
+     selectedBlockId = block.blockId;
+     _prefs?.setString('selectedBlockId', block.blockId);
+     final nextRoutine = block.routines.isNotEmpty
+@@ -793,6 +814,10 @@ class JudgingStore extends ChangeNotifier {
+   }
+ 
+   void selectRoutine(String routineId, {bool notify = true}) {
++    if (restrictedJudgeSession &&
++        !routines.any((routine) =>
++            routine.id == routineId && _canScoreRoutine(routine, scoringJudge)))
++      return;
+     selectedRoutineId = routineId;
+     _prefs?.setString('selectedRoutineId', routineId);
+     _persistInBackground();
+@@ -890,6 +915,10 @@ class JudgingStore extends ChangeNotifier {
+     double? penalty,
+   }) async {
+     final activeJudge = judge ?? scoringJudge;
++    if (!_canScoreRoutine(routine, activeJudge)) {
++      throw StateError(
++          'Esta coreografía no está asignada al juez seleccionado.');
++    }
+     final template = templateFor(routine);
+     final maxByCriterion = {
+       for (final criterion in template.criteria)
+@@ -1326,12 +1355,16 @@ class JudgingStore extends ChangeNotifier {
+       selectedBlockId = defaultBlock?.blockId;
+       if (selectedBlockId != null) {
+         _prefs?.setString('selectedBlockId', selectedBlockId!);
++      } else {
++        _prefs?.remove('selectedBlockId');
+       }
+     }
+     if (!visibleRoutines.any((routine) => routine.id == selectedRoutineId)) {
+       selectedRoutineId = visibleRoutines.isNotEmpty
+           ? visibleRoutines.first.id
+-          : (routines.isEmpty ? '' : routines.first.id);
++          : (restrictedJudgeSession || routines.isEmpty
++              ? ''
++              : routines.first.id);
+       _prefs?.setString('selectedRoutineId', selectedRoutineId);
+     }
+     if (adminScoringJudge != null &&
+diff --git a/lib/local_judging_codec.dart b/lib/local_judging_codec.dart
+index 6af3030..c1f105a 100644
+--- a/lib/local_judging_codec.dart
++++ b/lib/local_judging_codec.dart
+@@ -17,6 +17,7 @@ Map<String, dynamic> encodeAppData(AppData data) => {
+                 'judge_id': p.judgeId,
+                 'name': p.name,
+                 'role': p.role.name,
++                'assigned_block_ids': p.assignedBlockIds,
+                 'hero_image_name': p.heroImageName,
+                 'photo_data': p.photoData,
+               })
+diff --git a/lib/models.dart b/lib/models.dart
+index 572493b..ff23f90 100644
+--- a/lib/models.dart
++++ b/lib/models.dart
+@@ -141,6 +141,7 @@ class JudgeProfile {
+     required this.role,
+     this.heroImageName,
+     this.photoData,
++    this.assignedBlockIds = const [],
+   });
+ 
+   final String judgeId;
+@@ -148,6 +149,7 @@ class JudgeProfile {
+   final UserRole role;
+   final String? heroImageName;
+   final String? photoData;
++  final List<String> assignedBlockIds;
+ 
+   factory JudgeProfile.fromJson(Map<String, dynamic> json) {
+     final rawRole = json['role'] as String? ?? '';
+@@ -163,6 +165,9 @@ class JudgeProfile {
+       heroImageName: json['hero_image_name'] as String? ??
+           json['heroImageName'] as String?,
+       photoData: json['photo_data'] as String? ?? json['photoData'] as String?,
++      assignedBlockIds:
++          (json['assigned_block_ids'] as List<dynamic>? ?? const [])
++              .cast<String>(),
+     );
+   }
+ }
+diff --git a/test/web_judge_test.dart b/test/web_judge_test.dart
+index 80b06fb..86ca370 100644
+--- a/test/web_judge_test.dart
++++ b/test/web_judge_test.dart
+@@ -7,9 +7,12 @@ import 'package:idb_shim/idb_shim.dart';
+ import 'package:jueceo_coreografias_tablet/indexeddb_judging_repository.dart';
+ import 'package:jueceo_coreografias_tablet/web_judge_api.dart';
+ import 'package:jueceo_coreografias_tablet/judging_store.dart';
++import 'package:jueceo_coreografias_tablet/models.dart';
++import 'package:jueceo_coreografias_tablet/local_judging_codec.dart';
+ import 'package:shared_preferences/shared_preferences.dart';
+ 
+ import 'support/judging_fixture.dart';
++import 'support/memory_judging_repository.dart';
+ 
+ void main() {
+   TestWidgetsFlutterBinding.ensureInitialized();
+@@ -289,4 +292,92 @@ void main() {
+     expect(online.scoreRows.single['value'], 8);
+     await restored.close();
+   });
++
++  test(
++      'switching a website judge selects an assigned block and preserves the original outbox',
++      () async {
++    SharedPreferences.setMockInitialValues({
++      'selectedJudge': 'DANIEL.H',
++      'selectedBlockId': 'block-1',
++    });
++    final data = jsonDecode(jsonEncode(encodeAppData(program())))
++        as Map<String, dynamic>;
++    (data['judgeProfiles'] as List)[0]['assigned_block_ids'] = ['block-1'];
++    (data['judgeProfiles'] as List)[1]
++        ['assigned_block_ids'] = ['block-2', 'block-3'];
++    (data['routines'] as List).addAll([
++      {
++        'routine_id': '134',
++        'name': 'Motion',
++        'block_id': 'block-2',
++        'block': 'Block 2',
++        'genre': 'TEST'
++      },
++      {
++        'routine_id': '135',
++        'name': 'Motion 2',
++        'block_id': 'block-3',
++        'block': 'Block 3',
++        'genre': 'TEST'
++      },
++    ]);
++    (data['blocks'] as List).addAll([
++      {'block_id': 'block-2', 'name': 'Block 2'},
++      {'block_id': 'block-3', 'name': 'Block 3'},
++    ]);
++    final api = FakeJudgingApi()..programData = AppData.fromJson(data);
++    final repository = MemoryJudgingRepository();
++    final store = JudgingStore(api,
++        automaticSync: false,
++        restrictedJudgeSession: true,
++        localRepository: repository);
++    await store.initialize();
++    final original = store.routines.first;
++    await store.submitScores(original, {1: 8});
++    expect(store.pendingCount, 1);
++    await store
++        .saveDraft(store.currentScope, original.id, 'DANIEL.H', {'1': 9});
++    store.selectJudge('LUIS');
++    expect(store.blocks.map((block) => block.blockId), ['block-2', 'block-3']);
++    expect(store.selectedBlockId, 'block-2');
++    expect(store.selectedRoutine?.id, '134');
++    expect(store.visibleRoutines.map((routine) => routine.id), ['134']);
++    store.selectBlock(store.appData!.blocks.first);
++    store.selectRoutine(original.id);
++    expect(store.selectedBlockId, 'block-2');
++    expect(store.selectedRoutine?.id, '134');
++    await expectLater(store.submitScores(original, {1: 5}), throwsStateError);
++    expect(store.pendingCount, 1);
++    store.selectBlock(store.blocks.last);
++    store.selectJudge('LUIS');
++    expect(store.selectedBlockId, 'block-3',
++        reason: 'Keep a block that is still assigned');
++    store.selectJudge('DANIEL.H');
++    expect(store.selectedBlockId, 'block-1');
++    expect(store.selectedRoutine?.id, original.id);
++    expect(store.scores.values, contains(8));
++    expect(store.draftFor(original, 'DANIEL.H'), {'1': 9});
++    store.selectJudge('LUIS');
++    await store.syncPending();
++    expect(store.pendingCount, 0);
++    expect(api.scoreRows.single['judge_id'], 'daniel');
++    expect(api.scoreRows.single['routine_id'], original.id);
++    expect(api.scoreRows.single['value'], 8);
++    await store.close();
++
++    // Assignments survive an offline restore, independently of preferences.
++    final offline = FakeJudgingApi()..offline = true;
++    final restored = JudgingStore(offline,
++        automaticSync: false,
++        restrictedJudgeSession: true,
++        localRepository: repository);
++    await restored.initialize();
++    restored.selectJudge('LUIS');
++    expect(
++        restored.blocks.map((block) => block.blockId), ['block-2', 'block-3']);
++    expect(restored.selectedRoutine?.blockId, 'block-2');
++    restored.selectJudge('DANIEL.H');
++    expect(restored.draftFor(restored.routines.first, 'DANIEL.H'), {'1': 9});
++    await restored.close();
++  });
+ }

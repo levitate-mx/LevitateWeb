@@ -9,6 +9,7 @@ type SelectedBlock = {
   state: 'open' | 'closed' | 'changed' | 'ready';
   complete: boolean;
   completedRoutines: number;
+  publishableRoutines?: number;
   totalRoutines: number;
   closedAt: string | null;
   fingerprint: string;
@@ -48,6 +49,8 @@ export function ParticipantBlockPublication({ eventId, disabled = false, onChang
   const writeController = useRef<AbortController | null>(null);
   const view = response?.identity === identity ? response.data : null;
   const selected = view?.selectedBlock;
+  const partialResults = view?.mode === 'block_complete' && selected?.publishableRoutines !== undefined
+    && selected.publishableRoutines > 0 && selected.publishableRoutines < selected.totalRoutines;
   const locked = disabled || loading || busy || loginRequired;
   const canClose = Boolean(view?.mode === 'block_close' && mode === view.mode && view.sourceEventId && selected?.complete
     && selected.totalRoutines > 0 && selected.completedRoutines === selected.totalRoutines
@@ -146,11 +149,13 @@ export function ParticipantBlockPublication({ eventId, disabled = false, onChang
         </select></label> : <p>El programa vinculado todavía no tiene bloques de competencia disponibles.</p>}
         {selected && <div className="pp-admin-block-summary">
           <p className={`pp-admin-block-state pp-admin-block-state--${selected.state}`}><strong>{view.mode === 'block_complete'
-            ? selected.complete ? 'Evaluaciones completas' : 'Evaluaciones pendientes'
+            ? selected.complete ? 'Evaluaciones completas' : partialResults ? 'Votación del público pendiente' : 'Evaluaciones pendientes'
             : stateLabels[selected.state]}</strong></p>
           <p>{selected.completedRoutines} de {selected.totalRoutines} coreografías con todos sus jueces completos.</p>
+          {partialResults
+            && <p>{selected.publishableRoutines} resultados listos para publicarse. Las coreografías de Relevé esperan el resultado de la votación del público.</p>}
           {view.mode === 'block_close' && selected.state === 'changed' && <p>La evaluación o el programa cambió después del cierre. Su material permanece oculto hasta revisar y cerrar de nuevo.</p>}
-          {!selected.complete && <p>{view.mode === 'block_complete'
+          {!selected.complete && !partialResults && <p>{view.mode === 'block_complete'
             ? 'Las notas permanecen pendientes hasta completar las evaluaciones y vincular todas las coreografías del bloque.'
             : 'Para cerrar el bloque deben estar completas sus evaluaciones y vinculadas todas sus coreografías.'}</p>}
           {view.mode === 'block_close' && <div className="pp-admin-actions">
