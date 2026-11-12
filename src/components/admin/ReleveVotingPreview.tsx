@@ -68,7 +68,7 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated, standalone = fa
   const [loadError, setLoadError] = useState("");
   const [retry, setRetry] = useState(0);
   const [division, setDivision] = useState<PreviewDivision>("motion");
-  const [phase, setPhase] = useState<PreviewPhase>("upcoming");
+  const [phase, setPhase] = useState<PreviewPhase>(standalone ? "open" : "upcoming");
   const [selected, setSelected] = useState<PreviewVotes>({ motion: null, aerial: null });
   const [votes, setVotes] = useState<PreviewVotes>({ motion: null, aerial: null });
   const [reviewing, setReviewing] = useState(false);
@@ -118,6 +118,7 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated, standalone = fa
   const localResults = simulatedResults(preview?.candidates || [], votes, division);
   const localVoteCount = localResults.reduce((total, result) => total + result.votes, 0);
   const canChoose = phase === "open" && !confirmedCandidate && !reviewing;
+  const CandidatesHeading = standalone ? "h2" : "h3";
 
   useEffect(() => { if (reviewing) reviewHeading.current?.focus(); }, [reviewing]);
 
@@ -153,29 +154,29 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated, standalone = fa
   };
   const resetPreview = () => {
     setSelected({ motion: null, aerial: null }); setVotes({ motion: null, aerial: null });
-    setPhase("upcoming"); setReviewing(false); setShowResults(false); setVoteError("");
+    setPhase(standalone ? "open" : "upcoming"); setReviewing(false); setShowResults(false); setVoteError("");
     setFeedback("Prueba reiniciada. Los votos simulados volvieron a cero.");
   };
 
   return (
-    <section className="releve-voting-preview" aria-label={standalone ? "Vista previa de votación Relevé" : "Vista previa privada de votación Relevé"} aria-busy={loading}>
-      <div className="releve-voting-preview__private-bar"><span>{standalone ? <Sparkles aria-hidden="true" size={16} /> : <LockKeyhole aria-hidden="true" size={16} />}<strong>{standalone ? "Vista previa de Relevé" : "Vista previa privada"}</strong><small>{standalone ? "Candidatos de ejemplo · Sin votos reales" : "Solo administradores · Votación pública deshabilitada"}</small></span><span className="releve-voting-preview__demo-tag">Modo prueba</span></div>
-      <div className="releve-voting-preview__controls">
+    <section className={`releve-voting-preview${standalone ? " releve-voting-preview--standalone" : ""}`} aria-label={standalone ? "Vista previa de votación Relevé" : "Vista previa privada de votación Relevé"} aria-busy={loading}>
+      {!standalone ? <div className="releve-voting-preview__private-bar"><span><LockKeyhole aria-hidden="true" size={16} /><strong>Vista previa privada</strong><small>Solo administradores · Votación pública deshabilitada</small></span><span className="releve-voting-preview__demo-tag">Modo prueba</span></div> : null}
+      {!standalone ? <div className="releve-voting-preview__controls">
         <label><span>Estado de la simulación</span><select value={phase} onChange={(event) => { setPhase(event.target.value as PreviewPhase); setReviewing(false); setVoteError(""); setFeedback(`Simulación ${phaseLabels[event.target.value as PreviewPhase].toLowerCase()}.`); }} disabled={loading || !preview}>
           <option value="upcoming">Próximamente</option><option value="open">Abierta</option><option value="closed">Cerrada</option>
         </select></label>
         <div><button type="button" disabled={loading || !preview} onClick={() => setShowResults((current) => !current)} aria-pressed={showResults}><Eye aria-hidden="true" size={15} />{showResults ? "Ocultar resultados simulados" : "Ver resultados simulados"}</button><button type="button" disabled={loading || !preview} onClick={resetPreview}><RotateCcw aria-hidden="true" size={15} />Reiniciar prueba</button></div>
-      </div>
+      </div> : null}
       <div className="releve-voting-preview__announcements" role="status" aria-live="polite" aria-atomic="true">{feedback}</div>
       {loadError ? <div className="releve-voting-preview__load-error"><p role="alert">{loadError}</p><button type="button" onClick={() => setRetry((current) => current + 1)}>Volver a cargar la prueba</button></div> : null}
       {loading ? <p className="releve-voting-preview__loading" role="status">Preparando la vista previa de Relevé…</p> : null}
       {preview ? <div className="releve-voting-preview__stage">
-        <header className="releve-voting-preview__intro"><span className="releve-voting-preview__eyebrow"><Sparkles aria-hidden="true" size={15} />La ovación también se elige</span><h2>{preview.title}</h2><p>{preview.description}</p><span className={`releve-voting-preview__phase is-${phase}`}><span aria-hidden="true" />{phaseLabels[phase]}</span></header>
+        {!standalone ? <header className="releve-voting-preview__intro"><span className="releve-voting-preview__eyebrow"><Sparkles aria-hidden="true" size={15} />La ovación también se elige</span><h2>{preview.title}</h2><p>{preview.description}</p><span className={`releve-voting-preview__phase is-${phase}`}><span aria-hidden="true" />{phaseLabels[phase]}</span></header> : null}
         <div className="releve-voting-preview__tabs" role="tablist" aria-label="Modalidad de Relevé">
           {divisions.map((item) => <button key={item.id} ref={(element) => { tabButtons.current[item.id] = element; }} id={`releve-voting-tab-${item.id}`} role="tab" type="button" aria-selected={division === item.id} aria-controls={`releve-voting-panel-${item.id}`} tabIndex={division === item.id ? 0 : -1} onClick={() => selectDivision(item.id)} onKeyDown={(event) => handleTabKey(event, item.id)}>{item.label}</button>)}
         </div>
         <div id={`releve-voting-panel-${division}`} role="tabpanel" aria-labelledby={`releve-voting-tab-${division}`} className="releve-voting-preview__panel">
-          <div className="releve-voting-preview__section-heading"><div><span className="releve-voting-preview__eyebrow">{divisionLabel}</span><h3 ref={candidatesHeading} tabIndex={-1}>¿Quién se lleva tu aplauso?</h3></div><p>Maestros y coreografías de demostración</p></div>
+          <div className="releve-voting-preview__section-heading"><div><span className="releve-voting-preview__eyebrow">{standalone ? "Votación Relevé" : divisionLabel}</span><CandidatesHeading ref={candidatesHeading} tabIndex={-1}>{standalone ? <>¿Quién se lleva <span>tu aplauso?</span></> : "¿Quién se lleva tu aplauso?"}</CandidatesHeading></div><p>Maestros y coreografías de demostración</p></div>
           {phase !== "open" ? <div className="releve-voting-preview__phase-notice" role="status"><Trophy aria-hidden="true" size={20} /><p>{phase === "upcoming" ? "Pronto podrás elegir a tu favorito. En esta prueba, cambia el estado a Abierta para recorrer la votación." : "La votación está cerrada en esta simulación. Puedes revisar tu elección y los resultados de prueba."}</p></div> : null}
           <fieldset className="releve-voting-preview__candidates" disabled={!canChoose}><legend>Elige un candidato de {divisionLabel}</legend>
             {candidates.map((candidate) => <PreviewCandidateCard key={candidate.id} candidate={candidate} selected={(confirmedCandidate?.id || selected[division]) === candidate.id} disabled={!canChoose} onSelect={() => choose(candidate)} />)}
@@ -185,6 +186,7 @@ export function ReleveVotingPreview({ refreshKey = 0, onUpdated, standalone = fa
           {voteError ? <p className="releve-voting-preview__vote-error" role="alert">{voteError}</p> : null}
           {showResults ? <section className="releve-voting-preview__results" aria-label={`Resultados simulados de ${divisionLabel}`}><header><div><span className="releve-voting-preview__eyebrow">Resultados simulados</span><h4>Así se vería el conteo</h4></div><strong>{localVoteCount} {localVoteCount === 1 ? "voto de prueba" : "votos de prueba"}</strong></header><p>Este conteo incluye únicamente los votos que confirmaste durante esta prueba. Se borra al salir o recargar.</p><ul>{localResults.map((result) => <li key={result.candidate.id}><div><strong>{result.candidate.teacherName}</strong><span>{result.votes} {result.votes === 1 ? "voto" : "votos"}</span></div><span className="releve-voting-preview__result-bar" aria-hidden="true"><span style={{ width: result.votes ? "100%" : "0%" }} /></span></li>)}</ul></section> : null}
         </div>
+        {standalone ? <div className="releve-voting-preview__public-actions"><button type="button" onClick={() => setShowResults((current) => !current)} aria-pressed={showResults}><Eye aria-hidden="true" size={15} />{showResults ? "Ocultar resultados simulados" : "Ver resultados simulados"}</button><button type="button" onClick={resetPreview}><RotateCcw aria-hidden="true" size={15} />Reiniciar prueba</button></div> : null}
         <footer className="releve-voting-preview__footer"><Sparkles aria-hidden="true" size={14} /><p>Vista previa con datos de demostración. Las selecciones viven únicamente en esta vista y no cuentan para ningún resultado real.</p></footer>
       </div> : null}
     </section>

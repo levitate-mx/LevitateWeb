@@ -30430,6 +30430,7 @@ button {
 .premiation-hero,
 .workshops-hero,
 .releve-hero,
+.releve-voting-hero,
 .motion-genres-hero,
 .passport-hero,
 .reference-hero,
@@ -30448,6 +30449,7 @@ button {
 .premiation-hero,
 .workshops-hero,
 .releve-hero,
+.releve-voting-hero,
 .motion-genres-hero,
 .passport-hero,
 .reference-hero,
@@ -30465,6 +30467,7 @@ button {
 
 .levitate-home-hero,
 .sedes-hero,
+.releve-voting-hero,
 .inscripciones-hero {
   grid-template-rows: minmax(0, 1fr);
 }
@@ -30477,6 +30480,7 @@ button {
 .premiation-hero__content,
 .workshops-hero__content,
 .releve-hero__content,
+.releve-voting-hero__content,
 .motion-genres-hero__content,
 .passport-hero__content,
 .reference-hero__content,
@@ -30520,6 +30524,7 @@ button {
 .premiation-hero h1,
 .workshops-hero h1,
 .releve-hero h1,
+.releve-voting-hero h1,
 .motion-genres-hero h1,
 .passport-hero h1,
 .reference-hero h1,
@@ -30570,6 +30575,7 @@ button {
 .premiation-hero p,
 .workshops-hero__content > p:not(.workshops-kicker),
 .releve-hero__footer p,
+.releve-voting-hero__description,
 .passport-hero__copy > p:not(.passport-kicker),
 .reference-hero__copy > p:not(.reference-eyebrow),
 .rules-hero__intro {

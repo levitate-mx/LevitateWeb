@@ -17,7 +17,9 @@ también sin acceso a la base de datos.
 - Seis participaciones ficticias, identificadas como ejemplos; no se consultan
   inscripciones, maestros ni academias reales.
 - Selección de candidato, confirmación y recibo de voto simulado.
-- Estados de apertura y cierre para probar la experiencia.
+- La página pública permite elegir directamente, con el encabezado, fondo crema
+  y tipografía del sitio. Los controles de apertura y cierre de la simulación
+  quedan en la vista administrativa; no aparecen en la experiencia pública.
 - Los votos y resultados de prueba viven únicamente en la memoria de la página.
   No se envían, comparten ni guardan en una base de datos o en el navegador.
   Recargar o salir de la sección reinicia la simulación.
