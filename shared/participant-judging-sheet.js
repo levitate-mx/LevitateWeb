@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { BlendMode, PDFDocument, StandardFonts, clip, degrees, endPath, popGraphicsState, pushGraphicsState, rectangle, rgb } from 'pdf-lib';
 
 const A4 = [595.28, 841.89];
 const margin = 32;
@@ -69,7 +69,7 @@ function wrap(input, font, size, width) {
 }
 
 /** Generate one reference-format A4 page per judge, with the source rubric. */
-export async function generateParticipantJudgingPdf({ eventTitle, routine, judges, logoBytes, preview = false }) {
+export async function generateParticipantJudgingPdf({ eventTitle, routine, judges, logoBytes, watermarkBytes, preview = false }) {
   if (!routine || !Array.isArray(judges) || !judges.length) throw new Error('No hay hojas de jueceo disponibles para esta presentación.');
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -86,6 +86,13 @@ export async function generateParticipantJudgingPdf({ eventTitle, routine, judge
     const bytes = logoBytes instanceof Uint8Array ? logoBytes : new Uint8Array(logoBytes);
     logo = bytes[0] === 0x89 ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   }
+  if (!watermarkBytes && typeof window !== 'undefined') {
+    try {
+      const response = await fetch('/assets/judging-sheet-watermark.png');
+      if (response.ok) watermarkBytes = new Uint8Array(await response.arrayBuffer());
+    } catch { /* The optional brand background must not block a judging download. */ }
+  }
+  const watermark = watermarkBytes ? await pdf.embedPng(watermarkBytes) : null;
   const [width, height] = A4, contentWidth = width - margin * 2;
   const metric = value => finite(value) ? number.format(value) : 'Pendiente';
   const text = (page, value, x, top, size = 8.7, font = regular, color = palette.ink) => {
@@ -218,6 +225,16 @@ export async function generateParticipantJudgingPdf({ eventTitle, routine, judge
     text(page, 'RETROALIMENTACIÓN DEL JUEZ', margin, layout.feedbackTop + 9, 7.5, bold, palette.pink);
     layout.feedbackLines.forEach((line, index) => text(page, line, margin, layout.feedbackTop + 25 + index * (layout.size + 3), layout.size));
     if (!summary.complete) text(page, 'EVALUACIÓN PENDIENTE', margin, footerTop - 13, 7, bold, palette.pink);
+    if (watermark) {
+      const bottom = height - footerTop, bodyHeight = footerTop - headerBottom - 3;
+      const scale = Math.max(width / watermark.width, bodyHeight / watermark.height);
+      const imageWidth = watermark.width * scale, imageHeight = watermark.height * scale;
+      page.pushOperators(pushGraphicsState(), rectangle(0, bottom, width, bodyHeight), clip(), endPath());
+      // White artwork becomes faint gray on the white sheet without altering the supplied PNG.
+      page.drawImage(watermark, { x: (width - imageWidth) / 2, y: bottom + (bodyHeight - imageHeight) / 2,
+        width: imageWidth, height: imageHeight, opacity: 0.07, blendMode: BlendMode.Difference });
+      page.pushOperators(popGraphicsState());
+    }
     if (isPreview) page.drawText('VISTA PREVIA - NO OFICIAL', { x: 94, y: 335, font: bold, size: 27, color: palette.pink, opacity: 0.13, rotate: degrees(32) });
     rule(page, footerTop);
     text(page, 'LEVITATE MX - HOJA DE JUECEO', margin, footerTop + 10, 6.7, regular, palette.muted);

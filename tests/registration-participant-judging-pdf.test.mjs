@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { PDFDocument, decodePDFRawStream } from 'pdf-lib';
 import { generateParticipantJudgingPdf, summarizeParticipantJudgingSheet } from '../shared/participant-judging-sheet.js';
 
@@ -76,6 +77,16 @@ test('each judge starts a separate A4 sheet and the preview flag marks complete 
   assert.match(text, /María José Pérez/);
   assert.match(text, /Renata Piñal/);
   assert.equal(text.match(/VISTA PREVIA - NO OFICIAL/g).length, 2);
+});
+
+test('brand artwork preserves every score and preview warning on one page per judge', async () => {
+  const watermarkBytes = await readFile(new URL('../public/assets/judging-sheet-watermark.png', import.meta.url));
+  const options = { eventTitle: 'Levitate MX', routine, judges: [judge(), judge({ status: 'partial' })] };
+  const plain = await PDFDocument.load(await generateParticipantJudgingPdf(options));
+  const branded = await PDFDocument.load(await generateParticipantJudgingPdf({ ...options, watermarkBytes }));
+  assert.equal(branded.getPageCount(), 2);
+  assert.equal(contentText(branded), contentText(plain));
+  assert.equal(contentText(branded).match(/VISTA PREVIA - NO OFICIAL/g).length, 1);
 });
 
 test('sixteen criteria, long metadata, all sections and 350 feedback characters fit one readable A4 sheet', async () => {
