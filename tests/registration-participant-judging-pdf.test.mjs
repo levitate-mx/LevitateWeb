@@ -30,7 +30,7 @@ test('all explicitly scored zeros are complete and remain zero even with a posit
   assert.deepEqual(summarizeParticipantJudgingSheet(zeroJudge), { complete: true, subtotal: 0, penalty: 1, total: 0, maximumScore: 20 });
   const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({ eventTitle: 'Levitate MX', routine, judges: [zeroJudge] }));
   const text = contentText(pdf);
-  assert.match(text, /TOTAL: 0 \/ 20/);
+  assert.match(text, /PUNTAJE FINAL\n0\n\/ 20/);
   assert.doesNotMatch(text, /Pendiente|VISTA PREVIA/);
 });
 
@@ -40,8 +40,9 @@ test('PDF sheets display original programme numbers while keeping legacy ID fall
       eventTitle: 'Levitate MX', routine: { ...routine, programNumber }, judges: [judge()],
     }));
     const text = contentText(pdf);
-    assert.ok(text.includes(`#${programNumber || routine.id} - ${routine.title}`));
-    if (programNumber) assert.ok(!text.includes(`#${routine.id} - ${routine.title}`));
+    assert.ok(text.includes(`#${programNumber || routine.id}`));
+    assert.ok(text.includes(routine.title));
+    if (programNumber) assert.ok(!text.includes(`#${routine.id}\n`));
   }
 });
 
@@ -52,7 +53,8 @@ test('null and partial evaluations stay pending and always carry a preview mark'
     assert.equal(summary.total, null);
     const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({ eventTitle: 'Levitate MX', routine, judges: [pending] }));
     const text = contentText(pdf);
-    assert.match(text, /TOTAL: Pendiente/);
+    assert.equal(pdf.getPageCount(), 1);
+    assert.match(text, /PUNTAJE FINAL\nPendiente/);
     assert.match(text, /VISTA PREVIA - NO OFICIAL/);
   }
 });
@@ -76,20 +78,35 @@ test('each judge starts a separate A4 sheet and the preview flag marks complete 
   assert.equal(text.match(/VISTA PREVIA - NO OFICIAL/g).length, 2);
 });
 
-test('long criteria, identifiers, accented names, feedback and unsupported glyphs never truncate or crash', async () => {
-  const criteria = Array.from({ length: 42 }, (_, index) => ({ ...criterion(index + 1), label: `CRITERIO-${index + 1}-INICIO ${'Composición, precisión, respiración y ejecución escénica. '.repeat(4)} CRITERIO-${index + 1}-FINAL` }));
-  criteria.push({ ...criterion('IDENTIFICADOR'.repeat(25)), label: 'LARGO-SIN-ESPACIOS-' + 'abcdefghij'.repeat(300) + '-ÚLTIMO' });
-  const feedback = 'PÁRRAFO-INICIAL\n' + Array.from({ length: 90 }, (_, index) => `Comentario ${index + 1}: ejecución escénica y expresión impecables.`).join('\n') + '\nFINAL DE RETROALIMENTACIÓN 🌟 漢字';
-  const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({ eventTitle: 'Encuentro de expresión - Otoño', routine: { ...routine, title: 'Ángeles, corazones y expresión '.repeat(8) }, judges: [judge({ criteria, feedback })] }));
-  assert.ok(pdf.getPageCount() > 5);
+test('sixteen criteria, long metadata, all sections and 350 feedback characters fit one readable A4 sheet', async () => {
+  const criteria = Array.from({ length: 16 }, (_, index) => ({ ...criterion(index + 1),
+    section: index < 4 ? 'TÉCNICA' : index < 12 ? 'EJECUCIÓN COREOGRÁFICA' : 'PERFORMANCE',
+    label: `CRITERIO-${index + 1} Composición, precisión y ejecución escénica.` }));
+  const feedback = 'PÁRRAFO-INICIAL ' + 'Mejorar las transiciones, respiración y conexión escénica. '.repeat(5) + ' FINAL DE RETROALIMENTACIÓN 🌟 漢字';
+  assert.ok(feedback.length <= 350);
+  const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({ eventTitle: 'Encuentro de expresión - Otoño', routine: { ...routine, title: 'Ángeles, corazones y expresión '.repeat(6), academy: 'Academia de Danza, Expresión y Movimiento Escénico' }, judges: [judge({ criteria, feedback })] }));
+  assert.equal(pdf.getPageCount(), 1);
   const text = contentText(pdf);
-  for (let index = 1; index <= 42; index++) {
-    assert.ok(text.includes(`CRITERIO-${index}-INICIO`));
-    assert.ok(text.includes(`CRITERIO-${index}-FINAL`));
-  }
-  assert.ok(text.includes('ÚLTIMO'));
+  for (let index = 1; index <= 16; index++) assert.ok(text.includes(`CRITERIO-${index} `));
   assert.ok(text.includes('FINAL DE RETROALIMENTACIÓN'));
-  assert.ok(text.includes('Comentario 90:'));
+  for (const section of ['TÉCNICA', 'EJECUCIÓN COREOGRÁFICA', 'PERFORMANCE']) assert.ok(text.includes(section));
+  assert.doesNotMatch(text, /CONTINUACIÓN|MUESTRA DE DISEÑO|DATOS DE EJEMPLO/);
+});
+
+test('Relevé keeps its five one-to-three criteria, fifteen-point maximum and one page per judge', async () => {
+  const labels = ['Técnica y control', 'Composición coreográfica', 'Musicalidad', 'Interpretación artística', 'Presencia escénica'];
+  const criteria = labels.map((label, index) => ({ id: index, label, section: 'RELEVÉ', value: 3, maximumScore: 3 }));
+  const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({ eventTitle: 'Levitate MX', routine: { ...routine, division: 'Relevé', genre: 'Tela' }, judges: [judge({ criteria, penalty: 0, sheetMaximumScore: 15 })] }));
+  assert.equal(pdf.getPageCount(), 1);
+  const text = contentText(pdf);
+  for (const label of labels) assert.ok(text.includes(label));
+  assert.match(text, /PUNTAJE FINAL\n15\n\/ 15/);
+});
+
+test('oversized source data is rejected instead of silently truncating rubrics or adding continuation pages', async () => {
+  const criteria = Array.from({ length: 100 }, (_, index) => criterion(index + 1));
+  await assert.rejects(generateParticipantJudgingPdf({ eventTitle: 'Levitate MX', routine,
+    judges: [judge({ criteria, feedback: 'Texto extraordinario fuera de los límites del evento. '.repeat(100) })] }), /no cabe legiblemente en una hoja/);
 });
 
 test('empty judging list cannot create a misleading blank official sheet', async () => {

@@ -620,7 +620,7 @@ export function JudgingAdminWorkspace() {
         await import("../../../shared/participant-judging-sheet.js");
       const merged = await PDFDocument.create();
       const logoBytes = new Uint8Array(
-        await (await fetch("/assets/levitate-logo-mx.png")).arrayBuffer(),
+        await (await fetch("/assets/judging-sheet-logo-white.png")).arrayBuffer(),
       );
       for (const r of visible) {
         const row = scores.get(r.routine_id);
