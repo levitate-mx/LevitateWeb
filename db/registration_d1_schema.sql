@@ -24,9 +24,18 @@ CREATE TABLE IF NOT EXISTS registration_users (
   role TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin')),
   is_judge INTEGER NOT NULL DEFAULT 0 CHECK (is_judge IN (0, 1)),
   is_judging_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_judging_admin IN (0, 1)),
+  is_judging_viewer INTEGER NOT NULL DEFAULT 0 CHECK (is_judging_viewer IN (0, 1)),
   email_confirmed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS registration_judging_report_access (
+  user_id TEXT NOT NULL REFERENCES registration_users(id) ON DELETE CASCADE,
+  event_id TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, event_id)
 );
 
 CREATE TABLE IF NOT EXISTS registration_judge_assignments (

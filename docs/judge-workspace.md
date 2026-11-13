@@ -176,6 +176,23 @@ above to the same Android/web source before rebuilding this checkout. Installed
 Android/iPad apps are outside this change; native builds retain a no-op control.
 The API follows the [Fullscreen Standard](https://fullscreen.spec.whatwg.org/).
 
+### Final-report accounts
+
+The `judging_viewer` role opens `/jueceo/dictamen` directly, with the final-report
+filters, refresh, logout and browser fullscreen controls. It has no grading,
+administration, export or individual-sheet controls. Its API returns only final
+results and the metadata needed by those filters, without individual notes,
+feedback, participant records or judge account bindings.
+
+Apply the registration schema preparer before deploying the worker. Accounts
+retain the legacy `academy` database role and use `is_judging_viewer=1`, with
+`is_judge=0` and `is_judging_admin=0`. Each permitted event must have an enabled
+row in `registration_judging_report_access`; no assignment means no access.
+The server checks the session and event grant for every report request and
+rejects other authenticated registration endpoints for this role. Provision
+password hashes privately using the existing PBKDF2 format; never commit
+credentials or reset an existing identity to provision a new account.
+
 ### Judging sheet columns
 
 On desktop, feedback follows the last scoring criterion in the left column,

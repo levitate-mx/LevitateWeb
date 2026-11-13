@@ -33,6 +33,7 @@ import { JudgingReportEntry, JudgingReleveEntry } from "./components/judging/Jud
 import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 
+const JudgingReportViewer = lazy(() => import("./components/judging/JudgingReportViewer").then(module => ({ default: module.JudgingReportViewer })));
 const JudgingAdminWorkspace = lazy(() => import("./components/judging/JudgingAdminWorkspace").then(module => ({ default: module.JudgingAdminWorkspace })));
 const ReleveVotingPage = lazy(() => import("./components/releve/ReleveVotingPage").then(module => ({ default: module.ReleveVotingPage })));
 const guardAdminRoute = (screen: ReactNode) => (
@@ -40,6 +41,7 @@ const guardAdminRoute = (screen: ReactNode) => (
 );
 
 export default function App() {
+  if (["/jueceo/dictamen", "/jueceo/dictamen/"].includes(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando dictamen...</main>}><JudgingReportViewer /></Suspense>;
   if (["/jueceo/admin", "/jueceo/admin/"].includes(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando jueceo...</main>}><JudgingAdminWorkspace /></Suspense>;
   if (/^\/votacion-releve\/?$/.test(window.location.pathname)) return <Suspense fallback={<main aria-busy="true" style={{ padding: 32 }}>Cargando Relevé...</main>}><ReleveVotingPage /></Suspense>;
   if (/^\/jueceo\/releve\/?$/.test(window.location.pathname)) return <JudgingReleveEntry />;

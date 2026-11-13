@@ -5420,7 +5420,7 @@ function isUnauthorizedRegistrationError(error: unknown) {
 
 function redirectRegistrationAdmin(session: RegistrationSession | RegistrationBootstrap) {
   if (typeof window === "undefined" ||
-    (session.user.role !== "admin" && session.user.role !== "judging_admin" && session.user.role !== "judge")) {
+    (session.user.role !== "admin" && session.user.role !== "judging_admin" && session.user.role !== "judging_viewer" && session.user.role !== "judge")) {
     return false;
   }
 
@@ -10202,7 +10202,7 @@ export function LevitateAdminAccessBoundary({
     requestRegistrationApi<RegistrationSession>("/api/registration/me", { signal: controller.signal })
       .then((session) => {
         if (!live) return;
-        if (session.user.role === "judging_admin") {
+        if (session.user.role === "judging_admin" || session.user.role === "judging_viewer") {
           window.location.replace(getRegistrationHomePath(session.user.role));
           return;
         }
@@ -10375,7 +10375,7 @@ function RegistrationAdminPaymentsWorkspace({
   }, [isAdminMenuOpen]);
 
   const handleAdminAuthenticated = useCallback((nextSession: RegistrationSession | RegistrationBootstrap) => {
-    if (nextSession.user.role === "judging_admin") {
+    if (nextSession.user.role === "judging_admin" || nextSession.user.role === "judging_viewer") {
       window.location.replace(getRegistrationHomePath(nextSession.user.role));
       return;
     }

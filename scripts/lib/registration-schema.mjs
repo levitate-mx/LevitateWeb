@@ -16,6 +16,8 @@ const judgeMigration = readFileSync(new URL("../../db/registration_judge_workspa
 managedStatements.push(...(judgeMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const judgingAdminMigration = readFileSync(new URL("../../db/registration_judging_admin.sql", import.meta.url), "utf8");
 managedStatements.push(...(judgingAdminMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
+const reportViewerMigration = readFileSync(new URL("../../db/registration_judging_report_viewers.sql", import.meta.url), "utf8");
+managedStatements.push(...(reportViewerMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const participantDriveMigration = readFileSync(new URL("../../db/registration_participant_drive_sync.sql", import.meta.url), "utf8");
 managedStatements.push(...(participantDriveMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
 const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE TABLE")).map((sql) => ({
@@ -44,6 +46,7 @@ const additions = {
     role: "TEXT NOT NULL DEFAULT 'academy' CHECK (role IN ('academy', 'admin'))",
     is_judge: "INTEGER NOT NULL DEFAULT 0 CHECK (is_judge IN (0, 1))",
     is_judging_admin: "INTEGER NOT NULL DEFAULT 0 CHECK (is_judging_admin IN (0, 1))",
+    is_judging_viewer: "INTEGER NOT NULL DEFAULT 0 CHECK (is_judging_viewer IN (0, 1))",
   },
   registration_participants: {
     is_international: "INTEGER NOT NULL DEFAULT 0 CHECK (is_international IN (0, 1))",

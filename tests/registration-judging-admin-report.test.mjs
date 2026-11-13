@@ -78,7 +78,7 @@ function findElement(element, predicate) {
   return predicate(element) ? element : findElement(element.props?.children, predicate);
 }
 
-function harness(bundle = fixture()) {
+function harness(bundle = fixture(), readOnly = false) {
   const state = [];
   const selectedBlocks = [];
   let cursor = 0;
@@ -92,7 +92,7 @@ function harness(bundle = fixture()) {
   vm.runInNewContext(javascript, scope);
   const tree = () => {
     cursor = 0;
-    return scope.renderReport({ report: bundle.snapshot.report.blocks[0], bundle, blockId: "b1", onBlockChange: value => selectedBlocks.push(value) });
+    return scope.renderReport({ report: bundle.snapshot.report.blocks[0], bundle, blockId: "b1", onBlockChange: value => selectedBlocks.push(value), readOnly });
   };
   return {
     html: () => renderToStaticMarkup(tree()),
@@ -132,6 +132,17 @@ test("the new admin reuses the existing read-only entry and filter implementatio
   assert.match(ui, /judging-scores__status is-complete/);
   assert.match(ui, /TOP SCORE/);
   assert.match(ui, /Mejor vestuario/);
+});
+
+test("report-only viewers retain results and filters without individual-sheet controls", () => {
+  const view = harness(fixture(), true);
+  assert.match(view.html(), /Filtros del dictamen|TOP SCORE/);
+  assert.match(view.html(), /Vuelo 1|Mejor vestuario/);
+  assert.doesNotMatch(view.html(), /Ver detalle|aria-expanded|Subtotal registrado|DANIEL|Buen trabajo/);
+  view.change("query", "aurea");
+  assert.match(view.html(), /Danza Áurea/);
+  assert.match(view.html(), /1 de 5 coreografías/);
+  assert.doesNotMatch(view.html(), /Ver detalle|aria-expanded/);
 });
 
 test("combined search, discipline and evaluation filters retain official places and do not mutate the bundle", () => {

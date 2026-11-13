@@ -1,3 +1,4 @@
+import { handleJudgingReport, requireJudgingReportReader, enforceJudgingReportRequest } from './judging-report-viewer.js';
 import registrationPolicyDefaults from "../shared/registration-policy.json" with { type: "json" };
 import { resolveRegistrationPolicy } from "../shared/registration-policy.js";
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
@@ -153,7 +154,7 @@ const registrationLevels = new Set(["nudo", "principiante", "intermedio", "avanz
 const registrationInscriptionOrderStatuses = new Set(["pending_payment", "payment_reported", "paid", "rejected"]);
 const registrationPaymentRejectionReasons = new Set(["missing_proof", "incomplete_amount", "payment_not_found", "invalid_or_unreadable_proof"]);
 const registrationPaymentProofContentTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const registrationUserRoles = new Set(["academy", "admin", "judge", "judging_admin"]);
+const registrationUserRoles = new Set(["academy", "admin", "judge", "judging_admin", "judging_viewer"]);
 const maxRegistrationPaymentProofBytes = 1800000;
 const registrationMusicUploadContentTypes = new Set(["audio/mpeg", "audio/mp3"]);
 const maxRegistrationMusicUploadBytes = 12000000;
@@ -420,9 +421,35 @@ export default {
       return new Response(response.body, { status: response.status, headers });
     }
 
+    if (["/jueceo/dictamen", "/jueceo/dictamen/"].includes(url.pathname)) {
+      try {
+        const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+        requireJudgingReportReader(session);
+        const response = await env.ASSETS.fetch(request);
+        const headers = new Headers(response.headers);
+        headers.set('cache-control', 'no-store, private');
+        headers.set('x-robots-tag', 'noindex, nofollow');
+        return new Response(response.body, { status: response.status, headers });
+      } catch (error) {
+        if ([401, 403].includes(error.statusCode)) return new Response(null, { status: 302, headers: { location: '/login', 'cache-control': 'no-store, private' } });
+        return sendRegistrationError(error);
+      }
+    }
+    if (url.pathname.startsWith('/api/registration/judging-report/')) {
+      try {
+        const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+        return await handleJudgingReport(request, env, session);
+      } catch (error) {
+        const response = sendRegistrationError(error);
+        response.headers.set('cache-control', 'no-store, private');
+        return response;
+      }
+    }
+
     if (["/jueceo", "/jueceo/", "/jueceo/admin", "/jueceo/admin/", "/jueceo/app", "/jueceo/app/", "/jueceo/app/index.html"].includes(url.pathname)) {
       try {
         const session = await getRegistrationStateFromRequest({ db: getDb(env), request, touchLastSeen: false });
+        if (session.user.role === 'judging_viewer') return new Response(null, { status: 302, headers: { location: '/jueceo/dictamen', 'cache-control': 'no-store, private' } });
         const admin = url.pathname.startsWith('/jueceo/admin') || url.searchParams.get('mode') === 'admin-editor';
         const judgingAdmin = ["admin", "judging_admin"].includes(session.user.role);
         if (admin) requireJudgingAdmin(session);
@@ -3744,6 +3771,7 @@ async function getRegistrationStateFromRequest({ db, request, touchLastSeen = tr
           registration_users.email AS user_email,
           CASE WHEN registration_users.is_judge = 1 THEN 'judge'
                WHEN registration_users.is_judging_admin = 1 THEN 'judging_admin'
+               WHEN registration_users.is_judging_viewer = 1 THEN 'judging_viewer'
                ELSE registration_users.role END AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,
@@ -3771,6 +3799,9 @@ async function getRegistrationStateFromRequest({ db, request, touchLastSeen = tr
     throwHttpError("registration_session_invalid", "Tu sesión expiró o no existe", 401);
   }
 
+  const session = serializeRegistrationSession(row);
+  enforceJudgingReportRequest(request, session);
+
   if (touchLastSeen) await db
     .prepare(
       `
@@ -3782,7 +3813,7 @@ async function getRegistrationStateFromRequest({ db, request, touchLastSeen = tr
     .bind(sessionTokenHash)
     .run();
 
-  return serializeRegistrationSession(row);
+  return session;
 }
 
 async function requireRegistrationAcademy(request, db) {
@@ -3942,6 +3973,7 @@ async function getRegistrationStateByUserId(db, userId) {
           registration_users.email AS user_email,
           CASE WHEN registration_users.is_judge = 1 THEN 'judge'
                WHEN registration_users.is_judging_admin = 1 THEN 'judging_admin'
+               WHEN registration_users.is_judging_viewer = 1 THEN 'judging_viewer'
                ELSE registration_users.role END AS user_role,
           registration_users.email_confirmed_at,
           registration_academies.id AS academy_id,

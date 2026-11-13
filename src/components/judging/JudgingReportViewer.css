@@ -1,0 +1,10 @@
+.ja-report-reader .ja-main { margin-left: 0; }
+.ja-report-reader .ja-topbar > a { flex-shrink: 0; }
+.ja-report-reader .ja-topbar > a img { display: block; width: 134px; height: auto; filter: brightness(0) invert(.96); }
+.ja-report-reader .ja-content { max-width: 1500px; margin: 0 auto; }
+.ja-report-reader .ja-reader-identity { margin-top: 10px; color: var(--ja-muted); }
+.ja-report-reader .ja-reader-error { padding: 16px; border: 1px solid var(--ja-red); border-radius: 12px; color: var(--ja-red); }
+@media (max-width: 700px) {
+  .ja-report-reader .ja-topbar > a img { width: 82px; }
+  .ja-report-reader .ja-main { padding-bottom: 0; }
+}

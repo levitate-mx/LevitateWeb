@@ -13,20 +13,28 @@ const salt = Buffer.alloc(16, 39);
 const passwordHash = `pbkdf2_sha256$100000$${salt.toString("base64url")}$${pbkdf2Sync(password, salt, 100000, 32, "sha256").toString("base64url")}`;
 const previewPath = "/api/registration/admin/releve-voting/preview";
 
+test('the report page runs authentication before SPA asset handling in production', () => {
+  const configuration = JSON.parse(readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+  for (const route of ['/jueceo/dictamen', '/jueceo/dictamen/']) {
+    assert.ok(configuration.assets.run_worker_first.includes(route), route);
+  }
+});
+
 function fixture(t) {
   const sqlite = new DatabaseSync(":memory:");
   t.after(() => sqlite.close());
   sqlite.exec(readFileSync(new URL("../db/registration_d1_schema.sql", import.meta.url), "utf8"));
   sqlite.exec("INSERT INTO registration_academies(id,name,contact_name,email) VALUES ('staff','Private academy fixture','Fixture','staff@example.invalid')");
-  for (const [username, role, isJudge, isJudgingAdmin] of [
+  for (const [username, role, isJudge, isJudgingAdmin, isViewer = 0] of [
     ["adminjueceo", "academy", 0, 1],
     ["academy", "academy", 0, 0],
     ["judge", "academy", 1, 0],
     ["globaladmin", "admin", 0, 0],
     ["mixed", "admin", 1, 1],
+    ["viewer", "academy", 0, 0, 1],
   ]) {
-    sqlite.prepare(`INSERT INTO registration_users(id,academy_id,name,username,email,role,password_hash,email_confirmed_at,is_judge,is_judging_admin)
-      VALUES (?,'staff',?,?,?,?,?,datetime('now'),?,?)`).run(username, username, username, `${username}@users.levitate.invalid`, role, passwordHash, isJudge, isJudgingAdmin);
+    sqlite.prepare(`INSERT INTO registration_users(id,academy_id,name,username,email,role,password_hash,email_confirmed_at,is_judge,is_judging_admin,is_judging_viewer)
+      VALUES (?,'staff',?,?,?,?,?,datetime('now'),?,?,?)`).run(username, username, username, `${username}@users.levitate.invalid`, role, passwordHash, isJudge, isJudgingAdmin, isViewer);
   }
   sqlite.prepare(`INSERT INTO registration_participants(id,academy_id,full_name,curp,division,shirt_size)
     VALUES ('private-participant','staff','Sensitive staff participant fixture',?,'junior','s')`).run(curp);
@@ -56,7 +64,9 @@ function fixture(t) {
       } catch (error) { sqlite.exec("ROLLBACK"); throw error; }
     },
   };
+  sqlite.prepare('INSERT INTO registration_judging_report_access(user_id,event_id) VALUES(?,?)').run('viewer', eventId);
   const externalCalls = [];
+  let coreData = {};
   let allowCore = false;
   t.mock.method(globalThis, "fetch", async (input, options = {}) => {
     const url = new URL(input);
@@ -67,6 +77,8 @@ function fixture(t) {
     let rows = url.pathname === "/rest/v1/events" && Number(url.searchParams.get("offset")) === 0
       ? [{ id: eventId, name: "Levitate fixture", event_type: "event", competition_config: {} }]
       : [];
+    const table = url.pathname.split('/').at(-1);
+    if (table !== 'events' && Number(url.searchParams.get('offset')) === 0) rows = coreData[table] || [];
     const idFilter = url.searchParams.get("id");
     if (idFilter?.startsWith("eq.")) rows = rows.filter(row => row.id === idFilter.slice(3));
     return Response.json(rows);
@@ -101,7 +113,7 @@ function fixture(t) {
     }
     assert.equal(externalCalls.length, 0, "No external service may be contacted before authorization");
   }
-  return { sqlite, env, queries, externalCalls, assetCalls, request, login, assertIdentityOnly, allowCore() { allowCore = true; } };
+  return { sqlite, env, queries, externalCalls, assetCalls, request, login, assertIdentityOnly, allowCore() { allowCore = true; }, setCoreRows(rows) { coreData = rows; } };
 }
 
 test("username login and me expose the effective judging role while preserving the legacy academy role", async t => {
@@ -387,4 +399,70 @@ test("logout expires and invalidates only the selected session", async t => {
   assert.equal((await f.request(previewPath, { cookie })).status, 401);
   assert.equal((await (await f.request("/api/registration/me", { cookie: other.cookie })).json()).user.role, "judge");
   assert.equal(f.externalCalls.length, 0);
+});
+
+test('a report viewer signs in with its own role and reads only its assigned final report', async t => {
+  const f = fixture(t); f.allowCore();
+  const { state, cookie } = await f.login('viewer');
+  assert.equal(state.user.role, 'judging_viewer');
+  assert.deepEqual({ ...f.sqlite.prepare("SELECT role,is_judge,is_judging_admin,is_judging_viewer FROM registration_users WHERE id='viewer'").get() },
+    { role: 'academy', is_judge: 0, is_judging_admin: 0, is_judging_viewer: 1 });
+  const events = await f.request('/api/registration/judging-report/events', { cookie });
+  assert.equal(events.status, 200); assert.match(events.headers.get('cache-control'), /no-store/);
+  assert.deepEqual((await events.json()).events.map(event => event.id), [eventId]);
+  f.setCoreRows({
+    blocks: [{ event_id: eventId, block_id: 'b1', name: 'Block 1' }],
+    routines: [{ event_id: eventId, routine_id: 'r1', name: 'Routine', genre: 'TELA', block_id: 'b1', participant: 'PRIVATE PARTICIPANT' }],
+    judges: ['DANIEL HERRERA', 'RENATA PINAL', 'ANA KAREN ROJAS'].map((name, index) => ({ event_id: eventId, judge_id: 'j' + (index + 1), name, role: 'judge', assigned_block_ids: ['b1'] })),
+    criteria_templates: [{ event_id: eventId, template_id: 'test', genre: 'TELA', max_score: 5 }],
+    criteria: [{ event_id: eventId, template_id: 'test', criterion_id: 1, label: 'PRIVATE CRITERION', max_score: 5 }],
+    scores: ['j1', 'j2', 'j3'].map(judge_id => ({ event_id: eventId, routine_id: 'r1', judge_id, criterion_id: 1, value: 5 })),
+    feedback: [{ event_id: eventId, routine_id: 'r1', judge_id: 'j1', body: 'PRIVATE FEEDBACK' }],
+  });
+  const report = await f.request('/api/registration/judging-report/snapshot?eventId=' + eventId, { cookie });
+  assert.equal(report.status, 200);
+  const payload = await report.json();
+  assert.equal(payload.event.id, eventId); assert.equal(payload.snapshot.rows[0].name, 'Routine');
+  assert.deepEqual(payload.snapshot.rows[0].judges, []);
+  assert.equal(payload.snapshot.report.blocks[0].sections[0].categories[0].rows[0].score, 150);
+  assert.doesNotMatch(JSON.stringify(payload), /PRIVATE|password|access_code|criterion_id|curp/i);
+});
+
+test('report viewers cannot read or modify other private sections even with direct URLs', async t => {
+  const f = fixture(t), { cookie } = await f.login('viewer');
+  const paths = ['/api/registration/admin/judging/workspace/events', '/api/registration/admin/judging/workspace/snapshot?eventId=' + eventId,
+    '/api/registration/admin/judging/editor/session', '/api/registration/judge/session', '/api/registration/judge/scores',
+    '/api/registration/admin/releve-voting', '/api/registration/admin/releve-voting/preview', '/api/registration/admin/participants',
+    '/api/registration/admin/program', '/api/registration/admin/payment-orders', '/api/registration/admin/payment-order',
+    '/api/registration/admin/media-drive/connection', '/api/registration/admin/participant-portal',
+    '/api/registration/participants', '/api/registration/dances', '/api/registration/bootstrap'];
+  for (const path of paths) for (const method of ['GET', 'POST']) {
+    f.queries.length = 0;
+    const response = await f.request(path, { cookie, method, ...(method === 'POST' ? { body: {} } : {}) });
+    assert.ok((method === 'POST' ? [403, 405] : [403]).includes(response.status), method + ' ' + path + ': ' + response.status);
+    f.assertIdentityOnly();
+  }
+  assert.equal((await f.request('/api/registration/judging-report/snapshot?eventId=' + eventId, { cookie, body: {} })).status, 405);
+  for (const path of ['/jueceo', '/jueceo/admin', '/jueceo/app/?mode=admin-editor']) {
+    const page = await f.request(path, { cookie });
+    assert.equal(page.status, 302); assert.equal(page.headers.get('location'), '/jueceo/dictamen');
+  }
+  const page = await f.request('/jueceo/dictamen', { cookie });
+  assert.equal(page.status, 200); assert.equal(page.headers.get('x-robots-tag'), 'noindex, nofollow');
+});
+
+test('viewer grants and role revocation take effect immediately; unauthorized events never reach Core', async t => {
+  const f = fixture(t), { cookie } = await f.login('viewer');
+  for (const username of [null, 'academy', 'judge']) {
+    const otherCookie = username ? (await f.login(username)).cookie : undefined;
+    assert.equal((await f.request('/api/registration/judging-report/events', { cookie: otherCookie })).status, username ? 403 : 401);
+  }
+  assert.equal((await f.request('/api/registration/judging-report/snapshot?eventId=' + foreignId, { cookie })).status, 403);
+  assert.equal(f.externalCalls.length, 0);
+  f.sqlite.exec("UPDATE registration_judging_report_access SET enabled=0 WHERE user_id='viewer'");
+  assert.equal((await f.request('/api/registration/judging-report/snapshot?eventId=' + eventId, { cookie })).status, 403);
+  assert.equal(f.externalCalls.length, 0);
+  f.sqlite.exec("UPDATE registration_users SET is_judging_viewer=0 WHERE id='viewer'");
+  assert.equal((await (await f.request('/api/registration/me', { cookie })).json()).user.role, 'academy');
+  assert.equal((await f.request('/api/registration/judging-report/events', { cookie })).status, 403);
 });

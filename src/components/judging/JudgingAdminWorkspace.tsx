@@ -179,7 +179,7 @@ function currentJudgeActivity(activity: Presence[], judgeId: string) {
 }
 const isScoring = (presence: Presence | undefined) =>
   presence?.state === "viewing_sheet" || presence?.state === "judging";
-function useJudgingFullscreen(onError: (message: string) => void) {
+export function useJudgingFullscreen(onError: (message: string) => void) {
   const [available, setAvailable] = useState(false);
   const [active, setActive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -2037,14 +2037,16 @@ function JudgeForm({
   );
 }
 
-function ReportPanel({
+export function ReportPanel({
   report,
   bundle,
   blockId,
   onBlockChange,
+  readOnly = false,
 }: {
   report: ReportBlock | undefined;
-  bundle: Bundle;
+  bundle: Pick<Bundle, "event" | "blocks" | "snapshot">;
+  readOnly?: boolean;
   blockId: string;
   onBlockChange: (blockId: string) => void;
 }) {
@@ -2091,6 +2093,7 @@ function ReportPanel({
         expanded={expandedId === row.id}
         onToggle={() => setExpandedId(expandedId === row.id ? "" : row.id)}
         showMetadata
+        allowDetails={!readOnly}
       />
     );
   };
