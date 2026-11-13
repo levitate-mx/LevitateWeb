@@ -933,6 +933,7 @@ test('admin choreographer summaries retain legacy link counts when a linked danc
 
 
 const singlePassCutoff = Date.parse('2026-10-21T00:00:00-06:00');
+const ticketSalesCutoff = Date.parse(ticketEvent.salesEndsAt);
 
 function singlePassBuyer(curp = curpA, quantity = 1, productId = 'block') {
   return { curp, buyerName: 'Compradora preventa', buyerEmail: 'preventa@example.test', ...phone,
@@ -945,6 +946,74 @@ async function singlePassAdmin(f, suffix = 'presale-admin') {
   f.db.sqlite.prepare("UPDATE registration_sessions SET expires_at = '2099-01-01 00:00:00'").run();
   return admin;
 }
+
+test('ticket sales close at exactly 4 pm CDMX while earlier unpaid orders keep lookup and proof access', async t => {
+  const f = await fixture(t);
+  assert.equal(ticketEvent.salesEndsAt, '2026-11-13T16:00:00-06:00');
+  let now = ticketSalesCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+
+  const { json: { order } } = await f.request('/shop/order', {
+    method: 'POST', status: 201, body: singlePassBuyer(curpA, 1, 'full'),
+  });
+  const savedBeforeClosure = f.db.sqlite.prepare(
+    'SELECT amount, line_items_json, access_token FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id);
+
+  now = ticketSalesCutoff;
+  const { json: blocked } = await f.request('/shop/order', {
+    method: 'POST', status: 403, body: singlePassBuyer(curpA, 2, 'full'),
+  });
+  assert.equal(blocked.error.code, 'ticket_sales_closed');
+  assert.equal(blocked.error.message, 'La venta de boletos digitales ha concluido.');
+  assert.deepEqual(f.db.sqlite.prepare(
+    'SELECT amount, line_items_json, access_token FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id), savedBeforeClosure, 'the closed endpoint cannot edit or rotate an earlier checkout');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_shop_orders').get().total, 1);
+
+  const { json: lookup } = await f.request('/shop/order/lookup', {
+    method: 'POST', body: { orderId: order.id, accessToken: order.accessToken },
+  });
+  assert.equal(lookup.order.id, order.id);
+  const { json: uploaded } = await f.request('/shop/order/proof', {
+    method: 'POST', status: 201, body: { orderId: order.id, accessToken: order.accessToken, ...proof },
+  });
+  assert.equal(uploaded.order.status, 'payment_reported');
+});
+
+test('a ticket request crossing the 4 pm boundary cannot commit a new order or cart update', async t => {
+  const f = await fixture(t);
+  let now = ticketSalesCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  f.db.beforeRun = sql => {
+    if (/^\s*INSERT\s+INTO\s+registration_shop_orders\b/i.test(sql)) now = ticketSalesCutoff;
+  };
+
+  const { json: blockedInsert } = await f.request('/shop/order', {
+    method: 'POST', status: 403, body: singlePassBuyer(curpA, 1, 'full'),
+  });
+  assert.equal(blockedInsert.error.code, 'ticket_sales_closed');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_shop_orders').get().total, 0);
+
+  f.db.beforeRun = undefined;
+  now = ticketSalesCutoff - 1;
+  const { json: { order } } = await f.request('/shop/order', {
+    method: 'POST', status: 201, body: singlePassBuyer(curpA, 1, 'full'),
+  });
+  const saved = f.db.sqlite.prepare('SELECT amount, line_items_json, access_token FROM registration_shop_orders WHERE id = ?').get(order.id);
+  f.db.beforeRun = sql => {
+    if (/^\s*UPDATE\s+registration_shop_orders\b/i.test(sql)) now = ticketSalesCutoff;
+  };
+
+  const { json: blockedUpdate } = await f.request('/shop/order', {
+    method: 'POST', status: 403, body: singlePassBuyer(curpA, 2, 'full'),
+  });
+  assert.equal(blockedUpdate.error.code, 'ticket_sales_closed');
+  assert.deepEqual(
+    f.db.sqlite.prepare('SELECT amount, line_items_json, access_token FROM registration_shop_orders WHERE id = ?').get(order.id),
+    saved,
+  );
+});
 
 test('Single pass changes at exactly midnight CDMX for both product aliases and reused carts', async t => {
   for (const productId of ['block', 'ticket-block']) {

@@ -218,6 +218,8 @@ const registrationShopDiscountRate = 0.1;
 const registrationMediaGroupBaseParticipantCount = 4;
 const registrationMediaGroupExtraParticipantPrice = 300;
 const registrationTicketBlocks = ticketEvent.blocks;
+const ticketSalesEndsAt = Date.parse(ticketEvent.salesEndsAt);
+const ticketSalesEndsAtUnixSeconds = Math.floor(ticketSalesEndsAt / 1000);
 const registrationShopProducts = new Map([
   [
     "ticket-block",
@@ -1669,12 +1671,9 @@ async function handleRegistrationShopOrder(request, env) {
     const db = getDb(env);
     const body = await readJsonBody(request);
 
-    if (env.TICKET_SALES_PAUSED === "true" && hasRegistrationTicketItems(body.items)) {
-      throwHttpError(
-        "ticket_sales_paused",
-        "La venta de boletos está temporalmente pausada mientras actualizamos la logística del evento.",
-        503,
-      );
+    if (hasRegistrationTicketItems(body.items)
+      && (env.TICKET_SALES_PAUSED === "true" || Date.now() >= ticketSalesEndsAt)) {
+      throwTicketSalesClosed();
     }
 
     const curp = normalizeCurp(requireString(body.curp, "curp"));
@@ -1704,6 +1703,10 @@ function hasRegistrationTicketItems(items) {
     const productId = optionalString(item?.productId ?? item?.id);
     return registrationShopProducts.get(productId)?.itemType === "ticket";
   });
+}
+
+function throwTicketSalesClosed() {
+  throwHttpError("ticket_sales_closed", "La venta de boletos digitales ha concluido.", 403);
 }
 
 async function handleRegistrationShopOrderLookup(request, env) {
@@ -4372,6 +4375,7 @@ async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneCo
 async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact, curp, discountCode, items }) {
   const normalizedCart = normalizeRegistrationShopCart(items, discountCode);
   const hasMediaLineItems = normalizedCart.lineItems.some((lineItem) => lineItem.itemType === "media");
+  const hasTicketLineItems = normalizedCart.lineItems.some((lineItem) => lineItem.itemType === "ticket");
   const participant = await getRegistrationShopParticipantByCurp(db, curp, { required: hasMediaLineItems });
   const participantSnapshot = getRegistrationShopParticipantSnapshot(participant, buyerContact);
 
@@ -4407,6 +4411,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
             updated_at = datetime('now')
           WHERE id = ? AND status = ? AND status IN ('pending_payment', 'rejected')
             AND amount = ? AND line_items_json = ?
+            AND (? = 0 OR unixepoch('now') < ?)
             AND NOT EXISTS (SELECT 1 FROM registration_shop_payment_proofs WHERE order_id = registration_shop_orders.id)
             AND NOT EXISTS (SELECT 1 FROM registration_event_tickets
               WHERE source_order_type = 'shop' AND source_order_id = registration_shop_orders.id)
@@ -4431,9 +4436,14 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
         reusableOrder.status,
         reusableOrder.amount,
         reusableOrder.line_items_json,
+        hasTicketLineItems ? 1 : 0,
+        ticketSalesEndsAtUnixSeconds,
       )
       .run();
     if (Number(result.meta?.changes || 0) !== 1) {
+      if (hasTicketLineItems && Date.now() >= ticketSalesEndsAt) {
+        throwTicketSalesClosed();
+      }
       throwHttpError("registration_shop_order_changed", "La orden cambió mientras actualizabas el carrito. Actualiza e inténtalo de nuevo.", 409);
     }
 
@@ -4443,7 +4453,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
   const reference = await createRegistrationShopReference(db, curp, normalizedCart.lineItems);
   const orderId = crypto.randomUUID();
 
-  await db
+  const result = await db
     .prepare(
       `
         INSERT INTO registration_shop_orders (
@@ -4466,7 +4476,8 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
           discount_amount,
           line_items_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE (? = 0 OR unixepoch('now') < ?)
       `,
     )
     .bind(
@@ -4487,8 +4498,17 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
       normalizedCart.discountCode || null,
       normalizedCart.discountAmount,
       JSON.stringify(normalizedCart.lineItems),
+      hasTicketLineItems ? 1 : 0,
+      ticketSalesEndsAtUnixSeconds,
     )
     .run();
+
+  if (Number(result.meta?.changes || 0) !== 1) {
+    if (hasTicketLineItems && Date.now() >= ticketSalesEndsAt) {
+      throwTicketSalesClosed();
+    }
+    throwHttpError("registration_shop_order_changed", "La orden cambió mientras generabas el checkout. Actualiza e inténtalo de nuevo.", 409);
+  }
 
   return getRegistrationShopOrderRecordById(db, orderId);
 }

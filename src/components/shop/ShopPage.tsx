@@ -183,10 +183,9 @@ type ApiErrorResponse = {
 
 type ShopMode = "tickets" | "media";
 
-const ticketSalesPaused = false;
-
 const blockOptions: TicketOption[] = ticketEvent.blocks;
 const dayOptions: TicketOption[] = ticketEvent.days;
+const ticketSalesEndsAt = Date.parse(ticketEvent.salesEndsAt);
 
 const singlePassPricing = ticketPricing.singlePass;
 const singlePassPresaleEndsAt = Date.parse(singlePassPricing.presaleEndsAt);
@@ -431,6 +430,85 @@ function useSinglePassPresale() {
   }, []);
 
   return isPresale;
+}
+
+function useTicketSalesClosed() {
+  const [isClosed, setIsClosed] = useState(() => Date.now() >= ticketSalesEndsAt);
+
+  useEffect(() => {
+    let timeout: number | undefined;
+    const updateStatus = () => {
+      window.clearTimeout(timeout);
+      const remaining = ticketSalesEndsAt - Date.now();
+      setIsClosed(remaining <= 0);
+      if (remaining > 0) {
+        timeout = window.setTimeout(updateStatus, Math.min(remaining, 2147483647));
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateStatus();
+      }
+    };
+
+    updateStatus();
+    window.addEventListener("focus", updateStatus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("focus", updateStatus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  return isClosed;
+}
+
+function useTicketSalesRemaining() {
+  const [remainingMs, setRemainingMs] = useState(() => Math.max(0, ticketSalesEndsAt - Date.now()));
+
+  useEffect(() => {
+    const updateRemaining = () => setRemainingMs(Math.max(0, ticketSalesEndsAt - Date.now()));
+    const interval = window.setInterval(updateRemaining, 1000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateRemaining();
+      }
+    };
+
+    updateRemaining();
+    window.addEventListener("focus", updateRemaining);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", updateRemaining);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  return remainingMs;
+}
+
+function TicketSalesCountdown() {
+  const remainingSeconds = Math.ceil(useTicketSalesRemaining() / 1000);
+  const hours = Math.floor(remainingSeconds / 3600);
+  const minutes = Math.floor((remainingSeconds % 3600) / 60);
+  const seconds = remainingSeconds % 60;
+  const countdown = [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+
+  return (
+    <time
+      aria-label={`Quedan ${hours} horas, ${minutes} minutos y ${seconds} segundos para comprar accesos`}
+      className="ticket-shop-countdown"
+      dateTime={ticketEvent.salesEndsAt}
+      role="timer"
+    >
+      <span>Cierre en</span>
+      <strong>{countdown}</strong>
+    </time>
+  );
 }
 
 function getMediaProduct(productId: MediaProduct["id"]) {
@@ -1013,40 +1091,35 @@ function useShopMode(initialMode?: ShopMode) {
 
 export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
   const shopMode = useShopMode(initialMode);
+  const ticketSalesClosed = useTicketSalesClosed();
 
   if (shopMode === "media") {
     return <PhotoVideoShopPage />;
   }
 
-  return ticketSalesPaused ? <TicketSalesPausedPage /> : <TicketShopPage />;
+  const linkedOrder = getLinkedShopOrderLookup();
+  const storedOrder = readCheckoutCookie(ticketCheckoutCookieName)?.order;
+  const canAccessExistingOrder = Boolean(linkedOrder || storedOrder?.accessToken);
+
+  if (ticketSalesClosed && !canAccessExistingOrder) {
+    return <TicketSalesClosedPage />;
+  }
+
+  return <TicketShopPage salesClosed={ticketSalesClosed} />;
 }
 
-function TicketSalesPausedPage() {
+function TicketSalesClosedPage() {
   return (
     <main className="ticket-shop-page ticket-shop-page--paused levitate-home-redesign">
       <section className="ticket-shop-pause" id="boletos" aria-labelledby="ticket-shop-pause-title">
         <LevitateHeader activeLabel="Tienda" useRootLinks variant="pill" />
 
         <div className="ticket-shop-pause__content">
-          <p className="ticket-shop-pause__eyebrow">
-            <Info aria-hidden="true" size={18} />
-            Aviso de taquilla
-          </p>
           <h1 id="ticket-shop-pause-title">
-            <span className="ticket-shop-pause__title-main">La compra de boletos está</span>
-            <strong>temporalmente en pausa.</strong>
+            <span className="ticket-shop-pause__title-main">¡Gracias por ser parte</span>
+            <strong>de esta edición!</strong>
           </h1>
-          <p className="ticket-shop-pause__lead">
-            Estamos afinando algunos detalles de la logística del evento para brindarte la mejor experiencia posible.
-            Muy pronto compartiremos la información actualizada y la reapertura de la taquilla.
-          </p>
-          <div className="ticket-shop-pause__note" role="status">
-            <CalendarDays aria-hidden="true" size={22} />
-            <p>
-              Gracias por tu paciencia, tu comprensión y por acompañarnos en Levitate. Estaremos felices de recibirte
-              nuevamente muy pronto.
-            </p>
-          </div>
+          <p className="ticket-shop-pause__lead">La venta de boletos digitales ha concluido.</p>
         </div>
       </section>
 
@@ -1094,7 +1167,7 @@ function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
   );
 }
 
-function TicketShopPage() {
+function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
   const isSinglePassPresale = useSinglePassPresale();
   const ticketProducts = useMemo(() => getTicketProducts(isSinglePassPresale), [isSinglePassPresale]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -1705,6 +1778,24 @@ function TicketShopPage() {
     </section>
   );
 
+  if (salesClosed) {
+    return (
+      <main className="ticket-shop-page levitate-home-redesign">
+        <LevitateHeader activeLabel="Tienda" tone="light" useRootLinks variant="pill" />
+        <section className="ticket-shop ticket-shop--existing-order" aria-label="Pago de orden existente">
+          <div className="ticket-shop-existing-order">
+            {shopOrder && isBuyerConfirmed ? renderTransferCheckout() : (
+              <p className={buyerError ? "ticket-shop-existing-order__error" : undefined} role={buyerError ? "alert" : "status"}>
+                {buyerError || "Cargando tu orden…"}
+              </p>
+            )}
+          </div>
+        </section>
+        <LevitateFooter useRootLinks />
+      </main>
+    );
+  }
+
   return (
     <main className="ticket-shop-page levitate-home-redesign">
       <LevitateHeader activeLabel="Tienda" tone="light" useRootLinks variant="pill" />
@@ -1716,8 +1807,9 @@ function TicketShopPage() {
           <div className="ticket-shop__main">
             <section className="ticket-shop-deadline ticket-shop-deadline--inline" aria-label="Fecha límite de compra">
               <CalendarDays aria-hidden="true" size={22} />
-              <span>
-                Último día de compra: <strong>11 de noviembre.</strong> Sin venta el día del evento.
+              <span className="ticket-shop-deadline__copy">
+                <span>Venta digital hasta hoy, <strong>4:00 p. m. (CDMX).</strong></span>
+                <TicketSalesCountdown />
               </span>
               <button
                 aria-controls="ticket-shop-checkout"

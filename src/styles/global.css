@@ -15299,6 +15299,40 @@ button {
   padding: clamp(126px, 12vw, 164px) clamp(18px, 4vw, 64px) clamp(72px, 8vw, 120px);
 }
 
+.ticket-shop--existing-order {
+  min-height: var(--levitate-hero-screen);
+  display: grid;
+  align-items: end;
+  padding-bottom: var(--levitate-hero-bottom-pad);
+}
+
+.ticket-shop-existing-order {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid var(--ticket-shop-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 24px 70px rgba(42, 41, 40, 0.12);
+}
+
+.ticket-shop-existing-order .ticket-shop-payment {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+
+.ticket-shop-existing-order > p {
+  margin: 0;
+  color: var(--ticket-shop-muted);
+  font-weight: 720;
+  text-align: center;
+}
+
+.ticket-shop-existing-order > .ticket-shop-existing-order__error {
+  color: var(--ticket-shop-pink);
+}
+
 .ticket-shop-how > div > p {
   margin: 0;
   color: var(--ticket-shop-pink);
@@ -16597,6 +16631,40 @@ button {
   font-weight: 900;
 }
 
+.ticket-shop-deadline--inline > .ticket-shop-deadline__copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ticket-shop-countdown {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid rgba(231, 70, 151, 0.28);
+  border-radius: 999px;
+  background: rgba(231, 70, 151, 0.08);
+  color: var(--ticket-shop-pink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ticket-shop-countdown span {
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ticket-shop-countdown strong {
+  color: var(--ticket-shop-pink);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
 .ticket-shop-how {
   display: grid;
   gap: 22px;
@@ -16720,6 +16788,14 @@ button {
     grid-template-columns: 26px minmax(0, 1fr) auto;
     min-height: 58px;
     font-size: 0.92rem;
+  }
+
+  .ticket-shop-deadline--inline > .ticket-shop-deadline__copy {
+    gap: 8px;
+  }
+
+  .ticket-shop-countdown {
+    padding: 6px 9px;
   }
 
   .ticket-shop-cart-trigger--inline {

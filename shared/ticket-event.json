@@ -2,6 +2,8 @@
   "eventId": "edomex-2026-otono",
   "eventName": "Estado de México · Otoño 2026",
   "venue": "edomex",
+  "salesEndsAt": "2026-11-13T16:00:00-06:00",
+  "timeZone": "America/Mexico_City",
   "capacityPerBlock": 500,
   "days": [
     {
