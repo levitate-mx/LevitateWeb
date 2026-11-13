@@ -151,12 +151,13 @@ export function AdminWorkshopsPanel({ refreshKey = 0, onUpdated }: { refreshKey?
     setExporting(true); setExportError("");
     // Export every matching participant, including results on other pages.
     const rows = filtered.map(enrollment => ({
-      ...enrollment, workshops: enrollment.sessionIds.map(sessionName),
+      ...enrollment, workshops: enrollment.sessionIds.filter(id => !sessionFilter || id === sessionFilter).map(sessionName),
       paymentStatus: paymentLabels[enrollment.paymentStatus],
     }));
     try {
       const { createWorkshopExcel } = await import("./workshopExcel");
-      const file = await createWorkshopExcel(rows, snapshot.event.eventName);
+      const sessions = snapshot.sessions.map(session => ({ label: sessionName(session.id), start: session.start }));
+      const file = await createWorkshopExcel(rows, snapshot.event.eventName, sessions);
       startBrowserDownload(prepareBrowserDownload(file, `levitate-workshops-${snapshot.event.date}.xlsx`));
     } catch {
       setExportError("No se pudo generar el Excel. Intenta de nuevo.");

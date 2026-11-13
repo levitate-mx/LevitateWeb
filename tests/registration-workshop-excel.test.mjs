@@ -1,90 +1,56 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import ExcelJS from "exceljs";
-import { createWorkshopExcel } from "../src/components/admin/workshopExcel.ts";
-
-const sampleRow = (index = 0) => ({
-  name: `José María Núñez ${index + 1}`,
-  curp: `001213MDFBBB${String(index).padStart(7, "0")}`,
-  academyName: "Academia Raíces · México",
-  workshops: ["Técnica aérea · 09:00", "Comedia musical · 11:00", "Flexibilidad · 13:00", "Jazz · 15:00"],
-  extraCount: 1,
-  amountDue: 200,
-  paidAmount: index % 2 ? 0 : 125.5,
-  balance: index % 2 ? 200 : 74.5,
-  paymentReference: `000${String(index).padStart(8, "0")}`,
-  paymentStatus: index % 2 ? "Pendiente" : "Pago parcial",
-});
-
-async function roundTrip(rows) {
-  const blob = await createWorkshopExcel(rows, "Estado de México · Otoño 2026");
-  const buffer = await blob.arrayBuffer();
-  const workbook = new ExcelJS.Workbook();
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import ExcelJS from 'exceljs';
+import { createWorkshopExcel } from '../src/components/admin/workshopExcel.ts';
+import { buildWorkshopRosters } from '../shared/workshop-rosters.js';
+const sampleRow = index => ({ name: `José María Núñez ${index + 1}`, academyName: 'Academia Raíces · México',
+  curp: 'PRIVATE-CURP', paymentReference: 'PRIVATE-REFERENCE', amountDue: 200,
+  workshops: ['Tela · Aerial · 10:30 a. m.', 'Flex · Aerial · 9:00 a. m.'] });
+const sessions = [{ label: 'Tela · Aerial · 10:30 a. m.', start: '10:30' }, { label: 'Flex · Aerial · 9:00 a. m.', start: '09:00' }];
+async function roundTrip(rows, slots = sessions) {
+  const blob = await createWorkshopExcel(rows, 'Estado de México · Otoño 2026', slots);
+  const buffer = await blob.arrayBuffer(), workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
-  return { blob, buffer, workbook, sheet: workbook.getWorksheet("Inscritos") };
+  return { blob, buffer, workbook };
 }
-
-test("workshop export is a genuine XLSX containing all 31 participants and their accented text", async () => {
-  const rows = Array.from({ length: 31 }, (_, index) => sampleRow(index));
-  const { blob, buffer, workbook, sheet } = await roundTrip(rows);
-
-  assert.equal(blob.type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  assert.deepEqual([...new Uint8Array(buffer).slice(0, 4)], [0x50, 0x4b, 0x03, 0x04], "XLSX must be a ZIP package, not renamed CSV or HTML");
-  assert.equal(workbook.worksheets.length, 1);
-  assert.ok(sheet, "the workbook contains an Inscritos sheet");
-  assert.equal(sheet.columnCount, 11);
-  assert.equal(sheet.rowCount, 35, "all records beyond a 25-row admin page must be included");
-  assert.match(sheet.getCell("A2").value, /Estado de México · Otoño 2026/);
-  assert.deepEqual(sheet.getRow(4).values.slice(1), [
-    "Participante", "CURP", "Academia", "Talleres", "Cantidad", "Adicionales",
-    "Total extras MXN", "Pagado MXN", "Pendiente MXN", "Referencia", "Estado del pago",
-  ]);
-
-  rows.forEach((participant, index) => {
-    assert.deepEqual(sheet.getRow(index + 5).values.slice(1), [
-      participant.name, participant.curp, participant.academyName,
-      participant.workshops.join("\n"), participant.workshops.length, participant.extraCount,
-      participant.amountDue, participant.paidAmount, participant.balance,
-      participant.paymentReference, participant.paymentStatus,
-    ]);
-  });
-});
-
-test("Excel preserves numeric amounts and quantities while CURP and references retain leading zeroes", async () => {
-  const participant = sampleRow();
-  const { sheet } = await roundTrip([participant]);
-  const row = sheet.getRow(5);
-
-  for (const [column, expected] of [[5, 4], [6, 1], [7, 200], [8, 125.5], [9, 74.5]]) {
-    assert.equal(row.getCell(column).type, ExcelJS.ValueType.Number);
-    assert.equal(row.getCell(column).value, expected);
+test('workshop export contains a chronological summary and all participants per session beyond admin pagination', async () => {
+  const rows = Array.from({ length: 31 }, (_, i) => sampleRow(i));
+  const before = structuredClone(rows);
+  const { blob, buffer, workbook } = await roundTrip(rows);
+  assert.equal(blob.type, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.deepEqual([...new Uint8Array(buffer).slice(0, 4)], [80,75,3,4]);
+  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), ['Resumen', 'Flex Aerial 09.00', 'Tela Aerial 10.30']);
+  const summary = workbook.getWorksheet('Resumen');
+  assert.deepEqual(summary.getRow(4).values.slice(1), ['Taller y horario', 'Participantes']);
+  assert.equal(summary.getCell('A5').value, sessions[1].label);
+  assert.equal(summary.getCell('B5').value, 31);
+  for (const sheet of workbook.worksheets.slice(1)) {
+    assert.equal(sheet.rowCount, 35);
+    assert.deepEqual(sheet.getRow(4).values.slice(1), ['N.º', 'Participante', 'Academia']);
+    rows.forEach((participant, i) => assert.deepEqual(sheet.getRow(i + 5).values.slice(1), [i+1, participant.name, participant.academyName]));
+    assert.equal(sheet.views[0].ySplit, 4);
   }
-  for (const [column, expected] of [[2, participant.curp], [10, participant.paymentReference]]) {
-    assert.equal(row.getCell(column).type, ExcelJS.ValueType.String);
-    assert.equal(row.getCell(column).value, expected);
-    assert.ok(expected.startsWith("00"));
-  }
+  assert.deepEqual(rows, before);
+  assert.doesNotMatch(JSON.stringify(workbook.model), /PRIVATE-CURP|PRIVATE-REFERENCE/);
 });
-
-test("formula-like participant data stays literal text in the generated workbook", async () => {
-  const rows = ["=1+1", "+SUM(1,1)", "-1+1", "@SUM(1,1)"].map((value, index) => ({
-    ...sampleRow(index),
-    name: value,
-    curp: value,
-    academyName: value,
-    workshops: [value],
-    paymentReference: value,
-    paymentStatus: value,
-  }));
-  const { sheet } = await roundTrip(rows);
-
-  rows.forEach((participant, index) => {
-    const row = sheet.getRow(index + 5);
-    for (const column of [1, 2, 3, 4, 10, 11]) {
-      const cell = row.getCell(column);
-      assert.equal(cell.type, ExcelJS.ValueType.String);
-      assert.equal(cell.value, participant.name, "formula prefixes must remain visible and unchanged");
-      assert.equal(cell.formula, undefined, "exported participant data must never execute as a formula");
+test('sessions with the same title keep separate rosters; a repeated selection never duplicates a participant', () => {
+  const first = 'Comedia musical · Motion · 4:15 p. m.', second = 'Comedia musical · Motion · 6:00 p. m.';
+  const rows = [{ name: 'Zoe', academyName: 'Uno', workshops: [first, first] }, { name: 'Ana', academyName: 'Dos', workshops: [second] }];
+  const rosters = buildWorkshopRosters(rows, [{ label: first, start: '16:15' }, { label: second, start: '18:00' }]);
+  assert.deepEqual(rosters.map(r => r.participants.map(p => p.name)), [['Zoe'], ['Ana']]);
+  assert.equal(new Set(rosters.map(r => r.worksheetName)).size, 2);
+});
+test('formula-like names and academy labels remain literal text, and worksheet names are valid and unique', async () => {
+  const labels = ['=1+1', '+SUM(1,1)', '-1+1', '@SUM(1,1)', 'Resumen', 'A'.repeat(40), 'A'.repeat(39)+'B', 'Bad[]:/?*Title'];
+  const rows = labels.map(label => ({ name: label, academyName: label, workshops: [label] }));
+  const { workbook } = await roundTrip(rows, []);
+  assert.equal(new Set(workbook.worksheets.map(sheet => sheet.name.toLowerCase())).size, labels.length+1);
+  for (const sheet of workbook.worksheets.slice(1)) {
+    assert.ok(sheet.name.length <= 31); assert.doesNotMatch(sheet.name, /[\\/?*\[\]:]/);
+    for (const address of ['A1','B5','C5']) {
+      assert.equal(sheet.getCell(address).type, ExcelJS.ValueType.String);
+      assert.equal(sheet.getCell(address).value, sheet.getCell('A1').value);
+      assert.equal(sheet.getCell(address).formula, undefined);
     }
-  });
+  }
 });
