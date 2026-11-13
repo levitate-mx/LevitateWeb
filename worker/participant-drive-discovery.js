@@ -12,7 +12,8 @@ const scopePattern = /^[A-Za-z0-9_-]{1,100}$/;
 const maximumSourceBytes = 8 * 1024 * 1024;
 const maximumThumbnailBytes = 1024 * 1024;
 const maximumPixels = 40_000_000;
-const baseFields = "id,name,mimeType,trashed,parents,owners(emailAddress),permissions(type,role,emailAddress,domain),shared,driveId,appProperties,capabilities(canDownload,canListChildren,canAddChildren)";
+const permissionFields = "type,role,emailAddress,domain,deleted";
+const baseFields = `id,name,mimeType,trashed,parents,owners(emailAddress),permissions(${permissionFields}),shared,driveId,appProperties,capabilities(canDownload,canListChildren,canAddChildren)`;
 const fileFields = `${baseFields},size,md5Checksum,sha256Checksum,headRevisionId,version,thumbnailLink,thumbnailVersion,imageMediaMetadata(width,height,rotation)`;
 
 function fail(code = "portal_photo_source_unavailable", message = "No pudimos consultar las fotografías de Drive.", statusCode = 503) {
@@ -40,6 +41,27 @@ function privateItem(value, owner, parentId) {
     throw fail("portal_photo_source_not_private", "La carpeta y sus fotos deben permanecer privadas en Drive.");
   }
   identifier(value.id);
+}
+function restrictedItem(value, reader, parentId, collaboratorOwner = false) {
+  const actualOwner = email(value?.owners?.[0]?.emailAddress);
+  const permissions = value?.permissions;
+  const namedRole = new Set(["owner", "writer", "reader", "commenter"]);
+  const validEmail = address => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address);
+  if (!value || value.trashed !== false || value.driveId || typeof value.shared !== "boolean"
+    || !Array.isArray(value.owners) || value.owners.length !== 1 || !validEmail(actualOwner)
+    || (!collaboratorOwner && actualOwner !== reader)
+    || !Array.isArray(permissions) || !permissions.length
+    || permissions.some(permission => permission?.type !== "user" || !namedRole.has(permission.role)
+      || !validEmail(email(permission.emailAddress)) || permission.domain || permission.deleted === true)
+    || permissions.filter(permission => permission.role === "owner").length !== 1
+    || !permissions.some(permission => permission.role === "owner" && email(permission.emailAddress) === actualOwner)
+    || !permissions.some(permission => email(permission.emailAddress) === reader)
+    || new Set(permissions.map(permission => email(permission.emailAddress))).size !== permissions.length
+    || !Array.isArray(value.parents) || value.parents.length !== 1 || (parentId && value.parents[0] !== parentId)) {
+    throw fail("portal_photo_source_not_private", "La carpeta y sus fotos deben tener acceso restringido a personas identificadas en Drive.");
+  }
+  identifier(value.id);
+  identifier(value.parents[0]);
 }
 function scope(input) {
   for (const field of ["eventId", "participantId", "academyId"]) if (typeof input?.[field] !== "string" || !scopePattern.test(input[field])) throw fail("portal_photo_source_invalid", "Revisa la edición y el participante.", 400);
@@ -126,7 +148,18 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
       return value;
     });
   };
-  const metadata = (id, fields = fileFields) => json(`files/${identifier(id)}`, { query: { fields, supportsAllDrives: "true" } });
+  const hierarchyPermissions = async value => {
+    if (!hierarchy || value.permissions !== undefined) return value;
+    // Drive may omit File.permissions when the connected account only has read access.
+    const acl = await json(`files/${identifier(value.id)}/permissions`, { query: {
+      fields: `nextPageToken,permissions(${permissionFields})`, supportsAllDrives: "true", pageSize: 100,
+    } });
+    if (!Array.isArray(acl.permissions) || acl.permissions.length > 100 || acl.nextPageToken) {
+      throw fail("portal_photo_source_not_private", "No pudimos verificar el acceso restringido de la foto en Drive.");
+    }
+    return { ...value, permissions: acl.permissions };
+  };
+  const metadata = async (id, fields = fileFields) => hierarchyPermissions(await json(`files/${identifier(id)}`, { query: { fields, supportsAllDrives: "true" } }));
   const list = async (q, fields = baseFields, pageSize = 1000) => {
     const value = await json("files", { query: { q, fields: `nextPageToken,files(${fields})`, spaces: "drive", pageSize, orderBy: "name" } });
     if (!Array.isArray(value.files) || value.files.length > pageSize) throw fail();
@@ -150,7 +183,8 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     return root;
   };
   const validateRoot = (value, expectedParent, context) => {
-    privateItem(value, owner, expectedParent);
+    if (hierarchy) restrictedItem(value, owner, expectedParent);
+    else privateItem(value, owner, expectedParent);
     const properties = value.appProperties || {};
     if (value.mimeType !== folderMime || value.capabilities?.canListChildren !== true
       || (hierarchy ? properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.root || properties.levitateEventId !== context?.eventId
@@ -158,7 +192,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
         : !roots.has(properties.levitatePhotoAlbum))) throw fail();
   };
   const validateAcademy = (value, root, context) => {
-    privateItem(value, owner, root.id);
+    restrictedItem(value, owner, root.id);
     const properties = value.appProperties || {};
     if (value.mimeType !== folderMime || value.capabilities?.canListChildren !== true
       || properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.academy || properties.levitateEventId !== context.eventId
@@ -166,7 +200,8 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
       || properties.levitateParticipantId !== undefined || properties.demo !== undefined) throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta academia.", 409);
   };
   const validateAlbum = (album, root, context, dance, exactName = true) => {
-    privateItem(album, owner, root.id);
+    if (hierarchy) restrictedItem(album, owner, root.id);
+    else privateItem(album, owner, root.id);
     const properties = album.appProperties || {}, demo = properties.demo === "true";
     if (hierarchy) {
       if (album.mimeType !== folderMime || album.capabilities?.canListChildren !== true
@@ -187,7 +222,8 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     return { demo, trusted: properties.levitateParticipantId === context.participantId && properties.levitateAcademyId === context.academyId };
   };
   const validatePhoto = (photo, albumId, context, dance) => {
-    privateItem(photo, owner, albumId);
+    if (hierarchy) restrictedItem(photo, owner, albumId, true);
+    else privateItem(photo, owner, albumId);
     if (!imageTypes.has(photo.mimeType) || photo.capabilities?.canDownload !== true
       || photo.appProperties?.watermarkVersion || photo.appProperties?.levitatePhotoAlbum === "demo_photo_v1") throw fail();
     if (hierarchy && [
@@ -225,6 +261,10 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     }
   };
   const discover = async input => {
+    const maxPhotos = input?.maxPhotos;
+    if (maxPhotos !== undefined && (!Number.isInteger(maxPhotos) || maxPhotos < 1 || maxPhotos > 2)) {
+      throw fail('portal_photo_source_invalid', 'Revisa el límite de vistas previas.', 400);
+    }
     const context = scope(input), root = await rootFolder(context);
     if (!root || !context.dances.length) return { albums: [] };
     let albumParent = root;
@@ -238,7 +278,9 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     const folders = await list(`'${albumParent.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}'`);
     if (folders.nextPageToken) throw fail("portal_photo_source_ambiguous", "Hay muchas carpetas de fotos. Revisa la asociación antes de continuar.", 409);
     const result = [];
+    let collectedPhotos = 0;
     for (const dance of context.dances) {
+      if (maxPhotos !== undefined && collectedPhotos >= maxPhotos) break;
       const binding = context.knownBindings instanceof Map ? context.knownBindings.get(dance.id) : context.knownBindings?.[dance.id];
       const boundId = hierarchy ? undefined : typeof binding === "string" ? binding : binding?.folderId;
       if (boundId !== undefined) identifier(boundId);
@@ -256,11 +298,12 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
       if (!candidates.length) continue;
       const album = await metadata(candidates[0].id, baseFields);
       const albumState = validateAlbum(album, albumParent, context, dance, !boundId);
-      const images = await list(`'${album.id}' in parents and 'me' in owners and trashed = false and (mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp')`, fileFields, 100);
+      const images = await list(`'${album.id}' in parents${hierarchy ? "" : " and 'me' in owners"} and trashed = false and (mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp')`, fileFields, 100);
       const photos = [];
       for (const listed of images.files) {
+        if (maxPhotos !== undefined && collectedPhotos >= maxPhotos) break;
         if (listed.appProperties?.watermarkVersion || listed.appProperties?.levitatePhotoAlbum === "demo_photo_v1") continue;
-        validatePhoto(listed, album.id, context, dance);
+        validatePhoto(await hierarchyPermissions(listed), album.id, context, dance);
         const expectedRevision = revision(listed);
         photos.push({ id: listed.id, revision: expectedRevision, name: text(listed.name, 1000), mimeType: listed.mimeType, ...dimensions(listed),
           read: async () => {
@@ -307,6 +350,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
             validateRoot(finalRoot, root.parents[0], context);
             return loaded;
           } });
+        collectedPhotos++;
       }
       result.push({ id: album.id, danceId: dance.id, name: album.name, ...albumState, photos, truncated: Boolean(images.nextPageToken) });
     }

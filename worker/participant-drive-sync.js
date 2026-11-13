@@ -1,5 +1,5 @@
 import { PHOTO_WATERMARK_VERSION } from '../shared/participant-photo-watermark.js';
-import { PHOTO_PREVIEW_LIMIT, preferredPhotoDance } from './participant-photo-priority.js';
+import { PHOTO_PREVIEW_LIMIT, prioritizedPhotoDances } from './participant-photo-priority.js';
 
 const pending = (participantId, eventId, status = 'pending', extra = {}) => ({ status, hasMore: false, imported: 0, participantId, eventId, ...extra });
 const first = (db, sql, ...bindings) => db.prepare(sql).bind(...bindings).first();
@@ -27,7 +27,12 @@ async function context(db, env, participantId, eventId, adminPreview) {
     WHERE dp.participant_id=? AND d.academy_id=? AND d.venue=? AND (?=1 OR r.id IS NOT NULL)
     ORDER BY d.title,d.id`, event.id, participant.id, participant.academy_id, event.venue, registration ? 1 : 0);
   const peers = await all(db, 'SELECT id,full_name FROM registration_participants WHERE academy_id=?', participant.academy_id);
-  return { participant, dance: preferredPhotoDance(dances), ambiguousName: peers.filter(row => normalized(row.full_name) === normalized(participant.full_name)).length !== 1 };
+  return { participant, dances: prioritizedPhotoDances(dances), ambiguousName: peers.filter(row => normalized(row.full_name) === normalized(participant.full_name)).length !== 1 };
+}
+
+function sameDances(initial, current) {
+  return current?.participant?.academy_id === initial.participant.academy_id
+    && JSON.stringify(current?.dances) === JSON.stringify(initial.dances);
 }
 
 async function ownedLease(db, eventId, participantId, nonce, file) {
@@ -80,7 +85,7 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
   if (!db || !env || !identifier(participantId) || !identifier(eventId) || typeof assertAuthorized !== 'function') throw unavailable();
   await assertAuthorized();
   const initial = await context(db, env, participantId, eventId, adminPreview);
-  if (!initial?.dance) return pending(participantId, eventId);
+  if (!initial?.dances.length) return pending(participantId, eventId);
   if ([getDiscovery, getMediaStore, processPhoto, uploadPreview].some(value => typeof value !== 'function')) throw unavailable();
   const nonce = crypto.randomUUID();
   const claimed = await first(db, `INSERT INTO participant_portal_drive_sync(event_id,participant_id,lease_token,lease_until)
@@ -90,8 +95,24 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
       AND (participant_portal_drive_sync.next_check_at IS NULL OR participant_portal_drive_sync.next_check_at<=datetime('now'))
     RETURNING bindings_json`, eventId, participantId, nonce);
   if (!claimed) {
-    const state = await first(db, 'SELECT lease_token FROM participant_portal_drive_sync WHERE event_id=? AND participant_id=?', eventId, participantId);
-    return pending(participantId, eventId, state?.lease_token ? 'checking' : 'ready', { hasMore: Boolean(state?.lease_token) });
+    const state = await first(db, `SELECT lease_token,last_error,lease_until>datetime('now') AS active_lease
+      FROM participant_portal_drive_sync WHERE event_id=? AND participant_id=?`, eventId, participantId);
+    if (state?.lease_token && state.active_lease) return pending(participantId, eventId, 'checking', { hasMore: true });
+    if (state?.last_error) return pending(participantId, eventId, 'unavailable');
+    // Throttling avoids another Drive read; it is not evidence that a preview
+    // exists. Count only prepared assets of this participant's member dances.
+    const ready = await first(db, `SELECT 1 AS available FROM participant_portal_drive_files f
+      JOIN participant_portal_assets a ON a.id=f.asset_id AND a.event_id=f.event_id AND a.kind='photo'
+      JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=f.event_id AND r.dance_id=f.dance_id
+      JOIN registration_dances d ON d.id=f.dance_id
+      JOIN registration_dance_participants dp ON dp.dance_id=d.id
+      WHERE f.event_id=? AND dp.participant_id=? AND d.academy_id=? AND d.venue=(SELECT venue FROM participant_portal_events WHERE id=f.event_id)
+        AND f.status='ready' AND f.source_version LIKE ?
+        AND (?=1 OR (f.publication_policy='automatic' AND a.published=1 AND r.photos_published=1
+          AND coalesce(r.publication_blocked,0)=0 AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
+            WHERE settings.event_id=f.event_id AND settings.dance_id=f.dance_id AND settings.publication_paused=1))) LIMIT 1`,
+    eventId, participantId, initial.participant.academy_id, `${PHOTO_WATERMARK_VERSION}:%`, adminPreview ? 1 : 0);
+    return pending(participantId, eventId, ready ? 'ready' : 'pending');
   }
   let file, finished = false;
   const release = async ({ bindings, error = null, delay = 60 } = {}) => {
@@ -107,28 +128,29 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
     if (typeof discovery?.discover !== 'function') throw unavailable();
     // Legacy albums contain an individual participant name. The new hierarchy
     // binds academy + choreography IDs; membership came from the database above.
-    const { id: danceId, title } = initial.dance;
-    if (initial.ambiguousName && discovery.identityScope !== 'dance' && !identifier(knownBindings[danceId]?.folderId)) {
+    if (initial.ambiguousName && discovery.identityScope !== 'dance'
+      && initial.dances.some(dance => !identifier(knownBindings[dance.id]?.folderId))) {
       await release({ error: 'ambiguous_participant' });
       return pending(participantId, eventId);
     }
     const discovered = await discovery.discover({ eventId, participantId, participantName: initial.participant.full_name,
-      academyId: initial.participant.academy_id, academyName: initial.participant.academy_name, dances: [{ id: danceId, title }], knownBindings, adminPreview });
+      academyId: initial.participant.academy_id, academyName: initial.participant.academy_name, dances: initial.dances.map(({ id, title }) => ({ id, title })), maxPhotos: PHOTO_PREVIEW_LIMIT, knownBindings, adminPreview });
     await assertAuthorized();
     const current = await context(db, env, participantId, eventId, adminPreview);
-    if (current?.dance?.id !== danceId || !await ownedLease(db, eventId, participantId, nonce)) throw unavailable();
+    if (!sameDances(initial, current) || !await ownedLease(db, eventId, participantId, nonce)) throw unavailable();
     const albums = Array.isArray(discovered?.albums) ? discovered.albums : [];
     const bindings = { ...knownBindings }, candidates = [];
     let readyCount = 0;
-    const trustedAlbums = albums.filter(album => album && identifier(album.id) && album.danceId === danceId
-      && album.trusted === true && (!album.demo || adminPreview) && Array.isArray(album.photos));
-    if (trustedAlbums.length > 1) {
-      throw Object.assign(unavailable(), { code: 'ambiguous_photo_album' });
-    }
-    const [album] = trustedAlbums;
-    if (album) {
+    const seenPhotos = new Set();
+    for (const dance of initial.dances) {
+      if (seenPhotos.size >= PHOTO_PREVIEW_LIMIT) break;
+      const danceId = dance.id;
+      const trustedAlbums = albums.filter(album => album && identifier(album.id) && album.danceId === danceId
+        && album.trusted === true && (!album.demo || adminPreview) && Array.isArray(album.photos));
+      if (trustedAlbums.length > 1) throw Object.assign(unavailable(), { code: 'ambiguous_photo_album' });
+      const [album] = trustedAlbums;
+      if (!album) continue;
       bindings[danceId] = { folderId: album.id };
-      const seenPhotos = new Set();
       for (const sourcePhoto of album.photos) {
         if (seenPhotos.size >= PHOTO_PREVIEW_LIMIT) break;
         if (!sourcePhoto || !identifier(sourcePhoto.id) || typeof sourcePhoto.revision !== 'string' || !sourcePhoto.revision || sourcePhoto.revision.length > 300
@@ -138,17 +160,16 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
         const prior = await first(db, `SELECT status,asset_id,publication_policy,
           CASE WHEN status='failed' AND updated_at>datetime('now','-60 seconds') THEN 1 ELSE 0 END AS cooling_down
           FROM participant_portal_drive_files
-          WHERE event_id=? AND dance_id=? AND source_file_id=? AND source_version=?`, eventId, album.danceId, photo.id, photo.revision);
+          WHERE event_id=? AND dance_id=? AND source_file_id=? AND source_version=?`, eventId, danceId, photo.id, photo.revision);
         if (prior?.status === 'ready' && prior.asset_id) {
           readyCount++;
           if (!adminPreview && !album.demo && prior.publication_policy === 'draft') {
             await assertAuthorized();
             const valid = await context(db, env, participantId, eventId, false);
-            if (valid?.dance?.id !== danceId) throw unavailable();
-            await promoteReadyPreview(db, { eventId, participantId, nonce, danceId: album.danceId, photo, assetId: prior.asset_id });
+            if (!sameDances(initial, valid)) throw unavailable();
+            await promoteReadyPreview(db, { eventId, participantId, nonce, danceId, photo, assetId: prior.asset_id });
           }
-        }
-        else if (!prior?.cooling_down) candidates.push({ album, photo, danceId: album.danceId });
+        } else if (!prior?.cooling_down) candidates.push({ album, photo, danceId });
       }
     }
     if (!candidates.length) {
@@ -178,7 +199,7 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
       || prepared.width > 1600 || prepared.height > 1600) throw unavailable();
     await assertAuthorized();
     const valid = await context(db, env, participantId, eventId, adminPreview);
-    if (valid?.dance?.id !== file.danceId || !await ownedLease(db, eventId, participantId, nonce, file)) throw unavailable();
+    if (!sameDances(initial, valid) || !await ownedLease(db, eventId, participantId, nonce, file)) throw unavailable();
     let routine = await first(db, 'SELECT id FROM participant_portal_routines WHERE event_id=? AND dance_id=?', eventId, file.danceId);
     if (!routine) {
       await db.prepare('INSERT INTO participant_portal_routines(id,event_id,dance_id) VALUES(?,?,?) ON CONFLICT(event_id,dance_id) DO NOTHING')
@@ -196,7 +217,7 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
     if (!identifier(uploaded?.assetId)) throw unavailable();
     await assertAuthorized();
     const afterUpload = await context(db, env, participantId, eventId, adminPreview);
-    if (afterUpload?.dance?.id !== file.danceId || !await ownedLease(db, eventId, participantId, nonce, file)) throw unavailable();
+    if (!sameDances(initial, afterUpload) || !await ownedLease(db, eventId, participantId, nonce, file)) throw unavailable();
     const canApprove = !adminPreview && !file.album.demo && file.album.trusted === true;
     const member = membershipGuard({ eventId, participantId, danceId: file.danceId, nonce, adminPreview });
     const guard = `EXISTS(SELECT 1 FROM participant_portal_drive_files f JOIN participant_portal_drive_sync s ON s.event_id=f.event_id

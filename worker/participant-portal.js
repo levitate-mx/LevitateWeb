@@ -3,9 +3,10 @@ import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from "./par
 import { prepareParticipantDemoPhoto, readParticipantDemoPhotos } from "./participant-demo-media.js";
 import { participantDemoMediaDefinitions } from "../shared/participant-demo-media.js";
 import { syncParticipantDrivePhotos } from "./participant-drive-sync.js";
-import { PHOTO_PREVIEW_LIMIT, preferredPhotoDance } from "./participant-photo-priority.js";
+import { selectParticipantPhotoAssets } from "./participant-photo-priority.js";
 import { processParticipantPhoto } from "./participant-photo-process.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
+import { projectParticipantResult } from './participant-results.js';
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
 import { createBlockPublicationGate, getBlockPublication, saveBlockPublicationMode, closeParticipantBlock, reopenParticipantBlock } from "./participant-block-publication.js";
 import { getReleasedJudgingSheetJudgeIds } from './judging-sheet-release.js';
@@ -156,6 +157,30 @@ async function me(db, env, request, getJudgingSnapshot) {
   await session(db, request); // An access replaced while Core responded cannot finish the old request.
   return json(data);
 }
+// Photos have their own approvals. A pending result or an unavailable judging
+// source must not hide a ready preview, and a ready preview releases no scores.
+async function readApprovedParticipantPhotos(db, participantId, eventId, adminPreview = false) {
+  const assets = await all(db, `SELECT a.*,r.dance_id AS danceId,d.title AS danceTitle,
+    (SELECT COUNT(*) FROM registration_dance_participants members WHERE members.dance_id=d.id) AS participant_count
+    FROM participant_portal_assets a
+    JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id
+    JOIN participant_portal_events e ON e.id=r.event_id
+    JOIN registration_dances d ON d.id=r.dance_id
+    JOIN participant_portal_memberships m ON m.dance_id=d.id
+    JOIN participant_portal_people p ON p.id=m.participant_id
+    WHERE a.event_id=? AND m.participant_id=? AND a.kind='photo'
+      AND d.academy_id=p.academy_id AND d.venue=e.venue
+      AND (p.portal_event_id IS NULL OR p.portal_event_id=e.id)
+      ${adminPreview ? '' : `AND e.published=1 AND a.published=1 AND r.photos_published=1 AND coalesce(r.publication_blocked,0)=0
+        AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
+          WHERE settings.event_id=e.id AND settings.dance_id=d.id AND settings.publication_paused=1)
+        AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_files f
+          WHERE f.event_id=e.id AND f.dance_id=d.id AND f.asset_id=a.id AND f.publication_policy='held')`}
+    ORDER BY a.created_at DESC,a.id DESC`, eventId, participantId);
+  const dances = [...new Map(assets.map(asset => [asset.danceId,
+    { id: asset.danceId, title: asset.danceTitle, participant_count: asset.participant_count }])).values()];
+  return selectParticipantPhotoAssets(dances, assets);
+}
 // The preview flag is supplied only by the authenticated admin route. Participant
 // requests always derive both IDs from their grant and use publication checks.
 async function participantData(db, env, participantId, eventId, adminPreview = false, getJudgingSnapshot) {
@@ -182,15 +207,13 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
     LEFT JOIN participant_portal_routines r ON r.dance_id = d.id AND r.event_id = ?
     WHERE dp.participant_id = ? AND (r.id IS NOT NULL OR (? = 1 AND d.venue = ?))
     ORDER BY d.title, d.id`, event.id, participant.id, registrationFallback ? 1 : 0, event.venue);
-  const photoDances = rows.filter(row => row.registration_academy_id === participant.academy_id && row.registration_venue === event.venue);
-  const photoDanceId = preferredPhotoDance(photoDances)?.registration_dance_id ?? null;
-  const assets = adminPreview || event.published ? await all(db, `SELECT a.* FROM participant_portal_assets a
+  const assets = adminPreview || event.published ? await all(db, `SELECT a.*,r.dance_id AS danceId FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN participant_portal_memberships dp ON dp.dance_id = r.dance_id
     WHERE a.event_id = ? AND dp.participant_id = ?
-      AND (a.kind = 'judge_sheet' OR (a.kind = 'photo' AND r.dance_id = ?))
+      AND a.kind IN ('judge_sheet','photo')
       ${adminPreview ? "" : `AND a.published = 1 AND ${routineVisibility} AND (a.kind = 'judge_sheet' OR r.photos_published = 1)`}
-    ORDER BY a.created_at DESC,a.id DESC`, event.id, participant.id, photoDanceId) : [];
+    ORDER BY a.created_at DESC,a.id DESC`, event.id, participant.id) : [];
   const document = await first(db, `SELECT d.asset_id FROM participant_portal_documents d
     JOIN participant_portal_assets a ON a.id = d.asset_id
     WHERE d.participant_id = ? AND d.event_id = ? ${adminPreview ? "" : "AND d.published = 1 AND a.published = 1"}
@@ -217,7 +240,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       const judging = visible ? parsed(row.judging_json) : null;
       const sheet = visible ? assets.find((asset) => asset.routine_id === row.id && asset.kind === "judge_sheet") : null;
       const photos = visible && (adminPreview || row.photos_published)
-        ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo").slice(0, PHOTO_PREVIEW_LIMIT) : [];
+        ? assets.filter((asset) => asset.routine_id === row.id && asset.kind === "photo") : [];
       return { id: row.id || `registration:${row.registration_dance_id}`, eventId: event.id, title: row.title, genre: row.genre, subgenre: row.subgenre, category: row.category, division, level: row.level,
         result: portalResult(row, event, adminPreview),
         judging: { status: judging || sheet ? "available" : "pending", judges: judging?.judges || [], ...(sheet ? { assetId: sheet.id, url: link(sheet.id) } : {}) },
@@ -319,7 +342,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       const sameSource = (current.source_event_id || '') === (original?.source_event_id || '')
         && (current.source_routine_id || '') === (original?.source_routine_id || '');
       return current.publication_blocked || !sameSource ? [{ ...routine,
-        judging: { source: 'jueceocore', sourceStatus: 'pending', status: 'pending', judges: [] } }] : [routine];
+        result: pendingResult(), judging: { source: 'jueceocore', sourceStatus: 'pending', status: 'pending', judges: [] } }] : [routine];
     }) };
     const visibleNow = await first(db, "SELECT published FROM participant_portal_events WHERE id=?", event.id);
     const stillAuthorized = await publication.confirm();
@@ -327,7 +350,71 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       routines: enriched.routines.map(routine => ({ ...routine, result: pendingResult(),
         judging: { sourceStatus: "pending", status: "pending", judges: [] }, photos: { status: "pending", count: 0, items: [] } })) };
   }
-  return enriched;
+  // Re-read the independent photo approvals after all judging awaits. This
+  // preserves withdrawals while allowing previews on still-draft routines.
+  // A manual release of every current judge sheet also authorizes this
+  // routine's completed result. Other routines can still be awaiting scores;
+  // the existing projector independently withholds unfinished category places.
+  const manualResults = new Map();
+  if (!adminPreview && source?.enabled === 1 && event.published) {
+    for (const routine of enriched.routines) {
+      const row = rows.find(value => (value.id || `registration:${value.registration_dance_id}`) === routine.id);
+      if (!row || row.publication_blocked || Boolean(row.source_event_id) !== Boolean(row.source_routine_id)) continue;
+      const sourceEventId = row.source_event_id || source.source_event_id;
+      const sourceRoutineId = row.source_routine_id || row.registration_dance_id;
+      if (sourceEventId !== source.source_event_id) continue;
+      try {
+        const snapshot = await snapshots.get(sourceEventId.toLowerCase());
+        const result = projectParticipantResult({ snapshot, routineId: sourceRoutineId });
+        if (result.status !== 'published') continue;
+        const own = snapshot.rows.find(value => value.id === sourceRoutineId);
+        const proof = await first(db, `SELECT fingerprint,operation_nonce FROM registration_judging_sheet_releases
+          WHERE source_event_id=? AND block_id=?`, sourceEventId, own.blockId);
+        if (!proof) continue;
+        const judgeIds = await getReleasedJudgingSheetJudgeIds({ db, sourceEventId, sourceRoutineId, snapshot });
+        manualResults.set(routine.id, { routineId: routine.id, danceId: row.registration_dance_id,
+          sourceEventId, blockId: own.blockId, fingerprint: proof.fingerprint, nonce: proof.operation_nonce,
+          explicitEventId: row.source_event_id || '', explicitRoutineId: row.source_routine_id || '',
+          judgeIds, result: own.judges.every(judge => judgeIds.includes(judge.id)) ? result : null });
+      } catch { /* A missing, changed or incomplete approval cannot release a result. */ }
+    }
+  }
+  const photos = await readApprovedParticipantPhotos(db, participant.id, event.id, adminPreview);
+  let approvedManualResults = new Set();
+  if (manualResults.size) {
+    // One final database read pins the exact release revision and rechecks
+    // membership, source binding, edition visibility and routine withdrawal
+    // after all awaited fingerprints. A newer click or revocation wins.
+    const permissions = await all(db, `SELECT json_extract(c.value,'$.routineId') AS routine_id
+      FROM json_each(?) c JOIN participant_portal_memberships m ON m.dance_id=json_extract(c.value,'$.danceId')
+      JOIN participant_portal_people p ON p.id=m.participant_id
+      JOIN registration_dances d ON d.id=m.dance_id AND d.academy_id=p.academy_id
+      JOIN participant_portal_events e ON e.id=? AND e.published=1 AND e.venue=d.venue
+      LEFT JOIN participant_portal_routines r ON r.event_id=e.id AND r.dance_id=d.id
+      JOIN participant_portal_judging_sources s ON s.event_id=e.id AND s.enabled=1
+        AND s.source_event_id=json_extract(c.value,'$.sourceEventId')
+      JOIN registration_judging_sheet_releases release ON release.source_event_id=s.source_event_id
+        AND release.block_id=json_extract(c.value,'$.blockId')
+        AND release.fingerprint=json_extract(c.value,'$.fingerprint') AND release.operation_nonce=json_extract(c.value,'$.nonce')
+      WHERE m.participant_id=? AND (p.portal_event_id IS NULL OR p.portal_event_id=e.id)
+        AND coalesce(r.publication_blocked,0)=0
+        AND coalesce(r.id,'registration:'||d.id)=json_extract(c.value,'$.routineId')
+        AND coalesce(r.source_event_id,'')=json_extract(c.value,'$.explicitEventId')
+        AND coalesce(r.source_routine_id,'')=json_extract(c.value,'$.explicitRoutineId')`,
+    JSON.stringify([...manualResults.values()].map(({ judgeIds, result, ...proof }) => proof)), event.id, participant.id);
+    approvedManualResults = new Set(permissions.map(permission => permission.routine_id));
+  }
+  return { ...enriched, routines: enriched.routines.map(routine => {
+    const items = photos.filter(asset => asset.routine_id === routine.id).map(asset => ({ id: asset.id,
+      previewUrl: link(asset.id), ...(asset.allow_download ? { downloadUrl: `${link(asset.id)}${adminPreview ? '&' : '?'}download=1` } : {}),
+      width: asset.width, height: asset.height, caption: asset.caption }));
+    const manual = manualResults.get(routine.id);
+    const allowed = manual && approvedManualResults.has(routine.id);
+    return { ...routine, ...(manual ? {
+      result: allowed ? manual.result || routine.result : pendingResult(),
+      judging: allowed ? retainReleasedJudging(routine.judging, manual.judgeIds) : pendingJudging(),
+    } : {}), photos: { ...routine.photos, status: items.length ? 'available' : 'pending', count: items.length, items } };
+  }) };
 }
 function photoFileName(name) {
   return `${name.replace(/\.[^.]+$/, "").slice(0, 190)}.jpg`;
@@ -352,6 +439,8 @@ async function photoResponse(asset, object) {
 async function serveAsset(db, env, request, assetId, admin = false, getMediaStore, getJudgingSnapshot) {
   const grant = admin ? null : await session(db, request);
   const asset = await first(db, "SELECT * FROM participant_portal_assets WHERE id = ?", assetId);
+  const selectedPhoto = async () => (await readApprovedParticipantPhotos(db, grant.participant_id, grant.event_id))
+    .find(photo => photo.id === asset.id);
   // Historical uploaded PDFs cannot be tied to the current source grades.
   // Participants receive freshly generated sheets after the manual block release.
   if (!admin && asset?.kind === 'judge_sheet') fault('portal_asset_not_found', 'El archivo no está disponible.', 404);
@@ -363,6 +452,8 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
     if (asset.kind === "diploma") {
       const document = await first(db, `SELECT asset_id FROM participant_portal_documents WHERE participant_id = ? AND event_id = ? AND asset_id = ? AND published = 1`, grant.participant_id, grant.event_id, asset.id);
       if (asset.participant_id !== grant.participant_id || !document) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
+    } else if (asset.kind === 'photo') {
+      if (!await selectedPhoto()) fault('portal_asset_not_found', 'El archivo no está disponible.', 404);
     } else {
       publication = await createBlockPublicationGate({ db, eventId: event.id });
       const routineVisibility = publication.mode === "block_complete" ? "coalesce(r.publication_blocked,0)=0" : "r.status='published'";
@@ -405,6 +496,13 @@ async function serveAsset(db, env, request, assetId, admin = false, getMediaStor
         AND (a.kind='judge_sheet' OR (a.kind='photo' AND r.photos_published=1 AND (?=0 OR a.allow_download=1)))`,
       asset.id, grant.id, new URL(request.url).searchParams.get("download") === "1" ? 1 : 0);
     if (!current || !await publication.confirm()) fault("portal_asset_not_found", "El archivo no está disponible.", 404);
+  }
+  if (!admin && asset.kind === 'photo') {
+    const current = await selectedPhoto();
+    if (!current || (new URL(request.url).searchParams.get('download') === '1' && !current.allow_download)) {
+      fault('portal_asset_not_found', 'El archivo no está disponible.', 404);
+    }
+    await session(db, request); // The fresh selection must not outlive a revoked QR grant.
   }
   const disposition = asset.kind === "diploma" || new URL(request.url).searchParams.get("download") === "1" ? "attachment" : "inline";
   return new Response(photo?.body ?? object.body, { headers: { ...headers, "content-type": photo ? "image/jpeg" : asset.content_type,

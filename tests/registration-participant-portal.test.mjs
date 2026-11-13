@@ -177,8 +177,8 @@ test('Drive trial rejects invalid archival sources before creating a source albu
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 0);
 });
 
-test('passport shows up to two newest previews from the smallest choreography without filling from another', async t => {
-  const { admin, request, db, access } = await fixture(t);
+test('passport fills two global preview slots across owned choreographies and prefers smaller casts only when needed', async t => {
+  const { admin, request, db, access, bucket } = await fixture(t);
   const { cookie } = await access();
   db.sqlite.exec(`UPDATE registration_dances SET category='duo' WHERE id='dance-b';
     INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a');`);
@@ -197,12 +197,12 @@ test('passport shows up to two newest previews from the smallest choreography wi
     db.sqlite.prepare('UPDATE participant_portal_assets SET created_at=? WHERE id=?').run(createdAt, data.assetId);
   }
 
-  async function assertPassportPreviews(preferredId, expectedPhotoIds, routineOrder = [duoId, soloId]) {
+  async function assertPassportPreviews(expectedByRoutine, routineOrder = [duoId, soloId]) {
     for (const { path, session } of [{ path: '/api/participant/me', session: cookie }, { path: previewPath(), session: adminCookie }]) {
       const { data } = await request(path, { cookie: session });
       assert.deepEqual(data.routines.map(routine => routine.id), routineOrder);
       for (const routine of data.routines) {
-        const expected = routine.id === preferredId ? expectedPhotoIds : [];
+        const expected = expectedByRoutine[routine.id] || [];
         assert.equal(routine.photos.status, expected.length ? 'available' : 'pending');
         assert.equal(routine.photos.count, expected.length);
         assert.deepEqual(routine.photos.items.map(photo => photo.id), expected);
@@ -215,25 +215,127 @@ test('passport shows up to two newest previews from the smallest choreography wi
           assert.doesNotMatch(JSON.stringify(routine.judging), /Observación privada/);
         }
       }
+      assert.ok(data.routines.reduce((count, routine) => count + routine.photos.count, 0) <= 2);
     }
   }
 
   await uploadPhoto(duoId, 'duo-preview-one', '2026-11-10 00:00:04');
+  await assertPassportPreviews({ [duoId]: ['duo-preview-one'] });
   await uploadPhoto(duoId, 'duo-preview-two', '2026-11-10 00:00:05');
-  await assertPassportPreviews(soloId, []);
+  await assertPassportPreviews({ [duoId]: ['duo-preview-two', 'duo-preview-one'] });
   await uploadPhoto(soloId, 'solo-preview-one', '2026-11-10 00:00:01');
-  await assertPassportPreviews(soloId, ['solo-preview-one']);
+  await assertPassportPreviews({ [soloId]: ['solo-preview-one'], [duoId]: ['duo-preview-two'] });
+  await request('/api/participant/assets/solo-preview-one', { cookie });
+  await request('/api/participant/assets/duo-preview-two', { cookie });
+  let reads = bucket.reads.length;
+  await request('/api/participant/assets/duo-preview-one', { cookie, expected: 404 });
+  assert.equal(bucket.reads.length, reads, 'a third preview URL is denied before private storage');
   await uploadPhoto(soloId, 'solo-preview-two', '2026-11-10 00:00:02');
+  await assertPassportPreviews({ [soloId]: ['solo-preview-two', 'solo-preview-one'] });
   await uploadPhoto(soloId, 'solo-preview-three', '2026-11-10 00:00:03');
-  await assertPassportPreviews(soloId, ['solo-preview-three', 'solo-preview-two']);
+  await assertPassportPreviews({ [soloId]: ['solo-preview-three', 'solo-preview-two'] });
+  reads = bucket.reads.length;
+  for (const id of ['solo-preview-one', 'duo-preview-one', 'duo-preview-two']) {
+    await request('/api/participant/assets/' + id, { cookie, expected: 404 });
+  }
+  assert.equal(bucket.reads.length, reads);
 
   db.sqlite.exec(`UPDATE registration_dances SET category='solo' WHERE id='dance-b';
     DELETE FROM registration_dance_participants WHERE dance_id='dance-b' AND participant_id='person-b';`);
-  await assertPassportPreviews(duoId, ['duo-preview-two', 'duo-preview-one']);
+  await assertPassportPreviews({ [duoId]: ['duo-preview-two', 'duo-preview-one'] });
   db.sqlite.prepare("UPDATE registration_dances SET title='Vuelo' WHERE id='dance-b'").run();
-  await assertPassportPreviews(soloId, ['solo-preview-three', 'solo-preview-two'], [soloId, duoId]);
+  await assertPassportPreviews({ [soloId]: ['solo-preview-three', 'solo-preview-two'] }, [soloId, duoId]);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 5);
 });
+
+test('a preview displaced from the global selection while private storage is reading returns no bytes', async t => {
+  const { admin, request, db, access, bucket } = await fixture(t);
+  db.sqlite.exec("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a')");
+  const { cookie } = await access();
+  const routines = [];
+  for (const danceId of ['dance-a', 'dance-b']) {
+    const saved = await admin({ action: 'routine.save', eventId: 'test-event', danceId, photosPublished: true });
+    await admin({ action: 'routine.publish', routineId: saved.data.routineId }); routines.push(saved.data.routineId);
+  }
+  async function upload(routineId, uploadId) {
+    const saved = await admin({ action: 'asset.upload', eventId: 'test-event', routineId, kind: 'photo', uploadId,
+      fileName: uploadId + '.jpg', contentType: 'image/jpeg', base64Data: photoSource.toString('base64') });
+    await admin({ action: 'asset.publish', assetId: saved.data.assetId, published: true });
+  }
+  await upload(routines[0], 'priority-solo-one'); await upload(routines[1], 'displaced-group-one');
+  const sourceGet = bucket.get.bind(bucket); let enter, release;
+  const entered = new Promise(resolve => { enter = resolve; });
+  const wait = new Promise(resolve => { release = resolve; });
+  bucket.get = async key => { const object = await sourceGet(key); enter(); await wait; return object; };
+  const pending = request('/api/participant/assets/displaced-group-one', { cookie, expected: 404 });
+  await Promise.race([entered, pending.then(() => assert.fail('the initially selected image must reach storage'))]);
+  try { await upload(routines[0], 'priority-solo-two'); } finally { release(); }
+  const response = await pending;
+  assert.equal(response.data.error.code, 'portal_asset_not_found');
+  assert.equal(response.data instanceof Uint8Array, false);
+});
+
+async function readyDraftPhoto(t) {
+  const f = await fixture(t), access = await f.access();
+  const routine = (await f.admin({ action: 'routine.save', eventId: 'test-event', danceId: 'dance-a', photosPublished: true })).data.routineId;
+  const asset = (await f.admin({ action: 'asset.upload', uploadId: 'ready-draft-preview', eventId: 'test-event', routineId: routine,
+    kind: 'photo', fileName: 'ready.jpg', contentType: 'image/jpeg', base64Data: photoSource.toString('base64'), allowDownload: true })).data.assetId;
+  await f.admin({ action: 'asset.publish', assetId: asset, published: true });
+  f.db.sqlite.prepare(`INSERT INTO participant_portal_drive_files(event_id,dance_id,source_file_id,source_version,source_folder_id,asset_id,status,publication_policy)
+    VALUES('test-event','dance-a','source-photo','v1','source-album',?,'ready','automatic')`).run(asset);
+  return { ...f, cookie: access.cookie, routine, asset };
+}
+
+test('ready previews on draft routines require their own current approvals and exact participant academy and venue', async t => {
+  const f = await readyDraftPhoto(t);
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM participant_portal_routines WHERE id=?').get(f.routine).status, 'draft');
+  let own = (await f.request('/api/participant/me', { cookie: f.cookie })).data.routines[0];
+  assert.equal(own.result.status, 'pending'); assert.equal(own.judging.status, 'pending');
+  assert.deepEqual(own.photos.items.map(photo => photo.id), [f.asset]);
+  await f.request('/api/participant/assets/' + f.asset, { cookie: f.cookie });
+  f.db.sqlite.exec("INSERT INTO registration_academies(id,name,contact_name,email) VALUES('foreign-academy','Otra Academia','Otro','other@example.test')");
+  const changes = [
+    ["UPDATE participant_portal_events SET published=0", "UPDATE participant_portal_events SET published=1"],
+    ["UPDATE participant_portal_assets SET published=0", "UPDATE participant_portal_assets SET published=1"],
+    ["UPDATE participant_portal_routines SET photos_published=0", "UPDATE participant_portal_routines SET photos_published=1"],
+    ["UPDATE participant_portal_routines SET publication_blocked=1", "UPDATE participant_portal_routines SET publication_blocked=0"],
+    ["UPDATE participant_portal_drive_album_settings SET publication_paused=1", "UPDATE participant_portal_drive_album_settings SET publication_paused=0"],
+    ["UPDATE participant_portal_drive_files SET publication_policy='held'", "UPDATE participant_portal_drive_files SET publication_policy='automatic'"],
+    ["UPDATE registration_dances SET venue='cdmx' WHERE id='dance-a'", "UPDATE registration_dances SET venue='edomex' WHERE id='dance-a'"],
+    ["UPDATE registration_dances SET academy_id='foreign-academy' WHERE id='dance-a'", "UPDATE registration_dances SET academy_id='academy' WHERE id='dance-a'"],
+    ["DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-a'",
+      "INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-a')"],
+  ];
+  for (const [withdraw, restore] of changes) {
+    f.db.sqlite.exec(withdraw); const reads = f.bucket.reads.length;
+    const data = (await f.request('/api/participant/me', { cookie: f.cookie })).data;
+    assert.deepEqual(data.routines.flatMap(routine => routine.photos.items), [], withdraw);
+    await f.request('/api/participant/assets/' + f.asset, { cookie: f.cookie, expected: 404 });
+    assert.equal(f.bucket.reads.length, reads, 'withdrawn previews are denied before storage: ' + withdraw);
+    f.db.sqlite.exec(restore);
+  }
+  own = (await f.request('/api/participant/me', { cookie: f.cookie })).data.routines[0];
+  assert.deepEqual(own.photos.items.map(photo => photo.id), [f.asset]);
+});
+
+for (const [label, withdraw] of [
+  ['album pause', "UPDATE participant_portal_drive_album_settings SET publication_paused=1"],
+  ['held file', "UPDATE participant_portal_drive_files SET publication_policy='held'"],
+  ['download permission', 'UPDATE participant_portal_assets SET allow_download=0'],
+]) {
+  test(`withdrawing ${label} during a ready photo download prevents private bytes`, { timeout: 5000 }, async t => {
+    const f = await readyDraftPhoto(t), sourceGet = f.bucket.get.bind(f.bucket);
+    let enter, release; const entered = new Promise(resolve => { enter = resolve; });
+    const wait = new Promise(resolve => { release = resolve; });
+    f.bucket.get = async key => { const object = await sourceGet(key); enter(); await wait; return object; };
+    const pending = f.request('/api/participant/assets/' + f.asset + '?download=1', { cookie: f.cookie, expected: 404 });
+    await Promise.race([entered, pending.then(() => assert.fail('the initially approved photo must reach storage'))]);
+    try { f.db.sqlite.exec(withdraw); } finally { release(); }
+    const response = await pending;
+    assert.equal(response.data.error.code, 'portal_asset_not_found');
+    assert.equal(response.data instanceof Uint8Array, false);
+  });
+}
 
 test('private portal requires its own QR grant and actual admin session; no CURP entry',async t=>{
   const {request,access,db}=await fixture(t);
@@ -437,6 +539,8 @@ test('admin preview reads every draft without publishing it, regardless of all p
     const eventPublished=Boolean(mask&1),routinePublished=Boolean(mask&2),photosPublished=Boolean(mask&4),assetsPublished=Boolean(mask&8),documentPublished=Boolean(mask&16);
     db.sqlite.prepare('UPDATE participant_portal_events SET published=? WHERE id=?').run(Number(eventPublished),'test-event');
     db.sqlite.prepare('UPDATE participant_portal_routines SET status=?,photos_published=? WHERE id=?').run(routinePublished?'published':'draft',Number(photosPublished),saved.data.routineId);
+    db.sqlite.prepare('UPDATE participant_portal_drive_album_settings SET publication_paused=? WHERE event_id=? AND dance_id=?')
+      .run(Number(!photosPublished),'test-event','dance-a');
     db.sqlite.prepare('UPDATE participant_portal_assets SET published=?').run(Number(assetsPublished));
     db.sqlite.prepare('UPDATE participant_portal_documents SET published=?').run(Number(documentPublished));
     const before=totalChanges(db);
@@ -464,7 +568,7 @@ test('admin preview reads every draft without publishing it, regardless of all p
     assert.equal(publicView.data.routines[0].judging.status,'pending','publication flags cannot substitute the explicit sheet release');
     assert.deepEqual(publicView.data.routines[0].judging.judges,[]);
     assert.equal(publicView.data.routines[0].judging.url,undefined);
-    assert.equal(publicView.data.routines[0].photos.count,eventPublished&&routinePublished&&photosPublished&&assetsPublished?1:0);
+    assert.equal(publicView.data.routines[0].photos.count,eventPublished&&photosPublished&&assetsPublished?1:0);
     assert.equal(publicView.data.diploma.status,eventPublished?'available':'pending');
     assert.doesNotMatch(JSON.stringify(publicView.data),/\/api\/registration\/admin|adminPreview|googleapis|drive\.google/);
     const readsBefore=bucket.reads.length;

@@ -100,6 +100,15 @@ function PhotoImage({ photo, className }: { photo: ParticipantPhoto; className?:
   );
 }
 
+function PhotoSyncNotice({ status, onRetry }: { status: ParticipantPhotoSyncStatus; onRetry: () => void }) {
+  if (status === 'ready') return null;
+  if (status === 'checking') return <p className="participant-status-copy" role="status">Estamos preparando tus fotografías…</p>;
+  return <div className={`participant-photo-sync-notice${status === 'unavailable' ? ' is-unavailable' : ''}`} role={status === 'unavailable' ? 'alert' : 'status'}>
+    <p>{status === 'unavailable' ? 'No pudimos preparar tus fotografías en este momento. Puedes volver a intentarlo.' : 'La preparación de tus fotografías sigue pendiente. Puedes volver a intentarlo.'}</p>
+    <button className="participant-button participant-button--outline" type="button" onClick={onRetry}>Volver a buscar fotos</button>
+  </div>;
+}
+
 function InternalPreviewBanner() {
   return (
     <div className="participant-preview-banner participant-preview-banner--internal">
@@ -198,12 +207,14 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   const [eventError, setEventError] = useState("");
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
   const [photoSyncStatus, setPhotoSyncStatus] = useState<ParticipantPhotoSyncStatus>('ready');
+  const [photoSyncAttempt, setPhotoSyncAttempt] = useState(0);
   const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [judgingDownloadBusy, setJudgingDownloadBusy] = useState(false);
   const [judgingDownloadMessage, setJudgingDownloadMessage] = useState("");
   const [judgingDownloadError, setJudgingDownloadError] = useState(false);
   const judgingGeneration = useRef(0);
+  const judgingRequest = useRef<AbortController | null>(null);
   const diplomaGeneration = useRef(0);
   const diplomaRequest = useRef<AbortController | null>(null);
   const assetGeneration = useRef(0);
@@ -216,6 +227,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   function cancelParticipantDownloads(clearMessages = true) {
     ++judgingGeneration.current;
+    judgingRequest.current?.abort();
     ++diplomaGeneration.current;
     ++assetGeneration.current;
     diplomaRequest.current?.abort();
@@ -364,7 +376,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
         setPhase('access');
       },
     });
-  }, [preview, isInternalPreview, phase, changingEvent, data?.participant.id, data?.selectedEventId]);
+  }, [preview, isInternalPreview, phase, changingEvent, data?.participant.id, data?.selectedEventId, photoSyncAttempt]);
 
   const routine = data?.routines.find((item) => item.id === selectedRoutineId) || data?.routines[0];
   const event = data?.events.find((item) => item.id === data.selectedEventId);
@@ -374,6 +386,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   }, [data?.participant.id, data?.selectedEventId, phase]);
   useEffect(() => {
     ++judgingGeneration.current;
+    judgingRequest.current?.abort();
     if (assetKind.current === "jueceo") {
       ++assetGeneration.current;
       assetRequest.current?.abort();
@@ -383,7 +396,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     setJudgingDownloadBusy(false);
     setJudgingDownloadMessage("");
     setJudgingDownloadError(false);
-    return () => { ++judgingGeneration.current; };
+    return () => { ++judgingGeneration.current; judgingRequest.current?.abort(); };
   }, [data?.participant.id, data?.selectedEventId, selectedRoutineId, phase]);
   const photos = useMemo(
     () =>
@@ -431,6 +444,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
 
   function selectRoutine(id: string) {
     ++judgingGeneration.current;
+    judgingRequest.current?.abort();
     setSelectedRoutineId(id);
     setPhotoIndex(null);
     setDownloadMessage("");
@@ -561,33 +575,75 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
   }
 
   async function downloadJudgingSheets() {
-    const descriptor = routine?.judging.pdf;
-    if (judgingDownloadBusy || changingEvent || !descriptor || !descriptor.judges.length) return;
+    const cached = routine?.judging.pdf;
+    const initial = refreshContext.current;
+    const participantId = initial.data?.participant.id;
+    const eventId = initial.data?.selectedEventId;
+    const routineId = routine?.id;
+    if (judgingDownloadBusy || changingEvent || initial.phase !== 'ready' || !participantId || !eventId
+      || !routineId || !cached || !cached.judges.length) return;
     // The server enforces ownership and publication. Keep internal draft
     // descriptors out of the participant download path as an additional guard.
-    if (!isInternalPreview && (descriptor.preview || routine.judging.status !== "available"
-      || descriptor.judges.some(judge => judge.status !== "complete"))) return;
+    if (!isInternalPreview && (cached.preview || routine.judging.status !== "available"
+      || cached.judges.some(judge => judge.status !== "complete"))) return;
     const generation = ++judgingGeneration.current;
+    const navigation = accessNavigation.current;
+    const controller = new AbortController();
+    judgingRequest.current?.abort();
+    judgingRequest.current = controller;
+    const isCurrent = () => !controller.signal.aborted && generation === judgingGeneration.current
+      && navigation === accessNavigation.current && refreshContext.current.phase === 'ready'
+      && !refreshContext.current.changingEvent && refreshContext.current.data?.participant.id === participantId
+      && refreshContext.current.data.selectedEventId === eventId;
     setJudgingDownloadBusy(true);
     setJudgingDownloadMessage("");
     setJudgingDownloadError(false);
     try {
+      const latest = preview ? initial.data! : isInternalPreview
+        ? await openParticipantAdminPreview(new URLSearchParams({ participantId, eventId }).toString(), controller.signal)
+        : await participantRequest<ParticipantPortalData>(`/api/participant/me?eventId=${encodeURIComponent(eventId)}`, { signal: controller.signal });
+      if (!isCurrent()) return;
+      if (latest.participant?.id !== participantId || latest.selectedEventId !== eventId
+        || !Array.isArray(latest.events) || !latest.events.some(item => item.id === eventId)
+        || !Array.isArray(latest.routines)) throw new Error('No pudimos verificar las hojas actuales de esta presentación.');
+      const matches = latest.routines.filter(item => item.id === routineId && item.eventId === eventId);
+      const fresh = matches.length === 1 ? matches[0] : undefined;
+      const descriptor = fresh?.judging.pdf;
+      if (!fresh || !descriptor || descriptor.routine?.id !== cached.routine.id || !Array.isArray(descriptor.judges)
+        || !descriptor.judges.length || descriptor.judges.some(judge => typeof judge.id !== 'string' || !judge.id.trim())
+        || new Set(descriptor.judges.map(judge => judge.id)).size !== descriptor.judges.length) {
+        throw new Error('Estas hojas cambiaron o todavía no están habilitadas. Actualiza tu espacio e intenta de nuevo.');
+      }
+      if (!isInternalPreview) {
+        const approved = new Set(fresh.judging.judges.flatMap(judge => 'id' in judge && typeof judge.id === 'string'
+          && 'status' in judge && judge.status === 'complete' ? [judge.id] : []));
+        if (descriptor.preview || fresh.judging.status !== 'available' || fresh.judging.source !== 'jueceocore'
+          || fresh.judging.sourceStatus !== 'available' || descriptor.judges.some(judge => !approved.has(judge.id)
+            || judge.status !== 'complete' || !Number.isFinite(judge.penalty) || !Array.isArray(judge.criteria) || !judge.criteria.length
+            || judge.criteria.some(criterion => typeof criterion.value !== 'number' || !Number.isFinite(criterion.value)
+              || !Number.isFinite(criterion.maximumScore) || criterion.value < 0 || criterion.value > criterion.maximumScore))) {
+          throw new Error('Estas hojas cambiaron o todavía no están habilitadas. Actualiza tu espacio e intenta de nuevo.');
+        }
+      }
       const { generateParticipantJudgingPdf } = await import("../../../shared/participant-judging-sheet.js");
-      if (generation !== judgingGeneration.current) return;
+      if (!isCurrent()) return;
       const bytes = await generateParticipantJudgingPdf({ ...descriptor, preview: isInternalPreview || descriptor.preview });
-      if (generation !== judgingGeneration.current) return;
-      const routineName = descriptor.routine.id.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 70);
+      if (!isCurrent()) return;
+      const routineName = descriptor.routine.title.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70) || 'presentacion';
+      const sourceId = descriptor.routine.id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 70);
       startBrowserDownload(prepareBrowserDownload(
         new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
-        `${isInternalPreview ? "revision-interna-" : ""}levitate-jueceo-${routineName}.pdf`,
+        `${isInternalPreview ? "revision-interna-" : ""}levitate-jueceo-${routineName}-${sourceId}.pdf`,
       ));
       setJudgingDownloadMessage("Tus hojas de jueceo están listas. Revisa las descargas de tu navegador.");
     } catch (cause) {
-      if (generation !== judgingGeneration.current) return;
+      if (!isCurrent()) return;
       setJudgingDownloadError(true);
       setJudgingDownloadMessage(cause instanceof Error ? cause.message
         : "No pudimos preparar tus hojas de jueceo. Intenta de nuevo.");
     } finally {
+      if (judgingRequest.current === controller) judgingRequest.current = null;
       if (generation === judgingGeneration.current) setJudgingDownloadBusy(false);
     }
   }
@@ -932,7 +988,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
           id="tus-fotos"
           data-participant-chapter
           aria-labelledby="participant-gallery-title"
-          aria-busy={changingEvent}
+          aria-busy={changingEvent || photoSyncStatus === 'checking'}
         >
           <div className="participant-chapter__inner">
             <header className="participant-chapter-heading" data-participant-reveal>
@@ -940,7 +996,10 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 Tus fotos<span>.</span>
               </h2>
             </header>
-            {photoSyncStatus === 'checking' && <p className="participant-status-copy" role="status">Estamos preparando tus fotografías…</p>}
+            {!changingEvent && <PhotoSyncNotice status={photoSyncStatus} onRetry={() => {
+              setPhotoSyncStatus('checking');
+              setPhotoSyncAttempt(value => value + 1);
+            }} />}
             <div className="participant-gallery__offer" data-participant-reveal>
               <div>
                 <h3>Revive tu paso por el escenario.</h3>

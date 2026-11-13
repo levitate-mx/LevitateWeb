@@ -1,22 +1,34 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
+import { renderToStaticMarkup } from 'react-dom/server';
 import test from 'node:test';
 import ts from 'typescript';
 
 const helper = await readFile(new URL('../src/components/participant/participantPhotoSync.ts', import.meta.url), 'utf8');
 const page = await readFile(new URL('../src/components/participant/ParticipantPage.tsx', import.meta.url), 'utf8');
 const syntax = ts.createSourceFile('ParticipantPage.tsx', page, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-let photoEffect;
+let photoEffect, photoEffectDependencies, retryAction;
+const require = createRequire(import.meta.url);
 function visit(node) {
   if (ts.isCallExpression(node) && node.expression.getText(syntax) === 'useEffect'
-    && node.arguments[0]?.getText(syntax).includes('return startParticipantPhotoSync')) photoEffect = node.arguments[0].getText(syntax);
+    && node.arguments[0]?.getText(syntax).includes('return startParticipantPhotoSync')) {
+    photoEffect = node.arguments[0].getText(syntax);
+    photoEffectDependencies = node.arguments[1].getText(syntax);
+  }
+  if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(syntax) === 'PhotoSyncNotice') {
+    const retry = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(syntax) === 'onRetry');
+    retryAction = retry?.initializer?.expression?.getText(syntax);
+  }
   ts.forEachChild(node, visit);
 }
 visit(syntax);
 assert.ok(photoEffect, 'the real passport mounts automatic photo synchronization');
-const compile = source => ts.transpileModule(source, { compilerOptions: {
-  target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
+assert.ok(retryAction, 'the gallery provides an explicit photo retry action');
+const notice = syntax.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'PhotoSyncNotice').getText(syntax);
+const compile = (source, jsx = false) => ts.transpileModule(source, { fileName: jsx ? 'photo-sync-ui.tsx' : 'photo-sync-ui.ts', compilerOptions: {
+  target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
 } }).outputText;
 const clone = value => JSON.parse(JSON.stringify(value));
 const profile = (changes = {}) => ({ participant: { id: 'alison', name: 'Alison', academy: 'Danzarale' },
@@ -28,17 +40,18 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function harness(overrides = {}) {
   const timers = new Map(), requests = [], updates = [], statuses = [];
   let sequence = 0;
-  const scope = { exports: {}, AbortController, URLSearchParams,
+  const scope = { exports: {}, require, AbortController, URLSearchParams,
     setTimeout(callback, delay) { const id = ++sequence; timers.set(id, { callback, delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
   };
   vm.runInNewContext(compile(helper), scope);
   Object.assign(scope, {
-    preview: false, isInternalPreview: false, phase: 'ready', changingEvent: false,
+    preview: false, isInternalPreview: false, phase: 'ready', changingEvent: false, photoSyncAttempt: 0, photoSyncStatus: 'ready',
     data: profile(), accessNavigation: { current: 0 }, eventRequest: { current: new AbortController() },
     photoIndex: 1, selected: 'beyond', error: '', canceledDownloads: 0,
     setData(value) { scope.data = value; scope.refreshContext.current.data = value; updates.push(value); },
-    setPhotoSyncStatus(status) { statuses.push(status); },
+    setPhotoSyncStatus(status) { scope.photoSyncStatus = status; statuses.push(status); },
+    setPhotoSyncAttempt(value) { scope.photoSyncAttempt = typeof value === 'function' ? value(scope.photoSyncAttempt) : value; },
     setSelectedRoutineId(value) { scope.selected = typeof value === 'function' ? value(scope.selected) : value; },
     setPhotoIndex(value) { scope.photoIndex = value; },
     setError(value) { scope.error = value; },
@@ -52,9 +65,24 @@ function harness(overrides = {}) {
     ...scope.exports, ...overrides,
   });
   scope.refreshContext = { current: { data: scope.data, phase: scope.phase, changingEvent: scope.changingEvent } };
-  vm.runInNewContext(compile(`exports.mount = ${photoEffect};`), scope);
-  const stop = scope.exports.mount();
-  return { scope, requests, updates, statuses, timers, stop,
+  vm.runInNewContext(compile(`${notice}
+exports.notice = PhotoSyncNotice; exports.retry = ${retryAction}; exports.dependencies = () => ${photoEffectDependencies}; exports.mount = ${photoEffect};`, true), scope);
+  let dependencies = scope.exports.dependencies();
+  let stop = scope.exports.mount();
+  const noticeView = () => scope.exports.notice({ status: scope.photoSyncStatus, onRetry: () => {
+    scope.exports.retry();
+    const next = scope.exports.dependencies();
+    if (next.some((value, index) => !Object.is(value, dependencies[index]))) {
+      stop?.(); dependencies = next; stop = scope.exports.mount();
+    }
+  } });
+  return { scope, requests, updates, statuses, timers, get stop() { return stop; }, notice: noticeView,
+    retry() {
+      const element = noticeView();
+      const button = element?.props.children?.find?.(child => child?.type === 'button');
+      assert.ok(button, 'retry must be an actual gallery button');
+      button.props.onClick();
+    },
     fire(delay) { for (const [id, timer] of [...timers]) if (timer.delay === delay) { timers.delete(id); timer.callback(); } },
   };
 }
@@ -189,4 +217,82 @@ test('opening is bounded to twelve processing steps instead of an unbounded loop
   }
   assert.equal(view.requests.length, 12); assert.equal(view.statuses.at(-1), 'pending'); assert.equal(view.timers.size, 0);
   view.stop();
+});
+
+test('a pending search remains pending and offers a visible retry without claiming the photos are ready', async () => {
+  const view = harness();
+  view.requests[0].resolve(result({ status: 'pending', hasMore: false })); await flush();
+  assert.equal(view.statuses.at(-1), 'pending');
+  assert.equal(view.requests.length, 1);
+  const html = renderToStaticMarkup(view.notice());
+  assert.match(html, /role="status"/);
+  assert.match(html, /La preparación de tus fotografías sigue pendiente/);
+  assert.match(html, /Volver a buscar fotos/);
+  assert.doesNotMatch(html, /bloque|Drive|CURP|listas|preparando/i);
+  assert.equal(view.scope.phase, 'ready');
+  assert.equal(view.scope.selected, 'beyond');
+  view.stop();
+});
+
+test('a temporary photo failure is visible and its retry restarts only photo work while preserving the passport', async () => {
+  const existing = profile({ routines: [{ id: 'beyond', photos: { count: 1, items: [{ id: 'existing-photo' }] } }] });
+  const view = harness({ data: existing });
+  const before = clone(view.scope.data);
+  view.requests[0].reject({ status: 503 }); await flush();
+  assert.equal(view.statuses.at(-1), 'unavailable');
+  let html = renderToStaticMarkup(view.notice());
+  assert.match(html, /role="alert"/);
+  assert.match(html, /No pudimos preparar tus fotografías en este momento/);
+  assert.match(html, /Volver a buscar fotos/);
+  assert.doesNotMatch(html, /portal_photo_source_not_private|Drive|CURP/);
+  assert.deepEqual(view.scope.data, before);
+  assert.equal(view.scope.canceledDownloads, 0);
+  view.retry();
+  assert.equal(view.scope.photoSyncAttempt, 1);
+  assert.equal(view.scope.phase, 'ready');
+  assert.equal(view.scope.selected, 'beyond');
+  assert.deepEqual(view.scope.data, before);
+  assert.equal(view.requests.length, 2, 'one click starts one fresh photo batch');
+  assert.equal(view.requests[0].options.signal.aborted, true);
+  assert.equal(view.requests[1].path, '/api/participant/photos/sync');
+  assert.deepEqual(JSON.parse(view.requests[1].options.body), { eventId: 'edomex-2026' });
+  html = renderToStaticMarkup(view.notice());
+  assert.match(html, /Estamos preparando tus fotografías/);
+  assert.doesNotMatch(html, /<button|Volver a buscar/);
+  view.requests[1].resolve(result({ status: 'pending', hasMore: false })); await flush();
+  assert.equal(view.statuses.at(-1), 'pending');
+  view.retry();
+  assert.equal(view.scope.photoSyncAttempt, 2);
+  assert.equal(view.requests.length, 3);
+  view.requests[2].resolve(result({ status: 'ready', imported: 1 })); await flush();
+  assert.equal(view.requests[3].path, '/api/participant/me?eventId=edomex-2026');
+  const updated = profile({ routines: [{ id: 'beyond', photos: { count: 2, items: [{ id: 'existing-photo' }, { id: 'new-photo' }] } }] });
+  view.requests[3].resolve(updated); await flush();
+  assert.equal(view.statuses.at(-1), 'ready');
+  assert.equal(view.notice(), null, 'a successful refreshed gallery removes the retry notice');
+  assert.equal(view.scope.selected, 'beyond');
+  assert.equal(view.scope.phase, 'ready');
+  assert.equal(view.scope.data.routines[0].photos.items.length, 2);
+  assert.ok(view.requests.every(request => !request.path.includes('session') && !request.path.includes('login')));
+  view.stop();
+});
+
+test('a server unavailable result stays unavailable and late retry responses cannot affect a different edition', async () => {
+  for (const reject of [false, true]) {
+    const view = harness();
+    view.requests[0].resolve(result({ status: 'unavailable', hasMore: false })); await flush();
+    assert.equal(view.statuses.at(-1), 'unavailable');
+    assert.match(renderToStaticMarkup(view.notice()), /No pudimos preparar/);
+    view.retry();
+    const pending = view.requests[1];
+    view.scope.accessNavigation.current++;
+    view.scope.refreshContext.current.data = profile({ selectedEventId: 'other-edition' });
+    if (reject) pending.reject({ status: 401 }); else pending.resolve(result({ status: 'ready', imported: 1 }));
+    await flush();
+    assert.equal(view.updates.length, 0);
+    assert.equal(view.requests.length, 2);
+    assert.equal(view.scope.phase, 'ready');
+    assert.equal(view.scope.canceledDownloads, 0);
+    view.stop();
+  }
 });

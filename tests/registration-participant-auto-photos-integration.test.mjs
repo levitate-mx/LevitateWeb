@@ -165,21 +165,46 @@ test('a personal passport generates and stores a real marked JPEG for only its o
   await f.call('/api/participant/assets/' + asset.id, { cookie: other.cookie, expected: 404 });
 });
 
-test('generated assets continue to obey routine, block and edition publication gates', async t => {
+test('a synchronized preview is immediately available on a draft routine while grades stay pending and independent photo withdrawals still apply', async t => {
   const f = await fixture(t), { cookie } = await f.access();
   await f.sync(cookie);
   const routine = f.db.sqlite.prepare('SELECT * FROM participant_portal_routines').get();
   const asset = f.db.sqlite.prepare('SELECT * FROM participant_portal_assets').get();
-  assert.equal((await f.call('/api/participant/me', { cookie })).data.routines[0].photos.count, 0, 'new draft routine stays hidden');
-  await f.admin({ action: 'routine.publish', routineId: routine.id });
-  assert.equal((await f.call('/api/participant/me', { cookie })).data.routines[0].photos.count, 1);
+  assert.equal(routine.status, 'draft'); assert.equal(routine.result_json, null); assert.equal(routine.judging_json, null);
+  async function assertReadyPhotoAndPendingGrades() {
+    const own = (await f.call('/api/participant/me', { cookie })).data.routines[0];
+    assert.equal(own.photos.count, 1); assert.deepEqual(own.photos.items.map(photo => photo.id), [asset.id]);
+    assert.equal(own.result.status, 'pending'); assert.equal(own.judging.status, 'pending');
+    assert.deepEqual(own.judging.judges, []);
+  }
+  await assertReadyPhotoAndPendingGrades();
   const image = await f.call('/api/participant/assets/' + asset.id, { cookie });
   assert.equal(image.response.headers.get('content-type'), 'image/jpeg');
   assert.equal(image.response.headers.get('cache-control'), 'private, no-store');
+  assert.equal((await validatePreparedParticipantPhoto(image.data)).sha256, asset.sha256);
   f.db.sqlite.prepare("INSERT INTO participant_portal_publication_settings(event_id,mode,operation_nonce) VALUES(?,'block_close','test-operation')").run(editionId);
-  assert.equal((await f.call('/api/participant/me', { cookie })).data.routines[0].photos.count, 0, 'uncleared block keeps generated assets pending');
+  for (const automaticCompletion of [0, 1]) {
+    f.db.sqlite.prepare('UPDATE participant_portal_publication_settings SET automatic_completion=? WHERE event_id=?').run(automaticCompletion, editionId);
+    await assertReadyPhotoAndPendingGrades();
+    await f.call('/api/participant/assets/' + asset.id, { cookie });
+  }
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM participant_portal_routines').get().status, 'draft', 'opening a photo never publishes the routine');
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_judging_sheet_releases').get().n, 0);
+
+  await f.admin({ action: 'asset.publish', assetId: asset.id, published: false });
+  assert.equal(f.db.sqlite.prepare('SELECT publication_policy FROM participant_portal_drive_files').get().publication_policy, 'held');
+  assert.equal((await f.call('/api/participant/me', { cookie })).data.routines[0].photos.count, 0);
   await f.call('/api/participant/assets/' + asset.id, { cookie, expected: 404 });
-  f.db.sqlite.prepare("UPDATE participant_portal_publication_settings SET mode='individual' WHERE event_id=?").run(editionId);
+  assert.equal((await f.sync(cookie)).data.imported, 0, 'checking again cannot reapprove a held photo');
+  await f.admin({ action: 'asset.publish', assetId: asset.id, published: true });
+  await assertReadyPhotoAndPendingGrades();
+
+  await f.admin({ action: 'routine.unpublish', routineId: routine.id });
+  assert.equal((await f.call('/api/participant/me', { cookie })).data.routines[0].photos.count, 0);
+  await f.call('/api/participant/assets/' + asset.id, { cookie, expected: 404 });
+  f.db.sqlite.prepare('UPDATE participant_portal_routines SET publication_blocked=0 WHERE id=?').run(routine.id);
+  await assertReadyPhotoAndPendingGrades();
+
   f.db.sqlite.prepare('UPDATE participant_portal_events SET published=0 WHERE id=?').run(editionId);
   assert.equal((await f.call('/api/participant/me', { cookie })).data.routines[0].photos.count, 0);
   await f.call('/api/participant/assets/' + asset.id, { cookie, expected: 404 });

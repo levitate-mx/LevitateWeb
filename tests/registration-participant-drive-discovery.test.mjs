@@ -22,7 +22,12 @@ function item(id, parent, extra = {}) {
 const publicMetadata = value => { const { bytes, ...metadata } = value; return structuredClone(metadata); };
 function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hierarchy ? PARTICIPANT_PHOTO_ACCOUNT : owner } = {}) {
   const files = new Map(), calls = [], sessions = new Map();
-  const state = { files, intercept, next: 0, tokenCalls: 0, thumbnailBytes, quota: { limit: "15000000000", usage: "1000" } };
+  const state = { files, intercept, next: 0, tokenCalls: 0, thumbnailBytes, omitFilePermissions: new Set(), quota: { limit: "15000000000", usage: "1000" } };
+  const exposedMetadata = value => {
+    const metadata = publicMetadata(value);
+    if (state.omitFilePermissions.has(value.id)) delete metadata.permissions;
+    return metadata;
+  };
   files.set(rootId, item(rootId, "my_drive_root_000001", { appProperties: { levitatePhotoAlbum: demo ? "demo_root_v1" : "source_root_v1", ...(demo ? { demo: "true" } : {}) } }));
   files.set(albumId, item(albumId, rootId, { name: albumName + (demo ? " · DEMO" : ""),
     webViewLink: `https://drive.google.com/drive/folders/${albumId}`, appProperties: { levitatePhotoAlbum: demo ? "demo_album_v1" : "source_album_v1", ...scopeProperties, ...(demo ? { demo: "true" } : {}) } }));
@@ -61,17 +66,20 @@ function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hier
       assert.equal(options.method, "GET");
       const q = url.searchParams.get("q");
       const parent = q.match(/^'([^']+)' in parents/)?.[1]; assert.ok(parent);
-      assert.match(q, /'me' in owners/); assert.match(q, /trashed = false/);
+      assert.match(q, /trashed = false/);
       const props = new Map();
       for (const [, name, value] of q.matchAll(/appProperties has \{ key='([^']+)' and value='([^']+)' \}/g)) {
         const expected = props.get(name) || []; expected.push(value); props.set(name, expected);
       }
       const types = [...q.matchAll(/mimeType\s*=\s*'([^']+)'/g)].map(match => match[1]);
+      if (hierarchy && types.includes("image/jpeg")) assert.doesNotMatch(q, /'me' in owners/);
+      else assert.match(q, /'me' in owners/);
       const result = [...files.values()].filter(value => !value.trashed
         && value.parents.includes(parent === "root" ? "my_drive_root_000001" : parent)
+        && (!q.includes("'me' in owners") || value.owners.some(value => value.emailAddress === aboutOwner))
         && (!types.length || types.includes(value.mimeType))
         && [...props].every(([name, values]) => values.includes(value.appProperties?.[name])));
-      return Response.json({ files: result.map(publicMetadata) });
+      return Response.json({ files: result.map(exposedMetadata) });
     }
     if (url.pathname === "/upload/drive/v3/files" && options.method === "POST") {
       const metadata = JSON.parse(options.body);
@@ -87,6 +95,14 @@ function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hier
         imageMediaMetadata: { width: 640, height: 480 }, md5Checksum: hash(bytes, "md5"), version: "1" }));
       return Response.json({ id: metadata.id });
     }
+    const permissionsMatch = url.pathname.match(/^\/drive\/v3\/files\/([A-Za-z0-9_-]+)\/permissions$/);
+    if (permissionsMatch) {
+      assert.equal(options.method, "GET");
+      assert.equal(url.searchParams.get("pageSize"), "100");
+      assert.equal(url.searchParams.get("supportsAllDrives"), "true");
+      assert.match(url.searchParams.get("fields"), /emailAddress/);
+      return Response.json({ permissions: structuredClone(files.get(permissionsMatch[1]).permissions) });
+    }
     const matched = url.pathname.match(/^\/drive\/v3\/files\/([A-Za-z0-9_-]+)$/);
     if (matched) {
       const value = files.get(matched[1]); if (!value) return new Response("SYNTHETIC_PROVIDER_DETAIL", { status: 404 });
@@ -97,7 +113,7 @@ function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hier
       }
       assert.equal(options.method, "GET");
       if (url.searchParams.get("alt") === "media") return new Response(value.bytes, { headers: { "content-type": value.mimeType, "content-length": value.size } });
-      return Response.json(publicMetadata(value));
+      return Response.json(exposedMetadata(value));
     }
     throw new Error(`Unexpected fixture route ${url.pathname}`);
   };
@@ -300,7 +316,7 @@ test("hierarchy rechecks academy, album and photo scope around a thumbnail read"
   for (const change of ["academy-privacy", "academy-scope", "album-scope", "photo-scope"]) {
     const f = fixture({ hierarchy: true, intercept({ url }, state) {
       if (url.hostname !== "lh3.googleusercontent.com") return;
-      if (change === "academy-privacy") state.files.get("academy_folder_000001").shared = true;
+      if (change === "academy-privacy") state.files.get("academy_folder_000001").permissions.push({ type: "anyone", role: "reader" });
       if (change === "academy-scope") state.files.get("academy_folder_000001").appProperties.levitateAcademyId = "foreign-academy";
       if (change === "album-scope") state.files.get(albumId).appProperties.levitateDanceId = "foreign-dance";
       if (change === "photo-scope") state.files.get(sourceId).appProperties.levitateDanceId = "foreign-dance";
@@ -316,4 +332,217 @@ test("hierarchy is explicit, limited to Ati, and cannot invoke the legacy demo m
   await assert.rejects((await f.reader()).prepareDemoSource({}), controlled("portal_photo_source_invalid", 400));
   assert.equal(f.calls.length, 0);
   assert.equal((await fixture().reader()).identityScope, "participant");
+});
+
+const photographer = "photographer@example.test";
+function namedSharing(f, atiRole = "reader") {
+  for (const file of f.files.values()) {
+    file.shared = true;
+    file.permissions.push({ type: "user", role: "writer", emailAddress: photographer });
+  }
+  const photo = f.files.get(sourceId);
+  photo.owners = [{ emailAddress: photographer }];
+  photo.permissions = [{ type: "user", role: "owner", emailAddress: photographer },
+    { type: "user", role: atiRole, emailAddress: PARTICIPANT_PHOTO_ACCOUNT }];
+}
+
+test("restricted named sharing keeps Ati-owned folders and accepts a photographer-owned photo readable by Ati", async () => {
+  for (const role of ["reader", "commenter", "writer"]) {
+    const f = fixture({ hierarchy: true }); namedSharing(f, role);
+    if (role === "writer") delete f.files.get(sourceId).thumbnailLink;
+    const result = await (await f.reader()).discover(context);
+    assert.equal(result.albums[0].photos[0].id, sourceId);
+    assert.deepEqual((await result.albums[0].photos[0].read()).bytes, role === "writer" ? sourceBytes : thumbnailBytes);
+    assert.equal(writes(f).length, 0, "discovery must never change sharing or upload files");
+    const lists = f.calls.filter(({ url }) => url.pathname === "/drive/v3/files");
+    assert.ok(lists.filter(({ url }) => !url.searchParams.get("q").includes("image/jpeg"))
+      .every(({ url }) => url.searchParams.get("q").includes("'me' in owners")), "folder lookup stays limited to Ati ownership");
+    assert.doesNotMatch(JSON.stringify(result), /photographer@example|ati\.levitate|googleusercontent|permissions|SYNTHETIC_PRIVATE/);
+  }
+});
+
+test("a photo owned by Ati also accepts only named reader, commenter or writer collaborators", async () => {
+  for (const role of ["reader", "commenter", "writer"]) {
+    const f = fixture({ hierarchy: true });
+    for (const file of f.files.values()) {
+      file.shared = true;
+      file.permissions.push({ type: "user", role, emailAddress: photographer });
+    }
+    const result = await (await f.reader()).discover(context);
+    assert.deepEqual((await result.albums[0].photos[0].read()).bytes, thumbnailBytes);
+    assert.equal(writes(f).length, 0);
+  }
+});
+
+test("every hierarchy level rejects public, group, domain, unnamed or unsupported grants", async () => {
+  const unsafeGrants = [
+    { type: "anyone", role: "reader" },
+    { type: "anyone", role: "reader", permissionDetails: [{ inherited: true }] },
+    { type: "domain", role: "reader", domain: "example.test" },
+    { type: "group", role: "reader", emailAddress: "group@example.test" },
+    { type: "user", role: "reader" },
+    { type: "user", role: "reader", emailAddress: "not-an-email" },
+    { type: "user", role: "organizer", emailAddress: photographer },
+    { type: "user", role: "reader", emailAddress: photographer, domain: "example.test" },
+    { type: "user", role: "reader", emailAddress: photographer, deleted: true },
+  ];
+  for (const changedId of [rootId, "academy_folder_000001", albumId, sourceId]) {
+    for (const grant of unsafeGrants) {
+      const f = fixture({ hierarchy: true });
+      f.files.get(changedId).shared = true;
+      f.files.get(changedId).permissions.push(grant);
+      await assert.rejects((await f.reader()).discover(context), controlled("portal_photo_source_not_private"), `${changedId}: ${JSON.stringify(grant)}`);
+      assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+    }
+  }
+});
+
+test("folders remain Ati-owned even when a foreign owner grants Ati read access", async () => {
+  for (const changedId of [rootId, "academy_folder_000001", albumId]) {
+    const f = fixture({ hierarchy: true, intercept({ url }, state) {
+      if (url.pathname !== `/drive/v3/files/${changedId}`) return;
+      const folder = state.files.get(changedId);
+      folder.owners = [{ emailAddress: photographer }]; folder.shared = true;
+      folder.permissions = [{ type: "user", role: "owner", emailAddress: photographer },
+        { type: "user", role: "reader", emailAddress: PARTICIPANT_PHOTO_ACCOUNT }];
+    } });
+    await assert.rejects((await f.reader()).discover(context), controlled("portal_photo_source_not_private"));
+    assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+  }
+});
+
+test("photographer originals require one matching owner, Ati access and exactly the trusted album parent", async () => {
+  for (const change of ["no-ati-access", "wrong-owner-permission", "two-owners", "two-owner-permissions", "invalid-owner", "duplicate-user", "two-parents", "shared-drive", "cannot-download"]) {
+    const f = fixture({ hierarchy: true }); namedSharing(f);
+    const photo = f.files.get(sourceId);
+    if (change === "no-ati-access") photo.permissions.pop();
+    if (change === "wrong-owner-permission") photo.permissions[0].emailAddress = "stranger@example.test";
+    if (change === "two-owners") photo.owners.push({ emailAddress: PARTICIPANT_PHOTO_ACCOUNT });
+    if (change === "two-owner-permissions") photo.permissions[1].role = "owner";
+    if (change === "invalid-owner") photo.owners[0].emailAddress = photo.permissions[0].emailAddress = "invalid";
+    if (change === "duplicate-user") photo.permissions.push({ type: "user", role: "reader", emailAddress: photographer });
+    if (change === "two-parents") photo.parents.push("foreign_album_000001");
+    if (change === "shared-drive") photo.driveId = "shared_drive_000001";
+    if (change === "cannot-download") photo.capabilities.canDownload = false;
+    await assert.rejects((await f.reader()).discover(context), controlled(change === "cannot-download" ? "portal_photo_source_unavailable" : "portal_photo_source_not_private"), change);
+    assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+  }
+  const f = fixture({ hierarchy: true }); namedSharing(f);
+  f.files.get(sourceId).parents = ["foreign_album_000001"];
+  const result = await (await f.reader()).discover(context);
+  assert.equal(result.albums[0].photos.length, 0, "an unrelated photo is never discovered through an old album binding");
+  assert.equal(imageReads(f).length, 0);
+});
+
+test("reader-only photo metadata uses a bounded read-only permissions lookup and checks it again after downloading", async () => {
+  const f = fixture({ hierarchy: true }); namedSharing(f);
+  f.state.omitFilePermissions.add(sourceId);
+  const result = await (await f.reader()).discover(context);
+  assert.deepEqual((await result.albums[0].photos[0].read()).bytes, thumbnailBytes);
+  const aclReads = f.calls.filter(({ url }) => url.pathname.endsWith(`/${sourceId}/permissions`));
+  assert.equal(aclReads.length, 3, "check complete permissions during discovery, before reading and after reading");
+  assert.equal(writes(f).length, 0);
+});
+
+test("missing photo ACL fails closed for unavailable, paginated or publicly shared permission lists", async () => {
+  for (const change of ["unavailable", "paginated", "public"]) {
+    const f = fixture({ hierarchy: true, intercept({ url }, state) {
+      if (!url.pathname.endsWith(`/${sourceId}/permissions`)) return;
+      if (change === "unavailable") return new Response(null, { status: 403 });
+      return Response.json({ permissions: state.files.get(sourceId).permissions,
+        ...(change === "paginated" ? { nextPageToken: "more_permissions" } : {}) });
+    } });
+    namedSharing(f); f.state.omitFilePermissions.add(sourceId);
+    if (change === "public") f.files.get(sourceId).permissions.push({ type: "anyone", role: "reader" });
+    await assert.rejects((await f.reader()).discover(context), controlled(change === "unavailable" ? "portal_photo_source_unavailable" : "portal_photo_source_not_private"));
+    assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+  }
+});
+
+test("a removed Ati grant after discovery blocks a photographer original before loading bytes", async () => {
+  const f = fixture({ hierarchy: true }); namedSharing(f); f.state.omitFilePermissions.add(sourceId);
+  const result = await (await f.reader()).discover(context);
+  f.files.get(sourceId).permissions = [{ type: "user", role: "owner", emailAddress: photographer }];
+  await assert.rejects(result.albums[0].photos[0].read(), controlled("portal_photo_source_not_private"));
+  assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+});
+
+test("shared-original reads reject lost access, public permissions, moved parents or changed revisions before returning bytes", async () => {
+  for (const change of ["ati-removed", "public-root", "public-academy", "public-album", "public-photo", "photo-parent", "album-parent", "foreign-folder-owner", "revision"]) {
+    const f = fixture({ hierarchy: true, intercept({ url }, state) {
+      if (url.hostname !== "lh3.googleusercontent.com") return;
+      if (change === "ati-removed") state.files.get(sourceId).permissions.pop();
+      if (change.startsWith("public-")) {
+        const target = { "public-root": rootId, "public-academy": "academy_folder_000001", "public-album": albumId, "public-photo": sourceId }[change];
+        state.files.get(target).permissions.push({ type: "anyone", role: "reader" });
+      }
+      if (change === "photo-parent") state.files.get(sourceId).parents = ["foreign_album_000001"];
+      if (change === "album-parent") state.files.get(albumId).parents = ["foreign_academy_0001"];
+      if (change === "foreign-folder-owner") {
+        const album = state.files.get(albumId);
+        album.owners = [{ emailAddress: photographer }];
+        album.permissions = [{ type: "user", role: "owner", emailAddress: photographer },
+          { type: "user", role: "reader", emailAddress: PARTICIPANT_PHOTO_ACCOUNT }];
+      }
+      if (change === "revision") state.files.get(sourceId).md5Checksum = "a".repeat(32);
+    } });
+    namedSharing(f); f.state.omitFilePermissions.add(sourceId);
+    const result = await (await f.reader()).discover(context);
+    await assert.rejects(result.albums[0].photos[0].read(), controlled(change === "revision" ? "portal_photo_source_changed" : "portal_photo_source_not_private", change === "revision" ? 409 : 503), change);
+    assert.equal(imageReads(f).length, 1); assert.equal(writes(f).length, 0);
+  }
+});
+
+test("legacy sources retain owner-only access even for explicitly named collaborators", async () => {
+  for (const changedId of [rootId, albumId, sourceId]) {
+    const f = fixture();
+    f.files.get(changedId).shared = true;
+    f.files.get(changedId).permissions.push({ type: "user", role: "reader", emailAddress: photographer });
+    await assert.rejects((await f.reader()).discover(context), controlled("portal_photo_source_not_private"));
+    assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+  }
+});
+
+function addHierarchyDance(f, dance, photoCount) {
+  const danceAlbumId = `album_for_${dance.id}_000001`;
+  f.files.set(danceAlbumId, { ...structuredClone(f.files.get(albumId)), id: danceAlbumId, name: dance.title,
+    appProperties: { ...f.files.get(albumId).appProperties, levitateDanceId: dance.id } });
+  for (let index = 0; index < photoCount; index++) {
+    const id = `photo_for_${dance.id}_${index}_0001`;
+    f.files.set(id, { ...structuredClone(f.files.get(sourceId)), id, name: `${index}.jpg`, parents: [danceAlbumId] });
+  }
+  return danceAlbumId;
+}
+
+test("a two-photo cap is global across member dances and stops querying later albums once full", async () => {
+  const f = fixture({ hierarchy: true });
+  const second = { id: "dance-2", title: "Second performance" }, third = { id: "dance-3", title: "Third performance" };
+  addHierarchyDance(f, second, 3); const thirdAlbum = addHierarchyDance(f, third, 1);
+  const result = await (await f.reader()).discover({ ...context, dances: [...context.dances, second, third], maxPhotos: 2 });
+  assert.deepEqual(result.albums.map(album => [album.danceId, album.photos.length]), [["dance-1", 1], ["dance-2", 1]]);
+  assert.ok(f.calls.every(({ url }) => !url.pathname.includes(thirdAlbum) && !url.searchParams.get("q")?.includes("dance-3")));
+  assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+});
+
+test("empty first albums fall through to later member dances without exceeding two previews", async () => {
+  const f = fixture({ hierarchy: true });
+  const second = { id: "dance-2", title: "Second performance" };
+  addHierarchyDance(f, second, 3); f.files.delete(sourceId);
+  const result = await (await f.reader()).discover({ ...context, dances: [...context.dances, second], maxPhotos: 2 });
+  assert.deepEqual(result.albums.map(album => [album.danceId, album.photos.length]), [["dance-1", 0], ["dance-2", 2]]);
+  assert.equal(imageReads(f).length, 0); assert.equal(writes(f).length, 0);
+});
+
+test("two photographer-owned previews across albums keep all ACL rechecks within the upstream call budget", async () => {
+  const f = fixture({ hierarchy: true }); namedSharing(f);
+  const second = { id: "dance-2", title: "Second performance" };
+  addHierarchyDance(f, second, 1);
+  for (const file of f.files.values()) if (file.mimeType === "image/jpeg") f.state.omitFilePermissions.add(file.id);
+  const result = await (await f.reader()).discover({ ...context, dances: [...context.dances, second], maxPhotos: 2 });
+  const photos = result.albums.flatMap(album => album.photos);
+  assert.equal(photos.length, 2);
+  for (const photo of photos) assert.deepEqual((await photo.read()).bytes, thumbnailBytes);
+  assert.equal(imageReads(f).length, 2);
+  assert.ok(f.calls.length <= 40, `${f.calls.length} upstream calls must remain bounded`);
+  assert.equal(writes(f).length, 0);
 });

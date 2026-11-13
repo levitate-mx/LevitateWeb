@@ -55,7 +55,7 @@ export function startParticipantPhotoSync({ participantId, eventId, step, read, 
           }
           onData(profile);
         }
-        if (!result.hasMore) { onStatus(result.status === 'unavailable' ? 'unavailable' : 'ready'); return; }
+        if (!result.hasMore) { onStatus(result.status === 'checking' ? 'pending' : result.status); return; }
         if (result.status === 'checking') await pause();
       }
       if (current()) onStatus('pending');

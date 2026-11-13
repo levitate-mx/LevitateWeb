@@ -179,7 +179,7 @@ test("publication withdrawal cancels a stored PDF even while its response body i
   const scope = { exports: {}, AbortController,
     preview: false, changingEvent: false, downloadBusy: null,
     assetGeneration: { current: 0 }, accessNavigation: { current: 0 }, judgingGeneration: { current: 0 }, diplomaGeneration: { current: 0 },
-    assetRequest: { current: null }, diplomaRequest: { current: null }, assetKind: { current: null },
+    assetRequest: { current: null }, diplomaRequest: { current: null }, judgingRequest: { current: null }, assetKind: { current: null },
     setDownloadBusy: value => states.push(value), setDownloadMessage() {}, setJudgingDownloadBusy() {}, setJudgingDownloadMessage() {}, setJudgingDownloadError() {},
     prepareBrowserDownload(blob, name) { return { blob, name }; }, startBrowserDownload: value => downloads.push(value),
     async fetch(url, options) {

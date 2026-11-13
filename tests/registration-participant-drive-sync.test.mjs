@@ -95,11 +95,63 @@ test('a published passport automatically discovers by full name and academy, app
   assert.equal(f.rows('participant_portal_assets')[0].published, 1);
   assert.equal(f.rows('participant_portal_routines')[0].photos_published, 1);
   assert.equal(f.rows('participant_portal_routines')[0].status, 'draft', 'photo import never publishes grades');
-  const retry = await f.run(); assert.equal(retry.imported, 0); assert.equal(f.calls.processing, 1); assert.equal(f.calls.discovery.length, 1);
+  const retry = await f.run(); assert.equal(retry.status, 'ready'); assert.equal(retry.imported, 0); assert.equal(f.calls.processing, 1); assert.equal(f.calls.discovery.length, 1);
   f.expire();
   const later = await f.run(); assert.equal(later.imported, 0); assert.equal(f.calls.processing, 1);
   assert.deepEqual(f.calls.discovery[1].knownBindings, { 'dance-a': { folderId: 'private-folder' } });
   assert.equal(f.rows('participant_portal_assets').length, 1);
+});
+
+test('an error cooldown remains unavailable without retrying Drive or pretending photos are ready', async t => {
+  const f = await fixture(t);
+  f.options.getDiscovery = async () => ({ async discover(context) {
+    f.calls.discovery.push(context);
+    throw Object.assign(new Error('Private source'), { code: 'portal_photo_source_not_private' });
+  } });
+  const failed = await f.run(); assert.equal(failed.status, 'unavailable');
+  const before = f.rows('participant_portal_drive_sync')[0];
+  assert.equal(before.last_error, 'portal_photo_source_not_private');
+  const retry = await f.run();
+  assert.equal(retry.status, 'unavailable'); assert.equal(retry.hasMore, false); assert.equal(retry.imported, 0);
+  assert.equal(f.calls.discovery.length, 1); assert.equal(f.calls.reads, 0); assert.equal(f.calls.processing, 0);
+  const after = f.rows('participant_portal_drive_sync')[0];
+  assert.equal(after.next_check_at, before.next_check_at); assert.equal(after.last_error, before.last_error);
+});
+
+test('an empty album cooldown stays pending without another Drive lookup', async t => {
+  const f = await fixture(t, { photos: 0 });
+  assert.equal((await f.run()).status, 'pending');
+  const retry = await f.run();
+  assert.equal(retry.status, 'pending'); assert.equal(retry.hasMore, false); assert.equal(retry.imported, 0);
+  assert.equal(f.calls.discovery.length, 1); assert.equal(f.calls.reads, 0);
+});
+
+test('cooldown readiness requires an approved ready preview from a current member dance', async t => {
+  for (const change of [
+    "UPDATE participant_portal_assets SET published=0",
+    "UPDATE participant_portal_routines SET photos_published=0",
+    "UPDATE participant_portal_routines SET publication_blocked=1",
+    "UPDATE participant_portal_drive_files SET status='failed'",
+    "UPDATE participant_portal_drive_files SET publication_policy='held'",
+    "UPDATE participant_portal_drive_files SET source_version='old-watermark:revision-1'",
+    "INSERT INTO participant_portal_drive_album_settings(event_id,dance_id,publication_paused) VALUES('edition','dance-a',1)",
+    "UPDATE registration_dance_participants SET dance_id='dance-b' WHERE participant_id='person-a'",
+  ]) {
+    const f = await fixture(t); await f.run();
+    f.db.sqlite.exec(change);
+    const retry = await f.run();
+    assert.equal(retry.status, 'pending', change);
+    assert.equal(retry.imported, 0); assert.equal(retry.hasMore, false);
+    assert.equal(f.calls.discovery.length, 1); assert.equal(f.calls.processing, 1);
+  }
+});
+
+test('a cooldown can report an existing private draft ready only to administrative preview', async t => {
+  const f = await fixture(t, { admin: true }); await f.run();
+  assert.equal(f.rows('participant_portal_assets')[0].published, 0);
+  assert.equal((await f.run()).status, 'ready');
+  assert.equal((await f.run({ adminPreview: false })).status, 'pending');
+  assert.equal(f.calls.discovery.length, 1); assert.equal(f.calls.processing, 1);
 });
 
 test('one photo per request bounds processing and subsequent opens finish the selected two previews', async t => {
@@ -110,23 +162,34 @@ test('one photo per request bounds processing and subsequent opens finish the se
   assert.equal(f.rows('participant_portal_drive_files').length, 2);
 });
 
-test('photo sync requests the smallest choreography and does not fill empty preview slots with a larger one', async t => {
-  for (const photoCount of [0, 1]) {
-    const f = await fixture(t, { photos: 2 });
+test('photo sync fills two global slots from available member dances and uses group size only to resolve extra choices', async t => {
+  for (const [soloCount, groupCount, expected] of [
+    [0, 1, ['dance-b']],
+    [0, 2, ['dance-b', 'dance-b']],
+    [1, 1, ['dance-a', 'dance-b']],
+    [1, 3, ['dance-a', 'dance-b']],
+    [3, 3, ['dance-a', 'dance-a']],
+  ]) {
+    const f = await fixture(t, { photos: 3 });
     f.db.sqlite.exec("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a')");
-    const duet = { ...f.album, id: 'duet-folder', danceId: 'dance-b', photos: f.album.photos };
-    f.album.photos = f.album.photos.slice(0, photoCount);
-
-    const result = await f.run({ getDiscovery: async () => ({ async discover(context) {
+    const duet = { ...f.album, id: 'duet-folder', danceId: 'dance-b',
+      photos: f.album.photos.slice(0, groupCount).map((photo, index) => ({ ...photo, id: `duet-file-${index + 1}` })) };
+    f.album.photos = f.album.photos.slice(0, soloCount);
+    f.options.getDiscovery = async () => ({ async discover(context) {
       f.calls.discovery.push(context);
       return { albums: [duet, f.album] };
-    } }) });
-
-    assert.deepEqual(f.calls.discovery[0].dances, [{ id: 'dance-a', title: 'Vuelo' }]);
-    assert.equal(result.imported, photoCount);
-    assert.equal(result.hasMore, false);
-    assert.equal(f.calls.reads, photoCount);
-    assert.deepEqual(f.rows('participant_portal_drive_files').map(file => file.dance_id), Array(photoCount).fill('dance-a'));
+    } });
+    const first = await f.run();
+    assert.deepEqual(f.calls.discovery[0].dances, [{ id: 'dance-a', title: 'Vuelo' }, { id: 'dance-b', title: 'Otra pieza' }]);
+    assert.equal(f.calls.discovery[0].maxPhotos, 2);
+    assert.equal(first.imported, 1); assert.equal(first.hasMore, expected.length > 1);
+    if (first.hasMore) {
+      const second = await f.run(); assert.equal(second.imported, 1); assert.equal(second.hasMore, false);
+    }
+    assert.equal(f.calls.reads, expected.length); assert.equal(f.calls.processing, expected.length);
+    assert.deepEqual(f.rows('participant_portal_drive_files').map(file => file.dance_id), expected);
+    const retry = await f.run(); assert.equal(retry.imported, 0); assert.equal(retry.status, 'ready');
+    assert.equal(f.calls.discovery.length, expected.length);
   }
 });
 
