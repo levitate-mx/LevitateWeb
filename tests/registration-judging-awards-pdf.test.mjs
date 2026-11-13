@@ -187,7 +187,7 @@ test('ceremony PDF moves from independent Relevé to special awards, champion an
   const champion = text.indexOf('Campeón de campeones:');
   const porra = text.indexOf('Mejor porra:');
   assert.ok(motion >= 0 && motion < aerial && aerial < releve);
-  assert.match(text, /PREMIO RELEVÉ Premiación independiente El más votado por el público Maestro Relevé Motion · Academia Águila · 28 votos Relevé Motion/);
+  assert.match(text, /PREMIO RELEVÉ Premiación independiente Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces. Maestro Relevé Motion · Academia Águila · 28 votos Relevé Motion/);
   assert.doesNotMatch(text, /#10[1-4]|199\.5/);
   assert.ok(releve < text.indexOf('Maestro Relevé Motion'));
   assert.ok(releve < text.indexOf('Maestra Relevé Aerial'));
@@ -229,8 +229,9 @@ test('public-favorite PDF announcement never invents a winner while voting is pe
     block.sections[0].kind = 'releve';
     block.releveAudienceFavorite = { status, winner: null };
     const text = contentText(await PDFDocument.load(await generateAdminReportPdf(bundle, 'b1'))).replace(/\s+/g, ' ');
-    assert.ok(text.indexOf('El más votado por el público') < text.indexOf('Junior - Solo'));
+    assert.ok(text.indexOf('Bono del público') < text.indexOf('Junior - Solo'));
     assert.ok(text.includes(message));
+    assert.ok(!text.includes('Esto le otorgó 5 puntos extras'));
   }
 });
 

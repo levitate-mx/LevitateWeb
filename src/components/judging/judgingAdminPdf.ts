@@ -123,7 +123,7 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
   header();
   for (const section of block.sections) {
     if (section.kind === "releve") {
-      ensure(190);
+      ensure(205);
       y += 14;
       page.drawRectangle({
         x: 34, y: 841.89 - y - 58, width: 527, height: 58,
@@ -142,9 +142,15 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
           : favorite?.status === "none" ? "Sin votos registrados"
             : "Pendiente del cierre de la votación";
       const favoriteLines = wrapped(favoriteText, 503, 10);
-      ensure(favoriteLines.length * 15 + 52);
-      draw("El más votado por el público", 46, y + 4, 11, pink);
-      y += 26;
+      const announcementLines = wrapped(winner
+        ? "Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces."
+        : "Bono del público", 503, 11);
+      ensure((announcementLines.length + favoriteLines.length) * 15 + 37);
+      for (const value of announcementLines) {
+        draw(value, 46, y + 4, 11, pink);
+        y += 15;
+      }
+      y += 11;
       for (const value of favoriteLines) {
         draw(value, 46, y, 10);
         y += 15;

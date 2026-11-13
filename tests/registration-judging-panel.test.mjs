@@ -239,7 +239,7 @@ test("dictamen cards round display totals only and omit presentation numbers whi
 test("the audience favorite is announced only from trusted ready data and otherwise remains explicit", () => {
   const winner = { routineId: "hidden-id", name: "Rutina favorita", academy: "Academia del público", votes: 28 };
   const ready = renderToStaticMarkup(ReleveAudienceFavorite({ favorite: { status: "ready", winner } }));
-  assert.match(ready, /El más votado por el público/);
+  assert.match(ready, /Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces./);
   assert.match(ready, /Rutina favorita/);
   assert.match(ready, /Academia del público · 28 votos/);
   assert.doesNotMatch(ready, /hidden-id|#/);

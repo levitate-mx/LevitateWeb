@@ -169,8 +169,8 @@ export function ReleveAudienceFavorite({ favorite, heading = "h3" }: { favorite:
   const winner = favorite?.status === "ready" ? favorite.winner : null;
   const message = favorite?.status === "tie" ? "Empate del público · resultado por definir."
     : favorite?.status === "none" ? "Sin votos registrados." : "Pendiente del cierre de votación.";
-  return <section className="judging-scores__audience-favorite" aria-label="El más votado por el público">
-    <Heading>El más votado por el público</Heading>
+  return <section className="judging-scores__audience-favorite" aria-label="Bono del público">
+    <Heading>{winner ? "Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces." : "Bono del público"}</Heading>
     {winner ? <><strong>{winner.name}</strong><p>{winner.academy || "Sin academia"} · {winner.votes} votos</p></> : <p>{message}</p>}
   </section>;
 }

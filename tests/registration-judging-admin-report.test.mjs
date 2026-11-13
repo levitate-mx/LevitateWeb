@@ -425,12 +425,12 @@ test("Relevé audience favorite precedes its ranking and survives dictamen filte
     const favorite = findElement(view.tree(), node => node.props?.favorite === report.releveAudienceFavorite);
     assert.ok(favorite);
     const ui = view.html();
-    assert.ok(ui.indexOf("Premiación independiente") < ui.indexOf("El más votado por el público"));
-    assert.ok(ui.indexOf("El más votado por el público") < ui.indexOf("Danza Áurea"));
+    assert.ok(ui.indexOf("Premiación independiente") < ui.indexOf("Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces."));
+    assert.ok(ui.indexOf("Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces.") < ui.indexOf("Danza Áurea"));
     assert.match(ui, /Favorita del público/);
     assert.match(ui, /Academia ganadora · 32 votos/);
     const ordinary = findElement(view.tree(), node => node.type === "section" && node.props?.["aria-label"] === "Aro");
-    assert.doesNotMatch(renderToStaticMarkup(ordinary), /El más votado por el público|Favorita del público/);
+    assert.doesNotMatch(renderToStaticMarkup(ordinary), /Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces.|Favorita del público/);
     view.change("query", "Danza Áurea");
     assert.match(view.html(), /Favorita del público/);
     assert.match(view.html(), /Academia ganadora · 32 votos/);
