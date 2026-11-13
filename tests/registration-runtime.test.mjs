@@ -1360,6 +1360,72 @@ test('inscription and shop payments keep proof, approval, ticket creation and to
   assert.equal(allOrders.orders.length, 2);
 });
 
+test('one configured scanner installer activates independent phones without consuming its authorization', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-installer-admin', { role: 'admin' });
+  const token = 'scanner-installer-fixture-token-for-multiple-phones';
+  const tokenHash = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))).toString('hex');
+  f.env.REGISTRATION_SCANNER_INSTALLER = JSON.stringify({ version: 1, tokenHash, issuedByUserId: admin.userId });
+  const activations = await Promise.all(['Puerta norte', 'Puerta sur'].map(async deviceName => {
+    const { json } = await f.request('/scanner/activate', { method: 'POST', status: 201,
+      body: { pairingPayload: `LEVITATE:SCANNER-PAIR:${token}`, deviceName } });
+    return json;
+  }));
+  assert.notEqual(activations[0].deviceToken, activations[1].deviceToken);
+  assert.notEqual(activations[0].device.id, activations[1].device.id);
+  const records = f.db.sqlite.prepare('SELECT pairing_code_id,created_by_user_id FROM registration_scanner_devices').all();
+  assert.equal(new Set(records.map(r => r.pairing_code_id)).size, 2);
+  assert.ok(records.every(r => r.created_by_user_id === admin.userId));
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_scanner_pairing_codes WHERE used_at IS NOT NULL').get().n, 2);
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_scanner_pairing_codes WHERE pairing_token_hash=?').get(tokenHash).n, 0);
+  for (const a of activations) {
+    const { json } = await f.request('/scanner/me', { headers: { authorization: `Scanner ${a.deviceToken}` } });
+    assert.equal(json.device.id, a.device.id);
+    assert.deepEqual(json.blocks.map(b => b.id), scannerAccessIds);
+  }
+  await f.request('/scanner/me', { headers: { authorization: `Scanner ${token}` }, status: 401 });
+  f.db.sqlite.prepare("UPDATE registration_scanner_devices SET status='revoked' WHERE id=?").run(activations[0].device.id);
+  await f.request('/scanner/me', { headers: { authorization: `Scanner ${activations[0].deviceToken}` }, status: 401 });
+  await f.request('/scanner/me', { headers: { authorization: `Scanner ${activations[1].deviceToken}` } });
+  assert.doesNotMatch(JSON.stringify(activations), new RegExp(token));
+});
+
+test('unconfigured, mismatched, malformed and disabled scanner installers cannot authorize phones', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-installer-guards', { role: 'admin' });
+  const academy = await seedAcademy(f, 'scanner-installer-academy');
+  const token = 'scanner-installer-fixture-token-for-guard-checks';
+  const tokenHash = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))).toString('hex');
+  const request = () => f.request('/scanner/activate', { method: 'POST', status: 401,
+    body: { pairingPayload: `LEVITATE:SCANNER-PAIR:${token}`, deviceName: 'No autorizado' } });
+  for (const config of [undefined, '', '{broken', '{}',
+    JSON.stringify({ version: 1, tokenHash: 'a'.repeat(64), issuedByUserId: admin.userId }),
+    JSON.stringify({ version: 1, tokenHash, issuedByUserId: academy.userId }),
+    JSON.stringify({ version: 1, tokenHash, issuedByUserId: 'missing-admin' })]) {
+    f.env.REGISTRATION_SCANNER_INSTALLER = config;
+    await request();
+  }
+  f.db.sqlite.prepare("UPDATE registration_users SET status='disabled' WHERE id=?").run(admin.userId);
+  f.env.REGISTRATION_SCANNER_INSTALLER = JSON.stringify({ version: 1, tokenHash, issuedByUserId: admin.userId });
+  await request();
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_scanner_devices').get().n, 0);
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_scanner_pairing_codes').get().n, 0);
+});
+
+test('ordinary scanner pairing remains single-use and expires even with a reusable installer configured', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'scanner-once-admin', { role: 'admin' });
+  f.env.REGISTRATION_SCANNER_INSTALLER = JSON.stringify({ version: 1, tokenHash: 'b'.repeat(64), issuedByUserId: admin.userId });
+  const { json: pairing } = await f.request('/admin/scanner/pairing-code', { method: 'POST', cookie: admin.cookie, status: 201 });
+  const body = { pairingPayload: pairing.pairingPayload, deviceName: 'Uno solo' };
+  await f.request('/scanner/activate', { method: 'POST', status: 201, body });
+  await f.request('/scanner/activate', { method: 'POST', status: 401, body });
+  const { json: expired } = await f.request('/admin/scanner/pairing-code', { method: 'POST', cookie: admin.cookie, status: 201 });
+  f.db.sqlite.prepare("UPDATE registration_scanner_pairing_codes SET expires_at=datetime('now','-1 minute') WHERE used_at IS NULL").run();
+  await f.request('/scanner/activate', { method: 'POST', status: 401, body: { ...body, pairingPayload: expired.pairingPayload } });
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) AS n FROM registration_scanner_devices').get().n, 1);
+});
+
 test('ticket scanner block catalog is available only to activated devices and activation returns it', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'scanner-catalog-admin', { role: 'admin' });

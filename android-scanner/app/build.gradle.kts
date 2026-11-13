@@ -9,9 +9,15 @@ val configuredApiBaseUrl = providers.gradleProperty("LEVITATE_API_BASE_URL")
     .trimEnd('/')
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
-val configuredBootstrapPayload = providers.gradleProperty("LEVITATE_SCANNER_BOOTSTRAP_PAYLOAD")
+val rawBootstrapPayload = providers.gradleProperty("LEVITATE_SCANNER_BOOTSTRAP_PAYLOAD")
     .orElse("")
     .get()
+    .trim()
+if (providers.gradleProperty("LEVITATE_REQUIRE_SCANNER_PROVISIONING").orNull == "true"
+    && !Regex("^LEVITATE:SCANNER-PAIR:[A-Za-z0-9_-]{32,128}$").matches(rawBootstrapPayload)) {
+    throw GradleException("La APK para teléfonos nuevos necesita LEVITATE_SCANNER_BOOTSTRAP_PAYLOAD configurado.")
+}
+val configuredBootstrapPayload = rawBootstrapPayload
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 
@@ -23,8 +29,8 @@ android {
         applicationId = "mx.levitate.scanner"
         minSdk = 23
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
 
         buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
         buildConfigField("String", "SCANNER_BOOTSTRAP_PAYLOAD", "\"$configuredBootstrapPayload\"")

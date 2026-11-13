@@ -4,8 +4,8 @@ Aplicación Android para validar los boletos QR en la entrada de los eventos Lev
 
 ## Flujo de puerta
 
-1. El APK se entrega preconfigurado para un único teléfono, sin usuario ni contraseña.
-2. En el primer inicio la app se activa automáticamente en segundo plano.
+1. La misma APK preconfigurada se puede instalar en varios teléfonos, sin usuario ni contraseña.
+2. En el primer inicio cada teléfono se activa automáticamente en segundo plano y recibe su propia sesión cifrada.
 3. Al iniciar una sesión nueva, el operador selecciona explícitamente el bloque que está ingresando. Las opciones se obtienen del servidor; no hay un bloque predeterminado.
 4. La cámara y el ingreso manual se habilitan después de seleccionar un bloque. El bloque actual permanece visible y puede cambiarse entre lecturas.
 5. Los boletos por bloque sólo se aceptan en las entradas que cubre su compra. Una entrada incorrecta se rechaza sin consumir el boleto.
@@ -79,13 +79,13 @@ para el evento actual. Usa la misma sesión `Authorization: Scanner …`.
 
 ## Actualizar una instalación existente
 
-La versión 1.2.0 usa `versionCode=3`. Instalar el APK **encima de la versión
+La versión 1.2.1 usa `versionCode=4`. Instalar el APK **encima de la versión
 anterior**, con el mismo identificador de aplicación y certificado de firma.
 No desinstalar ni borrar datos. Se mantienen el nombre de preferencias y el alias
 de Android Keystore para recuperar la sesión cifrada existente. Las variantes
 debug y release tienen identificadores distintos: usar la misma variante que
 está instalada. El APK de actualización no necesita regenerar la autorización
-de vinculación; una instalación nueva sí necesita el aprovisionamiento habitual.
+de vinculación; una instalación nueva se activa automáticamente con la APK de distribución configurada.
 
 Validación local: `./gradlew :app:testDebugUnitTest :app:assembleDebug`.
 
@@ -113,14 +113,18 @@ Para apuntar una compilación de prueba al servidor local desde el emulador:
 
 En un teléfono físico, reemplazar `10.0.2.2` por la IP local de la computadora.
 
-El APK preconfigurado se compila con una autorización de un solo uso:
+La APK de distribución se compila con la autorización reutilizable del instalador:
 
 ```bash
-./gradlew assembleDebug -PLEVITATE_SCANNER_BOOTSTRAP_PAYLOAD=LEVITATE:SCANNER-PAIR:...
+./gradlew assembleDebug -PLEVITATE_REQUIRE_SCANNER_PROVISIONING=true -PLEVITATE_SCANNER_BOOTSTRAP_PAYLOAD=LEVITATE:SCANNER-PAIR:...
 ```
 
-Una vez activado el teléfono, no se debe borrar el almacenamiento de la app ni desinstalarla. Si ocurre, hay que generar un APK nuevo.
+Para evitar exponerla en comandos, se recomienda suministrar la propiedad mediante `ORG_GRADLE_PROJECT_LEVITATE_SCANNER_BOOTSTRAP_PAYLOAD`. La opción `LEVITATE_REQUIRE_SCANNER_PROVISIONING=true` rechaza una compilación de distribución sin autorización; las compilaciones vacías siguen sirviendo para pruebas y actualizaciones de teléfonos ya vinculados.
+
+En el Worker, el secreto `REGISTRATION_SCANNER_INSTALLER` contiene JSON `{version:1, tokenHash, issuedByUserId}`: sólo el SHA-256 de la autorización y el identificador del administrador activo que la emitió. No se guarda la autorización en el código fuente. El servidor comprueba el instalador y crea una vinculación de un solo uso diferente para cada teléfono, conservando la sesión individual y las validaciones autenticadas. Los códigos administrativos ordinarios siguen venciendo a los diez minutos y no se pueden reutilizar.
+
+Si se reinstala o borra el almacenamiento, la misma APK de distribución puede activar nuevamente el teléfono. Las instalaciones existentes conservan sus sesiones; no se borran boletos ni canjes. Rotar o retirar el secreto del instalador detiene nuevas activaciones con esa APK, sin cambiar las sesiones existentes.
 
 ## Generar una versión para distribución
 
-Abrir `android-scanner` en Android Studio, configurar una firma de aplicación y generar un APK o Android App Bundle de release. La autorización incluida sólo sirve para activar un dispositivo una vez; después la app guarda su acceso individual cifrado con Android Keystore.
+Abrir `android-scanner` en Android Studio, configurar una firma de aplicación y generar un APK o Android App Bundle de release. Usar la autorización de distribución configurada en el servidor y activar la comprobación de aprovisionamiento. El mismo archivo sirve para varios teléfonos; cada uno guarda su acceso individual cifrado con Android Keystore.

@@ -2617,7 +2617,22 @@ async function handleRegistrationScannerActivate(request, env) {
     const pairingToken = parseRegistrationScannerPairingValue(body.pairingPayload ?? body.pairingToken ?? body.code);
     const deviceName = requireString(body.deviceName, "deviceName").slice(0, 120);
     const db = getDb(env);
-    const pairingTokenHash = await hashToken(pairingToken);
+    let pairingTokenHash = await hashToken(pairingToken);
+    const installer = registrationScannerInstaller(env);
+    if (installer && installer.tokenHash === pairingTokenHash) {
+      // A distributed installer can authorize multiple phones. Each activation
+      // still gets its own single-use pairing record and private device session.
+      const devicePairingHash = await hashToken(createSessionToken());
+      const provisioned = await db.prepare(`
+        INSERT INTO registration_scanner_pairing_codes (id, pairing_token_hash, created_by_user_id, expires_at)
+        SELECT ?, ?, id, datetime('now', '+10 minutes') FROM registration_users
+        WHERE id=? AND role='admin' AND status='active'
+      `).bind(crypto.randomUUID(), devicePairingHash, installer.issuedByUserId).run();
+      if (Number(provisioned.meta?.changes || 0) !== 1) {
+        throwHttpError('registration_scanner_pairing_invalid', 'La activación de este instalador ya no está disponible.', 401);
+      }
+      pairingTokenHash = devicePairingHash;
+    }
     const deviceToken = createSessionToken();
     const deviceId = crypto.randomUUID();
     const insertResult = await db
@@ -5649,6 +5664,15 @@ function parseRegistrationTicketScanValue(value) {
   }
 
   return ticketCode;
+}
+
+function registrationScannerInstaller(env) {
+  try {
+    const value = JSON.parse(env.REGISTRATION_SCANNER_INSTALLER || 'null');
+    if (value?.version === 1 && typeof value.tokenHash === 'string' && /^[a-f0-9]{64}$/.test(value.tokenHash)
+      && typeof value.issuedByUserId === 'string' && value.issuedByUserId.trim()) return value;
+  } catch { /* An absent or malformed installer never authorizes a device. */ }
+  return null;
 }
 
 function parseRegistrationScannerPairingValue(value) {
