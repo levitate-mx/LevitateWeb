@@ -40,6 +40,7 @@ function reportProjection(snapshot) {
       rows: snapshot.rows.map(row => ({ id: row.id, programNumber: row.programNumber,
         name: row.name, academy: row.academy, state: row.state, genre: row.genre,
         division: row.division, category: row.category, level: row.level,
+        ...(Object.hasOwn(row, 'participantCount') ? { participantCount: row.participantCount } : {}),
         blockId: row.blockId, blockName: row.blockName, status: row.status,
         completedJudges: row.completedJudges, expectedJudges: row.expectedJudges,
         recordedScores: row.recordedScores, judges: [] })),

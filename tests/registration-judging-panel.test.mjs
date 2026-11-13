@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isJudgingGroupCategory } from '../shared/judging-group.js';
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import vm from "node:vm";
@@ -24,7 +25,7 @@ for (const name of ["statusLabels", "scoreFormatter"]) {
 const javascript = ts.transpileModule(`${declarations.join("\n")}\nglobalThis.helpers = { ${functionNames.join(",")} };`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
-const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, Building2, ChevronDown, MapPin };
+const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, Building2, ChevronDown, MapPin };
 vm.runInNewContext(javascript, scope);
 const { scoreValue, reportScoreValue, disciplineName, blockKey, blockLabel, JudgeBreakdown, filterReportSections, DictamenEntry } = scope.helpers;
 

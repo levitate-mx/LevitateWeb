@@ -1,4 +1,5 @@
 import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
+import { withJudgingGroupParticipants } from './judging-group-participants.js';
 import { readReleveVotingResult } from './releve-competition.js';
 
 // The judge workspace applies its own authenticated write authorization.
@@ -320,10 +321,10 @@ export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
     await readRows(config, table, { select: columns, event_id: `eq.${eventId}`, order: tableOrders[table] }, fetcher),
   ]));
   const data = Object.fromEntries(entries);
-  return buildJudgingScoreSnapshot({
+  return withJudgingGroupParticipants(env, buildJudgingScoreSnapshot({
     event, blocks: data.blocks, routines: data.routines, judges: data.judges,
     templates: data.criteria_templates, criteria: data.criteria, scores: data.scores, penalties: data.penalties, feedback: data.feedback,
     specialAwards: data.special_awards,
     releveVoting: await readReleveVotingResult(env.DB, eventId),
-  }, new Date().toISOString(), { judgeRoster: "levitate" });
+  }, new Date().toISOString(), { judgeRoster: "levitate" }));
 }

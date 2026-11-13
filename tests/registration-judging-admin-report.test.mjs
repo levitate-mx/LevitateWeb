@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ChevronDown, Trophy, X } from "lucide-react";
 import ts from "typescript";
 import { normalizeAdminSearch } from "../src/components/admin/adminNavigation.ts";
+import { isJudgingGroupCategory } from '../shared/judging-group.js';
 
 function declarations(source, functions, constants) {
   const syntax = ts.createSourceFile("report.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -82,7 +83,7 @@ function harness(bundle = fixture(), readOnly = false) {
   const state = [];
   const selectedBlocks = [];
   let cursor = 0;
-  const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, ChevronDown, Trophy, X,
+  const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, ChevronDown, Trophy, X,
     useState(initial) {
       const index = cursor++;
       if (!(index in state)) state[index] = initial;
@@ -143,6 +144,23 @@ test("report-only viewers retain results and filters without individual-sheet co
   assert.match(view.html(), /Danza Áurea/);
   assert.match(view.html(), /1 de 5 coreografías/);
   assert.doesNotMatch(view.html(), /Ver detalle|aria-expanded/);
+});
+
+test('participant counts appear only for groups in both admin and report-only views', () => {
+  for (const readOnly of [false, true]) {
+    const bundle = fixture();
+    bundle.snapshot.rows[0].category = 'GRUPO';
+    bundle.snapshot.rows[0].participantCount = 8;
+    bundle.snapshot.rows[1].participantCount = 2;
+    bundle.snapshot.rows[2].category = 'Grupo';
+    bundle.snapshot.rows[2].participantCount = null;
+    const ui = harness(bundle, readOnly).html();
+    assert.equal((ui.match(/Cantidad de participantes/g) || []).length, 2);
+    assert.match(ui, /judging-scores__participants.*?<strong>8<\/strong>/);
+    assert.match(ui, /judging-scores__participants.*?<strong>Por confirmar<\/strong>/);
+    assert.doesNotMatch(ui, /judging-scores__participants.*?<strong>2<\/strong>/);
+    assert.match(ui, />1\.º lugar</);
+  }
 });
 
 test("combined search, discipline and evaluation filters retain official places and do not mutate the bundle", () => {

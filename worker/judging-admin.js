@@ -1,5 +1,6 @@
 import { judgingConnection, readJudgingRows } from "./judging-reader.js";
 import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
+import { withJudgingGroupParticipants } from './judging-group-participants.js';
 import { readReleveVotingResult } from './releve-competition.js';
 import {
   levitateJudgingEventIds,
@@ -336,13 +337,13 @@ export async function readAdminSnapshot(
       JSON.stringify([r.block_id, r.routine_id, r.judge_id, r.category]),
       r,
     );
-  const snapshot = buildJudgingScoreSnapshot({
+  const snapshot = await withJudgingGroupParticipants(env, buildJudgingScoreSnapshot({
     event: scope.event,
     ...raw,
     templates: raw.criteria_templates,
     specialAwards: raw.special_awards,
     releveVoting: await readReleveVotingResult(env.DB, scope.eventId),
-  }, undefined, { judgeRoster: "levitate" });
+  }, undefined, { judgeRoster: "levitate" }));
   const { results: accounts } = await env.DB.prepare(
     `SELECT a.judge_id,a.enabled,u.username,u.id user_id FROM registration_judge_assignments a
     JOIN registration_users u ON u.id=a.user_id WHERE a.event_id=? AND u.is_judge=1

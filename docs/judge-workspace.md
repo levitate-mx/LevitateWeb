@@ -193,6 +193,12 @@ rejects other authenticated registration endpoints for this role. Provision
 password hashes privately using the existing PBKDF2 format; never commit
 credentials or reset an existing identity to provision a new account.
 
+Group results include a participant-count column in both the administrator and
+report-only views. Counts come from registration membership through the exact,
+enabled edition/event/routine association; participant identities are never
+returned. Unlinked, empty or ambiguous associations display “Por confirmar”.
+Solo, duo and trio results retain their existing columns and scoring rules.
+
 ### Judging sheet columns
 
 On desktop, feedback follows the last scoring criterion in the left column,

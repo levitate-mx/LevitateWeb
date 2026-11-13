@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { normalizeAdminSearch } from "./adminNavigation";
 import { requestRegistrationApi } from "./registrationApi";
+import { isJudgingGroupCategory } from '../../../shared/judging-group.js';
 import "./JudgingScoresPanel.css";
 
 type JudgingEvent = {
@@ -33,6 +34,7 @@ export type ChoreographyScore = {
   genre: string;
   division: string;
   category: string;
+  participantCount?: number | null;
   level: string;
   blockId: string | number | null;
   blockName: string;
@@ -177,8 +179,10 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
   const isNumericScore = Number.isFinite(standing.score) && !(row.status === "pending" && row.recordedScores === 0);
   const audience = standing.audience;
   const audiencePending = audience?.ready === false;
+  const isGroup = isJudgingGroupCategory(row.category);
+  const participantCount = Number.isSafeInteger(row.participantCount) && Number(row.participantCount) > 0 ? row.participantCount : null;
   return (
-    <article className={`judging-scores__entry${standing.placement?.isFirstPlace ? " is-first" : ""}`}>
+    <article className={`judging-scores__entry${standing.placement?.isFirstPlace ? " is-first" : ""}${isGroup ? " is-group" : ""}`}>
       <div className="judging-scores__standing">
         <div className={`judging-scores__points${isNumericScore ? "" : " is-text"}`}><span>{audience ? audiencePending ? "Jurado" : "Puntaje final" : "Puntaje"}</span><strong>{scoreText}</strong></div>
         <div className="judging-scores__entry-info">
@@ -190,6 +194,7 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
             : row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
           {allowDetails ? <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button> : null}
         </div>
+        {isGroup ? <div className="judging-scores__participants"><span>Cantidad de participantes</span><strong>{participantCount ?? 'Por confirmar'}</strong></div> : null}
         <div className={`judging-scores__placement${standing.placement?.isParticipation ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{audiencePending ? 'Pendiente' : standing.placement === null ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>
       </div>
       {allowDetails && expanded ? <section id={detailId} className="judging-scores__detail" aria-label={`Puntuaciones de ${row.name || row.id}`}><h6>Detalle por juez · {blockLabel(row)}</h6><p className="judging-scores__detail-progress">{statusLabels[row.status]} · {row.expectedJudges > 0 ? `${row.completedJudges}/${row.expectedJudges} jueces completos` : "Sin jueces asignados"} · Escala de {scoreValue(maximumScore)} puntos{row.state ? ` · ${row.state}` : ""}</p>{row.judges.length ? <div className="judging-scores__judges">{row.judges.map((judge) => <JudgeBreakdown key={judge.id} judge={judge} />)}</div> : <p className="judging-scores__muted">Todavía no hay jueces asignados o evaluaciones disponibles para esta coreografía.</p>}</section> : null}
