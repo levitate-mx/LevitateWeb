@@ -31,6 +31,7 @@ import type {
 import { LevitateHeader } from "../home/LevitateHeader";
 import { prepareBrowserDownload, startBrowserDownload } from "../../utils/browserDownload";
 import { participantPublicationChanged, startParticipantRefresh } from "./participantRefresh";
+import { participantReleasedScore } from './participantReleasedScore';
 import { startParticipantPhotoSync, type ParticipantPhotoSyncStatus, type ParticipantPhotoSyncResponse } from "./participantPhotoSync";
 import "./ParticipantPage.css";
 
@@ -619,6 +620,7 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
     : isInternalPreview ? participantAdminAssetUrl(routine?.judging.url) : participantAssetUrl(routine?.judging.url, preview);
   const published = routine?.result.status === "published";
   const result = routine?.result;
+  const displayedScore = published ? result : participantReleasedScore(routine);
   const hasPlace = Boolean(
     published &&
       result?.directCompetition &&
@@ -820,33 +822,33 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                     <ChevronDown size={28} aria-hidden="true" />
                   </label>
                 </header>
-                {published && result ? (
+                {displayedScore ? (
                   <dl
                     className={`participant-results ${hasPlace ? "participant-results--ranked" : ""}`}
                   >
                     <div className="participant-results__score">
-                      <dt>Puntaje final</dt>
+                      <dt>{published ? 'Puntaje final' : 'Puntaje del jurado'}</dt>
                       <dd>
-                        {score(result.score)}
-                        {result.maxScore !== null && <small>/ {score(result.maxScore)}</small>}
+                        {score(displayedScore.score)}
+                        {displayedScore.maxScore !== null && <small>/ {score(displayedScore.maxScore)}</small>}
                       </dd>
                     </div>
                     <div
                       className="participant-results__medal"
-                      data-medal={result.medal || "pending"}
+                      data-medal={published && result?.medal || "pending"}
                     >
-                      <dt>Medalla</dt>
+                      <dt>{published ? 'Medalla' : 'Reconocimiento'}</dt>
                       <dd>
                         <Medal size={30} strokeWidth={1} aria-hidden="true" />
-                        <span>{result.medal ? medalNames[result.medal] : "Por publicar"}</span>
+                        <span>{published ? result?.medal ? medalNames[result.medal] : 'Por publicar' : 'En revisión'}</span>
                       </dd>
                     </div>
                     {hasPlace && (
                       <div className="participant-results__place">
                         <dt>Competencia directa</dt>
-                        <dd aria-label={`${result.place === 1 ? "Primer" : result.place === 2 ? "Segundo" : "Tercer"} lugar`}>
+                        <dd aria-label={`${result?.place === 1 ? "Primer" : result?.place === 2 ? "Segundo" : "Tercer"} lugar`}>
                           <span className="participant-results__place-rank">
-                            {result.place === 1 ? "1er" : result.place === 2 ? "2do" : "3er"}
+                            {result?.place === 1 ? "1er" : result?.place === 2 ? "2do" : "3er"}
                           </span>
                           <small>lugar</small>
                         </dd>
