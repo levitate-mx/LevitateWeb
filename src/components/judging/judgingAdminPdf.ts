@@ -1,5 +1,6 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
+import { compactJudgingCategoryTitle } from "../../../shared/judging-category-title.js";
 
 type Bundle = {
   event: { name: string };
@@ -12,18 +13,26 @@ type Bundle = {
         name: string;
         sections: {
           label: string;
+          kind?: "competition" | "releve";
           categories: {
             title: string;
             rows: {
               routineId: string;
               score: number | null;
+              maximumScore?: number | null;
               juryScore?: number | null;
               audience?: { votes: number | null; bonus: number; ready: boolean; status: string };
-              placement: null | { label: string };
+              medal: "oro" | "plata" | "bronce" | "participacion" | null;
+              directCompetition: boolean;
+              placement: null | { rank: number | null; label: string };
             }[];
           }[];
         }[];
-        specialAwards: { title: string; displayValue: string }[];
+        specialAwards: { id?: string; title: string; displayValue: string }[];
+        releveAudienceFavorite?: {
+          status: "ready" | "pending" | "tie" | "none";
+          winner: null | { routineId: string; name: string; academy: string; votes: number };
+        };
         topScore?: null | { routineId: string; score: number };
       }[];
     };
@@ -113,11 +122,41 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
   }
   header();
   for (const section of block.sections) {
-    ensure(60);
-    draw(section.label.toUpperCase(), 34, y, 15, pink);
-    y += 24;
+    if (section.kind === "releve") {
+      ensure(190);
+      y += 14;
+      page.drawRectangle({
+        x: 34, y: 841.89 - y - 58, width: 527, height: 58,
+        color: rgb(0.99, 0.90, 0.94),
+      });
+      page.drawRectangle({
+        x: 34, y: 841.89 - y - 58, width: 3, height: 58, color: pink,
+      });
+      draw("PREMIO RELEVÉ", 46, y + 10, 15, pink);
+      draw("Premiación independiente", 46, y + 34, 9, muted);
+      y += 72;
+      const favorite = block.releveAudienceFavorite;
+      const winner = favorite?.status === "ready" ? favorite.winner : null;
+      const favoriteText = winner ? `${winner.name} · ${winner.academy} · ${winner.votes} votos`
+        : favorite?.status === "tie" ? "Empate del público pendiente de resolver"
+          : favorite?.status === "none" ? "Sin votos registrados"
+            : "Pendiente del cierre de la votación";
+      const favoriteLines = wrapped(favoriteText, 503, 10);
+      ensure(favoriteLines.length * 15 + 52);
+      draw("El más votado por el público", 46, y + 4, 11, pink);
+      y += 26;
+      for (const value of favoriteLines) {
+        draw(value, 46, y, 10);
+        y += 15;
+      }
+      y += 18;
+    } else {
+      ensure(60);
+      draw(compactJudgingCategoryTitle(section.label).toUpperCase(), 34, y, 15, pink);
+      y += 24;
+    }
     for (const category of section.categories) {
-      const heading = wrapped(category.title, 505, 10);
+      const heading = wrapped(compactJudgingCategoryTitle(category.title), 505, 10);
       ensure(heading.length * 15 + 70);
       page.drawRectangle({
         x: 34,
@@ -134,14 +173,33 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
       for (const standing of category.rows) {
         const row = lookup.get(standing.routineId);
         if (!row) continue;
-        const lines = wrapped(`#${row.programNumber || row.id} · ${row.name}`, 316, 10),
-          academy = wrapped(row.academy, 316, 8),
-          place = wrapped(standing.audience?.ready === false ? "Pendiente del público" : standing.placement?.label || "Sin lugar", 90, 8);
+        const lines = wrapped(row.name, 316, 10),
+          academy = wrapped(row.academy, 316, 8);
+        const medalLabels = {
+          oro: "Medalla de oro",
+          plata: "Medalla de plata",
+          bronce: "Medalla de bronce",
+          participacion: "Medalla de participación",
+        };
+        const awaitingAudience = standing.audience?.ready === false;
+        const medal = awaitingAudience ? "Medalla pendiente"
+          : standing.medal ? medalLabels[standing.medal]
+            : row.status === "unavailable" ? "Sin medalla asignada" : "Medalla pendiente";
+        const place = awaitingAudience ? "Pendiente del público"
+          : !standing.directCompetition ? "Sin competencia directa"
+            : standing.placement?.rank != null && standing.placement.rank >= 1 && standing.placement.rank <= 3
+              ? `${standing.placement.rank}.º lugar`
+              : standing.placement ? "Sin lugar de podio" : "Lugar pendiente";
+        const medalLines = wrapped(medal, 90, 8);
+        const placeLines = wrapped(place, 90, 8);
         const audience = standing.audience;
-        const publicLines = audience ? wrapped(`Jurado: ${standing.juryScore == null ? 'Pendiente' : new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(standing.juryScore)} · Público: ${audience.votes ?? '—'} votos · Bono: ${audience.ready ? `+${audience.bonus}` : audience.status === 'tie_pending' ? 'Empate por definir' : 'Pendiente'}${audience.ready ? ' · Final hasta 155 puntos' : ''}`, 316, 8) : [];
+        const maximumScore = standing.maximumScore;
+        const finalLimit = audience?.ready && maximumScore != null && Number.isFinite(maximumScore) && maximumScore > 0
+          ? ` · Final hasta ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(maximumScore)} puntos` : '';
+        const publicLines = audience ? wrapped(`Jurado: ${standing.juryScore == null || !Number.isFinite(standing.juryScore) ? 'Pendiente' : new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(standing.juryScore)} · Público: ${audience.votes ?? '—'} votos · Bono: ${audience.ready ? `+${audience.bonus}` : audience.status === 'tie_pending' ? 'Empate por definir' : 'Pendiente'}${finalLimit}`, 316, 8) : [];
         const h = Math.max(
           (lines.length + academy.length + publicLines.length) * 14 + 18,
-          place.length * 13 + 18,
+          (medalLines.length + placeLines.length) * 13 + 24,
           46,
         );
         ensure(h);
@@ -159,18 +217,20 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
           top += 12;
         }
         draw(
-          standing.score == null
+          standing.score == null || !Number.isFinite(standing.score)
             ? "Pendiente"
             : new Intl.NumberFormat("es-MX", {
-                maximumFractionDigits: 2,
+                maximumFractionDigits: 0,
               }).format(standing.score),
           375,
           y + 5,
           13,
           pink,
         );
-        for (let n = 0; n < place.length; n++)
-          draw(place[n], 465, y + 6 + n * 13, 8);
+        for (let n = 0; n < placeLines.length; n++)
+          draw(placeLines[n], 465, y + 6 + n * 13, 8, pink);
+        for (let n = 0; n < medalLines.length; n++)
+          draw(medalLines[n], 465, y + 12 + (placeLines.length + n) * 13, 8, muted);
         if (row.status !== "complete") {
           draw(
             row.status === "partial" ? "Incompleta" : "Pendiente",
@@ -191,19 +251,6 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
       y += 14;
     }
   }
-  if (block.topScore) {
-    const lines = wrapped(
-      `TOP SCORE: ${lookup.get(block.topScore.routineId)?.name || block.topScore.routineId} · ${new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 }).format(block.topScore.score)}`,
-      527,
-      11,
-    );
-    ensure(lines.length * 15 + 20);
-    for (const value of lines) {
-      draw(value, 34, y, 11, pink);
-      y += 15;
-    }
-    y += 20;
-  }
   if (block.specialAwards.length) {
     const needed =
       35 +
@@ -213,24 +260,33 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
           wrapped(`${a.title}: ${a.displayValue || "Sin asignar"}`, 515, 10)
             .length *
             15 +
-          12,
+          (a.id === "champion_of_champions" ? 28 : 12),
         0,
       );
     ensure(Math.min(needed, 650));
     draw("PREMIOS ESPECIALES", 34, y, 13, pink);
     y += 26;
     for (const award of block.specialAwards) {
+      const isChampion = award.id === "champion_of_champions";
       const lines = wrapped(
         `${award.title}: ${award.displayValue || "Sin asignar"}`,
-        515,
+        isChampion ? 503 : 515,
         10,
       );
-      ensure(lines.length * 15 + 12);
+      const height = lines.length * 15 + (isChampion ? 28 : 12);
+      ensure(height);
+      if (isChampion) {
+        page.drawRectangle({
+          x: 34, y: 841.89 - y - height + 6, width: 527, height: height - 6,
+          color: rgb(0.99, 0.90, 0.94),
+        });
+        y += 10;
+      }
       for (const l of lines) {
-        draw(l, 43, y, 10);
+        draw(l, isChampion ? 46 : 43, y, 10, isChampion ? pink : ink);
         y += 15;
       }
-      y += 12;
+      y += isChampion ? 18 : 12;
     }
   }
   pdf

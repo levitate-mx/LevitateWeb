@@ -92,6 +92,26 @@ async function fixture(t, { linked = true } = {}) {
   return { db, input, snapshot, calls, providers, view, mode, close, reopen, rows, allows };
 }
 
+test('a block release matches full-event and scoped reads with different global maxima', async t => {
+  const f = await fixture(t);
+  await f.mode('block_close');
+  const current = f.snapshot();
+  for (const block of current.report.blocks) for (const section of block.sections) for (const category of section.categories) {
+    for (const entry of category.rows) entry.maximumScore = 20;
+  }
+  current.report.maximumScore = 210;
+  await f.close({}, { getSnapshot: async () => current });
+  const scoped = structuredClone(current);
+  scoped.report.maximumScore = 20;
+  scoped.rows = scoped.rows.filter(row => row.blockId === 'block-1');
+  scoped.report.blocks = scoped.report.blocks.filter(block => block.id === 'block-1');
+  scoped.resultScope.blockIds = ['block-1'];
+  assert.equal(await f.allows({}, scoped), true);
+  const invalid = structuredClone(scoped);
+  invalid.report.blocks[0].sections[0].categories[0].rows[0].maximumScore = null;
+  assert.equal(await f.allows({}, invalid), false, 'an explicitly unknown routine scale cannot inherit the event maximum');
+});
+
 test('legacy editions default to individual mode and can opt in before linking the programme', async t => {
   const f = await fixture(t, { linked: false });
   assert.deepEqual(await f.view(), { mode: 'individual', sourceEventId: '', blocks: [], selectedBlock: null });

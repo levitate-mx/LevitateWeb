@@ -84,25 +84,29 @@ function completeRoutine(row) {
   return recorded === row.recordedScores;
 }
 
+export { completeRoutine as isCompleteJudgingRoutine };
+
 function scoreEntries(block, maximumScore, sourceIds) {
   if (!Array.isArray(block?.sections) || !block.sections.length) return false;
   const seen = new Set();
   const pendingAudience = new Set();
+  let blockMaximum = 0;
   for (const section of block.sections) {
     if (!Array.isArray(section?.categories) || !section.categories.length) return false;
     for (const category of section.categories) {
       if (!Array.isArray(category?.rows) || !category.rows.length) return false;
       for (const entry of category.rows) {
         const id = text(entry?.routineId);
-        const effectiveMaximum = entry.maximumScore ?? maximumScore;
+        const effectiveMaximum = Object.hasOwn(entry, 'maximumScore') ? entry.maximumScore : maximumScore;
         if (!sourceIds.includes(id) || seen.has(id) || !finite(effectiveMaximum) || effectiveMaximum <= 0
           || !finite(entry.score) || entry.score < 0 || entry.score > effectiveMaximum) return false;
         seen.add(id);
+        blockMaximum = Math.max(blockMaximum, effectiveMaximum);
         if (entry.audience?.ready === false) pendingAudience.add(id);
       }
     }
   }
-  return seen.size === sourceIds.length ? { pendingAudience } : false;
+  return seen.size === sourceIds.length ? { pendingAudience, maximumScore: blockMaximum } : false;
 }
 
 function reportFingerprint(block) {
@@ -134,8 +138,10 @@ async function analyzeBlock(edition, blockId, snapshot, mappingRows, expectedIds
   const manifest = mappingManifest(edition, sourceIds, mappingRows);
   if (!manifest || unavailable.completedRoutines !== sourceIds.length) return unavailable;
   const { isActive, ...event } = snapshot.event;
+  // Full-event and participant block reads may have different global maxima.
+  // The authorized block's own scales must produce the same fingerprint.
   const payload = { version: 1, editionId: edition.eventId, venue: edition.venue, sourceEventId: edition.sourceEventId, blockId,
-    event, competitionConfig: snapshot.publicationContext?.competitionConfig || {}, maximumScore,
+    event, competitionConfig: snapshot.publicationContext?.competitionConfig || {}, maximumScore: entries.maximumScore,
     rows: sortBy(rows, 'id').map(row => ({ ...row, judges: sortBy(row.judges, 'id').map(judge => ({ ...judge, criteria: sortBy(judge.criteria, 'id') })) })),
     block: reportFingerprint(blocks[0]), manifest };
   let fingerprint;

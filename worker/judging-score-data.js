@@ -80,15 +80,17 @@ function expectedForBlock(judges, block, routine) {
   return matches.length ? matches : judges;
 }
 
-export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toISOString(), { judgeRoster } = {}) {
+export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toISOString(), { judgeRoster, completeEvent = false } = {}) {
   const sourceEvent = object(input.event);
   const eventId = text(sourceEvent.id);
   const warnings = new Set();
   const warn = (message) => warnings.add(message);
   if (!eventId) warn("No se recibió un evento de jueceo válido.");
   const scoped = (table) => scopedRows(input[table], eventId, table, warn);
-  const routines = uniqueRows(ordered(scoped("routines")), (row) => text(row.routine_id), "routines", warn);
-  const blocks = uniqueRows(ordered(scoped("blocks")), (row) => text(row.block_id), "blocks", warn);
+  const routineRows = scoped("routines");
+  const blockRows = scoped("blocks");
+  const routines = uniqueRows(ordered(routineRows), (row) => text(row.routine_id), "routines", warn);
+  const blocks = uniqueRows(ordered(blockRows), (row) => text(row.block_id), "blocks", warn);
   const allJudges = uniqueRows(ordered(scoped("judges")), (row) => text(row.judge_id), "judges", warn);
   const judges = [...allJudges.values()].filter((judge) => normalized(judge.role) !== "ADMIN");
   const blockFor = routine => blocks.get(text(routine.block_id))
@@ -232,6 +234,9 @@ export function buildJudgingScoreSnapshot(input = {}, fetchedAt = new Date().toI
     event: sourceEvent, blocks: [...blocks.values()], routines: [...routines.values()], rows,
     specialAwards: scoped("specialAwards"), unavailableRoutineIds,
     releveVoting: input.releveVoting,
+    // A participant's block-scoped read cannot establish an event-wide winner.
+    // Dropped or ambiguous source identities also invalidate event coverage.
+    completeEvent: completeEvent === true && routines.size === routineRows.length && blocks.size === blockRows.length,
   }, warn);
   return {
     event: {

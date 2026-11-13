@@ -9,8 +9,6 @@ import {
   ClipboardList,
   Copy,
   Download,
-  CloudUpload,
-  Mail,
   MoreHorizontal,
   Maximize,
   Minimize,
@@ -33,7 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { requestRegistrationApi } from "../admin/registrationApi";
-import { DictamenEntry, filterReportSections } from "../admin/JudgingScoresPanel";
+import { DictamenEntry, filterReportSections, ReleveAudienceFavorite } from "../admin/JudgingScoresPanel";
 import type {
   ChoreographyScore,
   ReportBlock,
@@ -42,6 +40,7 @@ import type {
 import "./JudgingAdminWorkspace.css";
 import { resolveJudgePortrait } from "./judgePortraits";
 import { ReleveVotingAdminPanel } from '../releve/ReleveVotingAdminPanel';
+import { compactJudgingCategoryTitle } from '../../../shared/judging-category-title.js';
 
 type Event = {
   id: string;
@@ -179,6 +178,26 @@ function currentJudgeActivity(activity: Presence[], judgeId: string) {
 }
 const isScoring = (presence: Presence | undefined) =>
   presence?.state === "viewing_sheet" || presence?.state === "judging";
+function judgeSheetSummary(activity: Presence[], judgeId: string, routines: Routine[], blocks: Block[], selectedBlockId: string, includeCurrentBlock = false) {
+  const presence = currentJudgeActivity(activity, judgeId);
+  if (!presence) return { label: activity.some(row => row.judge_id === judgeId) ? "Sin actividad reciente" : "Sin actividad registrada", sheet: "", block: "" };
+  if (!isScoring(presence)) return { label: presence.state === "left_sheet" ? "Hoja cerrada" : presence.state === "home" ? "En inicio" : "Sin hoja abierta", sheet: "", block: "" };
+  const routine = routines.find(row => row.routine_id === presence.routine_id);
+  const otherBlock = routine && (includeCurrentBlock || selectedBlockId && routine.block_id !== selectedBlockId)
+    ? blocks.find(block => block.block_id === routine.block_id) : null;
+  return { label: "Hoja abierta", sheet: routine ? `#${routine.program_number?.trim() || routine.routine_id} · ${routine.name}` : "Coreografía no disponible",
+    block: routine && (includeCurrentBlock || selectedBlockId && routine.block_id !== selectedBlockId) ? otherBlock?.title || otherBlock?.name || "Otro bloque" : "" };
+}
+function matrixTotal(row: Score | undefined) {
+  if (!row || row.status === "pending") return { text: "—", label: "Pendiente", status: "pending" };
+  if (row.status === "unavailable") return { text: "—", label: "No disponible", status: "unavailable" };
+  const totals = row.judges.filter(judge => judge.status !== "pending" && typeof judge.total === "number" && Number.isFinite(judge.total)).map(judge => judge.total as number);
+  if (!totals.length) return row.status === "complete" ? { text: "—", label: "No disponible", status: "unavailable" } : { text: "—", label: "Pendiente", status: "pending" };
+  const total = totals.reduce((sum, value) => sum + value, 0);
+  if (!Number.isFinite(total)) return { text: "—", label: "No disponible", status: "unavailable" };
+  return { text: new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(total),
+    label: row.status === "complete" ? "Oficial" : "Provisional", status: row.status };
+}
 export function useJudgingFullscreen(onError: (message: string) => void) {
   const [available, setAvailable] = useState(false);
   const [active, setActive] = useState(false);
@@ -358,10 +377,6 @@ export function JudgingAdminWorkspace() {
     [userRole, setUserRole] = useState<"admin" | "judging_admin" | undefined>(),
     [modal, setModal] = useState<Modal>(null);
   const fullscreen = useJudgingFullscreen(setNotice);
-  const [exportId, setExportId] = useState("");
-  const [exports, setExports] = useState<
-    { id: string; block_id: string; created_at: string; files: number }[]
-  >([]);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("levitate-judging-theme");
     return saved === "light" || saved === "dark" ? saved : "dark";
@@ -388,19 +403,6 @@ export function JudgingAdminWorkspace() {
   useEffect(() => {
     localStorage.setItem("levitate-judging-theme", theme);
   }, [theme]);
-  useEffect(() => setExportId(""), [blockId]);
-  useEffect(() => {
-    if (!eventId || view !== "scores") return;
-    let live = true;
-    api<{ exports: typeof exports }>("exports")
-      .then((r) => {
-        if (live) setExports(r.exports);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [api, eventId, view, exportId]);
   const loadEvents = useCallback(async () => {
     const response = await requestRegistrationApi<{
       events: Event[];
@@ -463,7 +465,6 @@ export function JudgingAdminWorkspace() {
   );
   useEffect(() => {
     setBundle(null);
-    setExportId("");
     setActivity([]);
     setQuery("");
     setBlockId("");
@@ -592,11 +593,6 @@ export function JudgingAdminWorkspace() {
   const blockReport = bundle?.snapshot.report.blocks.find(
     (b) => b.id === blockId,
   );
-  const standings = new Map(
-    blockReport?.sections
-      .flatMap((s) => s.categories.flatMap((c) => c.rows))
-      .map((s) => [s.routineId, s]),
-  );
   const visible = routines.filter(
     (r) =>
       norm(
@@ -664,62 +660,6 @@ export function JudgingAdminWorkspace() {
         await generateAdminReportPdf(bundle!, blockId),
         `Levitate-dictamen-${blockId}.pdf`,
       );
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy("");
-    }
-  }
-  async function uploadSheets() {
-    setError("");
-    if (
-      !routines.length ||
-      routines.some((r) => scores.get(r.routine_id)?.status !== "complete")
-    ) {
-      setError(
-        "Completa todas las hojas del bloque antes de exportar para envío.",
-      );
-      return;
-    }
-    setBusy("Preparando exportación");
-    try {
-      const { generateParticipantJudgingPdf } =
-        await import("../../../shared/participant-judging-sheet.js");
-      const batch = await api<{ id: string }>("export-start", {
-        block_id: blockId,
-      });
-      const logoBytes = new Uint8Array(
-        await (await fetch("/assets/levitate-logo-mx.png")).arrayBuffer(),
-      );
-      for (let n = 0; n < routines.length; n++) {
-        const r = routines[n],
-          row = scores.get(r.routine_id)!;
-        setBusy(`Subiendo hojas ${n + 1} de ${routines.length}`);
-        const bytes = await generateParticipantJudgingPdf({
-          eventTitle: bundle!.event.name,
-          routine: {
-            ...r,
-            id: r.routine_id,
-            programNumber: r.program_number?.trim() || undefined,
-            title: r.name,
-            block: bundle!.blocks.find((b) => b.block_id === blockId)?.name,
-          },
-          judges: row.judges,
-          logoBytes,
-        });
-        const data = await fileBase64(
-          new File([new Uint8Array(bytes)], "hojas.pdf", {
-            type: "application/pdf",
-          }),
-        );
-        await api("export-file", {
-          export_id: batch.id,
-          routine_id: r.routine_id,
-          pdf: data.split(",")[1],
-        });
-      }
-      setExportId(batch.id);
-      setNotice("Hojas guardadas en Drive privado.");
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -918,6 +858,12 @@ export function JudgingAdminWorkspace() {
             </div>
           ) : null}
           {loading && !bundle ? <Empty>Cargando programa…</Empty> : null}
+          {bundle && (view === "home" || view === "scores") ? (
+            <section className="ja-score-activity" aria-label="Actividad de jueces">
+              <header><Activity size={18} /><h2>Actividad de jueces</h2><span>Todos los bloques · cada 10 s</span></header>
+              <ActivityPanel judges={judges} activity={activity} routines={bundle.routines} blocks={bundle.blocks} selectedBlockId={blockId} />
+            </section>
+          ) : null}
           {bundle &&
           view !== "import" &&
           view !== "judges" &&
@@ -1099,58 +1045,6 @@ export function JudgingAdminWorkspace() {
           ) : null}
           {view === 'releve' ? <ReleveVotingAdminPanel refreshToken={bundle?.snapshot.fetchedAt || ''} onChanged={() => void refresh(true)} /> : null}
           {bundle && view === "scores" ? (
-            <section className="ja-score-activity" aria-label="Actividad de jueces">
-              <header><Activity size={18} /><h2>Actividad de jueces</h2><span>En vivo · cada 10 s</span></header>
-              <ActivityPanel judges={scoreJudges} activity={activity} routines={bundle.routines} />
-            </section>
-          ) : null}
-          {bundle && view === "scores" ? (
-            <div className="ja-export-actions">
-              {exports.some((e) => e.block_id === blockId) ? (
-                <select
-                  aria-label="Exportación de hojas"
-                  value={exportId}
-                  onChange={(e) => setExportId(e.target.value)}
-                >
-                  <option value="">Exportaciones anteriores</option>
-                  {exports
-                    .filter((e) => e.block_id === blockId)
-                    .map((e) => (
-                      <option
-                        key={e.id}
-                        value={e.id}
-                        disabled={e.files < routines.length}
-                      >
-                        {new Date(
-                          `${e.created_at.replace(" ", "T")}Z`,
-                        ).toLocaleString("es-MX")}{" "}
-                        · {e.files} hojas
-                      </option>
-                    ))}
-                </select>
-              ) : null}
-              <button
-                disabled={!!busy || !routines.length}
-                onClick={() => void uploadSheets()}
-              >
-                <CloudUpload size={17} />
-                Subir hojas a Drive
-              </button>
-              <button
-                disabled={!!busy || !exportId}
-                onClick={() =>
-                  setModal({
-                    title: "Enviar hojas a academias",
-                    content: <ExportRecipients exportId={exportId} api={api} />,
-                  })
-                }
-              >
-                <Mail size={17} />
-                Enviar correos
-              </button>
-            </div>
-          ) : null}
-          {bundle && view === "scores" ? (
             <div
               className="ja-table-scroll"
               tabIndex={0}
@@ -1163,15 +1057,18 @@ export function JudgingAdminWorkspace() {
                     <th>
                       Coreografía <small>{visible.length}</small>
                     </th>
-                    {scoreJudges.map((j) => (
+                    {scoreJudges.map((j) => {
+                      const summary = judgeSheetSummary(activity, j.judge_id, bundle.routines, bundle.blocks, blockId);
+                      return (
                       <th key={j.judge_id}>
                         <JudgeAvatar judge={j} />
                         <span className="ja-column-label">Juez</span>
                         <strong>{j.name}</strong>
+                        <div className="ja-judge-sheet-status"><small>{summary.label}</small>{summary.sheet ? <span>{summary.sheet}</span> : null}{summary.block ? <small className="ja-judge-sheet-block">{summary.block}</small> : null}</div>
                       </th>
-                    ))}
+                    );})}
                     <th>
-                      Puntaje oficial<small>/ 150</small>
+                      Puntaje total
                     </th>
                     {canManagePrograms ? <th className="ja-actions-column">
                       <span className="ja-sr">Acciones</span>
@@ -1181,6 +1078,7 @@ export function JudgingAdminWorkspace() {
                 <tbody>
                   {visible.map((r) => {
                     const row = scores.get(r.routine_id);
+                    const total = matrixTotal(row);
                     return (
                       <tr key={r.routine_id}>
                         <th scope="row">
@@ -1232,7 +1130,7 @@ export function JudgingAdminWorkspace() {
                                 <strong>{number(js?.total)}</strong>
                                 <small>
                                   {assigned
-                                    ? active ? "Calificando" : labels[js?.status || "pending"]
+                                    ? active ? "Hoja abierta" : labels[js?.status || "pending"]
                                     : "No asignado"}
                                 </small>
                                 {js?.penalty ? (
@@ -1240,20 +1138,20 @@ export function JudgingAdminWorkspace() {
                                     {number(js.penalty)}
                                   </span>
                                 ) : null}
-                                {active ? <LoaderCircle className="ja-presence ja-spin" size={14} aria-label="Juez calificando" /> : null}
+                                {active ? <span className="ja-presence-dot" role="img" aria-label="Juez con esta hoja abierta" /> : null}
                               </button>
                             </td>
                           );
                         })}
                         <td className="ja-total">
                           <strong>
-                            {number(standings.get(r.routine_id)?.score)}
+                            {total.text}
                           </strong>
                           <small>
                             {row?.completedJudges || 0}/
                             {row?.expectedJudges || 0} jueces
                           </small>
-                          <Status value={row?.status || "pending"} />
+                          <span className={`ja-status is-${total.status}`}>{total.label}</span>
                         </td>
                         {canManagePrograms ? <td>
                           <div className="ja-row-actions">
@@ -1380,117 +1278,6 @@ export function JudgingAdminWorkspace() {
       ) : null}
       {modal ? (
         <ModalFrame modal={modal} onClose={() => setModal(null)} />
-      ) : null}
-    </div>
-  );
-}
-
-function ExportRecipients({ exportId, api }: { exportId: string; api: Api }) {
-  const [data, setData] = useState<{
-      title: string;
-      recipients: {
-        email: string;
-        academy: string;
-        files: number;
-        deliveryStatus?: string | null;
-      }[];
-      missingAcademies: string[];
-    } | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [sent, setSent] = useState<string[]>([]),
-    [confirmed, setConfirmed] = useState(false);
-  useEffect(() => {
-    let live = true;
-    api<typeof data>("export-recipients", { export_id: exportId })
-      .then((r) => {
-        if (live) {
-          setData(r);
-          setSent(
-            r?.recipients
-              .filter((v) => v.deliveryStatus === "sent")
-              .map((v) => v.email) || [],
-          );
-        }
-      })
-      .catch((e) => {
-        if (live) setError(errorText(e));
-      });
-    return () => {
-      live = false;
-    };
-  }, [api, exportId]);
-  return (
-    <div className="ja-send">
-      <p>{data?.title || "Consultando destinatarios…"}</p>
-      {data?.missingAcademies.length ? (
-        <p className="ja-error">
-          Sin correo: {data.missingAcademies.join(", ")}
-        </p>
-      ) : null}
-      {data?.recipients.map((r) => (
-        <div key={r.email}>
-          <strong>{r.academy}</strong>
-          <span>
-            {r.email} · {r.files} hojas
-          </span>
-          {sent.includes(r.email) ? <b>Enviado</b> : null}
-          {r.deliveryStatus && r.deliveryStatus !== "sent" ? (
-            <p className="ja-error">
-              {r.deliveryStatus === "sending"
-                ? "Envío en curso"
-                : "Envío sin confirmar. Revisar en Gmail antes de repetir."}
-            </p>
-          ) : null}
-        </div>
-      ))}
-      {data && !data.recipients.length ? (
-        <Empty>No hay destinatarios con hojas disponibles.</Empty>
-      ) : null}
-      {data?.recipients.length ? (
-        <>
-          <label className="ja-check">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />
-            Confirmo los destinatarios y el envío
-          </label>
-          <button
-            className="ja-primary"
-            disabled={
-              !confirmed || busy || sent.length === data.recipients.length
-            }
-            onClick={async () => {
-              setBusy(true);
-              setError("");
-              try {
-                for (const r of data.recipients) {
-                  if (sent.includes(r.email) || r.deliveryStatus) continue;
-                  await api("export-send", {
-                    export_id: exportId,
-                    recipient: r.email,
-                    confirmation: exportId,
-                  });
-                  setSent((old) => [...old, r.email]);
-                }
-              } catch (e) {
-                setError(errorText(e));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Mail size={17} />
-            {busy ? "Enviando…" : "Enviar hojas"}
-          </button>
-        </>
-      ) : null}
-      {error ? (
-        <p role="alert" className="ja-error">
-          {error}
-        </p>
       ) : null}
     </div>
   );
@@ -2037,6 +1824,54 @@ function JudgeForm({
   );
 }
 
+export function SheetReleaseControl({ eventId, blockId, revision }: { eventId: string; blockId: string; revision?: string }) {
+  type Release = { blockId: string; state: "pending" | "ready" | "released" | "changed"; complete: boolean; canRelease: boolean; routines: number; availableRoutines: number; availableSheets: number; releasedRoutines: number; releasedSheets: number; releasedAt: string | null };
+  const [release, setRelease] = useState<Release | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const path = `/api/registration/admin/judging/workspace/sheet-release?eventId=${encodeURIComponent(eventId)}`;
+  useEffect(() => {
+    const controller = new AbortController();
+    setRelease(null);
+    setLoading(true);
+    setError("");
+    requestRegistrationApi<Release>(`${path}&blockId=${encodeURIComponent(blockId)}`, { signal: controller.signal })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        if (data.blockId !== blockId) throw new Error("No se pudo comprobar el bloque seleccionado.");
+        setRelease(data);
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "No se pudo comprobar el estado de las hojas.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [path, blockId, revision]);
+  const availableLabel = release ? `${release.availableSheets} ${release.availableSheets === 1 ? "hoja disponible" : "hojas disponibles"} de ${release.availableRoutines} ${release.availableRoutines === 1 ? "coreografía" : "coreografías"}` : "";
+  const releasedLabel = release ? `${release.releasedSheets} ${release.releasedSheets === 1 ? "hoja habilitada" : "hojas habilitadas"} de ${release.releasedRoutines} ${release.releasedRoutines === 1 ? "coreografía" : "coreografías"}` : "";
+  const message = loading ? "Comprobando hojas de este bloque…"
+    : release?.canRelease === true ? `${availableLabel}. Puedes ${release.availableSheets === 1 ? "enviarla" : "enviarlas"} ahora.`
+      : release && release.releasedSheets > 0 ? `${releasedLabel} en Mi Levitate. Las nuevas hojas requieren otro envío.`
+        : "Todavía no hay hojas terminadas para enviar.";
+  return <section className="ja-sheet-release" aria-label="Hojas de jueceo en Mi Levitate" aria-busy={loading || sending}>
+    <div><h3>Hojas de jueceo del bloque</h3><p role="status">{message}</p></div>
+    <button type="button" disabled={loading || sending || release?.canRelease !== true} onClick={async () => {
+      if (release?.canRelease !== true || sending) return;
+      setSending(true);
+      setError("");
+      try {
+        const data = await requestRegistrationApi<Release>(path, { method: "POST", body: JSON.stringify({ block_id: blockId }) });
+        if (data.blockId !== blockId) throw new Error("No se pudo comprobar el bloque seleccionado.");
+        setRelease(data);
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : "No se pudieron habilitar las hojas.");
+      } finally { setSending(false); }
+    }}>{sending ? "Habilitando hojas…" : release && !release.canRelease && release.releasedSheets > 0 ? "Hojas habilitadas" : "Enviar hojas de jueceo"}</button>
+    {error ? <p className="ja-error" role="alert">{error}</p> : null}
+  </section>;
+}
+
 export function ReportPanel({
   report,
   bundle,
@@ -2087,7 +1922,7 @@ export function ReportPanel({
         key={row.id}
         standing={standing}
         row={row}
-        maximumScore={bundle.snapshot.report.maximumScore}
+        maximumScore={standing.maximumScore ?? bundle.snapshot.report.maximumScore}
         eventId={bundle.event.id}
         blockId={blockId}
         expanded={expandedId === row.id}
@@ -2135,7 +1970,7 @@ export function ReportPanel({
             <option value="all">Todas</option>
             {(report?.sections || []).map((section) => (
               <option key={section.id} value={section.id}>
-                {section.label}
+                {compactJudgingCategoryTitle(section.label)}
               </option>
             ))}
           </select>
@@ -2161,6 +1996,7 @@ export function ReportPanel({
       <header>
         <h2>{report?.title || report?.name || "Dictamen final"}</h2>
       </header>
+      {!readOnly && report && blockId ? <SheetReleaseControl key={`${bundle.event.id}:${blockId}`} eventId={bundle.event.id} blockId={blockId} revision={bundle.snapshot.fetchedAt} /> : null}
       {hasFilters ? (
         <div className="ja-report-filter-summary">
           <p role="status">
@@ -2173,11 +2009,12 @@ export function ReportPanel({
         </div>
       ) : null}
       {sections.map((section) => (
-          <section key={section.id}>
-            <h2>{section.label}</h2>
+          <section className={section.kind === "releve" ? "ja-report-releve" : undefined} aria-label={section.kind === "releve" ? "Premio Relevé" : compactJudgingCategoryTitle(section.label)} key={section.id}>
+            {section.kind === "releve" ? <header><h2>Premio Relevé</h2><p>Premiación independiente</p></header> : <h2>{compactJudgingCategoryTitle(section.label)}</h2>}
+            {section.kind === "releve" ? <ReleveAudienceFavorite favorite={report?.releveAudienceFavorite} /> : null}
             {section.categories.map((c) => (
               <section className="ja-report-category" key={c.id}>
-                <h3>{c.title}</h3>
+                <h3>{compactJudgingCategoryTitle(c.title)}</h3>
                 <div className="judging-scores__standings">
                   {c.rows.map(({ standing }) => render(standing))}
                 </div>
@@ -2192,22 +2029,10 @@ export function ReportPanel({
             : "No hay resultados disponibles para mostrar en este bloque."}
         </Empty>
       ) : null}
-      {report?.topScore ? (
-        <div className="ja-top-score">
-          <Trophy size={24} />
-          <div>
-            <small>TOP SCORE</small>
-            <strong>
-              {lookup.get(report.topScore.routineId)?.name} ·{" "}
-              {number(report.topScore.score)}
-            </strong>
-          </div>
-        </div>
-      ) : null}
       <section className="ja-awards-report">
         <h2>Premios especiales</h2>
         {(report?.specialAwards || []).map((a) => (
-          <div key={a.id}>
+          <div className={`${a.id === "champion_of_champions" ? "is-champion" : ""}${a.isAssigned ? "" : " is-unassigned"}`} key={a.id}>
             <span>{a.title}</span>
             <strong>{a.displayValue || "Sin asignar"}</strong>
           </div>
@@ -2382,24 +2207,27 @@ function ActivityPanel({
   judges,
   activity,
   routines,
+  blocks,
+  selectedBlockId,
 }: {
   judges: Judge[];
   activity: Presence[];
   routines: Routine[];
+  blocks: Block[];
+  selectedBlockId: string;
 }) {
   return (
     <section className="ja-activity">
       {judges.map((j) => {
         const devices = activity.filter((a) => a.judge_id === j.judge_id);
         const presence = currentJudgeActivity(activity, j.judge_id);
-        const scoring = isScoring(presence);
-        const routine = routines.find((r) => r.routine_id === presence?.routine_id);
+        const summary = judgeSheetSummary(activity, j.judge_id, routines, blocks, selectedBlockId, true);
         return (
           <article key={j.judge_id}>
             <details>
             <summary>
               <JudgeAvatar judge={j} />
-              <span className="ja-activity-person"><strong>{j.name}</strong><small>{scoring ? routine ? `Calificando #${routine.program_number?.trim() || routine.routine_id} · ${routine.name}` : "Calificando" : presence ? presence.state === "left_sheet" ? "Salió de la hoja" : "En inicio" : devices.length ? "Sin actividad reciente" : "Sin actividad registrada"}</small></span>
+              <span className="ja-activity-person"><strong>{j.name}</strong><small className="ja-activity-current">{summary.label}{summary.sheet ? ` · ${summary.sheet}` : ""}</small>{summary.block ? <small className="ja-activity-block">{summary.block}</small> : null}</span>
               <span
                 className={`ja-status ${presence ? "is-complete" : "is-pending"}`}
               >
@@ -2415,7 +2243,7 @@ function ActivityPanel({
                 <div className="ja-device" key={a.device_id}>
                   <strong>
                     {a.platform || "Dispositivo"} ·{" "}
-                    {isScoring(a) ? "Calificando" : a.state === "left_sheet" ? "Salió de la hoja" : "En inicio"}
+                    {isScoring(a) ? "Hoja abierta" : a.state === "left_sheet" ? "Hoja cerrada" : a.state === "home" ? "En inicio" : "Sin hoja abierta"}
                   </strong>
                   <small>{a.device_id}</small>
                   <dl>

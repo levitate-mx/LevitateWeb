@@ -39,7 +39,7 @@ test('Relevé accepts only integer scores 1–3 for its five criteria, preservin
   assert.equal(validateJudgeRows('scores', [score(normal, 1, 0)], scope, [normal], [...ordinary, rubric], [...criteria, normalCriterion])[0].value, 0);
 });
 
-test('all Relevé report and participant sheets use the five labels and preserve the audience bonus normalization', () => {
+test('all Relevé report and participant sheets use the five labels and add the audience bonus to the real jury sum', () => {
   const scores = routines.flatMap(routine => judges.flatMap(judge => criteria.map(criterion => ({ ...score(routine, criterion.criterion_id), judge_id: judge.judge_id }))));
   const source = { event: { id: eventId, name: 'Relevé' }, blocks: [scoped({ block_id: blockId, name: 'Bloque 7' })], routines, judges,
     templates: [...ordinary, rubric], criteria, scores, penalties: [], feedback: [], specialAwards: [],
@@ -55,8 +55,10 @@ test('all Relevé report and participant sheets use the five labels and preserve
     }
   }
   const rows = result.report.blocks.flatMap(block => block.sections.flatMap(section => section.categories.flatMap(category => category.rows)));
-  assert.equal(rows.find(row => row.routineId === '236').score, 155);
-  assert.ok(rows.filter(row => row.routineId !== '236').every(row => row.score === 150));
+  assert.equal(rows.find(row => row.routineId === '236').score, 50);
+  assert.equal(rows.find(row => row.routineId === '236').juryScore, 45);
+  assert.ok(rows.every(row => row.maximumScore === 50));
+  assert.ok(rows.filter(row => row.routineId !== '236').every(row => row.score === 45));
   source.scores[0].value = 0;
   assert.notEqual(buildJudgingScoreSnapshot(source).rows.find(row => row.id === '232').status, 'complete');
 });

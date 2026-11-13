@@ -9,10 +9,14 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
 
 - Navegacion con etiquetas en escritorio y barra compacta en movil: Home,
   Editar calificaciones, Jueces, Dictamen final, Favoritos e Importar Excel;
-  Votacion Releve y configuracion. La actividad se integra a Editar calificaciones. El tablero prioriza el bloque,
+  Votacion Releve y configuracion. La actividad aparece arriba en Inicio y Editar calificaciones. El tablero prioriza el bloque,
   el avance de evaluacion y las proximas coreografias con la identidad de Levitate.
 - Matriz por coreografia y juez, estados completos/incompletos, filtros,
   metadatos editables, movimiento entre bloques y eliminacion confirmada.
+  El total se muestra sin decimales y se identifica como provisional mientras
+  faltan evaluaciones; solo una fila completa se identifica como oficial.
+  La columna suma las notas reales de los jueces, con la penalizacion ya
+  incluida en cada nota; no convierte esa suma a la escala de 150 puntos.
 - El puntaje abre la hoja Flutter ya utilizada por los jueces, en modo editor
   administrativo. Usa endpoints administrativos separados y almacenamiento
   local aislado por administrador, evento y juez. No simula actividad del juez.
@@ -24,6 +28,11 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
 - Actividad consulta cada 10 segundos; notas cada 30 segundos con la pagina
   visible y sin formularios abiertos. Los reportes viejos no cuentan como datos
   sincronizados. Una nota pendiente en una tablet aun no aparece en la web.
+  El panel superior muestra todos los jueces del evento con la hoja abierta y
+  su bloque. Cada encabezado de juez tambien identifica la hoja abierta, aunque
+  los filtros de la tabla la oculten o pertenezca a otro bloque. Abrir una hoja no implica que el
+  juez este modificando una nota. Inicio, hoja cerrada y actividad vencida se
+  distinguen sin inventar una hoja actual.
 - Favoritos multiples compatibles con los aliases anteriores, votos por juez
   y cuatro premios especiales manuales por bloque.
 - Dictamen y PDF reutilizan el calculo oficial y la presentacion de
@@ -31,7 +40,7 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
   lectura y conserva sus reglas. No se cambiaron las reglas de los clientes iOS.
 - Dictamen conserva el detalle por juez y los filtros del admin
   anterior: busqueda, disciplina y estado. Filtrar no recalcula lugares ni
-  modifica el PDF, Top Score o premios del bloque. Cambiar evento, bloque o
+  modifica el PDF ni los premios del bloque. Cambiar evento, bloque o
   vista limpia esos filtros y cierra el detalle; actualizar datos conserva la
   seleccion y muestra las notas nuevas sin guardar ni editar calificaciones.
 - Excel de hasta 20 MB usa el importador nativo con un identificador nuevo,
@@ -67,22 +76,32 @@ una edicion posterior. La bitacora no es una papelera ni una funcion de deshacer
 Debe ejecutarse antes de publicar el Worker. No modifica participantes, nombres,
 pagos, QR, calificaciones existentes ni membresias del jurado.
 
-## Exportaciones y correo
+## Hojas en Mi Levitate
 
-La descarga PDF funciona localmente. La subida de hojas a Drive exige que el
-bloque este completo, genera un PDF por coreografia con todas sus hojas y usa
-el almacenamiento privado existente. El maximo por PDF es 8 MB. No se crea un
-permiso publico en Drive. Las exportaciones anteriores quedan en el selector.
+La descarga PDF administrativa funciona localmente. **Enviar hojas de jueceo**
+habilita las hojas terminadas de los jueces del bloque seleccionado en Mi
+Levitate únicamente al pulsar el botón. Basta con una hoja completa de un juez;
+las evaluaciones de los demás jueces y coreografías pueden seguir pendientes.
+El servidor exige un administrador autorizado y registra administrador, fecha
+y la huella de cada hoja habilitada. Las nuevas hojas o las corregidas requieren
+otro envío; el avance de otras evaluaciones conserva las hojas ya habilitadas
+que siguen iguales. Las lecturas, actualizaciones y el
+guardado de calificaciones nunca habilitan hojas automáticamente.
 
-El directorio `academy_contacts` determina los destinatarios; se muestran para
-confirmacion explicita antes de enviar. Gmail recibe enlaces privados con
-vencimiento de 30 dias, no adjuntos publicos. El token se deriva con HMAC del
-secreto del servidor y solo su hash se guarda en D1. El endpoint de descarga
-valida hash, vencimiento y evento; responde sin cache y sin referer.
+El favorito del público y sus votos no alteran la huella de las hojas del
+jurado. Los resultados y las fotografías mantienen sus controles de publicación
+independientes. Las rutas directas de hojas también requieren la habilitación
+manual vigente de cada juez y la pertenencia autenticada del participante.
 
-Cada envio reserva una identidad unica por exportacion y destinatario antes de
-contactar Gmail. Un envio incierto no se repite automaticamente: debe revisarse
-en Gmail antes de preparar otro. Las pruebas no enviaron correos reales.
+El esquema aditivo agrega `manifest_json` en `registration_judging_sheet_releases`
+sin modificar las aprobaciones anteriores. `db:prepare:registration` verifica y
+aplica la columna antes de publicar el Worker. Las aprobaciones anteriores sin
+manifiesto conservan su comprobación original de bloque completo.
+
+El envío por correo está retirado de la interfaz. Las acciones anteriores
+`export-send` y `export-recipients` responden 410 después de comprobar la sesión;
+no consultan destinatarios ni envían correos. Los registros anteriores se
+conservan.
 
 ## Verificacion
 

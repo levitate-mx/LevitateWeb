@@ -16,14 +16,15 @@ const snapshot = (rows = [nativeRoutine()], id = sourceEvent) => ({ event: { id,
   rows, warnings: ["Private warning"], report: { private: true } });
 const manual = { status: "available", judges: [{ name: "Obsolete manual" }], url: "/api/participant/assets/old-sheet" };
 function fixture({ rows = [portalRow()], snapshots = { [sourceEvent]: snapshot() }, event = { published: 1 }, adminPreview = false, sourceEventId, data } = {}) {
-  const calls = [];
+  const calls = [], releaseCalls = [];
   const input = data || { participant: { id: "participant-one" }, routines: rows.map(row => ({ id: row.id || `registration:${row.registration_dance_id}`,
     title: "Own choreography", result: { status: "published", score: 138 }, judging: structuredClone(manual), photos: { status: "available" } })) };
-  return { calls, input, run: (extra = {}) => enrichParticipantJudging({ data: input, rows, event, adminPreview, sourceEventId,
+  return { calls, releaseCalls, input, run: (extra = {}) => enrichParticipantJudging({ data: input, rows, event, adminPreview, sourceEventId,
+    getReleasedJudgeIds: async options => { releaseCalls.push(options); return ['judge-1']; },
     getSnapshot: async id => { calls.push(id); if (snapshots[id] instanceof Error) throw snapshots[id]; return snapshots[id]; }, ...extra }) };
 }
 
-test("authoritative complete sheets replace stale manual assets without changing results or other chapters", async () => {
+test("manually approved complete sheets replace stale assets without changing results or other chapters", async () => {
   const f = fixture(); const result = await f.run(); const value = result.routines[0];
   assert.deepEqual(f.calls, [sourceEvent]);
   assert.equal(value.judging.source, "jueceocore"); assert.equal(value.judging.sourceStatus, "available");
@@ -53,7 +54,7 @@ test("hidden editions and draft curated routines do not consult the source at al
   }
 });
 
-test("an authenticated automatic edition releases complete sheets independently of photo or result drafts", async () => {
+test("manual approvals expose complete sheets in an authenticated automatic edition independently of photo or result drafts", async () => {
   for (const source of [
     { rows: [portalRow({ status: "draft" })] },
     { rows: [portalRow({ status: "draft", source_event_id: null, source_routine_id: null })], sourceEventId: sourceEvent,
@@ -68,7 +69,7 @@ test("an authenticated automatic edition releases complete sheets independently 
   }
 });
 
-test("automatic release cannot expose hidden editions or incomplete evaluations", async () => {
+test("manual approvals cannot expose hidden editions or incomplete judge evaluations", async () => {
   const hidden = fixture({ rows: [portalRow({ status: "draft" })], event: { published: 0, automatic_judging: true } });
   assert.equal((await hidden.run()).routines[0].judging.status, "pending"); assert.deepEqual(hidden.calls, []);
   const partial = fixture({ rows: [portalRow({ status: "draft" })], event: { published: 1, automatic_judging: true },
@@ -102,11 +103,54 @@ test("participants cannot read partial sheets even when they have a numeric offi
   assert.equal(result.routines[0].judging.pdf, undefined); assert.deepEqual(result.routines[0].judging.judges, []);
 });
 
-test("complete source status cannot bypass an incomplete expected judge", async () => {
+test("an approved complete judge sheet is available while another expected judge remains pending", async () => {
   const f = fixture({ snapshots: { [sourceEvent]: snapshot([nativeRoutine({ expectedJudges: 2,
     judges: [judge(), judge({ id: "judge-2", status: "pending", criteria: judge().criteria.map(value => ({ ...value, value: null })) })] })]) } });
-  const result = await f.run(); assert.equal(result.routines[0].judging.status, "pending");
-  assert.equal(result.routines[0].judging.pdf, undefined);
+  const result = await f.run(); const judging = result.routines[0].judging;
+  assert.equal(judging.status, "available"); assert.equal(judging.preview, false);
+  assert.deepEqual(judging.judges.map(value => value.id), ['judge-1']);
+  assert.deepEqual(judging.pdf.judges.map(value => value.id), ['judge-1']);
+  assert.equal(judging.pdf.preview, false);
+});
+
+test("complete source sheets remain private without an internal manual-release authorization", async () => {
+  for (const getReleasedJudgeIds of [undefined, async () => [], async () => ['unrelated-judge'], async () => { throw new Error('private release error'); }]) {
+    const f = fixture(); const result = await f.run({ getReleasedJudgeIds });
+    assert.equal(result.routines[0].judging.status, 'pending');
+    assert.deepEqual(result.routines[0].judging.judges, []); assert.equal(result.routines[0].judging.pdf, undefined);
+    assert.doesNotMatch(JSON.stringify(result), /private release error|Buen trabajo|old-sheet/);
+  }
+});
+
+test("manual authorizations receive the verified own source identity and never expose unapproved judges", async () => {
+  const own = nativeRoutine({ status: 'partial', expectedJudges: 3, completedJudges: 2,
+    judges: [judge(), judge({ id: 'judge-2', name: 'Jueza Dos', feedback: 'NOT YET APPROVED' }),
+      judge({ id: 'judge-3', name: 'Jueza Tres', status: 'partial', feedback: 'INCOMPLETE',
+        criteria: [judge().criteria[0], { ...judge().criteria[1], value: null }] })] });
+  const f = fixture({ snapshots: { [sourceEvent]: snapshot([own]) } });
+  const result = await f.run({ getReleasedJudgeIds: async options => {
+    assert.equal(options.sourceEventId, sourceEvent); assert.equal(options.sourceRoutineId, 'source-routine');
+    assert.equal(options.snapshot.rows[0], own);
+    return ['judge-1', 'judge-3', 'unrelated-judge'];
+  } });
+  const value = result.routines[0].judging;
+  assert.equal(value.status, 'available'); assert.equal(value.pdf.preview, false);
+  assert.deepEqual(value.judges.map(judge => judge.id), ['judge-1']);
+  assert.deepEqual(value.pdf.judges.map(judge => judge.id), ['judge-1']);
+  assert.doesNotMatch(JSON.stringify(value), /NOT YET APPROVED|INCOMPLETE|judge-2|judge-3/);
+  assert.equal(own.judges.length, 3, 'source roster remains untouched');
+});
+
+test("an invalid unapproved peer cannot hide an unchanged approved complete sheet or leak its own values", async () => {
+  const own = nativeRoutine({ status: 'partial', expectedJudges: 2, completedJudges: 1,
+    judges: [judge(), judge({ id: 'judge-2', name: 'Jueza Dos', status: 'partial',
+      feedback: 'PRIVATE INVALID DRAFT', criteria: [{ ...judge().criteria[0], value: 11 }] })] });
+  const f = fixture({ snapshots: { [sourceEvent]: snapshot([own]) } });
+  const result = await f.run(); const judging = result.routines[0].judging;
+  assert.equal(judging.status, 'available');
+  assert.deepEqual(judging.judges.map(value => value.id), ['judge-1']);
+  assert.deepEqual(judging.pdf.judges.map(value => value.id), ['judge-1']);
+  assert.doesNotMatch(JSON.stringify(judging), /PRIVATE INVALID DRAFT|judge-2/);
 });
 
 test("valid completed zero-valued sheets remain available and never gain points from penalties", async () => {

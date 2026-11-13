@@ -551,6 +551,29 @@ test("CLI requires explicit target and mode before invoking any database", async
   await assert.rejects(main(["--remote", "--check", "--persist-to", "/tmp/unused"]), /only with --local/);
 });
 
+test("judge-sheet manifests add a nullable column while preserving previous manual approvals", async t => {
+  const table = "registration_judging_sheet_releases";
+  const { db, sqlite, writes } = fixture(t, removeColumns(baseSchema, table, ["manifest_json"]));
+  seed(sqlite);
+  sqlite.prepare(`INSERT INTO ${table}(source_event_id,block_id,fingerprint,operation_nonce)
+    VALUES(?,?,?,?)`).run("source-event", "block-1", "a".repeat(64), "existing-approval");
+  const approvals = () => sqlite.prepare(`SELECT * FROM ${table} ORDER BY source_event_id,block_id`).all().map(row => ({ ...row }));
+  const before = approvals();
+  const plan = await planRegistrationSchema(db);
+  assert.equal(plan.steps.length, 1);
+  assert.match(plan.steps[0].sql, /^ALTER TABLE registration_judging_sheet_releases ADD COLUMN manifest_json TEXT/);
+  assert.deepEqual(writes, []);
+  await prepareRegistrationSchema(db, { apply: true });
+  const { manifest_json, ...approval } = approvals()[0];
+  assert.equal(manifest_json, null);
+  assert.deepEqual(approval, before[0]);
+  assert.throws(() => sqlite.prepare(`UPDATE ${table} SET manifest_json=?`).run("invalid json"), /CHECK constraint/);
+  assert.deepEqual((await planRegistrationSchema(db)).steps, []);
+  const writeCount = writes.length;
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(writes.length, writeCount);
+});
+
 test("existing databases receive the six ordered payment indexes once without changing orders", async t => {
   const { db, sqlite } = fixture(t);
   seed(sqlite);

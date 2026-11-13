@@ -5,6 +5,15 @@ it from JueceoLevitateAndroid with `node scripts/build-judge-web.mjs <website>`
 before building/deploying this website. The generated browser app lives at
 `public/jueceo/app/`; the browser entry is `/jueceo/app/` (or `/jueceo`).
 
+Use the build script after restoring every published source patch listed below.
+The script requires the layout, assigned-block, Relevé, save-notice and presence
+regressions to exist and pass before compiling. Its layout contract checks that
+feedback follows the final criterion on desktop and mobile. A shared Flutter
+checkout without those regressions must not replace the published browser app.
+The required build check and its geometry contract are preserved in
+`docs/patches/judge-web-rebuild-validation.patch`; apply it after the four client
+patches when restoring a shared Flutter checkout.
+
 ## Website appearance
 
 The web entry supplies `levitateWebTheme` from
@@ -34,8 +43,10 @@ workspace and restores navigation without clearing the draft.
 Judge portraits reuse the public jury files under `/assets/`, with exact
 normalized names so Daniel Herrera and Daniel Montalvo remain distinct. The web
 Flutter `webJudgePortraitCatalog` and React `judging/judgePortraits.ts` share
-those paths. Eva Carrillo uses a neutral placeholder until her portrait is added;
-failed image requests also show a placeholder. Native hero assets are unchanged.
+those paths. Eva Carrillo uses the supplied portrait at `/assets/eva-carrillo.jpg`;
+incomplete identities and failed image requests show a placeholder. Native hero
+assets are unchanged. The incremental Flutter change is preserved in
+`docs/patches/judge-web-eva-portrait.patch` and must be retained when rebuilding.
 
 The React administration workspace scopes the corresponding light/dark tokens
 under `.ja-app` in `JudgingAdminWorkspace.css`. It starts in dark mode and keeps
@@ -221,7 +232,10 @@ Aro or Trapecio sheets. The same template selection rules are used by the web
 client, score validation and result/PDF readers. Applicability is retained in
 the offline programme cache.
 
-The existing 150-point normalization and five-point audience bonus are retained.
+The final web report and PDF use the real sum of the jury totals. Three complete
+Relevé sheets contribute up to 45 points, plus the five-point audience bonus
+when the poll result is ready. General competition uses the sum of its assigned
+jury maxima, normally 210 points for three 70-point sheets.
 The targeted data update is in `db/judging/edomex-2026-releve-rubric.sql`; it
 refuses to run once any of the five Relevé routines has saved scores. It does
 not update or delete existing scores or apparatus rubrics. Deploy the new web

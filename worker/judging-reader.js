@@ -1,6 +1,6 @@
 import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
 import { withJudgingGroupParticipants } from './judging-group-participants.js';
-import { readReleveVotingResult } from './releve-competition.js';
+import { readReleveVotingResult, releveJudgingEventId } from './releve-competition.js';
 
 // The judge workspace applies its own authenticated write authorization.
 export { configuration as judgingConnection, readRows as readJudgingRows, allowedEventId as requireLevitateJudgingEvent };
@@ -308,7 +308,8 @@ export async function getJudgingSheets(env, eventId, { routineIds, fetcher = fet
   }
   const snapshot=buildJudgingScoreSnapshot({event,blocks:blocks.filter(block=>selectedBlocks.has(block.block_id)),routines,judges:data.judges,
     templates:data.criteria_templates,criteria:data.criteria,scores:data.scores,penalties:data.penalties,
-    feedback:data.feedback,specialAwards:[],releveVoting:await readReleveVotingResult(env.DB,eventId)},new Date().toISOString());
+    feedback:data.feedback,specialAwards:[],releveVoting:await readReleveVotingResult(env.DB,eventId)},new Date().toISOString(),
+    { judgeRoster: eventId === releveJudgingEventId ? 'levitate' : undefined });
   return {...snapshot,resultScope:{complete:true,eventId,blockIds:[...selectedBlocks]},
     publicationContext:{competitionConfig:event.competition_config || {}}};
 }
@@ -326,5 +327,5 @@ export async function getJudgingScores(env, eventId, { fetcher = fetch } = {}) {
     templates: data.criteria_templates, criteria: data.criteria, scores: data.scores, penalties: data.penalties, feedback: data.feedback,
     specialAwards: data.special_awards,
     releveVoting: await readReleveVotingResult(env.DB, eventId),
-  }, new Date().toISOString(), { judgeRoster: "levitate" }));
+  }, new Date().toISOString(), { judgeRoster: "levitate", completeEvent: true }));
 }

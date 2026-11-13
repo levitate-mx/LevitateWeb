@@ -5,9 +5,9 @@ import { buildJudgingScoreSnapshot } from '../worker/judging-score-data.js';
 
 // Expected values were produced by compiling the native Swift sources, not by
 // calling the JavaScript report code. The fixture records each source SHA-256.
-// Swift is not needed to run this portable regression suite. Numeric scores,
-// grouping and ordering retain native parity; the new announcer podium policy
-// is verified separately instead of reusing the fixture's old placement rules.
+// Swift is not needed to run this portable regression suite. The source fixtures
+// retain grouping/order coverage. Numeric reports intentionally sum real judge
+// totals instead of following the native normalized scoring configuration.
 const native = JSON.parse(await readFile(new URL('./fixtures/judging-report-native-contract.json', import.meta.url), 'utf8'));
 const eventId = 'report-fixture-event';
 const at = '2026-11-02T18:00:00.000Z';
@@ -38,7 +38,7 @@ function reportRows(block) {
 
 function close(actual, expected, context = '') {
   assert.equal(typeof actual, 'number', context);
-  assert.ok(Math.abs(actual - expected) < 1e-10, `${context}: ${actual} differs from native Swift ${expected}`);
+  assert.ok(Math.abs(actual - expected) < 1e-10, `${context}: ${actual} differs from expected ${expected}`);
 }
 
 function compareNativeGroupsAndScores(actual, expected) {
@@ -60,7 +60,7 @@ function compareNativeGroupsAndScores(actual, expected) {
 }
 
 for (const example of native.engine) {
-  test(`official score matches compiled Swift: ${example.name}`, () => {
+  test(`real judge sums replace former normalization settings: ${example.name}`, () => {
     const evaluatorWeights = Object.fromEntries(example.judges.map((judge, index) => [`Juez ${index + 1}`, judge.weight]));
     const data = fixture([{ id: '1' }], {
       maximum: example.judges[0].maximumScore,
@@ -71,14 +71,17 @@ for (const example of native.engine) {
       ? [row({ routine_id: '1', judge_id: `j${index + 1}`, criterion_id: 1, value: judge.subtotal })] : []);
     data.penalties = example.judges.map((judge, index) => row({ routine_id: '1', judge_id: `j${index + 1}`, value: judge.penalty }));
     const result = buildJudgingScoreSnapshot(data, at);
-    close(reportRows(result.report.blocks[0])[0].score, example.expected.score, example.name);
-    assert.equal(result.report.maximumScore, 150);
+    const expectedTotal = example.judges.reduce((sum, judge) => sum + (judge.subtotal > 0 ? Math.max(0, judge.subtotal + judge.penalty) : 0), 0);
+    const maximum = example.judges.length * example.judges[0].maximumScore;
+    close(reportRows(result.report.blocks[0])[0].score, expectedTotal, example.name);
+    assert.equal(reportRows(result.report.blocks[0])[0].maximumScore, maximum);
+    assert.equal(result.report.maximumScore, maximum);
     assert.deepEqual(result.warnings, []);
   });
 }
 
 for (const example of native.grouping) {
-  test(`Dictamen groups, order and scores retain compiled Swift parity: ${example.name}`, () => {
+  test(`Dictamen retains native fixture groups and order with real scores: ${example.name}`, () => {
     const result = buildJudgingScoreSnapshot(fixture(example.routines, { report: example.configuration }), at);
     assert.equal(result.report.blocks.length, 1);
     compareNativeGroupsAndScores(result.report.blocks[0].sections, example.expected);
@@ -86,32 +89,39 @@ for (const example of native.grouping) {
   });
 }
 
-test('a category with one recorded result receives first place regardless of the former solo score thresholds', () => {
-  for (const score of [0, 1, 50, 100, 150]) {
+test('a solo category receives its score medal without an invented ranking place', () => {
+  for (const [score, medal] of [[0, 'participacion'], [1, 'participacion'], [50, 'participacion'],
+    [100, 'participacion'], [110, 'bronce'], [120, 'plata'], [130, 'oro'], [150, 'oro']]) {
     for (const useThresholds of [true, false]) {
       const result = buildJudgingScoreSnapshot(fixture([{ id: '1', score }], {
         report: { use_solo_placement_thresholds: useThresholds },
       }), at);
       const entry = reportRows(result.report.blocks[0])[0];
       close(entry.score, score);
-      assert.deepEqual(entry.placement, { rank: 1, label: '1.º lugar', isFirstPlace: true, isParticipation: false });
+      assert.equal(entry.medal, medal);
+      assert.equal(entry.placement, null);
+      assert.equal(entry.directCompetition, false);
+      assert.equal(entry.eligibleCount, 1);
     }
   }
 });
 
-test('the announcer podium always stops at third place and labels every other recorded result as participation', () => {
+test('the announcer podium stops at third place while every competitor retains a score medal', () => {
   for (const configuredPositions of [0, 1, 2, 3, 4, 20, 100]) {
     const result = buildJudgingScoreSnapshot(fixture([
       { id: '1', score: 130 }, { id: '2', score: 120 }, { id: '3', score: 110 },
       { id: '4', score: 100 }, { id: '5', score: 90 },
     ], { report: { ranked_positions: configuredPositions } }), at);
     assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry.placement]), [
-      ['5', { rank: null, label: 'Participación', isFirstPlace: false, isParticipation: true }],
-      ['4', { rank: null, label: 'Participación', isFirstPlace: false, isParticipation: true }],
+      ['5', { rank: null, label: 'Sin lugar de podio', isFirstPlace: false, isParticipation: true }],
+      ['4', { rank: null, label: 'Sin lugar de podio', isFirstPlace: false, isParticipation: true }],
       ['3', { rank: 3, label: '3.º lugar', isFirstPlace: false, isParticipation: false }],
       ['2', { rank: 2, label: '2.º lugar', isFirstPlace: false, isParticipation: false }],
       ['1', { rank: 1, label: '1.º lugar', isFirstPlace: true, isParticipation: false }],
     ]);
+    assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => entry.medal),
+      ['participacion', 'participacion', 'bronce', 'plata', 'oro']);
+    assert.ok(reportRows(result.report.blocks[0]).every(entry => entry.directCompetition && entry.eligibleCount === 5));
   }
 });
 
@@ -126,19 +136,43 @@ test('each category retains an independent top-three podium and ascending score 
   assert.equal(categories.length, 2);
   for (const category of categories) {
     assert.deepEqual(category.rows.map(entry => entry.placement.rank), [null, 3, 2, 1]);
-    assert.equal(category.rows[0].placement.label, 'Participación');
+    assert.equal(category.rows[0].placement.label, 'Sin lugar de podio');
     assert.deepEqual(category.rows.map(entry => entry.score), [...category.rows.map(entry => entry.score)].sort((a, b) => a - b));
   }
 });
 
-test('equal scores share competition ranks while ranks outside the top three remain participation', () => {
+test('equal scores share competition ranks while ranks outside the top three have no podium place', () => {
   const result = buildJudgingScoreSnapshot(fixture([
     { id: '2', score: 130 }, { id: '1', score: 130 }, { id: '4', score: 120 },
     { id: '3', score: 120 }, { id: '5', score: 100 },
   ]), at);
   assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry.placement.rank, entry.placement.label]), [
-    ['5', null, 'Participación'], ['3', 3, '3.º lugar'], ['4', 3, '3.º lugar'], ['1', 1, '1.º lugar'], ['2', 1, '1.º lugar'],
+    ['5', null, 'Sin lugar de podio'], ['3', 3, '3.º lugar'], ['4', 3, '3.º lugar'], ['1', 1, '1.º lugar'], ['2', 1, '1.º lugar'],
   ]);
+  assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => entry.medal), ['participacion', 'plata', 'plata', 'oro', 'oro']);
+});
+
+test('a direct-competition winner can earn any medal and never upgrades the score medal by place', () => {
+  for (const [score, medal] of [[90, 'participacion'], [110, 'bronce'], [120, 'plata'], [140, 'oro']]) {
+    const result = buildJudgingScoreSnapshot(fixture([{ id: '1', score }, { id: '2', score: score - 1 }]), at);
+    const winner = reportRows(result.report.blocks[0]).find(entry => entry.routineId === '1');
+    assert.equal(winner.placement.rank, 1);
+    assert.equal(winner.medal, medal);
+    assert.equal(winner.directCompetition, true);
+  }
+});
+
+test('medal thresholds follow the effective score scale without rounding across a boundary', () => {
+  for (const maximum of [100, 150, 210]) {
+    for (const [ratio, medal, below] of [[181 / 210, 'oro', 'plata'], [161 / 210, 'plata', 'bronce'], [141 / 210, 'bronce', 'participacion']]) {
+      for (const [score, expected] of [[maximum * ratio, medal], [maximum * ratio - 1e-7, below]]) {
+        const result = buildJudgingScoreSnapshot(fixture([{ id: '1', score }], { maximum }), at);
+        const entry = reportRows(result.report.blocks[0])[0];
+        assert.equal(entry.medal, expected, `${score}/${maximum}`);
+        assert.equal(entry.placement, null);
+      }
+    }
+  }
 });
 
 test('no-note pending routines receive no invented places while explicitly recorded zero scores remain eligible', () => {
@@ -148,15 +182,17 @@ test('no-note pending routines receive no invented places while explicitly recor
   assert.equal(result.rows.find(entry => entry.id === '1').status, 'pending');
   assert.equal(entries.get('1').score, 0);
   assert.equal(entries.get('1').placement, null);
+  assert.equal(entries.get('1').medal, null);
   assert.equal(result.rows.find(entry => entry.id === '2').status, 'complete');
   assert.equal(entries.get('2').score, 0);
   assert.equal(entries.get('2').placement.rank, 1);
+  assert.equal(entries.get('2').medal, 'participacion');
   data.scores = [];
   result = buildJudgingScoreSnapshot(data, at);
-  assert.ok(reportRows(result.report.blocks[0]).every(entry => entry.score === 0 && entry.placement === null));
+  assert.ok(reportRows(result.report.blocks[0]).every(entry => entry.score === 0 && entry.placement === null && entry.medal === null));
 });
 
-test('criterion and evaluator weighting compose before official normalization without altering the raw judge sheet', () => {
+test('criterion weights remain in judge totals but evaluator weights never multiply the final real sum', () => {
   const data = fixture([{ id: '1', score: 40 }], { maximum: 100,
     scoring: { criterion_weights: { tecnica: 2 }, evaluator_weights: { 'Juez 1': 2, 'Juez 2': 1 } },
     judges: [{ judge_id: 'j1', name: 'Juez 1', role: 'judge' }, { judge_id: 'j2', name: 'Juez 2', role: 'judge' }],
@@ -166,7 +202,8 @@ test('criterion and evaluator weighting compose before official normalization wi
   assert.equal(result.rows[0].judges[0].criteria[0].value, 40);
   assert.equal(result.rows[0].judges[0].subtotal, 80);
   assert.equal(result.rows[0].judges[0].maximumScore, 200);
-  close(reportRows(result.report.blocks[0])[0].score, 80);
+  close(reportRows(result.report.blocks[0])[0].score, 240);
+  assert.equal(reportRows(result.report.blocks[0])[0].maximumScore, 400);
   data.event.competition_config.scoring.criterion_weights = { '1': 0 };
   const zeroWeighted = buildJudgingScoreSnapshot(data, at);
   assert.equal(zeroWeighted.rows[0].judges[0].maximumScore, 100, 'native falls back to the template maximum if all criterion weights are zero');
@@ -181,13 +218,15 @@ test('Dictamen tie positions use its native entry-number order rather than the s
   assert.deepEqual(reportRows(result.report.blocks[0]).map(item => [item.routineId, item.placement.rank]), [['1', 1], ['2', 1]]);
 });
 
-test('legitimate incomplete sheets produce the native official score while retaining their incomplete state', () => {
+test('legitimate incomplete sheets expose the recorded sum while retaining their incomplete state', () => {
   const data = fixture([{ id: '1', score: 90 }], { maximum: 100,
     judges: [{ judge_id: 'j1', name: 'Juez 1', role: 'judge' }, { judge_id: 'j2', name: 'Juez 2', role: 'judge' }] });
   const result = buildJudgingScoreSnapshot(data, at);
   assert.equal(result.rows[0].status, 'partial');
-  close(reportRows(result.report.blocks[0])[0].score, 67.5, 'one missing judge contributes zero to the official denominator');
-  assert.equal(reportRows(result.report.blocks[0])[0].placement.rank, 1, 'a valid partial result with recorded notes remains eligible');
+  close(reportRows(result.report.blocks[0])[0].score, 90, 'a pending judge adds no points and never divides the recorded total');
+  assert.equal(reportRows(result.report.blocks[0])[0].maximumScore, 200);
+  assert.equal(reportRows(result.report.blocks[0])[0].placement, null, 'a partial result does not invent direct competition');
+  assert.equal(reportRows(result.report.blocks[0])[0].medal, 'participacion', 'a valid partial result retains its medal against the whole jury maximum');
   assert.equal(result.report.blocks[0].counts.scored, 1);
   data.scores = [];
   const pending = buildJudgingScoreSnapshot(data, at);
@@ -231,6 +270,7 @@ test('invalid score or penalty data never receives a computed final score or a p
     const invalid = entries.find(item => item.routineId === '3');
     assert.equal(invalid.score, null, corrupt);
     assert.equal(invalid.placement, null, corrupt);
+    assert.equal(invalid.medal, null, corrupt);
     assert.equal(entries.find(item => item.routineId === '1').placement.rank, 1);
     assert.equal(entries.find(item => item.routineId === '2').placement.rank, 2, 'invalid data does not consume a rank');
     assert.equal(result.report.blocks[0].topScore.routineId, '1');
@@ -255,11 +295,15 @@ test('special awards honor the selected event and block, configured titles, manu
   assert.equal(result.report.title, 'Dictamen personalizado');
   assert.equal(result.report.subtitle, 'Final por bloque');
   assert.deepEqual(result.report.blocks[0].specialAwards, [
-    { id: 'award_1', title: 'Vestuario', displayValue: '#1 Vuelo', isAssigned: true, routineId: '1' },
+    { id: 'award_1', title: 'Vestuario', displayValue: 'Vuelo', isAssigned: true, routineId: '1' },
     { id: 'award_4', title: 'Porra', displayValue: 'Academia invitada', isAssigned: true, routineId: null },
   ]);
   assert.ok(result.report.blocks[1].specialAwards.every(award => !award.isAssigned));
+  assert.doesNotMatch(result.report.blocks[0].specialAwards[0].displayValue, /#1/);
   assert.doesNotMatch(JSON.stringify(result.report), /No debe aparecer|Oculto/);
+  data.specialAwards.find(award => award.event_id === eventId && award.award === 'award_4').manual_value = 'Academia 25';
+  assert.equal(buildJudgingScoreSnapshot(data, at).report.blocks[0].specialAwards.find(award => award.id === 'award_4').displayValue,
+    'Academia 25', 'intentional numbers in a manual award label remain intact');
   data.event.competition_config.result_report.showSpecialAwards = false;
   result = buildJudgingScoreSnapshot(data, at);
   assert.ok(result.report.blocks.every(block => block.specialAwards.length === 0));
@@ -275,4 +319,56 @@ test('report derivation preserves source registrations, order and private bounda
   assert.equal(result.fetchedAt, at);
   assert.deepEqual(result.rows.map(item => item.id), ['2', '1'], 'the raw sheet order remains separate from report display order');
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE-EVENT-KEY|PRIVATE-JUDGE-CODE|NaN|Infinity/);
+});
+
+test('the screenshot totals 19 and 43 remain the real sum with a 210-point jury maximum and penalties counted once', () => {
+  for (const scoring of [{}, { aggregation: 'average', official_missing_score_policy: 'ignore',
+    include_penalties: false, drop_highest_count: 1, evaluator_weights: { 'Juez 1': 4 } }]) {
+    const data = fixture([{ id: '1', score: 19 }, { id: '2', score: 45 }], { maximum: 70, scoring,
+      judges: [1, 2, 3].map(index => ({ judge_id: `j${index}`, name: `Juez ${index}`, role: 'judge' })) });
+    data.penalties = [row({ routine_id: '2', judge_id: 'j1', value: -2 })];
+    const result = buildJudgingScoreSnapshot(data, at);
+    const entries = new Map(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry]));
+    assert.equal(result.rows[1].judges[0].subtotal, 45);
+    assert.equal(result.rows[1].judges[0].total, 43);
+    assert.equal(entries.get('1').score, 19);
+    assert.equal(entries.get('2').score, 43);
+    assert.equal(entries.get('1').maximumScore, 210);
+    assert.equal(entries.get('2').maximumScore, 210);
+    assert.equal(result.report.maximumScore, 210);
+    assert.equal(result.rows[0].status, 'partial');
+  }
+});
+
+test('a complete three-judge jury awards the exact 181/161/141 medal thresholds on the real 210-point scale', () => {
+  const totals = [[61, 60, 60], [54, 54, 53], [47, 47, 47], [46, 47, 47]];
+  const data = fixture(totals.map((scores, index) => ({ id: String(index + 1), score: scores[0] })), {
+    maximum: 70, judges: [1, 2, 3].map(index => ({ judge_id: `j${index}`, name: `Juez ${index}`, role: 'judge' })),
+  });
+  totals.forEach((scores, index) => scores.slice(1).forEach((value, judge) =>
+    data.scores.push(row({ routine_id: String(index + 1), judge_id: `j${judge + 2}`, criterion_id: 1, value }))));
+  const result = buildJudgingScoreSnapshot(data, at);
+  const entries = new Map(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry]));
+  assert.deepEqual(['1', '2', '3', '4'].map(id => [entries.get(id).score, entries.get(id).medal]),
+    [[181, 'oro'], [161, 'plata'], [141, 'bronce'], [140, 'participacion']]);
+  assert.ok([...entries.values()].every(entry => entry.maximumScore === 210));
+  assert.equal(entries.get('1').placement.rank, 1);
+  assert.equal(entries.get('4').placement.rank, null);
+});
+
+test('each standing retains its real maximum in a mixed-scale event and unknown scales stay null', () => {
+  const data = fixture([{ id: '1', score: 19, genre: 'Jazz' }, { id: '2', score: 14, genre: 'Aro' }], {
+    maximum: 70, judges: [1, 2, 3].map(index => ({ judge_id: `j${index}`, name: `Juez ${index}`, role: 'judge' })),
+  });
+  data.templates[1].max_score = 15; data.criteria[1].max_score = 15;
+  let result = buildJudgingScoreSnapshot(data, at);
+  let entries = new Map(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry]));
+  assert.equal(entries.get('1').maximumScore, 210); assert.equal(entries.get('2').maximumScore, 45);
+  assert.equal(result.report.maximumScore, 210);
+  data.routines[1].genre = 'Unknown template';
+  result = buildJudgingScoreSnapshot(data, at);
+  entries = new Map(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry]));
+  assert.equal(entries.get('2').maximumScore, null); assert.equal(entries.get('2').score, null);
+  assert.equal(entries.get('2').medal, null);
+  assert.equal(buildJudgingScoreSnapshot(fixture([]), at).report.maximumScore, 1, 'an empty event has only a non-publishable fallback');
 });

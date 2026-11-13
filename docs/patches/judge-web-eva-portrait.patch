@@ -1,0 +1,114 @@
+diff --git a/lib/levitate_web_workspace.dart b/lib/levitate_web_workspace.dart
+--- a/lib/levitate_web_workspace.dart
++++ b/lib/levitate_web_workspace.dart
+@@ -791,6 +791,7 @@
+ 
+ /// Public website portraits, matched by exact normalized judge identity.
+ const webJudgePortraitCatalog = <String, String>{
++  'evacarrillo': '/assets/eva-carrillo.jpg',
+   'danielherrera': '/assets/daniel-herrera.jpg',
+   'renatapinal': '/assets/renata-pinal.jpg',
+   'anakarenrojas': '/assets/ana-karen-rojas.jpg',
+@@ -823,7 +824,7 @@
+     webJudgePortraitCatalog[normalizeWebJudgePortraitName(name)];
+ 
+ bool webJudgePortraitMustUsePlaceholder(String name) =>
+-    const {'eva', 'evacarrillo'}.contains(normalizeWebJudgePortraitName(name));
++    normalizeWebJudgePortraitName(name) == 'eva';
+ 
+ class WebJudgePortrait extends StatelessWidget {
+   const WebJudgePortrait({super.key, required this.judge, this.photoData});
+diff --git a/test/levitate_web_appearance_test.dart b/test/levitate_web_appearance_test.dart
+--- a/test/levitate_web_appearance_test.dart
++++ b/test/levitate_web_appearance_test.dart
+@@ -47,16 +47,12 @@
+         isNot(webJudgePortraitAssetFor('Daniel Montalvo')));
+   });
+ 
+-  test('Eva has an explicit portrait placeholder policy', () {
+-    for (final name in [
+-      'Eva',
+-      'EVA CARRILLO',
+-      'eva-carrillo',
+-      'Éva_Carrillo'
+-    ]) {
++  test('only an ambiguous Eva identity keeps the explicit placeholder policy', () {
++    for (final name in ['Eva', 'EVA', 'Éva']) {
+       expect(webJudgePortraitMustUsePlaceholder(name), isTrue, reason: name);
+       expect(webJudgePortraitAssetFor(name), isNull, reason: name);
+     }
++    expect(webJudgePortraitMustUsePlaceholder('Eva Carrillo'), isFalse);
+     expect(webJudgePortraitMustUsePlaceholder('Juez invitado'), isFalse);
+   });
+ 
+@@ -87,11 +83,11 @@
+       'failed named portrait uses its placeholder without another artist',
+       (tester) async {
+     final client = _mockPortraitHttp(statusCode: HttpStatus.notFound);
+-    await _pumpPortrait(tester, 'Daniel Montalvo',
++    await _pumpPortrait(tester, 'Eva Carrillo',
+         photoData: _portraitPhotoData);
+     await tester.pumpAndSettle();
+     expect(client.requests.map((uri) => uri.path),
+-        ['/assets/daniel-montalvo.jpg']);
++        ['/assets/eva-carrillo.jpg']);
+     expect(find.byKey(const ValueKey('web-judge-portrait-placeholder')),
+         findsOneWidget);
+     expect(
+@@ -128,7 +124,7 @@
+ 
+   for (final size in [const Size(1280, 720), const Size(390, 844)]) {
+     testWidgets(
+-        'Eva placeholder ignores custom and legacy photos at ${size.width.toInt()}px',
++        'Eva Carrillo portrait replaces custom and legacy photos at ${size.width.toInt()}px',
+         (tester) async {
+       _setViewport(tester, size);
+       await _loadPreviewFonts(tester);
+@@ -146,23 +142,25 @@
+           tester, store, levitateWebTheme(Brightness.dark), captureKey);
+       expect(find.byType(WebJudgePortrait), findsOneWidget);
+       expect(find.byKey(const ValueKey('web-judge-portrait-placeholder')),
+-          findsOneWidget);
++          findsNothing);
++      final portrait = tester.widgetList<Image>(find.byType(Image))
++          .singleWhere((image) => image.image is NetworkImage);
++      expect((portrait.image as NetworkImage).url, '/assets/eva-carrillo.jpg');
+       expect(
+           tester.widgetList<Image>(find.byType(Image)).where((image) =>
+               image.image is MemoryImage ||
+-              image.image is NetworkImage ||
+               (image.image is AssetImage &&
+                   judgeHeroAssets
+                       .containsValue((image.image as AssetImage).assetName))),
+           isEmpty);
+-      expect(client.requests, isEmpty);
++      expect(client.requests.map((uri) => uri.path), ['/assets/eva-carrillo.jpg']);
+       expect(tester.takeException(), isNull);
+       if (size.width < 900) {
+         await tester.ensureVisible(find.byType(WebJudgePortrait));
+         await tester.pumpAndSettle();
+       }
+       await _capture(
+-          tester, captureKey, 'judge-eva-placeholder', Brightness.dark, size);
++          tester, captureKey, 'judge-eva-portrait', Brightness.dark, size);
+       await tester.pumpWidget(const SizedBox());
+       _resetPortraitHttp();
+       await store.close();
+@@ -595,6 +593,7 @@
+ const _portraitPhotoData = 'data:image/png;base64,'
+     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+ const _canonicalPortraits = <String, String>{
++  'Eva Carrillo': '/assets/eva-carrillo.jpg',
+   'Daniel Herrera': '/assets/daniel-herrera.jpg',
+   'Renata Pinal': '/assets/renata-pinal.jpg',
+   'Ana Karen Rojas': '/assets/ana-karen-rojas.jpg',
+@@ -604,6 +603,9 @@
+ };
+ const _knownPortraits = <String, String>{
+   ..._canonicalPortraits,
++  'EVA CARRILLO': '/assets/eva-carrillo.jpg',
++  'eva-carrillo': '/assets/eva-carrillo.jpg',
++  'Éva_Carrillo': '/assets/eva-carrillo.jpg',
+   'DANIELHERRERA': '/assets/daniel-herrera.jpg',
+   'daniel-herrera': '/assets/daniel-herrera.jpg',
+   'RENATA_PINAL': '/assets/renata-pinal.jpg',

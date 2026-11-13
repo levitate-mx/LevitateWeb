@@ -6,6 +6,7 @@ type JudgePortraitSource = {
 // These are the portraits published in the Estado de México jury lineup.
 // Match full identities so Daniel Herrera and Daniel Montalvo stay distinct.
 const publishedPortraits = new Map([
+  ["evacarrillo", "/assets/eva-carrillo.jpg"],
   ["danielherrera", "/assets/daniel-herrera.jpg"],
   ["renatapinal", "/assets/renata-pinal.jpg"],
   ["anakarenrojas", "/assets/ana-karen-rojas.jpg"],
@@ -22,7 +23,7 @@ export function resolveJudgePortrait(judge: JudgePortraitSource): string | undef
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
-  // Eva's portrait is pending; do not show a legacy photo of someone else.
-  if (identity === "eva" || identity === "evacarrillo") return undefined;
+  // A first name alone must not pick a portrait or a legacy image of someone else.
+  if (identity === "eva") return undefined;
   return publishedPortraits.get(identity) || judge.photo_data?.trim() || undefined;
 }

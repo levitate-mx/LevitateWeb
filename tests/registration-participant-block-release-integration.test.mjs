@@ -3,12 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import worker from '../worker/index.js';
+import { getJudgingSheets } from '../worker/judging-reader.js';
+import { releaseJudgingSheets } from '../worker/judging-sheet-release.js';
 import { PHOTO_WATERMARK_VERSION, validatePreparedParticipantPhoto } from '../worker/participant-photo.js';
 
 const sourceId = 'f3c2e100-1234-4567-8abc-123456789abc';
 const editionId = 'block-release-test';
 const adminCookie = 'levitate_registration_session=admin-session';
 const preparedPhoto = new Uint8Array(await readFile(new URL('./fixtures/participant-photo-prepared.jpg', import.meta.url)));
+const isSheetReleaseRead = sql => /^\s*SELECT\b/i.test(sql) && /\bFROM registration_judging_sheet_releases\b/i.test(sql);
 
 class D1 {
   constructor() { this.sqlite = new DatabaseSync(':memory:'); }
@@ -43,6 +46,13 @@ function coreData() {
     penalties: [], feedback: [row({ routine_id: 'r1', judge_id: 'j1', body: 'Comentario de su evaluación.' }),
       row({ routine_id: 'r2', judge_id: 'j1', body: 'COMENTARIO PRIVADO DE OTRA PERSONA' })], special_awards: [],
   };
+}
+
+function addSourceJudge(core, id, scores = {}) {
+  core.judges.push({ event_id: sourceId, judge_id: id, name: `Jueza ${id}`, role: 'judge', assigned_block_ids: [] });
+  for (const [routine_id, value] of Object.entries(scores)) {
+    core.scores.push({ event_id: sourceId, routine_id, judge_id: id, criterion_id: 1, value });
+  }
 }
 
 async function digest(value) { return Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).toString('hex'); }
@@ -84,8 +94,10 @@ async function fixture(t, { partial = false, published = true, mode = 'block_clo
     return Response.json(rows.slice(offset, offset + limit));
   });
   const objects = new Map();
+  const storageReads = [];
   let pendingStorageRead = null;
   const bucket = { async get(key) {
+    storageReads.push(key);
     const object = objects.get(key);
     if (pendingStorageRead) {
       const pending = pendingStorageRead; pendingStorageRead = null;
@@ -139,7 +151,9 @@ async function fixture(t, { partial = false, published = true, mode = 'block_clo
     return admin({ action: 'block.close', eventId: editionId, blockId: 'b1', fingerprint: data.selectedBlock.fingerprint });
   };
   const asset = (id, expected = 200) => request(`/api/participant/assets/${id}`, { cookie, expected });
-  return { db, core, upstreamCalls, sourceFingerprint, request, admin, me, review, close, asset, cookie, delayNextStorageRead };
+  const sendSheets = async () => releaseJudgingSheets({ db, sourceEventId: sourceId, blockId: 'b1', actorId: 'admin', routineIds: ['r1', 'r2'],
+    snapshot: await getJudgingSheets(env, sourceId, { routineIds: ['r1'], trustedEventId: sourceId }) });
+  return { db, core, upstreamCalls, sourceFingerprint, request, admin, me, review, close, asset, cookie, delayNextStorageRead, sendSheets, storageReads };
 }
 
 function assertHidden(data) {
@@ -163,20 +177,19 @@ test('closing an incomplete block fails without publishing routines, files, the 
   assert.equal(f.sourceFingerprint(), before);
 });
 
-test('one closure releases the complete official result and sheet with approved owned photos only', async t => {
+test('one closure releases official results and approved owned photos while sheets await their separate manual action', async t => {
   const f = await fixture(t); const before = f.sourceFingerprint();
   assertHidden((await f.me()).data);
   await f.asset('approved-photo', 404);
   await f.close();
   const { data, headers } = await f.me(), own = data.routines[0];
-  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 120); assert.equal(own.result.place, 1);
-  assert.equal(own.judging.status, 'available'); assert.equal(own.judging.pdf.routine.id, 'r1');
-  assert.equal(own.judging.judges[0].feedback, 'Comentario de su evaluación.');
+  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 40); assert.equal(own.result.maxScore, 50); assert.equal(own.result.place, 1);
+  assert.equal(own.judging.status, 'pending'); assert.deepEqual(own.judging.judges, []);
   assert.deepEqual(own.photos.items.map(photo => photo.id), ['approved-photo']);
   assert.doesNotMatch(JSON.stringify(data), /COMENTARIO PRIVADO|draft-photo|other-photo/);
   assert.equal(headers.get('cache-control'), 'private, no-store');
   const photo = await f.asset('approved-photo'); assert.equal(photo.data.length, preparedPhoto.length);
-  await f.asset('approved-sheet'); await f.asset('draft-photo', 404); await f.asset('other-photo', 404);
+  await f.asset('approved-sheet', 404); await f.asset('draft-photo', 404); await f.asset('other-photo', 404);
   assert.equal(f.db.sqlite.prepare("SELECT published FROM participant_portal_assets WHERE id='draft-photo'").get().published, 0);
   assert.equal(f.sourceFingerprint(), before);
 });
@@ -192,7 +205,7 @@ test('reopening retracts the result and both direct file routes while preserving
   assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM participant_portal_access ORDER BY id').all(), grants);
   assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM participant_portal_assets ORDER BY id').all(), assets);
   assert.equal(f.sourceFingerprint(), before);
-  await f.close(); assert.equal((await f.me()).data.routines[0].judging.status, 'available');
+  await f.close(); assert.equal((await f.me()).data.routines[0].judging.status, 'pending');
 });
 
 test('a grade changed after closure withdraws the whole block until a fresh review is closed', async t => {
@@ -202,7 +215,7 @@ test('a grade changed after closure withdraws the whole block until a fresh revi
   await f.asset('approved-photo', 404); await f.asset('approved-sheet', 404);
   assert.equal((await f.review()).data.selectedBlock.state, 'changed');
   await f.close();
-  const own = (await f.me()).data.routines[0]; assert.equal(own.result.place, 2); assert.equal(own.judging.status, 'available');
+  const own = (await f.me()).data.routines[0]; assert.equal(own.result.place, 2); assert.equal(own.judging.status, 'pending');
 });
 
 test('hidden editions and galleries disabled by their operator remain hidden after closing', async t => {
@@ -213,7 +226,7 @@ test('hidden editions and galleries disabled by their operator remain hidden aft
   const preview = await f.request(`/api/registration/admin/participant-portal?preview=1&eventId=${editionId}&participantId=person-a`, { cookie: adminCookie });
   assert.equal(preview.data.adminPreview, true); assert.equal(preview.data.routines[0].judging.status, 'available');
   await f.admin({ action: 'event.upsert', event: { id: editionId, title: 'Levitate de prueba', season: 'Otoño 2026', venue: 'edomex', published: true } });
-  const own = (await f.me()).data.routines[0]; assert.equal(own.judging.status, 'available'); assert.deepEqual(own.photos.items, []);
+  const own = (await f.me()).data.routines[0]; assert.equal(own.judging.status, 'pending'); assert.deepEqual(own.photos.items, []);
   await f.asset('approved-photo', 404);
 });
 
@@ -222,7 +235,7 @@ test('individual publication preserves its previous completion rules and the new
   f.db.sqlite.prepare("UPDATE participant_portal_routines SET status='published'").run();
   const own = (await f.me()).data.routines[0];
   assert.equal(own.result.status, 'published'); assert.equal(own.result.place, null);
-  assert.equal(own.judging.status, 'available'); assert.equal(own.photos.items.length, 1);
+  assert.equal(own.judging.status, 'pending'); assert.equal(own.photos.items.length, 1);
   await f.asset('approved-photo');
   await f.request(`/api/registration/admin/participant-portal?publication=1&eventId=${editionId}`, { expected: 401 });
   await f.request('/api/registration/admin/participant-portal', { method: 'POST', cookie: 'levitate_registration_session=academy-user-session',
@@ -237,10 +250,11 @@ const withdrawals = {
   } }),
   'unpublishing the routine': f => f.admin({ action: 'routine.unpublish', routineId: 'portal-a' }),
 };
-for (const assetId of ['approved-photo', 'approved-sheet']) {
+for (const assetId of ['approved-photo']) {
   for (const [label, withdraw] of Object.entries(withdrawals)) {
     test(`${label} while storage is reading ${assetId} returns no private file bytes`, { timeout: 5000 }, async t => {
       const f = await fixture(t); await f.close();
+      if (assetId === 'approved-sheet') await f.sendSheets();
       const pending = f.delayNextStorageRead();
       const download = f.asset(assetId, 404);
       await pending.entered;
@@ -257,7 +271,7 @@ for (const assetId of ['approved-photo', 'approved-sheet']) {
 
 test('an individual routine withdrawal overrides its already-closed block without removing records', async t => {
   const f = await fixture(t); await f.close();
-  assert.equal((await f.me()).data.routines[0].judging.status, 'available');
+  assert.equal((await f.me()).data.routines[0].judging.status, 'pending');
   const counts = f.db.sqlite.prepare(`SELECT
     (SELECT count(*) FROM participant_portal_routines) AS routines,
     (SELECT count(*) FROM participant_portal_assets) AS assets,
@@ -277,16 +291,15 @@ function assertNoClosures(db) {
   assert.equal(db.sqlite.prepare('SELECT count(*) AS count FROM participant_portal_block_publications').get().count, 0);
 }
 
-test('automatic completion releases full-block results, sheets and approved photos without closing or publishing draft records', async t => {
+test('automatic completion releases results and approved photos but never sheets without the explicit button', async t => {
   const f = await fixture(t, { mode: 'block_complete' });
   const before = changes(f.db), sourceBefore = f.sourceFingerprint();
   const { data } = await f.me(), own = data.routines[0];
-  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 120); assert.equal(own.result.place, 1);
-  assert.equal(own.judging.status, 'available'); assert.equal(own.judging.judges.length, 1);
-  assert.equal(own.judging.pdf.routine.id, 'r1');
+  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 40); assert.equal(own.result.maxScore, 50); assert.equal(own.result.place, 1);
+  assert.equal(own.judging.status, 'pending'); assert.deepEqual(own.judging.judges, []);
   assert.deepEqual(own.photos.items.map(photo => photo.id), ['approved-photo']);
   assert.doesNotMatch(JSON.stringify(data), /COMENTARIO PRIVADO|draft-photo|other-photo/);
-  await f.asset('approved-photo'); await f.asset('approved-sheet');
+  await f.asset('approved-photo'); await f.asset('approved-sheet', 404);
   await f.asset('draft-photo', 404); await f.asset('other-photo', 404);
   assertNoClosures(f.db);
   assert.equal(f.db.sqlite.prepare("SELECT count(*) AS count FROM participant_portal_routines WHERE status='draft'").get().count, 2);
@@ -304,8 +317,8 @@ test('a peer missing its last criterion keeps the entire automatic block private
   const sourceBeforeRead = f.sourceFingerprint();
   const own = (await f.me()).data.routines[0];
   assert.equal(own.result.status, 'published'); assert.equal(own.result.place, 1);
-  assert.equal(own.judging.status, 'available'); assert.deepEqual(own.photos.items.map(photo => photo.id), ['approved-photo']);
-  await f.asset('approved-photo'); await f.asset('approved-sheet');
+  assert.equal(own.judging.status, 'pending'); assert.deepEqual(own.photos.items.map(photo => photo.id), ['approved-photo']);
+  await f.asset('approved-photo'); await f.asset('approved-sheet', 404);
   assertNoClosures(f.db); assert.equal(changes(f.db), before);
   assert.equal(f.sourceFingerprint(), sourceBeforeRead);
 });
@@ -319,8 +332,8 @@ test('automatic publication waits for every expected judge on every peer, includ
   await f.asset('approved-photo', 404);
   f.core.scores.push({ event_id: sourceId, routine_id: 'r2', judge_id: 'j2', criterion_id: 1, value: 32 });
   const own = (await f.me()).data.routines[0];
-  assert.equal(own.result.status, 'published'); assert.equal(own.judging.status, 'available');
-  assert.equal(own.judging.judges.length, 2);
+  assert.equal(own.result.status, 'published'); assert.equal(own.judging.status, 'pending');
+  assert.deepEqual(own.judging.judges, []);
   assert.equal(changes(f.db), before); assertNoClosures(f.db);
 });
 
@@ -338,16 +351,16 @@ test('removing a required criterion withdraws an automatic block again without d
   assert.deepEqual(f.db.sqlite.prepare('SELECT * FROM participant_portal_assets ORDER BY id').all(), files);
 });
 
-test('a complete grade correction appears in the next automatic result and sheet without another close action', async t => {
+test('a complete grade correction updates the automatic result while sheets stay private until manually enabled', async t => {
   const f = await fixture(t, { mode: 'block_complete' });
   const before = changes(f.db);
-  assert.equal((await f.me()).data.routines[0].result.score, 120);
+  assert.equal((await f.me()).data.routines[0].result.score, 40);
   f.core.scores.find(row => row.routine_id === 'r1').value = 42;
   f.core.scores.find(row => row.routine_id === 'r2').value = 45;
   const own = (await f.me()).data.routines[0];
-  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 126); assert.equal(own.result.place, 2);
-  assert.equal(own.judging.judges[0].criteria[0].score, 42);
-  assert.equal(own.judging.pdf.judges[0].criteria[0].value, 42);
+  assert.equal(own.result.status, 'published'); assert.equal(own.result.score, 42); assert.equal(own.result.maxScore, 50); assert.equal(own.result.place, 2);
+  assert.equal(own.judging.status, 'pending');
+  assert.equal(own.judging.pdf, undefined);
   assert.equal(changes(f.db), before); assertNoClosures(f.db);
 });
 
@@ -361,7 +374,7 @@ test('automatic completion preserves the hidden-edition and operator gallery gat
   } });
   before = changes(f.db);
   const own = (await f.me()).data.routines[0];
-  assert.equal(own.result.status, 'published'); assert.equal(own.judging.status, 'available');
+  assert.equal(own.result.status, 'published'); assert.equal(own.judging.status, 'pending');
   assert.deepEqual(own.photos.items, []); await f.asset('approved-photo', 404);
   assert.equal(changes(f.db), before); assertNoClosures(f.db);
 });
@@ -377,15 +390,16 @@ test('an explicit routine pause overrides automatic completion until its operato
   await f.admin({ action: 'routine.publish', routineId: 'portal-a' });
   assert.equal(f.db.sqlite.prepare("SELECT publication_blocked FROM participant_portal_routines WHERE id='portal-a'").get().publication_blocked, 0);
   before = changes(f.db);
-  assert.equal((await f.me()).data.routines[0].judging.status, 'available');
+  assert.equal((await f.me()).data.routines[0].judging.status, 'pending');
   await f.asset('approved-photo');
   assert.equal(changes(f.db), before); assertNoClosures(f.db);
 });
 
-for (const assetId of ['approved-photo', 'approved-sheet']) {
+for (const assetId of ['approved-photo']) {
   for (const [label, withdraw] of Object.entries(withdrawals).filter(([label]) => label !== 'reopening the block')) {
     test(`automatic mode: ${label} while storage is reading ${assetId} returns no private file bytes`, { timeout: 5000 }, async t => {
       const f = await fixture(t, { mode: 'block_complete' });
+      if (assetId === 'approved-sheet') await f.sendSheets();
       const pending = f.delayNextStorageRead();
       const download = f.asset(assetId, 404);
       await Promise.race([pending.entered, download.then(() => assert.fail('the completed automatic block must first authorize the storage read'))]);
@@ -397,3 +411,156 @@ for (const assetId of ['approved-photo', 'approved-sheet']) {
     });
   }
 }
+
+test('the explicit sheet action enables fresh sheets without publishing results or photos, and never serves an old static PDF', async t => {
+  const f = await fixture(t);
+  assertHidden((await f.me()).data);
+  await f.sendSheets();
+  let own = (await f.me()).data.routines[0];
+  assert.equal(own.judging.status, 'available'); assert.equal(own.judging.pdf.routine.id, 'r1');
+  assert.equal(own.judging.judges[0].feedback, 'Comentario de su evaluación.');
+  assert.equal(own.result.status, 'pending'); assert.deepEqual(own.photos.items, []);
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) n FROM participant_portal_block_publications').get().n, 0);
+  await f.asset('approved-sheet', 404);
+  assert.deepEqual(f.storageReads, [], 'retired uploaded sheet URLs never read the stored PDF');
+  f.core.scores[0].value = 42;
+  own = (await f.me()).data.routines[0];
+  assert.equal(own.judging.status, 'pending', 'edited sheets need a new explicit action');
+  await f.sendSheets();
+  own = (await f.me()).data.routines[0];
+  assert.equal(own.judging.status, 'available'); assert.equal(own.judging.pdf.judges[0].criteria[0].value, 42);
+  await f.asset('approved-sheet', 404); assert.deepEqual(f.storageReads, []);
+});
+
+test('manual sheets do not change automatic results/photos and do not leak other participants or stale corrections', async t => {
+  const f = await fixture(t, { mode: 'block_complete' });
+  const before = (await f.me()).data.routines[0];
+  assert.equal(before.judging.status, 'pending');
+  await f.sendSheets();
+  let data = (await f.me()).data, own = data.routines[0];
+  assert.equal(own.judging.status, 'available');
+  assert.deepEqual(own.photos, before.photos); assert.deepEqual(own.result, before.result);
+  assert.doesNotMatch(JSON.stringify(data), /COMENTARIO PRIVADO/);
+  f.core.scores.find(row => row.routine_id === 'r1').value = 42;
+  own = (await f.me()).data.routines[0];
+  assert.equal(own.result.score, 42); assert.equal(own.result.maxScore, 50); assert.equal(own.judging.status, 'pending');
+  assert.deepEqual(own.photos, before.photos);
+  await f.sendSheets();
+  own = (await f.me()).data.routines[0];
+  assert.equal(own.judging.pdf.judges[0].criteria[0].value, 42);
+});
+
+test('an explicit click sends only saved complete judge sheets before the routine or block is complete', async t => {
+  const f = await fixture(t, { partial: true });
+  addSourceJudge(f.core, 'j2'); addSourceJudge(f.core, 'j3');
+  f.core.feedback.push({ event_id: sourceId, routine_id: 'r1', judge_id: 'j2', body: 'BORRADOR PRIVADO JUEZA DOS' });
+  const before = f.sourceFingerprint();
+  assertHidden((await f.me()).data);
+  const sent = await f.sendSheets();
+  assert.equal(sent.complete, false); assert.equal(sent.releasedSheets, 1);
+  let data = (await f.me()).data, own = data.routines[0];
+  assert.equal(own.judging.status, 'available'); assert.equal(own.judging.preview, false);
+  assert.equal(own.judging.pdf.preview, false);
+  assert.deepEqual(own.judging.judges.map(judge => judge.id), ['j1']);
+  assert.deepEqual(own.judging.pdf.judges.map(judge => judge.id), ['j1']);
+  assert.equal(own.judging.pdf.judges[0].criteria[0].value, 40);
+  assert.equal(own.result.status, 'pending'); assert.deepEqual(own.photos.items, []);
+  assert.doesNotMatch(JSON.stringify(data), /BORRADOR PRIVADO|COMENTARIO PRIVADO DE OTRA PERSONA|Raíz/);
+  assert.equal(f.sourceFingerprint(), before, 'sending never edits source scores or feedback');
+  assert.equal(f.db.sqlite.prepare('SELECT count(*) n FROM participant_portal_block_publications').get().n, 0);
+  await f.asset('approved-sheet', 404); await f.asset('approved-photo', 404);
+  assert.deepEqual(f.storageReads, []);
+
+  // Neither a different choreography's progress nor another judge's newly
+  // completed sheet withdraws the unchanged approval or sends the new sheet.
+  f.core.scores.push({ event_id: sourceId, routine_id: 'r2', judge_id: 'j1', criterion_id: 1, value: 30 },
+    { event_id: sourceId, routine_id: 'r1', judge_id: 'j2', criterion_id: 1, value: 35 });
+  own = (await f.me()).data.routines[0];
+  assert.deepEqual(own.judging.judges.map(judge => judge.id), ['j1']);
+  assert.deepEqual(own.judging.pdf.judges.map(judge => judge.id), ['j1']);
+  assert.doesNotMatch(JSON.stringify(own.judging), /BORRADOR PRIVADO/);
+  await f.sendSheets();
+  own = (await f.me()).data.routines[0];
+  assert.deepEqual(own.judging.judges.map(judge => judge.id), ['j1', 'j2']);
+  assert.deepEqual(own.judging.pdf.judges.map(judge => judge.id), ['j1', 'j2']);
+  assert.ok(own.judging.pdf.judges.every(judge => judge.status === 'complete'));
+  assert.equal(own.result.status, 'pending'); assert.deepEqual(own.photos.items, []);
+});
+
+test('correcting one approved judge withholds only that sheet and preserves the other approved judge', async t => {
+  const f = await fixture(t, { partial: true });
+  addSourceJudge(f.core, 'j2', { r1: 35 }); addSourceJudge(f.core, 'j3');
+  await f.sendSheets();
+  f.core.scores.find(row => row.routine_id === 'r1' && row.judge_id === 'j1').value = 42;
+  let own = (await f.me()).data.routines[0];
+  assert.equal(own.judging.status, 'available');
+  assert.deepEqual(own.judging.judges.map(judge => judge.id), ['j2']);
+  assert.deepEqual(own.judging.pdf.judges.map(judge => judge.id), ['j2']);
+  assert.equal(own.result.status, 'pending'); assert.deepEqual(own.photos.items, []);
+  await f.sendSheets();
+  own = (await f.me()).data.routines[0];
+  assert.deepEqual(own.judging.pdf.judges.map(judge => judge.id), ['j1', 'j2']);
+  assert.equal(own.judging.pdf.judges[0].criteria[0].value, 42);
+});
+
+for (const change of ['withdrawal', 'correction and renewed approval']) {
+  test(`the final per-judge gate removes a sheet after ${change} while another approval survives`, async t => {
+    const f = await fixture(t, { partial: true });
+    addSourceJudge(f.core, 'j2', { r1: 35 }); await f.sendSheets();
+    const prepare = f.db.prepare.bind(f.db); let releaseReads = 0, changed = false;
+    f.db.prepare = sql => {
+      const query = prepare(sql);
+      if (isSheetReleaseRead(sql)) {
+        const first = query.first.bind(query);
+        query.first = async () => {
+          const result = await first();
+          if (++releaseReads === 1) {
+            if (change === 'withdrawal') {
+              const manifest = JSON.parse(result.manifest_json);
+              manifest.sheets = manifest.sheets.filter(sheet => sheet.routineId !== 'r1' || sheet.judgeId !== 'j2');
+              const canonical = JSON.stringify(manifest, (key, value) => value && typeof value === 'object' && !Array.isArray(value)
+                ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
+              f.db.sqlite.prepare('UPDATE registration_judging_sheet_releases SET manifest_json=?,fingerprint=? WHERE source_event_id=? AND block_id=?')
+                .run(JSON.stringify(manifest), await digest(canonical), sourceId, 'b1');
+            } else {
+              f.core.scores.find(row => row.routine_id === 'r1' && row.judge_id === 'j2').value = 36;
+              await f.sendSheets();
+            }
+            changed = true;
+          }
+          return result;
+        };
+      }
+      return query;
+    };
+    const data = (await f.me()).data, own = data.routines[0];
+    assert.equal(changed, true); assert.ok(releaseReads >= 2, 'the response rechecks the current individual approvals');
+    assert.equal(own.judging.status, 'available'); assert.equal(own.judging.pdf.preview, false);
+    assert.deepEqual(own.judging.judges.map(judge => judge.id), ['j1']);
+    assert.deepEqual(own.judging.pdf.judges.map(judge => judge.id), ['j1']);
+    assert.equal(own.result.status, 'pending'); assert.deepEqual(own.photos.items, []);
+    assert.doesNotMatch(JSON.stringify(data), /COMENTARIO PRIVADO DE OTRA PERSONA|approved-sheet/);
+    await f.asset('approved-sheet', 404); assert.deepEqual(f.storageReads, []);
+  });
+}
+
+test('removing participant membership during the awaited manual release check removes the owned sheet from the response', async t => {
+  const f = await fixture(t, { mode: 'block_complete' }); await f.sendSheets();
+  const prepare = f.db.prepare.bind(f.db); let withdrawn = false;
+  f.db.prepare = sql => {
+    const query = prepare(sql);
+    if (isSheetReleaseRead(sql)) {
+      const first = query.first.bind(query);
+      query.first = async () => {
+        const result = await first();
+        f.db.sqlite.prepare("DELETE FROM registration_dance_participants WHERE participant_id='person-a' AND dance_id='dance-a'").run();
+        withdrawn = true;
+        return result;
+      };
+    }
+    return query;
+  };
+  const data = (await f.me()).data;
+  assert.equal(withdrawn, true); assert.deepEqual(data.routines, []);
+  assert.doesNotMatch(JSON.stringify(data), /Comentario de su evaluación|approved-photo|approved-sheet/);
+});

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getJudgingEvents, getJudgingScores, getJudgingSheets } from '../worker/judging-reader.js';
+import { releveJudgingEventId } from '../worker/releve-competition.js';
 
 const eventId = 'f3c2e100-1234-4567-8abc-123456789abc';
 const otherEventId = 'f3c2e100-1234-4567-8abc-987654321abc';
@@ -60,6 +61,40 @@ function upstream(data, { cap = 1000 } = {}) {
     },
   };
 }
+
+test('the full event reader computes the overall champion while participant block reads cannot award it', async () => {
+  const id = releveJudgingEventId;
+  const data = scoreData(id, 9.8);
+  const lastBlock = 'bloque-7-aerial-seniors-releve';
+  data.blocks.push({ event_id: id, block_id: lastBlock, name: 'Bloque 7', sort_order: 7 });
+  data.routines[0] = { ...data.routines[0], name: 'Ganadora del primer bloque', academy: 'Academia Uno',
+    division: 'Teen', level: 'Intermedio', category: 'Solo' };
+  data.routines.push({ ...data.routines[0], routine_id: 'r2', name: 'Rutina del último bloque', block_id: lastBlock });
+  data.scores.push(...['j1', 'j2', 'j3'].map(judge_id => ({ event_id: id, routine_id: 'r2', judge_id, criterion_id: 1, value: 9 })));
+  const scopedEnv = { ...env, JUDGING_LEVITATE_EVENT_IDS: id };
+  const server = upstream(data);
+  const result = await getJudgingScores(scopedEnv, id, { fetcher: server.fetcher });
+  const first = result.report.blocks[0];
+  const final = result.report.blocks.at(-1);
+  assert.ok(!first.specialAwards.some(award => award.id === 'champion_of_champions'));
+  const championIndex = final.specialAwards.findIndex(award => award.id === 'champion_of_champions');
+  assert.ok(championIndex >= 0);
+  assert.equal(final.specialAwards[championIndex].isAssigned, true);
+  assert.equal(final.specialAwards[championIndex].routineId, 'r1');
+  assert.match(final.specialAwards[championIndex].displayValue, /Ganadora del primer bloque/);
+  assert.equal(final.specialAwards[championIndex + 1].id, 'award_4');
+
+  const sheets = await getJudgingSheets(scopedEnv, id, { routineIds: ['r2'], fetcher: async (input, options) => {
+    const response = await server.fetcher(input, options);
+    const filter = new URL(input).searchParams.get('routine_id');
+    const values = await response.json();
+    return Response.json(filter ? values.filter(row => filter.slice(4, -1).split(',').includes(row.routine_id)) : values);
+  } });
+  assert.equal(sheets.rows.length, 1);
+  assert.equal(sheets.rows[0].id, 'r2');
+  assert.ok(sheets.report.blocks.every(block => !block.specialAwards.some(award => award.id === 'champion_of_champions')),
+    'a complete block of participant sheets cannot stand in for the complete event');
+});
 
 test('judging event reads use GET-only column allowlists and continue through a server cap below the requested page size', async () => {
   const ids = [eventId, otherEventId, ...[1, 2, 3].map(id => `f3c2e100-1234-4567-8abc-${String(id).padStart(12, '0')}`)];
@@ -157,7 +192,9 @@ test('the block report reads state and assigned awards without exposing device m
   const result = await getJudgingScores(env, eventId, server);
   assert.equal(result.rows[0].state, 'Estado de México');
   assert.equal(result.report.blocks[0].specialAwards[0].displayValue, 'Vestuario destacado');
-  assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].score, 120);
+  const standing = result.report.blocks[0].sections[0].categories[0].rows[0];
+  assert.equal(standing.score, 24, 'the report retains the three recorded totals of 8 without normalization');
+  assert.equal(standing.maximumScore, 30, 'this routine retains the three 10-point judge scales');
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE-DEVICE|device_id|FOREIGN-AWARD/);
   assert.ok(server.calls.some(({ url }) => url.pathname.endsWith('/special_awards')));
 });

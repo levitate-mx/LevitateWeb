@@ -16,6 +16,8 @@ const judgeMigration = readFileSync(new URL("../../db/registration_judge_workspa
 managedStatements.push(...(judgeMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const judgingAdminMigration = readFileSync(new URL("../../db/registration_judging_admin.sql", import.meta.url), "utf8");
 managedStatements.push(...(judgingAdminMigration.match(/CREATE TABLE[\s\S]*?\n\);|CREATE (?:UNIQUE )?INDEX[^;]+;/g) || []));
+const judgingSheetReleaseMigration = readFileSync(new URL("../../db/registration_judging_sheet_releases.sql", import.meta.url), "utf8");
+managedStatements.push(...(judgingSheetReleaseMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const reportViewerMigration = readFileSync(new URL("../../db/registration_judging_report_viewers.sql", import.meta.url), "utf8");
 managedStatements.push(...(reportViewerMigration.match(/CREATE TABLE[\s\S]*?\n\);/g) || []));
 const participantDriveMigration = readFileSync(new URL("../../db/registration_participant_drive_sync.sql", import.meta.url), "utf8");
@@ -28,6 +30,9 @@ const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE T
 // These additions replace the schema preparation previously done by request handlers.
 // Existing tables, columns, IDs, permissions, and nonempty access tokens are preserved.
 const additions = {
+  registration_judging_sheet_releases: {
+    manifest_json: "TEXT CHECK (manifest_json IS NULL OR json_valid(manifest_json))",
+  },
   participant_portal_publication_settings: {
     automatic_completion: "INTEGER NOT NULL DEFAULT 0 CHECK (automatic_completion IN (0,1))",
   },

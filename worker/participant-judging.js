@@ -60,9 +60,28 @@ function sheetJudges(row) {
   return { judges, recorded, complete: row.status === "complete" && judges.every(judge => judge.status === "complete") };
 }
 
-function projectedJudging(snapshot, row, adminPreview) {
+async function projectedJudging(snapshot, row, adminPreview, getReleasedJudgeIds) {
   if (!["complete", "partial", "pending"].includes(row?.status)) return pending("unavailable");
-  const sheet = sheetJudges(row);
+  let selectedRow = row;
+  if (!adminPreview) {
+    // Authorizations identify individual complete sheets, never an entire
+    // partially judged routine. Preserve the verified source roster before
+    // selecting only those sheets approved by the authenticated caller.
+    if (!Array.isArray(row.judges) || !row.judges.length || row.judges.length > 20
+      || row.expectedJudges !== row.judges.length || !Number.isInteger(row.expectedJudges)
+      || row.judges.some(judge => !text(judge?.id) || !text(judge.name))
+      || new Set(row.judges.map(judge => judge.id)).size !== row.judges.length) return pending("unavailable");
+    if (typeof getReleasedJudgeIds !== "function") return pending("pending");
+    let released;
+    try { released = await getReleasedJudgeIds({ sourceEventId: eventKey(snapshot.event.id), sourceRoutineId: row.id, snapshot }); }
+    catch { return pending("unavailable"); }
+    if (!Array.isArray(released)) return pending("unavailable");
+    const approved = new Set(released.filter(id => typeof id === "string" && id));
+    const judges = row.judges.filter(judge => approved.has(judge.id) && judge.status === "complete");
+    if (!judges.length) return pending("pending");
+    selectedRow = { ...row, status: "complete", expectedJudges: judges.length, judges };
+  }
+  const sheet = sheetJudges(selectedRow);
   if (!sheet) return pending("unavailable");
   if ((!adminPreview && !sheet.complete) || (adminPreview && !sheet.recorded)) return pending("pending");
   const judges = sheet.judges.map(judge => ({
@@ -86,7 +105,7 @@ function projectedJudging(snapshot, row, adminPreview) {
  * JueceoCore. The caller supplies only the participant's registration rows and
  * performs session/admin authentication before invoking this function.
  */
-export async function enrichParticipantJudging({ data, rows, event, adminPreview = false, getSnapshot, sourceEventId } = {}) {
+export async function enrichParticipantJudging({ data, rows, event, adminPreview = false, getSnapshot, sourceEventId, getReleasedJudgeIds } = {}) {
   if (!Array.isArray(data?.routines)) return data;
   const byId = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -121,9 +140,9 @@ export async function enrichParticipantJudging({ data, rows, event, adminPreview
     let judging;
     let result=event?.automatic_results===true ? pendingParticipantResult() : routine.result;
     if (!row || !source.valid) judging = pending("unlinked");
-    // Only the caller's authenticated edition binding enables automatic
-    // release. Photo/result drafts remain independent; hidden editions always
-    // stay hidden, and projectedJudging still requires complete evaluations.
+    // The authenticated edition binding permits reading the source, while
+    // individual sheet authorizations remain an independent manual action.
+    // Photo/result drafts and hidden editions keep their own publication gates.
     else if (!canRead(row,source)) judging = pending("pending");
     else {
       const snapshot = await readSnapshot(source.eventId);
@@ -131,7 +150,7 @@ export async function enrichParticipantJudging({ data, rows, event, adminPreview
       else {
         const matched = snapshot.rows.filter(value => value?.id === source.routineId);
         judging = matched.length !== 1 ? pending(matched.length ? "unavailable" : "unlinked")
-          : projectedJudging(snapshot, matched[0], adminPreview);
+          : await projectedJudging(snapshot, matched[0], adminPreview, getReleasedJudgeIds);
         if(event?.automatic_results===true&&matched.length===1) result=projectParticipantResult({snapshot,routineId:source.routineId});
       }
     }

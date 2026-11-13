@@ -1,0 +1,162 @@
+diff --git a/scripts/build-judge-web.mjs b/scripts/build-judge-web.mjs
+--- a/scripts/build-judge-web.mjs
++++ b/scripts/build-judge-web.mjs
+@@ -8,9 +8,27 @@
+ if (!website || !existsSync(resolve(website, 'worker/judge-workspace.js'))) {
+   throw new Error('Indicate the LevitateWeb checkout containing the judge workspace backend.');
+ }
+-const build = spawnSync('flutter', ['build', 'web', '--release', '--target', 'lib/main_web.dart',
+-  '--base-href', '/jueceo/app/', '--pwa-strategy', 'none', '--no-web-resources-cdn'], { cwd: root, stdio: 'inherit' });
+-if (build.status !== 0) process.exit(build.status ?? 1);
++const requiredTests = [
++  'test/web_judging_layout_contract_test.dart',
++  'test/web_judge_test.dart',
++  'test/releve_rubric_test.dart',
++  'test/judging_save_feedback_test.dart',
++  'test/judge_activity_order_test.dart',
++];
++for (const test of requiredTests) {
++  if (!existsSync(resolve(root, test))) {
++    throw new Error(`Required judge web regression test is missing: ${test}`);
++  }
++}
++function runFlutter(args) {
++  const result = spawnSync('flutter', args, { cwd: root, stdio: 'inherit' });
++  if (result.error) throw result.error;
++  if (result.status !== 0) process.exit(result.status ?? 1);
++}
++console.log('Checking judge web layout, assignments, Relevé, saving and activity before building.');
++runFlutter(['test', ...requiredTests]);
++runFlutter(['build', 'web', '--release', '--target', 'lib/main_web.dart',
++  '--base-href', '/jueceo/app/', '--pwa-strategy', 'none', '--no-web-resources-cdn']);
+ const output = resolve(website, 'public/jueceo/app');
+ mkdirSync(output, { recursive: true });
+ cpSync(resolve(root, 'build/web'), output, { recursive: true });
+diff --git a/test/web_judging_layout_contract_test.dart b/test/web_judging_layout_contract_test.dart
+new file mode 100644
+--- /dev/null
++++ b/test/web_judging_layout_contract_test.dart
+@@ -0,0 +1,123 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:jueceo_coreografias_tablet/judging_store.dart';
++import 'package:jueceo_coreografias_tablet/levitate_web_theme.dart';
++import 'package:jueceo_coreografias_tablet/main.dart';
++import 'package:jueceo_coreografias_tablet/models.dart';
++
++import 'support/judging_fixture.dart';
++import 'support/memory_judging_repository.dart';
++
++void main() {
++  for (final size in [const Size(1280, 720), const Size(390, 844)]) {
++    testWidgets(
++        'web release layout keeps feedback below every criterion at ${size.width.toInt()}px',
++        (tester) async {
++      tester.view.physicalSize = size;
++      tester.view.devicePixelRatio = 1;
++      addTearDown(tester.view.resetPhysicalSize);
++      addTearDown(tester.view.resetDevicePixelRatio);
++      final api = FakeJudgingApi();
++      final store = _layoutStore(api);
++      addTearDown(store.dispose);
++      await tester.pumpWidget(MaterialApp(
++        theme: levitateWebTheme(Brightness.dark),
++        home: Scaffold(
++          body: AnimatedBuilder(
++            animation: store,
++            builder: (context, _) => JudgingPage(store: store),
++          ),
++        ),
++      ));
++      await tester.pumpAndSettle();
++
++      final criteria = find.byKey(const ValueKey('web-judging-criteria'));
++      final feedback = find.byKey(const ValueKey('web-judging-feedback'));
++      final actions = find.byKey(const ValueKey('web-judging-actions'));
++      final save = find.byKey(const ValueKey('web-save-score'));
++      expect(find.byType(ScoreStepperField), findsNWidgets(6));
++      expect(feedback, findsOneWidget);
++      expect(find.descendant(of: criteria, matching: feedback), findsOneWidget);
++      await tester.ensureVisible(feedback);
++      await tester.pumpAndSettle();
++
++      final lastCriterion = tester.getRect(find.byType(ScoreStepperField).last);
++      final feedbackRect = tester.getRect(feedback);
++      final actionsRect = tester.getRect(actions);
++      final saveRect = tester.getRect(save);
++      final viewport = Offset.zero & size;
++      expect(feedbackRect.top, greaterThanOrEqualTo(lastCriterion.bottom));
++      expect(feedbackRect.overlaps(actionsRect), isFalse);
++      expect(saveRect.top, greaterThanOrEqualTo(0));
++      expect(saveRect.bottom, lessThanOrEqualTo(size.height));
++      expect(viewport.contains(saveRect.center), isTrue);
++      expect(find.descendant(of: actions, matching: save), findsOneWidget);
++      expect(find.descendant(of: criteria, matching: actions), findsNothing);
++
++      if (size.width >= 900) {
++        final aside = find.byKey(const ValueKey('web-judging-observations'));
++        expect(aside, findsOneWidget);
++        expect(find.descendant(of: aside, matching: feedback), findsNothing);
++        expect(find.descendant(of: aside, matching: actions), findsNothing);
++        expect(
++            feedbackRect.right, lessThanOrEqualTo(tester.getRect(aside).left));
++      } else {
++        expect(find.byKey(const ValueKey('web-judging-observations')),
++            findsNothing);
++        final details = find.byKey(const ValueKey('web-judging-details'));
++        expect(tester.getRect(details).top,
++            greaterThanOrEqualTo(feedbackRect.bottom));
++      }
++
++      expect(store.scores, isEmpty);
++      expect(store.pendingChanges, isEmpty);
++      expect(api.scoreRows, isEmpty);
++      expect(api.feedbackRows, isEmpty);
++      expect(tester.takeException(), isNull);
++      await tester.pumpWidget(const SizedBox());
++      await store.close();
++    });
++  }
++}
++
++JudgingStore _layoutStore(FakeJudgingApi api) => JudgingStore(api,
++    automaticSync: false, localRepository: MemoryJudgingRepository())
++  ..appData = AppData.fromJson({
++    'sourceName': 'Web layout regression',
++    'judges': ['DANIEL'],
++    'judgeProfiles': [
++      {'judge_id': 'daniel', 'name': 'DANIEL', 'role': 'judge'},
++    ],
++    'blocks': [
++      {'block_id': 'layout-block', 'name': 'Motion', 'is_active': true},
++    ],
++    'routines': [
++      {
++        'routine_id': 'layout-routine',
++        'name': 'Rutina de prueba de distribución',
++        'block_id': 'layout-block',
++        'block': 'Motion',
++        'academy': 'Academia de prueba',
++        'genre': 'TEST',
++      },
++    ],
++    'templates': [
++      {
++        'genre': 'TEST',
++        'max_score': 60,
++        'criteria': [
++          for (var index = 1; index <= 6; index++)
++            {
++              'id': index,
++              'label': 'Criterio $index',
++              'section': index <= 3 ? 'Primera sección' : 'Segunda sección',
++              'max_score': 10,
++            },
++        ],
++      },
++    ],
++  })
++  ..selectedEvent = event('layout-event')
++  ..selectedJudge = 'DANIEL'
++  ..selectedBlockId = 'layout-block'
++  ..selectedRoutineId = 'layout-routine';

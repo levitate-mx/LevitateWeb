@@ -93,7 +93,7 @@ test("unfinished peers are retained so an own-only score cannot become a false f
   const result=await getJudgingSheets(env,eventId,{routineIds:["r1"],fetcher:upstream(data).fetcher});
   assert.equal(result.rows.find(row=>row.id==="r2").status,"pending");
   const own=projectParticipantResult({snapshot:result,routineId:"r1"});
-  assert.equal(own.score,120);assert.equal(own.place,null);assert.equal(own.eligibleCount,2);
+  assert.equal(own.score,40);assert.equal(own.place,null);assert.equal(own.eligibleCount,2);
 });
 
 test("multiple own presentations reuse block reads and request each complete block only once",async()=>{

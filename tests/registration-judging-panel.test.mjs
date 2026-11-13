@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { isJudgingGroupCategory } from '../shared/judging-group.js';
+import { compactJudgingCategoryTitle } from '../shared/judging-category-title.js';
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import vm from "node:vm";
@@ -11,7 +12,7 @@ import { normalizeAdminSearch } from "../src/components/admin/adminNavigation.ts
 
 const source = await readFile(new URL("../src/components/admin/JudgingScoresPanel.tsx", import.meta.url), "utf8");
 const syntax = ts.createSourceFile("JudgingScoresPanel.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const functionNames = ["scoreValue", "reportScoreValue", "disciplineName", "blockKey", "blockLabel", "JudgeBreakdown", "filterReportSections", "DictamenEntry"];
+const functionNames = ["scoreValue", "reportScoreValue", "disciplineName", "blockKey", "blockLabel", "JudgeBreakdown", "filterReportSections", "ReleveAudienceFavorite", "DictamenEntry"];
 const declarations = functionNames.map((name) => {
   const declaration = syntax.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(declaration, `missing application function ${name}`);
@@ -25,9 +26,9 @@ for (const name of ["statusLabels", "scoreFormatter"]) {
 const javascript = ts.transpileModule(`${declarations.join("\n")}\nglobalThis.helpers = { ${functionNames.join(",")} };`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
-const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, Building2, ChevronDown, MapPin };
+const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, compactJudgingCategoryTitle, Building2, ChevronDown, MapPin };
 vm.runInNewContext(javascript, scope);
-const { scoreValue, reportScoreValue, disciplineName, blockKey, blockLabel, JudgeBreakdown, filterReportSections, DictamenEntry } = scope.helpers;
+const { scoreValue, reportScoreValue, disciplineName, blockKey, blockLabel, JudgeBreakdown, filterReportSections, ReleveAudienceFavorite, DictamenEntry } = scope.helpers;
 
 const judge = (overrides = {}) => ({
   id: "judge-1", name: "Jueza de prueba", status: "complete", subtotal: 98.25, penalty: 1.5,
@@ -99,7 +100,7 @@ const choreography = (id, overrides = {}) => ({
   category: "Solo", level: "Intermedio", blockId: "b1", blockName: "Bloque 1", status: "complete",
   completedJudges: 1, expectedJudges: 1, recordedScores: 1, judges: [judge()], ...overrides,
 });
-const standing = (routineId, rank, score) => ({ routineId, score,
+const standing = (routineId, rank, score) => ({ routineId, score, medal: "oro", directCompetition: true, eligibleCount: 3,
   placement: { rank, label: `${rank}°`, isFirstPlace: rank === 1, isParticipation: false } });
 
 test("dictamen filters preserve the complete block's places and server announcement order", () => {
@@ -117,11 +118,13 @@ test("dictamen filters preserve the complete block's places and server announcem
 });
 
 test("dictamen reading rows lead with the score, end with the place and retain expandable judge sheets", () => {
-  assert.equal(reportScoreValue(129.285714285), "129.3");
+  assert.equal(reportScoreValue(129.285714285), "129");
+  assert.equal(reportScoreValue(12.1), "12");
+  assert.equal(reportScoreValue(12.9), "13");
   assert.equal(reportScoreValue(0), "0");
   assert.equal(reportScoreValue(null), "Pendiente");
   const html = renderToStaticMarkup(DictamenEntry({
-    standing: standing("3", 1, 129.285714285), row: choreography("3", { name: "Vuelo <final>" }), maximumScore: 150,
+    standing: standing("3", 1, 129.285714285), row: choreography("3", { name: "Vuelo <final>" }), maximumScore: 210,
     eventId: "levitate-event", blockId: "b1", expanded: true, onToggle() {},
   }));
   assert.match(html, /judging-scores__entry is-first/);
@@ -131,34 +134,172 @@ test("dictamen reading rows lead with the score, end with the place and retain e
   assert.match(html, /Vuelo &lt;final&gt;/);
   assert.match(html, /Academia Águila/);
   assert.match(html, /Estado de México/);
-  assert.match(html, />129.3</);
-  assert.match(html, /Escala de 150 puntos/);
+  assert.match(html, />129</);
+  assert.doesNotMatch(html, />129\.3</);
+  assert.match(html, /Escala de 210 puntos/);
   assert.match(html, />1\.º lugar</);
+  assert.match(html, />Medalla<\/span><strong>Oro<\/strong>/);
   assert.match(html, /aria-expanded="true"/);
   assert.match(html, /Subtotal registrado/);
   assert.match(html, /judging-score-detail-levitate-event-b1-3/);
 });
 
 test("unavailable dictamen cards do not invent zero points or a placement", () => {
-  const html = renderToStaticMarkup(DictamenEntry({ standing: { routineId: "3", score: null, placement: null },
-    row: choreography("3", { status: "unavailable" }), maximumScore: 150, eventId: "levitate-event", blockId: "b1",
+  const html = renderToStaticMarkup(DictamenEntry({ standing: { routineId: "3", score: null, medal: null, directCompetition: true, eligibleCount: 2, placement: null },
+    row: choreography("3", { status: "unavailable" }), maximumScore: 210, eventId: "levitate-event", blockId: "b1",
     expanded: false, onToggle() {},
   }));
   assert.match(html, /No disponible/);
   assert.match(html, /Sin lugar asignado/);
   assert.match(html, /aria-expanded="false"/);
-  assert.doesNotMatch(html, /pts \/ 150|>0<|>1°<|is-first|Subtotal registrado/);
+  assert.doesNotMatch(html, /pts \/ 210|>0<|>1°<|is-first|Subtotal registrado/);
 });
 
 test("the reading view distinguishes pending sheets from a real zero and spells out participation", () => {
-  const render = (standing, row) => renderToStaticMarkup(DictamenEntry({ standing, row, maximumScore: 150,
+  const render = (standing, row) => renderToStaticMarkup(DictamenEntry({ standing, row, maximumScore: 210,
     eventId: "levitate-event", blockId: "b1", expanded: false, onToggle() {},
   }));
-  const pending = render({ routineId: "3", score: 0, placement: null }, choreography("3", { status: "pending", recordedScores: 0 }));
+  const pending = render({ routineId: "3", score: 0, medal: null, directCompetition: true, eligibleCount: 2, placement: null }, choreography("3", { status: "pending", recordedScores: 0 }));
   assert.match(pending, /Pendiente/);
   assert.doesNotMatch(pending, />0<|[123]\.º lugar|jueces completos|Escala de/);
-  const zero = render({ routineId: "3", score: 0, placement: { rank: null, label: "PART.", isFirstPlace: false, isParticipation: true } }, choreography("3"));
+  const zero = render({ routineId: "3", score: 0, medal: "participacion", directCompetition: true, eligibleCount: 2, placement: { rank: null, label: "Sin lugar de podio", isFirstPlace: false, isParticipation: true } }, choreography("3"));
   assert.match(zero, />0</);
-  assert.match(zero, />Participación</);
+  assert.match(zero, />Medalla<\/span><strong>Participación<\/strong>/);
+  assert.match(zero, />Lugar<\/span><strong>Sin lugar de podio<\/strong>/);
   assert.doesNotMatch(zero, /PART\.|jueces completos|Escala de/);
+});
+
+
+test("every server-provided medal is shown without a ranking when there is no direct competition", () => {
+  for (const [medal, label] of [["oro", "Oro"], ["plata", "Plata"], ["bronce", "Bronce"], ["participacion", "Participación"]]) {
+    const html = renderToStaticMarkup(DictamenEntry({
+      standing: { ...standing("3", 1, 120), medal, directCompetition: false, eligibleCount: 1 },
+      row: choreography("3"), maximumScore: 210, eventId: "levitate-event", blockId: "b1",
+      expanded: false, onToggle() {},
+    }));
+    assert.ok(html.includes(`<span>Medalla</span><strong>${label}</strong>`));
+    assert.match(html, /Sin competencia directa/);
+    assert.doesNotMatch(html, />Lugar<|[123]\.º lugar|is-first/);
+  }
+});
+
+test("a direct-competition place is additional to the authoritative medal and survives filtering", () => {
+  const html = renderToStaticMarkup(DictamenEntry({
+    standing: { ...standing("3", 1, 140), medal: "plata" }, row: choreography("3"),
+    maximumScore: 210, eventId: "levitate-event", blockId: "b1", expanded: false, onToggle() {},
+  }));
+  assert.match(html, />Medalla<\/span><strong>Plata<\/strong>/);
+  assert.match(html, />Lugar<\/span><strong>1\.º lugar<\/strong>/);
+  assert.doesNotMatch(html, /Oro|Sin competencia directa/);
+});
+
+test("unpublished audience results cannot display a premature medal or winning place", () => {
+  const html = renderToStaticMarkup(DictamenEntry({
+    standing: { ...standing("3", 1, 45), medal: "oro", audience: { votes: 12, bonus: 0, ready: false, status: "open" } },
+    row: choreography("3"), maximumScore: 50, eventId: "levitate-event", blockId: "b1", expanded: false, onToggle() {},
+  }));
+  assert.match(html, />Medalla<\/span><strong>Pendiente<\/strong>/);
+  assert.match(html, />Lugar<\/span><strong>Pendiente<\/strong>/);
+  assert.doesNotMatch(html, />Oro<|[123]\.º lugar|is-first/);
+});
+
+test("dictamen filters keep the independent Relevé section and the original medal and ranking", () => {
+  const ordinary = standing("1", 1, 140);
+  const releve = { ...standing("2", 2, 120), medal: "plata" };
+  const block = { sections: [
+    { id: "ARO", label: "Aro", categories: [{ id: "a", title: "Teen", rows: [ordinary] }] },
+    { id: "RELEVE", label: "RELEVÉ", kind: "releve", categories: [{ id: "r", title: "Motion", rows: [releve] }] },
+  ] };
+  const rows = [choreography("1"), choreography("2", { name: "Relevé independiente" })];
+  const sections = filterReportSections(block, rows, { query: "independiente", discipline: "all", status: "all" });
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].kind, "releve");
+  assert.equal(sections[0].categories[0].rows[0].standing, releve);
+  assert.equal(sections[0].categories[0].rows[0].standing.medal, "plata");
+  assert.equal(sections[0].categories[0].rows[0].standing.placement.rank, 2);
+});
+
+
+test("dictamen cards round display totals only and omit presentation numbers while judge details stay precise", () => {
+  for (const [score, label] of [[12.1, "12"], [12.9, "13"]]) {
+    const result = { ...standing("internal-id", 1, score), medal: "participacion" };
+    const row = choreography("internal-id", { programNumber: "2", name: "Rutina sin número" });
+    const before = structuredClone({ result, row });
+    const html = renderToStaticMarkup(DictamenEntry({ standing: result, row, maximumScore: 210,
+      eventId: "event", blockId: "block", expanded: true, onToggle() {}, showMetadata: true,
+    }));
+    assert.ok(html.includes(`<span>Puntaje</span><strong>${label}</strong>`));
+    assert.doesNotMatch(html, />#2<|>#internal-id<|>12\.[19]</);
+    assert.match(html, /<td>18.25<\/td>/);
+    assert.match(html, /<dd>98.25<\/dd>/);
+    assert.deepEqual({ result, row }, before, "rounding must not modify scores, medal or ranking");
+  }
+});
+
+test("the audience favorite is announced only from trusted ready data and otherwise remains explicit", () => {
+  const winner = { routineId: "hidden-id", name: "Rutina favorita", academy: "Academia del público", votes: 28 };
+  const ready = renderToStaticMarkup(ReleveAudienceFavorite({ favorite: { status: "ready", winner } }));
+  assert.match(ready, /El más votado por el público/);
+  assert.match(ready, /Rutina favorita/);
+  assert.match(ready, /Academia del público · 28 votos/);
+  assert.doesNotMatch(ready, /hidden-id|#/);
+  for (const [status, message] of [["pending", "Pendiente del cierre de votación"], ["tie", "Empate del público"], ["none", "Sin votos registrados"]]) {
+    const html = renderToStaticMarkup(ReleveAudienceFavorite({ favorite: { status, winner }, heading: "h4" }));
+    assert.ok(html.includes(message));
+    assert.doesNotMatch(html, /Rutina favorita|28 votos/);
+  }
+});
+
+test("category-title presentation leaves raw age groups and their official standings unchanged", () => {
+  const titles = ["PETITE: 7 A 10 AÑOS DÚO", "PETITE: 8 A 11 AÑOS DÚO", "SENIOR INTERMEDIO DÚO: 2 APARATOS"];
+  const block = { sections: [{ id: "MOTION", label: "Motion", categories: titles.map((title, index) => ({
+    id: `raw-age-group-${index}`, title, rows: [standing(String(index + 1), index + 1, 120)],
+  })) }] };
+  const before = structuredClone(block);
+  const rows = [choreography("1"), choreography("2"), choreography("3")];
+  const sections = filterReportSections(block, rows, { query: "", discipline: "all", status: "all" });
+  assert.equal(sections[0].categories.length, 3);
+  assert.deepEqual(Array.from(sections[0].categories, category => category.title), titles);
+  assert.deepEqual(Array.from(sections[0].categories, category => category.id), ["raw-age-group-0", "raw-age-group-1", "raw-age-group-2"]);
+  assert.deepEqual(Array.from(sections[0].categories, category => category.rows[0].standing.placement.rank), [1, 2, 3]);
+  assert.equal(compactJudgingCategoryTitle(sections[0].categories[0].title), "PETITE DÚO");
+  assert.equal(compactJudgingCategoryTitle(sections[0].categories[1].title), "PETITE DÚO");
+  assert.equal(compactJudgingCategoryTitle(sections[0].categories[2].title), titles[2]);
+  assert.deepEqual(block, before);
+});
+
+test("dictamen cards display the server's real sum and routine maximum without inventing a solo rank", () => {
+  for (const total of [19, 43]) {
+    const result = { ...standing("3", 1, total), maximumScore: 210, medal: "participacion", directCompetition: false, eligibleCount: 1 };
+    const row = choreography("3", { status: "partial", completedJudges: 1, expectedJudges: 3 });
+    const before = structuredClone({ result, row });
+    const html = renderToStaticMarkup(DictamenEntry({ standing: result, row, maximumScore: 999,
+      eventId: "event", blockId: "block", expanded: true, onToggle() {},
+    }));
+    assert.ok(html.includes(`<span>Puntaje</span><strong>${total}</strong>`));
+    assert.match(html, /Escala de 210 puntos/);
+    assert.match(html, /Sin competencia directa/);
+    assert.match(html, />Medalla<\/span><strong>Participación<\/strong>/);
+    assert.doesNotMatch(html, /Escala de 999|Escala de 150|1\.º lugar|is-first/);
+    assert.deepEqual({ result, row }, before);
+  }
+});
+
+test("a per-routine Relevé maximum overrides the report fallback and an invalid scale never borrows it", () => {
+  const render = result => renderToStaticMarkup(DictamenEntry({ standing: result, row: choreography("3"), maximumScore: 210,
+    eventId: "event", blockId: "block", expanded: true, onToggle() {},
+  }));
+  const result = { ...standing("3", 1, 50), maximumScore: 50, juryScore: 45,
+    audience: { candidateId: "candidate", votes: 30, bonus: 5, ready: true, status: "closed" } };
+  const html = render(result);
+  assert.match(html, /Puntaje final<\/span><strong>50<\/strong>/);
+  assert.match(html, /Jurado: 45 · Público: 30 votos · Bono: \+5/);
+  assert.match(html, /Escala de 50 puntos/);
+  assert.doesNotMatch(html, /Escala de 210|155|150/);
+  assert.ok(html.indexOf("judging-scores__placement") < html.indexOf("judging-scores__medal"));
+  const invalid = render({ ...standing("3", 1, null), maximumScore: null, medal: null, placement: null });
+  assert.match(invalid, /Escala no disponible/);
+  assert.doesNotMatch(invalid, /Escala de 210|Escala de 50/);
+  const legacy = render({ ...standing("3", 1, 19), medal: "participacion" });
+  assert.match(legacy, /Escala de 210 puntos/);
 });

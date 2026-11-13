@@ -41,7 +41,9 @@ for (const [genre, expectedNames] of [['JAZZ', motion], ['ARO', aerial], ['TELA'
     assert.equal(value.completedJudges, 3);
     assert.equal(value.recordedScores, 3);
     assert.equal(value.status, 'complete');
-    assert.ok(Math.abs(officialScore(result) - 120) < 1e-10);
+    assert.equal(officialScore(result), 24, 'only the three confirmed jury totals contribute to the real sum');
+    assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].maximumScore, 30);
+    assert.equal(result.report.maximumScore, 30);
     assert.deepEqual(input, before, 'the original judging data remains untouched');
   });
 }
@@ -54,7 +56,8 @@ test('unrelated scores, penalties and feedback cannot affect a report or make an
   const result = snapshot(input);
   assert.equal(result.rows[0].status, 'complete');
   assert.equal(result.rows[0].recordedScores, 3);
-  assert.ok(Math.abs(officialScore(result) - 120) < 1e-10);
+  assert.equal(officialScore(result), 24);
+  assert.equal(result.report.maximumScore, 30);
   assert.doesNotMatch(JSON.stringify(result.rows), /Foreign jury comment|Daniel Herrera/);
 });
 
@@ -66,7 +69,8 @@ test('a missing relevant sheet stays pending even when all judges from the other
   assert.equal(result.rows[0].completedJudges, 2);
   assert.equal(result.rows[0].recordedScores, 2);
   assert.equal(result.rows[0].status, 'partial');
-  assert.ok(Math.abs(officialScore(result) - 80) < 1e-10, 'the missing official judge contributes zero, not an unrelated judge');
+  assert.equal(officialScore(result), 16, 'the missing official judge contributes zero, not an unrelated judge');
+  assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].maximumScore, 30);
 });
 
 test('jury identities accept accents, casing, spaces and the published full name of Jorge Díaz de León', () => {
@@ -130,12 +134,14 @@ test('an unknown discipline and numeric-only block never falls back to displayin
   assert.ok(result.warnings.length > 0);
 });
 
-test('the native default remains unchanged for participant sheets and other callers without the admin roster option', () => {
+test('the default jury selection remains unchanged without the admin roster option while the report uses its real sum', () => {
   const input = fixture();
   for (const judge of input.judges) judge.assigned_block_ids = [];
   const result = buildJudgingScoreSnapshot(input, at);
   assert.equal(result.rows[0].expectedJudges, 6);
   assert.equal(result.rows[0].completedJudges, 6);
   assert.equal(result.rows[0].status, 'complete');
-  assert.ok(Math.abs(officialScore(result) - 75) < 1e-10);
+  assert.equal(officialScore(result), 30, 'three 8-point totals and three 2-point totals are added without rescaling');
+  assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].maximumScore, 60);
+  assert.equal(result.report.maximumScore, 60);
 });

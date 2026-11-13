@@ -987,6 +987,10 @@
   text-transform: none;
   margin-top: 5px;
 }
+.ja-judge-sheet-status { max-width: 200px; margin: 10px auto 0; padding-top: 8px; border-top: 1px solid var(--ja-line); }
+.ja-judge-sheet-status > small { color: var(--ja-muted); font-weight: 500; line-height: 1.4; }
+.ja-judge-sheet-status > span { display: block; margin-top: 5px; color: var(--ja-text); font-size: 11px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.ja-judge-sheet-status > .ja-judge-sheet-block { color: var(--ja-pink); }
 .ja-matrix thead th.ja-actions-column {
   min-width: 70px;
 }
@@ -1076,10 +1080,7 @@
   background: var(--ja-tint);
   border-color: var(--ja-brand);
 }
-.ja-presence {
-  font-size: 9px;
-  color: var(--ja-pink);
-}
+.ja-presence-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ja-pink); }
 .ja-penalty {
   font-size: 11px;
   color: var(--ja-red);
@@ -1311,6 +1312,11 @@
   font-weight: 500;
   letter-spacing: -0.03em;
 }
+.ja-report > .ja-report-releve { min-width: 0; padding: 20px; border: 2px solid var(--ja-accent-line); border-radius: 14px; background: var(--ja-tint); }
+.ja-report-releve > header { padding-bottom: 18px; border-bottom: 1px solid var(--ja-accent-line); }
+.ja-report-releve > header h2 { margin: 0; color: var(--ja-pink); font-size: 25px; font-weight: 600; line-height: 1.3; }
+.ja-report-releve > header p { margin: 8px 0 0; color: var(--ja-muted); font-size: 13px; line-height: 1.5; }
+.ja-report-releve .ja-report-category:last-child { margin-bottom: 0; }
 .ja-report-category {
   margin: 24px 0 35px;
 }
@@ -1387,6 +1393,12 @@
   color: var(--ja-muted);
   font-size: 13px;
 }
+.ja-sheet-release { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; min-width: 0; padding: 18px; border: 1px solid var(--ja-line); border-radius: 12px; background: var(--ja-surface); }
+.ja-sheet-release > div { min-width: 0; flex: 1 1 240px; }
+.ja-sheet-release h3 { margin: 0; color: var(--ja-text); font-size: 15px; font-weight: 600; }
+.ja-sheet-release p { margin: 8px 0 0; color: var(--ja-muted); font-size: 13px; line-height: 1.5; }
+.ja-report.judging-scores .ja-sheet-release button { min-height: 44px; border: 1px solid var(--ja-accent-line); background: var(--ja-tint); color: var(--ja-pink); }
+.ja-sheet-release > .ja-error { flex-basis: 100%; }
 .ja-report .judging-scores__entry {
   border: 0;
   border-bottom: 1px solid var(--ja-line);
@@ -1424,7 +1436,7 @@
   font-size: 22px;
   font-weight: 600;
 }
-.ja-report .judging-scores__placement {
+.ja-report .judging-scores__recognition {
   grid-column: 3;
   grid-row: 1;
 }
@@ -1449,7 +1461,7 @@
 .ja-report .judging-scores__entry-metadata .judging-scores__status {
   font-size: inherit;
 }
-.ja-report :is(.judging-scores__points > span, .judging-scores__placement > span) {
+.ja-report :is(.judging-scores__points > span, .judging-scores__placement > span, .judging-scores__medal > span) {
   color: var(--ja-muted);
   font-size: 11px;
 }
@@ -1462,6 +1474,9 @@
 .ja-report .judging-scores__points.is-text strong {
   font-size: 16px;
 }
+.ja-report .judging-scores__competition-note { color: var(--ja-muted); }
+.ja-report .judging-scores__medal strong { font-size: 16px; }
+.ja-report .judging-scores__medal.is-pending strong { color: var(--ja-muted); font-size: 15px; }
 .ja-report .judging-scores__placement strong {
   color: var(--ja-text);
   font-size: 18px;
@@ -1551,18 +1566,6 @@
   text-align: right;
   max-width: 150px;
 }
-.ja-top-score {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  padding: 25px 0;
-  border-bottom: 1px solid var(--ja-line);
-  color: var(--ja-pink);
-}
-.ja-top-score small,
-.ja-top-score strong {
-  display: block;
-}
 .ja-awards-report > div {
   display: flex;
   justify-content: space-between;
@@ -1571,6 +1574,11 @@
   border-bottom: 1px solid var(--ja-line);
   font-size: 13px;
 }
+.ja-awards-report > .is-champion { padding: 20px; border: 1px solid var(--ja-accent-line); border-radius: 12px; background: var(--ja-tint); }
+.ja-awards-report > .is-champion > span { color: var(--ja-pink); font-size: 15px; font-weight: 600; }
+.ja-awards-report > .is-champion > strong { min-width: 0; overflow-wrap: anywhere; }
+.ja-awards-report > .is-unassigned > strong { color: var(--ja-muted); }
+@media (max-width: 780px) { .ja-report > .ja-report-releve { padding: 12px; } .ja-report-releve > header h2 { font-size: 22px; } }
 .ja-favorites > section {
   margin-bottom: 35px;
 }
@@ -1675,8 +1683,10 @@
 .ja-activity-person { flex: 1; min-width: 0; }
 .ja-activity summary strong,
 .ja-activity summary small { display: block; overflow-wrap: anywhere; }
-.ja-activity summary strong { font-size: 12px; }
+.ja-activity summary strong { font-size: 14px; line-height: 1.4; }
 .ja-activity summary small { margin-top: 5px; font-size: 11px; color: var(--ja-muted); line-height: 1.5; }
+.ja-activity summary .ja-activity-current { color: var(--ja-text); font-size: 12px; }
+.ja-activity summary .ja-activity-block { color: var(--ja-pink); }
 .ja-activity summary .ja-status { font-size: 9px; }
 .ja-activity summary .ja-avatar { width: 30px; height: 30px; flex-shrink: 0; }
 .ja-activity-chevron { flex-shrink: 0; color: var(--ja-muted); }
@@ -2328,7 +2338,7 @@
     gap: 16px 12px;
     padding: 18px 12px;
   }
-  .ja-report .judging-scores__placement {
+  .ja-report .judging-scores__recognition {
     grid-column: 2;
     grid-row: 2;
   }
@@ -2384,7 +2394,7 @@
   .ja-report .judging-scores__entry.is-group .judging-scores__standing {
     grid-template-columns: 88px minmax(0, 1fr) 120px 120px;
   }
-  .ja-report .judging-scores__entry.is-group .judging-scores__placement { grid-column: 4; }
+  .ja-report .judging-scores__entry.is-group .judging-scores__recognition { grid-column: 4; }
 }
 @media (max-width: 780px) {
   .ja-report .judging-scores__participants { grid-column: 1; grid-row: 2; }

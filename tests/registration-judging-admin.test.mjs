@@ -595,84 +595,27 @@ test("PDF exports require admin and same origin; uploads are scoped and never ma
     (e) => e.statusCode === 404,
   );
 });
-test("mail preview sends nothing, explicit confirmation is required, links are private and duplicate sending is blocked", async (t) => {
+test("withdrawn sheet email actions reject stale clients before reading contacts or sending anything", async (t) => {
   const f = fixture(t);
+  let reads = 0;
   let sends = 0;
+  let storageReads = 0;
   const dependencies = {
-    fetcher: f.fetcher,
-    getMediaStore: async () => ({
-      put: async () => ({ objectKey: "google_drive:private" }),
-    }),
-    sendEmail: async (email) => {
-      sends++;
-      assert.equal(email.to, "academy@example.invalid");
-      assert.match(email.text, /api\/judging-export\?token=/);
-      assert.doesNotMatch(email.text, /drive.google|privatefile/);
-      return { sent: true };
-    },
+    fetcher: async () => { reads++; throw new Error("No contact read is permitted"); },
+    getMediaStore: async () => { storageReads++; throw new Error("No storage access is permitted"); },
+    sendEmail: async () => { sends++; return { sent: true }; },
   };
-  const batch = await (
-    await handleJudgingExports(
-      f.request("export-start", { block_id: "b1" }),
-      f.env,
-      admin,
-      dependencies,
-    )
-  ).json();
-  await handleJudgingExports(
-    f.request("export-file", {
-      export_id: batch.id,
-      routine_id: "r1",
-      pdf: Buffer.from("%PDF-test").toString("base64"),
-    }),
-    f.env,
-    admin,
-    dependencies,
-  );
-  const preview = await (
-    await handleJudgingExports(
-      f.request("export-recipients", { export_id: batch.id }),
-      f.env,
-      admin,
-      dependencies,
-    )
-  ).json();
-  assert.equal(preview.recipients[0].email, "academy@example.invalid");
+  for (const action of ["export-recipients", "export-send"]) {
+    for (const body of [{}, { export_id: "11111111-2222-4333-8444-555555555555", recipient: "academy@example.invalid", confirmation: "11111111-2222-4333-8444-555555555555" }]) {
+      await assert.rejects(handleJudgingExports(f.request(action, body), f.env, admin, dependencies),
+        error => error.statusCode === 410 && /correo.*deshabilitado/.test(error.message));
+    }
+    await assert.rejects(handleJudgingExports(f.request(action, {}), f.env, null, dependencies),
+      error => error.statusCode === 401 || error.statusCode === 403);
+  }
+  assert.equal(reads, 0);
   assert.equal(sends, 0);
-  await assert.rejects(
-    handleJudgingExports(
-      f.request("export-send", {
-        export_id: batch.id,
-        recipient: "academy@example.invalid",
-      }),
-      f.env,
-      admin,
-      dependencies,
-    ),
-  );
-  await handleJudgingExports(
-    f.request("export-send", {
-      export_id: batch.id,
-      recipient: "academy@example.invalid",
-      confirmation: batch.id,
-    }),
-    f.env,
-    admin,
-    dependencies,
-  );
-  assert.equal(sends, 1);
-  await assert.rejects(
-    handleJudgingExports(
-      f.request("export-send", {
-        export_id: batch.id,
-        recipient: "academy@example.invalid",
-        confirmation: batch.id,
-      }),
-      f.env,
-      admin,
-      dependencies,
-    ),
-    (e) => e.statusCode === 409,
-  );
-  assert.equal(sends, 1);
+  assert.equal(storageReads, 0);
+  const deliveries = await f.env.DB.prepare("SELECT count(*) total FROM registration_judging_mail_deliveries").first();
+  assert.equal(deliveries.total, 0);
 });

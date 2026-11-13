@@ -2,6 +2,7 @@ import { judgingConnection, readJudgingRows } from "./judging-reader.js";
 import { buildJudgingScoreSnapshot } from "./judging-score-data.js";
 import { withJudgingGroupParticipants } from './judging-group-participants.js';
 import { readReleveVotingResult } from './releve-competition.js';
+import { getJudgingSheetRelease, releaseJudgingSheets } from './judging-sheet-release.js';
 import {
   levitateJudgingEventIds,
   requireJudgingEvent,
@@ -343,7 +344,7 @@ export async function readAdminSnapshot(
     templates: raw.criteria_templates,
     specialAwards: raw.special_awards,
     releveVoting: await readReleveVotingResult(env.DB, scope.eventId),
-  }, undefined, { judgeRoster: "levitate" }));
+  }, undefined, { judgeRoster: "levitate", completeEvent: true }));
   const { results: accounts } = await env.DB.prepare(
     `SELECT a.judge_id,a.enabled,u.username,u.id user_id FROM registration_judge_assignments a
     JOIN registration_users u ON u.id=a.user_id WHERE a.event_id=? AND u.is_judge=1
@@ -410,11 +411,17 @@ export async function adminBridge(
     );
   }
   const result = await response.json().catch(() => null);
+  if (response.status === 401 || (response.status === 403 && result?.error === "No autorizado."))
+    fail(
+      "judging_admin_connection_rejected",
+      "No se pudo validar la conexión con el servicio de jueceo. No se guardó el cambio.",
+      503,
+    );
   if (!response.ok || !result)
     fail(
       "judging_admin_rejected",
       typeof result?.error === "string"
-        ? result.error
+        ? result.error.split(secret).join("[redactado]")
         : "La base de datos no confirmo el cambio.",
       response.status === 409 ? 409 : 502,
     );
@@ -442,6 +449,7 @@ export async function handleJudgingAdmin(
       "upsert-judge",
       "delete-judge",
       "special-award",
+      "sheet-release",
     ].includes(action)
   )
     fail(
@@ -536,6 +544,15 @@ export async function handleJudgingAdmin(
     env,
     url.searchParams.get("eventId"),
   );
+  if (action === "sheet-release" && request.method === "GET") {
+    const blockId = id(url.searchParams.get("blockId"), "el bloque");
+    const bundle = await readAdminSnapshot(env, eventId, { fetcher });
+    const block = bundle.blocks.find(block => block.block_id === blockId);
+    if (!block) fail("judging_block_not_found", "No se encontró el bloque del evento.", 404);
+    const routineIds = bundle.routines.filter(row => row.block_id === blockId || (!row.block_id && row.block === block.name)).map(row => row.routine_id);
+    return adminJudgingJson(await getJudgingSheetRelease({ db: env.DB, sourceEventId: eventId,
+      blockId, snapshot: bundle.snapshot, routineIds }));
+  }
   if (action === "exports" && request.method === "GET") {
     const { results } = await env.DB.prepare(
       `SELECT e.id,e.block_id,e.title,e.created_at,COUNT(f.id) files FROM registration_judging_exports e
@@ -601,6 +618,15 @@ export async function handleJudgingAdmin(
     fetcher,
     allowArchived: action === "restore",
   });
+  if (action === "sheet-release") {
+    const blockId = id(body.block_id, "el bloque");
+    const bundle = await readAdminSnapshot(env, eventId, { fetcher });
+    const block = bundle.blocks.find(block => block.block_id === blockId);
+    if (!block) fail("judging_block_not_found", "No se encontró el bloque del evento.", 404);
+    const routineIds = bundle.routines.filter(row => row.block_id === blockId || (!row.block_id && row.block === block.name)).map(row => row.routine_id);
+    return adminJudgingJson(await releaseJudgingSheets({ db: env.DB, sourceEventId: eventId,
+      blockId, snapshot: bundle.snapshot, routineIds, actorId: session.user.id }));
+  }
   if (action === "web-account") {
     const judgeId = id(body.judge_id, "el juez");
     const scope = await readAdminEvent(env, eventId, { fetcher });

@@ -61,7 +61,7 @@ export async function readReleveVotingResult(db, eventId) {
   }
 }
 
-export function releveStanding(eventId, row, juryScore, voting, warn) {
+export function releveStanding(eventId, row, juryScore, juryMaximumScore, voting, warn) {
   const candidate = releveCandidateForRoutine(eventId, row);
   if (eventId !== releveJudgingEventId || (!Object.values(routineIds).includes(row.id) && normalize(row.division) !== 'RELEVE')) return null;
   const valid = voting?.eventId === eventId && voting.pollId === releveCompetitionPollId;
@@ -69,7 +69,8 @@ export function releveStanding(eventId, row, juryScore, voting, warn) {
   const ready = Boolean(valid && voting.ready === true && voting.status === 'closed' && result);
   if (!ready) warn('El dictamen de Relevé está pendiente del cierre de la votación del público y de resolver cualquier empate.');
   const bonus = ready && result.bonus === releveBonusPoints ? releveBonusPoints : 0;
-  return { juryScore, score: juryScore === null ? null : juryScore + bonus, maximumScore: 150 + releveBonusPoints,
+  return { juryScore, score: juryScore === null ? null : juryScore + bonus,
+    maximumScore: juryMaximumScore === null ? null : juryMaximumScore + releveBonusPoints,
     audience: { candidateId: candidate?.id ?? null, votes: result?.votes ?? null, bonus, ready,
       status: valid && candidate ? voting.status : 'unavailable' } };
 }

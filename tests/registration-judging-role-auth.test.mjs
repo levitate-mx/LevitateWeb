@@ -424,7 +424,9 @@ test('a report viewer signs in with its own role and reads only its assigned fin
   const payload = await report.json();
   assert.equal(payload.event.id, eventId); assert.equal(payload.snapshot.rows[0].name, 'Routine');
   assert.deepEqual(payload.snapshot.rows[0].judges, []);
-  assert.equal(payload.snapshot.report.blocks[0].sections[0].categories[0].rows[0].score, 150);
+  const standing = payload.snapshot.report.blocks[0].sections[0].categories[0].rows[0];
+  assert.equal(standing.score, 15, 'the report viewer receives the three actual 5-point totals');
+  assert.equal(standing.maximumScore, 15, 'the routine exposes its own total maximum without exposing judge sheets');
   assert.doesNotMatch(JSON.stringify(payload), /PRIVATE|password|access_code|criterion_id|curp/i);
 });
 

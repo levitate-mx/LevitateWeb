@@ -42,8 +42,8 @@ test("medal tiers exactly follow native 181/210,161/210,141/210 thresholds on an
 
 test("official report score, scale and category place are projected without leaking other participants", () => {
   const data = snapshot();
-  assert.deepEqual(project(data), { status: "published", score: 144, maxScore: 150, medal: "oro", directCompetition: true, eligibleCount: 4, place: 1 });
-  assert.deepEqual(project(data, "4"), { status: "published", score: 90, maxScore: 150, medal: "participacion", directCompetition: true, eligibleCount: 4, place: null });
+  assert.deepEqual(project(data), { status: "published", score: 48, maxScore: 50, medal: "oro", directCompetition: true, eligibleCount: 4, place: 1 });
+  assert.deepEqual(project(data, "4"), { status: "published", score: 30, maxScore: 50, medal: "participacion", directCompetition: true, eligibleCount: 4, place: null });
   assert.deepEqual(Object.keys(project(data)), ["status", "score", "maxScore", "medal", "directCompetition", "eligibleCount", "place"]);
   assert.doesNotMatch(JSON.stringify(project(data)), /Pieza|Academia|judge|event|routine|block/);
 });
@@ -54,7 +54,7 @@ test("medal is score-tier based rather than copied from the direct competition p
 });
 
 test("singleton category has a score-tier medal but no fabricated direct podium", () => {
-  assert.deepEqual(project(snapshot({ totals: [48] })), { status: "published", score: 144, maxScore: 150, medal: "oro", directCompetition: false, eligibleCount: 1, place: null });
+  assert.deepEqual(project(snapshot({ totals: [48] })), { status: "published", score: 48, maxScore: 50, medal: "oro", directCompetition: false, eligibleCount: 1, place: null });
   const value = project(snapshot({ totals: [48, 45], otherCategory: true }), "2");
   assert.equal(value.eligibleCount, 1); assert.equal(value.directCompetition, false); assert.equal(value.place, null);
 });
@@ -66,14 +66,14 @@ test("equal official scores preserve competition ranks and top-three-only places
 
 test("own complete score is available while incomplete category peers withhold all final places", () => {
   const data = snapshot({ totals: [48, null, 40] });
-  assert.equal(project(data).status, "published"); assert.equal(project(data).score, 144);
+  assert.equal(project(data).status, "published"); assert.equal(project(data).score, 48);
   assert.equal(project(data).eligibleCount, 3); assert.equal(project(data).place, null);
   assert.deepEqual(project(data, "2"), pendingParticipantResult());
 });
 
 test("explicit zero is a complete result with participation and no native podium position", () => {
   const data = snapshot({ totals: [0, 0] });
-  assert.deepEqual(project(data), { status: "published", score: 0, maxScore: 150, medal: "participacion", directCompetition: true, eligibleCount: 2, place: null });
+  assert.deepEqual(project(data), { status: "published", score: 0, maxScore: 50, medal: "participacion", directCompetition: true, eligibleCount: 2, place: null });
 });
 
 test("own-routine-only sheets cannot masquerade as complete category results", () => {
@@ -90,6 +90,7 @@ test("malformed or ambiguous routine and report data fail closed", () => {
     data => data.rows[0].judges[0].status = "partial",
     data => data.rows[0].completedJudges = 0,
     data => data.report.maximumScore = 0,
+    data => data.report.blocks[0].sections[0].categories[0].rows.find(row => row.routineId === "1").maximumScore = null,
     data => data.report.blocks[0].sections[0].categories[0].rows.find(row => row.routineId === "1").score = 151,
     data => data.rows.splice(1, 1),
     data => data.rows[1].blockId = "different-block"]) {
@@ -99,12 +100,12 @@ test("malformed or ambiguous routine and report data fail closed", () => {
   assert.deepEqual(projectParticipantResult(), pendingParticipantResult());
 });
 
-test("configured weighting, penalty and extreme-score rules are consumed from the official report", () => {
+test("the penalized judge total is projected without applying another scaling or evaluator weight", () => {
   const input = source({ totals: [40, 30], scoring: { aggregation: "sum", include_penalties: true, evaluator_weights: { "Juez Uno": 2 } } });
   input.penalties = [scoped({ routine_id: "1", judge_id: "judge-1", value: -5 })];
   const data = buildJudgingScoreSnapshot(input);
   data.resultScope = { eventId, complete: true, blockIds: ["block-1"] };
-  assert.equal(project(data).score, 105); assert.equal(project(data).medal, "bronce");
+  assert.equal(project(data).score, 35); assert.equal(project(data).maxScore, 50); assert.equal(project(data).medal, "bronce");
 });
 
 test("projection does not modify authoritative snapshots", () => {

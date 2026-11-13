@@ -3,6 +3,7 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { normalizeAdminSearch } from "./adminNavigation";
 import { requestRegistrationApi } from "./registrationApi";
 import { isJudgingGroupCategory } from '../../../shared/judging-group.js';
+import { compactJudgingCategoryTitle } from '../../../shared/judging-category-title.js';
 import "./JudgingScoresPanel.css";
 
 type JudgingEvent = {
@@ -48,8 +49,11 @@ type EventsPayload = { events: JudgingEvent[]; fetchedAt: string };
 export type ReportStanding = {
   routineId: string;
   score: number | null;
+  medal: "oro" | "plata" | "bronce" | "participacion" | null;
+  directCompetition: boolean;
+  eligibleCount: number;
   juryScore?: number | null;
-  maximumScore?: number;
+  maximumScore?: number | null;
   audience?: { candidateId: string | null; votes: number | null; bonus: number; ready: boolean; status: string };
   placement: { rank: number | null; label: string; isFirstPlace: boolean; isParticipation: boolean } | null;
 };
@@ -58,8 +62,9 @@ export type ReportBlock = {
   name: string;
   title: string;
   isActive: boolean;
-  sections: { id: string; label: string; categories: { id: string; title: string; rows: ReportStanding[] }[] }[];
+  sections: { id: string; label: string; kind?: "competition" | "releve"; categories: { id: string; title: string; rows: ReportStanding[] }[] }[];
   specialAwards: { id: string; title: string; displayValue: string; isAssigned: boolean; routineId: string | null }[];
+  releveAudienceFavorite?: { status: "ready" | "pending" | "tie" | "none"; winner: { routineId: string; name: string; academy: string; votes: number } | null };
   counts: { disciplines: number; categories: number; scored: number; total: number };
   topScore: { routineId: string; score: number } | null;
 };
@@ -85,7 +90,7 @@ function scoreValue(value: number | null) {
 
 function reportScoreValue(value: number | null) {
   return value === null ? "Pendiente" : Number.isFinite(value)
-    ? new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 }).format(value)
+    ? new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(value)
     : "No disponible";
 }
 
@@ -159,6 +164,17 @@ export function filterReportSections(block: ReportBlock | null, rows: Choreograp
   })).filter((section) => section.categories.length > 0);
 }
 
+export function ReleveAudienceFavorite({ favorite, heading = "h3" }: { favorite: ReportBlock["releveAudienceFavorite"]; heading?: "h3" | "h4" }) {
+  const Heading = heading;
+  const winner = favorite?.status === "ready" ? favorite.winner : null;
+  const message = favorite?.status === "tie" ? "Empate del público · resultado por definir."
+    : favorite?.status === "none" ? "Sin votos registrados." : "Pendiente del cierre de votación.";
+  return <section className="judging-scores__audience-favorite" aria-label="El más votado por el público">
+    <Heading>El más votado por el público</Heading>
+    {winner ? <><strong>{winner.name}</strong><p>{winner.academy || "Sin academia"} · {winner.votes} votos</p></> : <p>{message}</p>}
+  </section>;
+}
+
 export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded, onToggle, showMetadata = false, allowDetails = true }: {
   standing: ReportStanding;
   row: ChoreographyScore;
@@ -171,18 +187,25 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
   allowDetails?: boolean;
 }) {
   const detailId = `judging-score-detail-${encodeURIComponent(eventId)}-${encodeURIComponent(blockId)}-${encodeURIComponent(String(row.id))}`;
-  const place = standing.placement === null ? "—"
-    : standing.placement.isParticipation ? "Participación"
-      : standing.placement.rank !== null ? `${standing.placement.rank}.º lugar` : standing.placement.label;
+  const effectiveMaximumScore = standing.maximumScore === undefined ? maximumScore : standing.maximumScore;
+  const scaleText = effectiveMaximumScore !== null && Number.isFinite(effectiveMaximumScore) && effectiveMaximumScore > 0
+    ? `Escala de ${scoreValue(effectiveMaximumScore)} puntos` : "Escala no disponible";
   const scoreText = row.status === "pending" && row.recordedScores === 0 ? "Pendiente"
     : row.status === "unavailable" && standing.score === null ? "No disponible" : reportScoreValue(standing.score);
   const isNumericScore = Number.isFinite(standing.score) && !(row.status === "pending" && row.recordedScores === 0);
   const audience = standing.audience;
   const audiencePending = audience?.ready === false;
+  const medal = isNumericScore && !audiencePending ? standing.medal : null;
+  const medalText = medal ? { oro: "Oro", plata: "Plata", bronce: "Bronce", participacion: "Participación" }[medal] : null;
+  const directCompetition = standing.directCompetition === true;
+  const rank = directCompetition && !audiencePending && standing.placement?.rank != null
+    && [1, 2, 3].includes(standing.placement.rank) ? standing.placement.rank : null;
+  const place = audiencePending ? "Pendiente" : rank !== null ? `${rank}.º lugar`
+    : standing.placement === null ? "—" : "Sin lugar de podio";
   const isGroup = isJudgingGroupCategory(row.category);
   const participantCount = Number.isSafeInteger(row.participantCount) && Number(row.participantCount) > 0 ? row.participantCount : null;
   return (
-    <article className={`judging-scores__entry${standing.placement?.isFirstPlace ? " is-first" : ""}${isGroup ? " is-group" : ""}`}>
+    <article className={`judging-scores__entry${rank === 1 ? " is-first" : ""}${isGroup ? " is-group" : ""}`}>
       <div className="judging-scores__standing">
         <div className={`judging-scores__points${isNumericScore ? "" : " is-text"}`}><span>{audience ? audiencePending ? "Jurado" : "Puntaje final" : "Puntaje"}</span><strong>{scoreText}</strong></div>
         <div className="judging-scores__entry-info">
@@ -190,14 +213,19 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
           <p className="judging-scores__academy">{row.academy || "Sin academia"}</p>
           {audience ? <p className="judging-scores__audience">Jurado: {row.status === 'pending' && row.recordedScores === 0 ? 'Pendiente' : reportScoreValue(standing.juryScore ?? null)} · Público: {audience.votes === null ? "No disponible" : `${audience.votes} votos`} · Bono: {audiencePending ? "Pendiente" : `+${audience.bonus}`}
             {audiencePending ? <span>{audience.status === 'tie_pending' ? 'Empate del público · bono por definir' : audience.status === 'open' ? 'Votación abierta · resultado provisional' : audience.status === 'unavailable' ? 'No se pudo comprobar la votación' : 'Pendiente del cierre de votación'}</span> : null}</p> : null}
-          {showMetadata ? <div className="judging-scores__entry-metadata"><span>#{row.programNumber || row.id}</span>{row.level ? <span>{row.level}</span> : null}{row.category ? <span>{row.category}</span> : null}<span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></div>
+          {showMetadata ? <div className="judging-scores__entry-metadata">{row.level ? <span>{row.level}</span> : null}{row.category ? <span>{row.category}</span> : null}<span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></div>
             : row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
           {allowDetails ? <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button> : null}
         </div>
         {isGroup ? <div className="judging-scores__participants"><span>Cantidad de participantes</span><strong>{participantCount ?? 'Por confirmar'}</strong></div> : null}
-        <div className={`judging-scores__placement${standing.placement?.isParticipation ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{audiencePending ? 'Pendiente' : standing.placement === null ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>
+        <div className="judging-scores__recognition">
+          {directCompetition ? <div className={`judging-scores__placement${rank === null && standing.placement !== null ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{place === "—" ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>
+            : null}
+          <div className={`judging-scores__medal${medalText ? ` is-${medal}` : " is-pending"}`}><span>Medalla</span><strong>{medalText || (row.status === "unavailable" ? "No disponible" : "Pendiente")}</strong></div>
+          {!directCompetition ? <p className="judging-scores__competition-note">Sin competencia directa</p> : null}
+        </div>
       </div>
-      {allowDetails && expanded ? <section id={detailId} className="judging-scores__detail" aria-label={`Puntuaciones de ${row.name || row.id}`}><h6>Detalle por juez · {blockLabel(row)}</h6><p className="judging-scores__detail-progress">{statusLabels[row.status]} · {row.expectedJudges > 0 ? `${row.completedJudges}/${row.expectedJudges} jueces completos` : "Sin jueces asignados"} · Escala de {scoreValue(maximumScore)} puntos{row.state ? ` · ${row.state}` : ""}</p>{row.judges.length ? <div className="judging-scores__judges">{row.judges.map((judge) => <JudgeBreakdown key={judge.id} judge={judge} />)}</div> : <p className="judging-scores__muted">Todavía no hay jueces asignados o evaluaciones disponibles para esta coreografía.</p>}</section> : null}
+      {allowDetails && expanded ? <section id={detailId} className="judging-scores__detail" aria-label={`Puntuaciones de ${row.name || row.id}`}><h6>Detalle por juez · {blockLabel(row)}</h6><p className="judging-scores__detail-progress">{statusLabels[row.status]} · {row.expectedJudges > 0 ? `${row.completedJudges}/${row.expectedJudges} jueces completos` : "Sin jueces asignados"} · {scaleText}{row.state ? ` · ${row.state}` : ""}</p>{row.judges.length ? <div className="judging-scores__judges">{row.judges.map((judge) => <JudgeBreakdown key={judge.id} judge={judge} />)}</div> : <p className="judging-scores__muted">Todavía no hay jueces asignados o evaluaciones disponibles para esta coreografía.</p>}</section> : null}
     </article>
   );
 }
@@ -350,22 +378,24 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
             <summary>Buscar y filtrar{hasFilters ? " · Filtros activos" : ""}</summary>
             <div className="judging-scores__filters" aria-label="Filtros del dictamen">
               <label><span>Buscar coreografía</span><input type="search" placeholder="Nombre, academia, estado o ID…" value={query} onChange={(event) => { setQuery(event.target.value); setExpandedId(""); }} /></label>
-              <label><span>Disciplina</span><select value={disciplineFilter} onChange={(event) => { setDisciplineFilter(event.target.value); setExpandedId(""); }}><option value="all">Todas</option>{selectedBlock.sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}</select></label>
+              <label><span>Disciplina</span><select value={disciplineFilter} onChange={(event) => { setDisciplineFilter(event.target.value); setExpandedId(""); }}><option value="all">Todas</option>{selectedBlock.sections.map((section) => <option key={section.id} value={section.id}>{compactJudgingCategoryTitle(section.label)}</option>)}</select></label>
               <label><span>Estado de evaluación</span><select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setExpandedId(""); }}><option value="all">Todos</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             </div>
             {hasFilters ? <div className="judging-scores__filter-summary"><p role="status">{visibleCount} de {selectedBlock.counts.total} coreografías del bloque.</p><button className="judging-scores__clear" type="button" onClick={resetFilters}>Limpiar filtros</button></div> : null}
           </details>
           <div className="judging-scores__sections">
             {sections.map((section) => {
-              const repeatsBlock = [selectedBlock.name, selectedBlock.title].some((value) => normalizeAdminSearch(value) === normalizeAdminSearch(section.label));
-              return <section className={`judging-scores__genre${repeatsBlock ? " judging-scores__genre--without-heading" : ""}`} key={section.id} aria-label={section.label}>
-              {!repeatsBlock ? <header><h3>{section.label}</h3></header> : null}
+              const isReleve = section.kind === "releve";
+              const repeatsBlock = !isReleve && [selectedBlock.name, selectedBlock.title].some((value) => normalizeAdminSearch(value) === normalizeAdminSearch(section.label));
+              return <section className={`judging-scores__genre${repeatsBlock ? " judging-scores__genre--without-heading" : ""}${isReleve ? " judging-scores__genre--releve" : ""}`} key={section.id} aria-label={isReleve ? "Premio Relevé" : compactJudgingCategoryTitle(section.label)}>
+              {!repeatsBlock ? <header><h3>{isReleve ? "Premio Relevé" : compactJudgingCategoryTitle(section.label)}</h3>{isReleve ? <p>Premiación independiente</p> : null}</header> : null}
+              {isReleve ? <ReleveAudienceFavorite favorite={selectedBlock.releveAudienceFavorite} heading="h4" /> : null}
               <div className="judging-scores__categories">
-                {section.categories.map((category) => <section className="judging-scores__category" key={category.id} aria-label={category.title}>
-                  <header><h4>{category.title}</h4></header>
+                {section.categories.map((category) => <section className="judging-scores__category" key={category.id} aria-label={compactJudgingCategoryTitle(category.title)}>
+                  <header><h4>{compactJudgingCategoryTitle(category.title)}</h4></header>
                   <div className="judging-scores__standings">
                     {category.rows.map(({ standing, row }) => <DictamenEntry
-                      key={String(row.id)} standing={standing} row={row} maximumScore={current.report.maximumScore}
+                      key={String(row.id)} standing={standing} row={row} maximumScore={standing.maximumScore ?? current.report.maximumScore}
                       eventId={eventId} blockId={selectedBlock.id} expanded={expandedId === String(row.id)}
                       onToggle={() => setExpandedId(expandedId === String(row.id) ? "" : String(row.id))}
                     />)}
@@ -378,7 +408,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
           </div>
           {selectedBlock.specialAwards.length ? <section className="judging-scores__awards" aria-label="Premios especiales del bloque"><header><h3>Premios especiales</h3></header><div className="judging-scores__awards-grid">{selectedBlock.specialAwards.map((award) => {
             const routine = award.routineId === null ? null : rowLookup.get(String(award.routineId));
-            return <article className={award.isAssigned ? "" : "is-unassigned"} key={award.id}><h4>{award.title}</h4><strong>{award.displayValue || "Sin asignar"}</strong>{routine ? <p>{routine.academy || "Sin academia"}{routine.state ? ` · ${routine.state}` : ""}</p> : null}</article>;
+            return <article className={`${award.isAssigned ? "" : "is-unassigned"}${award.id === "champion_of_champions" ? " is-champion" : ""}`} key={award.id}><h4>{award.title}</h4><strong>{award.displayValue || "Sin asignar"}</strong>{routine ? <p>{routine.academy || "Sin academia"}{routine.state ? ` · ${routine.state}` : ""}</p> : null}</article>;
           })}</div></section> : null}
         </> : <p className="judging-scores__empty" role="status">Este evento todavía no tiene bloques de competencia disponibles.</p>}
       </> : !loading && scoresError ? <p className="judging-scores__muted">Usa Actualizar para volver a consultar las puntuaciones.</p> : null}

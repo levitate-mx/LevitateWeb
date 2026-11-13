@@ -1,4 +1,3 @@
-import { judgingConnection, readJudgingRows } from "./judging-reader.js";
 import {
   readAdminSnapshot,
   adminJudgingBody,
@@ -13,51 +12,10 @@ const fail = (message, statusCode = 400) => {
     code: "judging_export_error",
   });
 };
-const normalized = (v) =>
-  String(v || "")
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-|-$/g, "");
-const escape = (v) =>
-  String(v).replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
 async function hash(value) {
   return [
     ...new Uint8Array(
       await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
-    ),
-  ]
-    .map((n) => n.toString(16).padStart(2, "0"))
-    .join("");
-}
-async function fileToken(env, fileId) {
-  if (
-    typeof env.LEVITATE_ADMIN_WEB_SECRET !== "string" ||
-    env.LEVITATE_ADMIN_WEB_SECRET.length < 40
-  )
-    fail("No se configuro el envio privado.", 503);
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(env.LEVITATE_ADMIN_WEB_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  return [
-    ...new Uint8Array(
-      await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(`judging-export:${fileId}`),
-      ),
     ),
   ]
     .map((n) => n.toString(16).padStart(2, "0"))
@@ -107,12 +65,15 @@ export async function handleJudgingExports(
   request,
   env,
   session,
-  { getMediaStore, sendEmail, fetcher = fetch },
+  { getMediaStore, fetcher = fetch },
 ) {
   requireJudgingAdmin(session);
   const url = new URL(request.url),
-    action = url.pathname.split("/").pop(),
-    eventId = await requireJudgingEvent(env, url.searchParams.get("eventId"));
+    action = url.pathname.split("/").pop();
+  if (action === "export-send" || action === "export-recipients") {
+    fail("El envío de hojas por correo está deshabilitado. Habilítalas por bloque en Mi Levitate.", 410);
+  }
+  const eventId = await requireJudgingEvent(env, url.searchParams.get("eventId"));
   const body = await adminJudgingBody(request, 11500000);
   const snapshot = await readAdminSnapshot(env, eventId, { fetcher });
   if (action === "export-start") {
@@ -177,150 +138,5 @@ export async function handleJudgingExports(
       .run();
     return adminJudgingJson({ ok: true });
   }
-  const config = judgingConnection(env),
-    contacts = await readJudgingRows(
-      config,
-      "academy_contacts",
-      {
-        select: "event_id,academy_key,academy_name,email,state",
-        event_id: `eq.${eventId}`,
-        order: "academy_key.asc",
-      },
-      fetcher,
-    );
-  if (contacts.some((c) => c.event_id !== eventId))
-    fail("No se pudo verificar el directorio de academias.", 502);
-  const { results: files } = await env.DB.prepare(
-    "SELECT * FROM registration_judging_export_files WHERE export_id=? AND event_id=?",
-  )
-    .bind(batch.id, eventId)
-    .all();
-  const recipients = new Map();
-  const missing = [];
-  for (const file of files) {
-    const routine = snapshot.routines.find(
-      (r) => r.routine_id === file.routine_id,
-    );
-    if (!routine) continue;
-    const matches = contacts.filter(
-      (c) =>
-        [c.academy_key, c.academy_name].some(
-          (v) => normalized(v) && normalized(v) === normalized(routine.academy),
-        ) &&
-        (!c.state ||
-          !routine.state ||
-          normalized(c.state) === normalized(routine.state)),
-    );
-    const addresses = [
-      ...new Set(
-        matches
-          .map((c) =>
-            String(c.email || "")
-              .trim()
-              .toLowerCase(),
-          )
-          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
-      ),
-    ];
-    if (!addresses.length) missing.push(routine.academy);
-    for (const email of addresses) {
-      if (!recipients.has(email))
-        recipients.set(email, { email, academy: routine.academy, files: [] });
-      recipients.get(email).files.push({ ...file, name: routine.name });
-    }
-  }
-  if (action === "export-recipients") {
-    const { results: deliveries } = await env.DB.prepare(
-      "SELECT recipient,status FROM registration_judging_mail_deliveries WHERE export_id=?",
-    )
-      .bind(batch.id)
-      .all();
-    return adminJudgingJson({
-      id: batch.id,
-      title: batch.title,
-      files: files.length,
-      recipients: [...recipients.values()].map((r) => ({
-        email: r.email,
-        academy: r.academy,
-        files: r.files.length,
-        deliveryStatus:
-          deliveries.find((d) => d.recipient === r.email)?.status || null,
-      })),
-      missingAcademies: [...new Set(missing)],
-    });
-  }
-  if (action !== "export-send") fail("Operacion no disponible.", 404);
-  if (
-    body.confirmation !== batch.id ||
-    typeof body.recipient !== "string" ||
-    !recipients.has(body.recipient)
-  )
-    fail("Confirma el destinatario antes de enviar.");
-  const recipient = recipients.get(body.recipient),
-    deliveryId = `${batch.id}:${recipient.email}`;
-  const already = await env.DB.prepare(
-    "SELECT status FROM registration_judging_mail_deliveries WHERE id=?",
-  )
-    .bind(deliveryId)
-    .first();
-  if (already)
-    fail(
-      `Este envio ya esta ${already.status === "sent" ? "confirmado" : "registrado; revisa su estado antes de repetirlo"}.`,
-      409,
-    );
-  const statements = [];
-  const links = [];
-  for (const file of recipient.files) {
-    const token = await fileToken(env, file.id);
-    statements.push(
-      env.DB.prepare(
-        "UPDATE registration_judging_export_files SET access_token_hash=?,expires_at=datetime('now','+30 days') WHERE id=? AND access_token_hash IS NULL",
-      ).bind(await hash(token), file.id),
-    );
-    links.push({
-      name: file.name,
-      url: `${url.origin}/api/judging-export?token=${token}`,
-    });
-  }
-  statements.push(
-    env.DB.prepare(
-      "INSERT INTO registration_judging_mail_deliveries(id,export_id,recipient,status) VALUES (?,?,?,'sending')",
-    ).bind(deliveryId, batch.id, recipient.email),
-  );
-  try {
-    await env.DB.batch(statements);
-  } catch {
-    fail(
-      "El envio ya esta en curso o no se pudo reservar. No se envio otro correo.",
-      409,
-    );
-  }
-  let result;
-  try {
-    result = await sendEmail({
-      to: recipient.email,
-      subject: `Levitate · Hojas de jueceo · ${batch.title}`,
-      kind: "judging_admin_sheets",
-      text: `${recipient.academy}\n${batch.title}\n\n${links.map((l) => `${l.name}\n${l.url}`).join("\n\n")}\n\nEnlaces privados disponibles durante 30 dias.`,
-      html: `<h2>${escape(batch.title)}</h2><p>${escape(recipient.academy)}</p><ul>${links.map((l) => `<li><a href="${escape(l.url)}">${escape(l.name)}</a></li>`).join("")}</ul><p>Enlaces privados disponibles durante 30 dias.</p>`,
-    });
-  } catch {
-    result = { sent: false, reason: "unknown" };
-  }
-  await env.DB.prepare(
-    "UPDATE registration_judging_mail_deliveries SET status=?,sent_at=CASE WHEN ?=1 THEN datetime('now') ELSE NULL END,error=? WHERE id=?",
-  )
-    .bind(
-      result.sent ? "sent" : "unknown",
-      result.sent ? 1 : 0,
-      result.sent ? null : result.reason || "unknown",
-      deliveryId,
-    )
-    .run();
-  if (!result.sent)
-    fail(
-      "No se confirmo el correo. No lo reenvies hasta revisar el estado en Gmail.",
-      502,
-    );
-  return adminJudgingJson({ ok: true, sent: true, recipient: recipient.email });
+  fail("Operación no disponible.", 404);
 }

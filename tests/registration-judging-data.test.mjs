@@ -47,7 +47,9 @@ test("judging snapshot preserves exact per-judge sheets alongside the separate b
         { id: 2, label: "Expresión", section: "Arte", value: 4, maximumScore: 5 }], feedback: "Buen trabajo." }],
   });
   for (const field of ["total", "aggregateTotal", "rank", "placement", "award"]) assert.equal(Object.hasOwn(result.rows[0], field), false);
-  assert.ok(Math.abs(result.report.blocks[0].sections[0].categories[0].rows[0].score - 110) < 1e-10);
+  assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].score, 11);
+  assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].maximumScore, 15);
+  assert.equal(result.report.maximumScore, 15);
 });
 
 test("original programme numbers are display metadata and never replace score or report identities", () => {

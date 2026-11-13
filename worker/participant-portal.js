@@ -8,6 +8,7 @@ import { processParticipantPhoto } from "./participant-photo-process.js";
 import { enrichParticipantJudging } from "./participant-judging.js";
 import { issueParticipantProgramLink, completeParticipantProgramLink } from "./participant-program-link.js";
 import { createBlockPublicationGate, getBlockPublication, saveBlockPublicationMode, closeParticipantBlock, reopenParticipantBlock } from "./participant-block-publication.js";
+import { getReleasedJudgingSheetJudgeIds } from './judging-sheet-release.js';
 import { ensureParticipantGuest, issueParticipantGuestAccess, linkRegisteredReleve } from "./participant-guests.js";
 
 const cookieName = "levitate_participant_session";
@@ -29,6 +30,17 @@ const bool = (value) => value === true;
 const parsed = (value) => { try { return JSON.parse(value); } catch { return null; } };
 const assetUrl = (id) => `/api/participant/assets/${encodeURIComponent(id)}`;
 const adminAssetUrl = (id) => `/api/registration/admin/participant-portal?assetId=${encodeURIComponent(id)}`;
+const pendingJudging = () => ({ source: 'jueceocore', sourceStatus: 'pending', status: 'pending', judges: [] });
+function retainReleasedJudging(judging, releasedJudgeIds) {
+  if (judging?.source !== 'jueceocore' || judging.status !== 'available' || judging.preview !== false
+    || judging.pdf?.preview !== false || !Array.isArray(judging.judges) || !Array.isArray(judging.pdf.judges)) return pendingJudging();
+  const approved = new Set(releasedJudgeIds);
+  const completePdfIds = new Set(judging.pdf.judges.filter(judge => judge.status === 'complete' && approved.has(judge.id)).map(judge => judge.id));
+  const judges = judging.judges.filter(judge => judge.status === 'complete' && completePdfIds.has(judge.id));
+  if (!judges.length) return pendingJudging();
+  const ids = new Set(judges.map(judge => judge.id));
+  return { ...judging, judges, pdf: { ...judging.pdf, judges: judging.pdf.judges.filter(judge => ids.has(judge.id)) } };
+}
 const headers = { "cache-control": "private, no-store", vary: "Cookie", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" };
 const json = (value, status = 200, extra = {}) => new Response(JSON.stringify(value), {
   status, headers: { ...headers, "content-type": "application/json; charset=utf-8", ...extra },
@@ -219,6 +231,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
     source = await first(db, "SELECT source_event_id,enabled FROM participant_portal_judging_sources WHERE event_id=?", event.id);
     enriched = await enrichParticipantJudging({ data, rows, event: { ...event, automatic_judging: source?.enabled === 1, automatic_results: source?.enabled === 1 }, adminPreview,
       sourceEventId: source?.source_event_id,
+      getReleasedJudgeIds: options => getReleasedJudgingSheetJudgeIds({ ...options, db }),
       getSnapshot: source && !source.enabled ? undefined : (sourceEventId,options) => {
         const snapshot = Promise.resolve().then(() => getJudgingSnapshot(sourceEventId,{...options,trustedEventId:source?.source_event_id}));
         snapshots.set(sourceEventId.toLowerCase(), snapshot);
@@ -226,6 +239,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       } });
   }
   if (!adminPreview) {
+    const sourceJudging = new Map(enriched.routines.map(routine => [routine.id, routine.judging]));
     if (publication.mode === "block_close" || automaticCompletion) {
       enriched = { ...enriched, routines: await Promise.all(enriched.routines.map(async routine => {
         const row = rows.find(value => (value.id || `registration:${value.registration_dance_id}`) === routine.id);
@@ -279,8 +293,37 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       enriched = { ...enriched, routines: enriched.routines.map(routine => ({ ...routine, result: pendingResult(),
         judging: { sourceStatus: "pending", status: "pending", judges: [] }, photos: { status: "pending", count: 0, items: [] } })) };
     }
+    // Recheck the individual approvals after the awaited publication checks.
+    // Keep only their intersection with the already projected sheets: another
+    // judge's surviving approval cannot authorize a withdrawn or changed sheet.
+    enriched = { ...enriched, routines: await Promise.all(enriched.routines.map(async routine => {
+      const row = rows.find(value => (value.id || `registration:${value.registration_dance_id}`) === routine.id);
+      const sourceEventId = row?.source_event_id || source?.source_event_id || '';
+      const sourceRoutineId = row?.source_routine_id || row?.registration_dance_id || '';
+      let releasedJudgeIds = [];
+      try {
+        const snapshot = await snapshots.get(sourceEventId.toLowerCase());
+        releasedJudgeIds = await getReleasedJudgingSheetJudgeIds({ db, sourceEventId, sourceRoutineId, snapshot });
+      } catch { /* Missing releases and incomplete source reads keep sheets private. */ }
+      return { ...routine, judging: event.published && row && !row.publication_blocked
+        ? retainReleasedJudging(sourceJudging.get(routine.id), releasedJudgeIds) : pendingJudging() };
+    })) };
+    const currentMemberships = await all(db, `SELECT m.dance_id,r.publication_blocked,r.source_event_id,r.source_routine_id
+      FROM participant_portal_memberships m LEFT JOIN participant_portal_routines r ON r.dance_id=m.dance_id AND r.event_id=?
+      WHERE m.participant_id=?`, event.id, participant.id);
+    enriched = { ...enriched, routines: enriched.routines.flatMap(routine => {
+      const original = rows.find(value => (value.id || `registration:${value.registration_dance_id}`) === routine.id);
+      const matches = currentMemberships.filter(value => value.dance_id === original?.registration_dance_id);
+      if (matches.length !== 1) return [];
+      const current = matches[0];
+      const sameSource = (current.source_event_id || '') === (original?.source_event_id || '')
+        && (current.source_routine_id || '') === (original?.source_routine_id || '');
+      return current.publication_blocked || !sameSource ? [{ ...routine,
+        judging: { source: 'jueceocore', sourceStatus: 'pending', status: 'pending', judges: [] } }] : [routine];
+    }) };
     const visibleNow = await first(db, "SELECT published FROM participant_portal_events WHERE id=?", event.id);
-    if (event.published && !visibleNow?.published) enriched = { ...enriched, diploma: { status: "pending", assetId: null, url: null },
+    const stillAuthorized = await publication.confirm();
+    if (!stillAuthorized || (event.published && !visibleNow?.published)) enriched = { ...enriched, diploma: { status: "pending", assetId: null, url: null },
       routines: enriched.routines.map(routine => ({ ...routine, result: pendingResult(),
         judging: { sourceStatus: "pending", status: "pending", judges: [] }, photos: { status: "pending", count: 0, items: [] } })) };
   }
@@ -309,6 +352,9 @@ async function photoResponse(asset, object) {
 async function serveAsset(db, env, request, assetId, admin = false, getMediaStore, getJudgingSnapshot) {
   const grant = admin ? null : await session(db, request);
   const asset = await first(db, "SELECT * FROM participant_portal_assets WHERE id = ?", assetId);
+  // Historical uploaded PDFs cannot be tied to the current source grades.
+  // Participants receive freshly generated sheets after the manual block release.
+  if (!admin && asset?.kind === 'judge_sheet') fault('portal_asset_not_found', 'El archivo no está disponible.', 404);
   let publication;
   if (!admin) {
     if (!asset || asset.event_id !== grant.event_id || !asset.published) fault("portal_asset_not_found", "El archivo no está disponible.", 404);

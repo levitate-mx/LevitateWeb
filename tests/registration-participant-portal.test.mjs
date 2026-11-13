@@ -207,7 +207,13 @@ test('passport shows up to two newest previews from the smallest choreography wi
         assert.equal(routine.photos.count, expected.length);
         assert.deepEqual(routine.photos.items.map(photo => photo.id), expected);
         assert.equal(routine.result.score, result().score);
-        assert.equal(routine.judging.judges[0].feedback, judging.judges[0].feedback);
+        if (data.adminPreview) {
+          assert.equal(routine.judging.judges[0].feedback, judging.judges[0].feedback);
+        } else {
+          assert.equal(routine.judging.status, 'pending');
+          assert.deepEqual(routine.judging.judges, []);
+          assert.doesNotMatch(JSON.stringify(routine.judging), /Observación privada/);
+        }
       }
     }
   }
@@ -248,7 +254,7 @@ test('private portal requires its own QR grant and actual admin session; no CURP
   await request('/api/participant/access/exchange',{method:'POST',body:{token:grant.token},origin:'https://evil.test',expected:403});
 });
 
-test('draft results and judging remain pending; publishing uses authoritative score scale and direct ranking only',async t=>{
+test('publishing uses authoritative results and direct ranking without releasing judging sheets',async t=>{
   const {admin,request,access}=await fixture(t);const {cookie}=await access();
   for(const bad of [result({directCompetition:false}),result({eligibleCount:1}),result({place:4}),result({score:151})]){
     await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:bad},400);
@@ -260,7 +266,10 @@ test('draft results and judging remain pending; publishing uses authoritative sc
   await admin({action:'routine.publish',routineId:saved.data.routineId});
   response=await request('/api/participant/me',{cookie});
   assert.equal(response.data.routines[0].result.score,138.5);assert.equal(response.data.routines[0].result.maxScore,150);
-  assert.equal(response.data.routines[0].result.place,1);assert.equal(response.data.routines[0].judging.judges[0].feedback,judging.judges[0].feedback);
+  assert.equal(response.data.routines[0].result.place,1);
+  assert.equal(response.data.routines[0].judging.status,'pending');
+  assert.deepEqual(response.data.routines[0].judging.judges,[]);
+  assert.doesNotMatch(JSON.stringify(response.data),/Observación privada/);
   await admin({action:'routine.save',eventId:'test-event',danceId:'dance-a',result:result({directCompetition:false,eligibleCount:1,place:null}),judging});
   response=await request('/api/participant/me',{cookie});assert.equal(response.data.routines[0].result.status,'pending','saving a revision unpublishes it');
   await admin({action:'routine.publish',routineId:saved.data.routineId});
@@ -452,10 +461,15 @@ test('admin preview reads every draft without publishing it, regardless of all p
     assert.equal(publicView.data.participant.id,'person-a','public IDs still come only from the QR grant');
     assert.equal(publicView.data.adminPreview,undefined);
     assert.equal(publicView.data.routines[0].result.score,eventPublished&&routinePublished?138.5:null);
-    assert.equal(publicView.data.routines[0].judging.status,eventPublished&&routinePublished?'available':'pending');
+    assert.equal(publicView.data.routines[0].judging.status,'pending','publication flags cannot substitute the explicit sheet release');
+    assert.deepEqual(publicView.data.routines[0].judging.judges,[]);
+    assert.equal(publicView.data.routines[0].judging.url,undefined);
     assert.equal(publicView.data.routines[0].photos.count,eventPublished&&routinePublished&&photosPublished&&assetsPublished?1:0);
     assert.equal(publicView.data.diploma.status,eventPublished?'available':'pending');
     assert.doesNotMatch(JSON.stringify(publicView.data),/\/api\/registration\/admin|adminPreview|googleapis|drive\.google/);
+    const readsBefore=bucket.reads.length;
+    await request('/api/participant/assets/'+sheet.data.assetId,{cookie:participantAccess.cookie,expected:404});
+    assert.equal(bucket.reads.length,readsBefore,'unreleased legacy sheet URLs cannot read private bytes');
     assert.equal(totalChanges(db),before,'the participant query must not publish or create data either');
   }
   assert.equal(bucket.objects.size,storedObjects);
@@ -543,13 +557,16 @@ test('QR grants identify current registered presentations before portal curation
   for(const routine of data.routines) {
     assert.equal(routine.eventId,'test-event');assert.equal(routine.title,'Vuelo');
     assert.deepEqual(routine.result,{status:'pending',score:null,maxScore:null,medal:null,directCompetition:false,eligibleCount:null,place:null});
-    assert.deepEqual(routine.judging,{status:'pending',judges:[],sourceStatus:'unlinked'});
+    assert.deepEqual(routine.judging,{source:'jueceocore',sourceStatus:'pending',status:'pending',judges:[]});
     assert.deepEqual(routine.photos,{status:'pending',count:0,items:[]});
   }
   assert.deepEqual(data.diploma,{status:'pending',assetId:null,url:null});
   const preview=await request(previewPath(),{cookie:adminCookie});
   assert.equal(preview.data.adminPreview,true);
-  assert.deepEqual(preview.data.routines,data.routines);
+  assert.deepEqual(preview.data.routines.map(({judging,...routine})=>routine),data.routines.map(({judging,...routine})=>routine));
+  for(const routine of preview.data.routines) {
+    assert.deepEqual(routine.judging,{status:'pending',judges:[],sourceStatus:'unlinked'},'admins retain the source-association state while participant sheets stay unreleased');
+  }
   assert.equal(totalChanges(db),before,'fallback projections are SELECT-only, even for an unpublished edition');
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_routines').get().count,0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS count FROM participant_portal_assets').get().count,0);
@@ -574,7 +591,9 @@ test('curated edition records override registration fallback without duplicating
   const before=totalChanges(db);
   response=await request('/api/participant/me',{cookie});
   curated=response.data.routines.find(routine=>routine.id===saved.data.routineId);
-  assert.equal(curated.result.score,138.5);assert.equal(curated.judging.judges[0].feedback,judging.judges[0].feedback);
+  assert.equal(curated.result.score,138.5);
+  assert.equal(curated.judging.status,'pending');assert.deepEqual(curated.judging.judges,[]);
+  assert.doesNotMatch(JSON.stringify(curated.judging),/Observación privada/);
   assert.equal(curated.photos.items[0].id,photo.data.assetId);
   assert.equal(response.data.routines.find(routine=>routine.id==='registration:dance-b').photos.count,0);
   assert.equal(totalChanges(db),before);
@@ -790,7 +809,7 @@ test('programme association validates exact IDs and metadata atomically without 
   assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_assets').get().n,0);
 });
 
-test('automatic source sheets derive ownership from QR, need edition release and never access Drive',async t=>{
+test('complete source sheets stay private without an explicit sheet release and never access Drive',async t=>{
   const {db,env,access,bucket}=await fixture(t);const {cookie}=await access();
   db.sqlite.prepare('INSERT INTO participant_portal_judging_sources(event_id,source_event_id,enabled) VALUES(?,?,1)').run('test-event','source-event');
   let reads=0;
@@ -808,8 +827,11 @@ test('automatic source sheets derive ownership from QR, need edition release and
   db.sqlite.prepare('UPDATE participant_portal_events SET published=0').run();
   let data=await call();assert.equal(reads,0);assert.equal(data.routines[0].judging.status,'pending');
   db.sqlite.prepare('UPDATE participant_portal_events SET published=1').run();
-  data=await call();assert.equal(data.routines[0].judging.pdf.judges[0].total,8);
-  assert.equal(data.routines[0].judging.pdf.preview,false);assert.equal(data.routines[0].judging.source,'jueceocore');
+  data=await call();assert.ok(reads>0);
+  assert.equal(data.routines[0].judging.status,'pending');assert.deepEqual(data.routines[0].judging.judges,[]);
+  assert.equal(data.routines[0].judging.pdf,undefined);assert.equal(data.routines[0].judging.source,'jueceocore');
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM registration_judging_sheet_releases').get().n,0,'reading complete source scores never releases sheets');
+  assert.doesNotMatch(JSON.stringify(data),/Solo de esta coreografía/);
   assert.doesNotMatch(JSON.stringify(data),/Privada de otra persona|google_drive|source-event/);
   assert.equal(bucket.objects.size,0);assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM participant_portal_assets').get().n,0);
   db.sqlite.prepare('UPDATE participant_portal_judging_sources SET enabled=0').run();

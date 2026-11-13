@@ -249,10 +249,10 @@ test('judging admin routes authenticate before upstream reads and never write to
     else {
       assert.equal(result.event.id, eventId);
       assert.equal(result.rows[0].judges[0].total, 8);
-      assert.equal(result.report.maximumScore, 150);
+      assert.equal(result.report.maximumScore, 30);
       assert.equal(result.report.blocks.length, 1);
       assert.equal(result.report.blocks[0].id, 'b1');
-      assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].score, 120);
+      assert.equal(result.report.blocks[0].sections[0].categories[0].rows[0].score, 24);
     }
     assert.doesNotMatch(JSON.stringify(result), /sb_publishable_|supabase\.co/);
     assert.ok(f.db.runtimeQueries.slice(queryStart).every(sql => !/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)),

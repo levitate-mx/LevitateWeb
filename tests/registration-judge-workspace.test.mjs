@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { pbkdf2Sync } from 'node:crypto';
 import worker from '../worker/index.js';
 import { handleJudgeWorkspace, validateJudgeRows } from '../worker/judge-workspace.js';
+import { handleJudgingAdmin } from '../worker/judging-admin.js';
 
 const eventId = '11111111-1111-4111-8111-111111111111';
 const otherEvent = '22222222-2222-4222-8222-222222222222';
@@ -245,14 +246,25 @@ function fixture(t) {
     judges: [{ event_id: eventId, judge_id: judgeId, name: 'Juez Web', role: 'judge', assigned_block_ids: [] }],
     blocks: [{ event_id: eventId, block_id: 'b1' }, { event_id: eventId, block_id: 'b2' }],
     routines, criteria_templates: templates.map(t => ({ ...t, event_id: eventId })), criteria: criteria.map(c => ({ ...c, event_id: eventId })),
-    scores: [row()], feedback: [], penalties: [], routine_favorite_votes: [], routine_favorites: [],
+    scores: [row()], feedback: [], penalties: [], routine_favorite_votes: [], routine_favorites: [], judge_activity: [],
   };
   const calls = [];
   let writeStatus = 204;
   const fetcher = async (input, options) => {
     const url = new URL(input), table = url.pathname.split('/').pop();
     calls.push({ url, ...options });
-    if (options.method !== 'GET') return new Response(writeStatus === 204 ? null : 'upstream secret must not leak', { status: writeStatus });
+    if (options.method !== 'GET') {
+      if (table === 'judge_activity' && writeStatus === 204) {
+        for (const activity of JSON.parse(options.body)) {
+          assert.ok(['home', 'viewing_sheet', 'left_sheet'].includes(activity.state), 'upstream enforces Core judge_activity_state_check');
+          const index = data.judge_activity.findIndex(row => row.event_id === activity.event_id
+            && row.judge_id === activity.judge_id && row.device_id === activity.device_id);
+          if (index < 0) data.judge_activity.push(activity);
+          else data.judge_activity[index] = activity;
+        }
+      }
+      return new Response(writeStatus === 204 ? null : 'upstream secret must not leak', { status: writeStatus });
+    }
     let rows = Number(url.searchParams.get('offset')) > 0 ? [] : (data[table] || []);
     for (const key of ['event_id', 'judge_id', 'routine_id', 'id']) {
       const filter = url.searchParams.get(key);
@@ -391,4 +403,84 @@ test('feedback and penalties keep native limits', () => {
   assert.equal(validateJudgeRows('feedback', [row({ body: '' })], scope, routines, templates, criteria)[0].body, '');
   for (const value of [1, -101, null, '0']) assert.throws(() => validateJudgeRows('penalties', [row({ value })], scope, routines, templates, criteria));
   assert.equal(validateJudgeRows('penalties', [row({ value: -3 })], scope, routines, templates, criteria)[0].value, -3);
+});
+
+const activityRow = (extra = {}) => ({ event_id: eventId, judge_id: judgeId,
+  device_id: 'browser-test', state: 'viewing_sheet', block_id: 'b1', routine_id: 'r1', ...extra });
+
+test('web presence opens, changes and leaves the exact assigned sheet without duplicating the device', async t => {
+  const f = fixture(t);
+  for (const input of [activityRow(), activityRow({ routine_id: 'r2' }),
+    activityRow({ state: 'left_sheet', routine_id: 'r2' }),
+    activityRow({ state: 'home', block_id: null, routine_id: null })]) {
+    const before = structuredClone(input);
+    const response = await handleJudgeWorkspace(f.request('activity', { body: input }), f.env, session, { fetcher: f.fetcher });
+    assert.deepEqual(await response.json(), { ok: true });
+    assert.equal(f.data.judge_activity.length, 1);
+    assert.equal(f.data.judge_activity[0].state, input.state);
+    assert.equal(f.data.judge_activity[0].routine_id, input.routine_id);
+    assert.equal(f.data.judge_activity[0].block_id, input.block_id);
+    assert.equal(f.data.judge_activity[0].event_id, eventId);
+    assert.equal(f.data.judge_activity[0].judge_id, judgeId);
+    assert.equal(f.data.judge_activity[0].platform, 'Web');
+    assert.ok(Number.isFinite(Date.parse(f.data.judge_activity[0].updated_at)));
+    assert.deepEqual(input, before);
+    const adminResponse = await handleJudgingAdmin(new Request(
+      `https://levitate.mx/api/registration/admin/judging/workspace/activity?eventId=${eventId}`), f.env,
+      { user: { id: 'admin', name: 'Admin', role: 'admin' } }, { fetcher: f.fetcher });
+    const monitor = await adminResponse.json();
+    assert.equal(adminResponse.status, 200);
+    assert.deepEqual(monitor.activity, f.data.judge_activity, 'the administrator reads the same current sheet written by the judge');
+  }
+  const writes = f.calls.filter(call => call.method === 'POST');
+  assert.equal(writes.length, 4);
+  assert.ok(writes.every(call => call.url.pathname === '/rest/v1/judge_activity'
+    && call.url.searchParams.get('on_conflict') === 'event_id,judge_id,device_id'));
+});
+
+test('legacy judging presence is normalized to the stored viewing_sheet state', async t => {
+  const f = fixture(t);
+  await handleJudgeWorkspace(f.request('activity', { body: activityRow({ state: 'judging' }) }), f.env, session, { fetcher: f.fetcher });
+  assert.equal(f.data.judge_activity[0].state, 'viewing_sheet');
+  assert.equal(f.data.judge_activity[0].routine_id, 'r1');
+});
+
+test('presence heartbeats keep the current sheet and store only server-scoped identity and diagnostics', async t => {
+  const f = fixture(t);
+  const heartbeat = activityRow({ routine_id: 'r2', platform: 'Forged native', updated_at: '2000-01-01',
+    sync_diagnostics: { pending_count: 2, report_id: 'heartbeat', last_confirmed_at: '2026-11-13T12:00:00Z',
+      last_error: null, app_version: 'untrusted', backend_host: 'untrusted', secret: 'not forwarded' } });
+  for (let index = 0; index < 2; index++) {
+    await handleJudgeWorkspace(f.request('activity', { body: heartbeat }), f.env, session, { fetcher: f.fetcher });
+  }
+  assert.equal(f.data.judge_activity.length, 1);
+  const activity = f.data.judge_activity[0];
+  assert.equal(activity.state, 'viewing_sheet'); assert.equal(activity.routine_id, 'r2');
+  assert.equal(activity.platform, 'Web'); assert.notEqual(activity.updated_at, heartbeat.updated_at);
+  assert.equal(activity.sync_diagnostics.pending_count, 2);
+  assert.equal(activity.sync_diagnostics.app_version, 'Levitate Web');
+  assert.equal(activity.sync_diagnostics.backend_host, 'levitate.mx');
+  assert.equal(activity.sync_diagnostics.secret, undefined);
+});
+
+test('presence rejects foreign identities, routines, blocks, invalid states and unauthenticated requests before writing', async t => {
+  const f = fixture(t);
+  for (const extra of [{ judge_id: 'another-judge' }, { event_id: otherEvent },
+    { routine_id: 'missing' }, { routine_id: 'r3' }, { block_id: 'b2' }]) {
+    await assert.rejects(handleJudgeWorkspace(f.request('activity', { body: activityRow(extra) }), f.env, session,
+      { fetcher: f.fetcher }), error => error.statusCode === 403);
+  }
+  for (const extra of [{ state: 'offline' }, { state: 'admin' }, { device_id: '../device' }]) {
+    await assert.rejects(handleJudgeWorkspace(f.request('activity', { body: activityRow(extra) }), f.env, session,
+      { fetcher: f.fetcher }), error => error.statusCode === 400);
+  }
+  f.sqlite.prepare('UPDATE registration_judge_assignments SET block_ids_json=?').run('["b1"]');
+  await assert.rejects(handleJudgeWorkspace(f.request('activity', { body: activityRow({ routine_id: 'r3', block_id: 'b2' }) }),
+    f.env, session, { fetcher: f.fetcher }), error => error.statusCode === 403);
+  await assert.rejects(handleJudgeWorkspace(f.request('activity', { body: activityRow(), origin: 'https://foreign.invalid' }),
+    f.env, session, { fetcher: f.fetcher }), error => error.statusCode === 403);
+  const response = await worker.fetch(f.request('activity', { body: activityRow() }), f.env);
+  assert.equal(response.status, 401);
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+  assert.deepEqual(f.data.judge_activity, []);
 });

@@ -20,10 +20,12 @@ function source() {
     routines: releveVotingCandidates.map((candidate, index) => scoped({ routine_id: identities[candidate.id], program_number: String(234 + index),
       name: candidate.choreography, academy: candidate.academy, division: 'RELEVÉ', level: 'NO APLICA', category: 'RELEVÉ',
       genre: candidate.id === 'damar' ? 'ARO' : candidate.id === 'mariana' ? 'TRAPECIO' : 'TELA', block_id: blockId, block: 'BLOQUE 7: AERIAL SENIORS + RELEVÉ' })),
-    judges: [scoped({ judge_id: 'j1', name: 'Daniel Herrera', role: 'judge' })],
-    templates: [scoped({ template_id: 'releve', genre: 'Relevé', max_score: 50, applies_to: { divisions: ['RELEVÉ'] } })],
-    criteria: [scoped({ template_id: 'releve', criterion_id: 1, label: 'Técnica', section: 'Evaluación', max_score: 50 })],
-    scores: Object.values(identities).map(routine_id => scoped({ routine_id, judge_id: 'j1', criterion_id: 1, value: 50 })),
+    judges: ['Daniel Herrera', 'Renata Piñal', 'Ana Karen Rojas'].map((name, index) =>
+      scoped({ judge_id: `j${index + 1}`, name, role: 'judge' })),
+    templates: [scoped({ template_id: 'releve', genre: 'Relevé', max_score: 15, applies_to: { divisions: ['RELEVÉ'] } })],
+    criteria: [scoped({ template_id: 'releve', criterion_id: 1, label: 'Técnica', section: 'Evaluación', max_score: 15 })],
+    scores: Object.values(identities).flatMap(routine_id => ['j1', 'j2', 'j3'].map(judge_id =>
+      scoped({ routine_id, judge_id, criterion_id: 1, value: 15 }))),
     penalties: [], feedback: [], specialAwards: [],
   };
 }
@@ -51,21 +53,21 @@ function database(t) {
   return { sqlite, db, queries };
 }
 
-test('the closed audience winner gets exactly five points after normalization, including 150 + 5 = 155', () => {
+test('the closed audience winner gets exactly five points after summing the real jury totals, including 45 + 5 = 50', () => {
   const data = source(), before = structuredClone(data);
   const result = snapshot(deriveReleveVotingResult(pollRows()), data);
   const rows = standings(result), winner = rows.find(row => row.routineId === '232');
-  assert.equal(winner.juryScore, 150); assert.equal(winner.score, 155); assert.equal(winner.maximumScore, 155);
+  assert.equal(winner.juryScore, 45); assert.equal(winner.score, 50); assert.equal(winner.maximumScore, 50);
   assert.deepEqual(winner.audience, { candidateId: 'estrella-mistica', votes: 3, bonus: 5, ready: true, status: 'closed' });
   assert.equal(winner.placement.rank, 1);
-  assert.ok(rows.filter(row => row !== winner).every(row => row.score === 150 && row.audience.bonus === 0));
-  assert.equal(result.report.maximumScore, 150, 'the normal competition scale stays unchanged');
+  assert.ok(rows.filter(row => row !== winner).every(row => row.score === 45 && row.audience.bonus === 0));
+  assert.equal(result.report.maximumScore, 50, 'a Relevé-only report uses its real jury-plus-bonus maximum');
   assert.equal(result.report.blocks[0].sections.length, 1, 'all five Relevé candidates share one podium across apparatuses');
   assert.equal(result.report.blocks[0].sections[0].categories[0].rows.length, 5);
   assert.deepEqual(data, before, 'jury scores are never edited to implement the bonus');
   assert.deepEqual(standings(snapshot(deriveReleveVotingResult(pollRows()), data)), rows, 'refreshing never adds the bonus twice');
   const projected = projectParticipantResult({ snapshot: result, routineId: '232' });
-  assert.equal(projected.status, 'published'); assert.equal(projected.score, 155); assert.equal(projected.maxScore, 155); assert.equal(projected.place, 1);
+  assert.equal(projected.status, 'published'); assert.equal(projected.score, 50); assert.equal(projected.maxScore, 50); assert.equal(projected.place, 1);
   assert.doesNotMatch(JSON.stringify(projected), /votes|candidate|hazel|voter|jury|hash/i);
 });
 
@@ -89,7 +91,7 @@ test('a completed poll with no ballots has no favorite and awards no bonus', () 
   const voting = deriveReleveVotingResult(pollRows({}));
   assert.equal(voting.ready, true); assert.equal(voting.totalVotes, 0);
   assert.ok(voting.candidates.every(row => row.votes === 0 && row.bonus === 0));
-  assert.ok(standings(snapshot(voting)).every(row => row.score === 150 && row.audience.ready));
+  assert.ok(standings(snapshot(voting)).every(row => row.score === 45 && row.audience.ready));
 });
 
 test('unknown candidates, invalid totals and mismatched snapshots do not silently become zero votes', () => {
@@ -111,7 +113,7 @@ test('the bonus is scoped to stable routine IDs in the definitive event; ambiguo
   const data = source(), foreign = '11111111-2222-4333-8444-555555555555';
   data.event.id = foreign;
   for (const table of ['blocks', 'routines', 'judges', 'templates', 'criteria', 'scores']) for (const row of data[table]) row.event_id = foreign;
-  assert.ok(standings(snapshot(voting, data)).every(row => !row.audience && row.score === 150));
+  assert.ok(standings(snapshot(voting, data)).every(row => !row.audience && row.score === 45));
   const incomplete = source(); incomplete.scores = [];
   assert.ok(standings(snapshot(voting, incomplete)).every(row => row.placement === null), 'a public favorite cannot win without a jury sheet');
 });
@@ -148,7 +150,10 @@ test('both admin readers and the participant reader include the same trusted aud
   const workspaceAdmin = await readAdminSnapshot(env, eventId, { fetcher });
   const participant = await getJudgingSheets(env, eventId, { routineIds: ['235'], fetcher });
   for (const result of [publicAdmin, workspaceAdmin.snapshot, participant]) {
+    const sheet = result.rows.find(row => row.id === '235');
+    assert.equal(sheet.expectedJudges, 3); assert.equal(sheet.completedJudges, 3); assert.equal(sheet.status, 'complete');
     const winner = standings(result).find(row => row.routineId === '235');
+    assert.equal(winner.juryScore, 45); assert.equal(winner.score, 50);
     assert.equal(winner.audience.votes, 1); assert.equal(winner.audience.bonus, 5); assert.equal(winner.audience.ready, true);
   }
 });
@@ -164,7 +169,7 @@ function prepareAutomaticPublication(f, data) {
   }
 }
 
-test('automatic publication waits for poll closure and unresolved ties, and accepts a legitimate 155-point result', async t => {
+test('automatic publication waits for poll closure and unresolved ties, and accepts a legitimate 50-point result', async t => {
   const f = database(t), data = source();
   prepareAutomaticPublication(f, data);
   for (const [voting, complete] of [[deriveReleveVotingResult(pollRows(undefined, { status: 'open' })), false],
@@ -180,12 +185,13 @@ test('automatic publication waits for poll closure and unresolved ties, and acce
 
 test('the 42 ordinary block-7 results publish while the five Relevé results wait for the public poll', async t => {
   const f = database(t), data = source();
-  data.templates.push(scoped({ template_id: 'senior', genre: 'TELA', max_score: 50 }));
-  data.criteria.push(scoped({ template_id: 'senior', criterion_id: 2, label: 'Técnica', section: 'Evaluación', max_score: 50 }));
+  data.templates.push(scoped({ template_id: 'senior', genre: 'TELA', max_score: 70 }));
+  data.criteria.push(scoped({ template_id: 'senior', criterion_id: 2, label: 'Técnica', section: 'Evaluación', max_score: 70 }));
   const ordinary = Array.from({ length: 42 }, (_, index) => `senior-${index}`);
   for (const id of ordinary) {
     data.routines.push({ ...data.routines[0], routine_id: id, name: `Rutina ${id}`, division: 'SENIOR', category: 'SOLO' });
-    data.scores.push(scoped({ routine_id: id, judge_id: 'j1', criterion_id: 2, value: 50 }));
+    data.scores.push(...data.judges.map(judge =>
+      scoped({ routine_id: id, judge_id: judge.judge_id, criterion_id: 2, value: 70 })));
   }
   prepareAutomaticPublication(f, data);
   const pendingPolls = [deriveReleveVotingResult([]),

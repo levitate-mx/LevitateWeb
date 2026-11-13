@@ -691,8 +691,10 @@ async function handleScopedJudgeAction(request, scope, action, fetcher) {
         "La sesión no corresponde a este juez.",
         403,
       );
+    // Keep the tablet and browser on Core's actual presence vocabulary.
+    const activityState = body.state === "judging" ? "viewing_sheet" : body.state;
     if (
-      !["home", "judging"].includes(body.state) ||
+      !["home", "viewing_sheet", "left_sheet"].includes(activityState) ||
       typeof body.device_id !== "string" ||
       !validId(body.device_id)
     ) {
@@ -756,7 +758,7 @@ async function handleScopedJudgeAction(request, scope, action, fetcher) {
           event_id: scope.eventId,
           judge_id: scope.judgeId,
           device_id: body.device_id,
-          state: body.state,
+          state: activityState,
           block_id: body.block_id ?? null,
           routine_id: body.routine_id ?? null,
           platform: "Web",

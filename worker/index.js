@@ -4087,7 +4087,9 @@ async function getRegistrationStudentState(db, user) {
     },
     registrations: registrationRows.map(serializeRegistrationStudentRecord),
     dances: danceRows.map(serializeRegistrationStudentDance),
-    resources: resourceRows.map(serializeRegistrationStudentResource),
+    // Judging sheets are delivered through the authenticated Mi Levitate block
+    // release, never through an ungated legacy document URL.
+    resources: resourceRows.filter(resource => resource.resource_type !== "judge_sheet").map(serializeRegistrationStudentResource),
   };
 }
 

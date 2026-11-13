@@ -35,10 +35,12 @@ test('portrait aliases handle case, accents and separators without conflating th
   assert.equal(resolveJudgePortrait({ name: 'Daniel Montalvo Herrera' }), undefined);
 });
 
-test('Eva stays a placeholder and other identities retain their explicitly assigned photo', () => {
-  for (const name of ['Eva', 'EVA CARRILLO', 'eva-carrillo']) {
-    assert.equal(resolveJudgePortrait({ name, photo_data: 'legacy-other-person' }), undefined);
+test('Eva Carrillo uses her supplied portrait and incomplete identities retain a placeholder', async () => {
+  for (const name of ['EVA CARRILLO', 'eva-carrillo', 'Éva_Carrillo']) {
+    assert.equal(resolveJudgePortrait({ name, photo_data: 'legacy-other-person' }), '/assets/eva-carrillo.jpg');
   }
+  await access(new URL('../public/assets/eva-carrillo.jpg', import.meta.url));
+  assert.equal(resolveJudgePortrait({ name: 'Eva', photo_data: 'legacy-other-person' }), undefined);
   assert.equal(resolveJudgePortrait({ name: 'Juez invitado', photo_data: 'data:image/png;base64,local' }), 'data:image/png;base64,local');
   assert.equal(resolveJudgePortrait({ name: 'Juez invitado', photo_data: ' ' }), undefined);
 });
