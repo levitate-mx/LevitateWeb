@@ -583,12 +583,11 @@ export function JudgingAdminWorkspace() {
         <ConfirmForm
           danger
           message={`Se eliminará la coreografía #${routine.program_number?.trim() || routine.routine_id} · ${routine.name} · ${routine.academy || "Sin academia"}, junto con sus notas, devoluciones, penalizaciones, favoritos y premios vinculados. Esta acción no se puede deshacer desde la web.`}
-          label={`Escribe el ID interno ${routine.routine_id} para confirmar`}
-          onConfirm={async (confirmation) => {
+          onConfirm={async () => {
             await mutate("delete-routine", {
               routine_id: routine.routine_id,
               expected_updated_at: routine.updated_at,
-              confirmation,
+              confirmation: routine.routine_id,
             });
             setModal(null);
           }}

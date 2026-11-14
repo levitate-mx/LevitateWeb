@@ -142,9 +142,10 @@ test("admin and judging admin can delete routines while program management remai
   }
 });
 
-test("routine delete first confirms name, programme number, academy and internal ID and can be cancelled without a request", () => {
+test("routine delete confirms name, programme number and academy without an ID input and can be cancelled without a request", () => {
   const bundle = fixture();
   Object.assign(bundle.routines[0], { name: "Vuelo <final>", program_number: " 194 a ", academy: "Academia Águila" });
+  const before = structuredClone(bundle);
   const view = harness(bundle);
   const button = find(view.tree(), node => node.props?.label === "Eliminar Vuelo <final>");
   button.props.onClick();
@@ -153,42 +154,54 @@ test("routine delete first confirms name, programme number, academy and internal
   const html = renderToStaticMarkup(view.confirmationTree());
   assert.match(html, /#194 a · Vuelo &lt;final&gt; · Academia Águila/);
   assert.match(html, /notas, devoluciones, penalizaciones, favoritos y premios vinculados/);
-  assert.match(html, /ID interno m1 para confirmar/);
-  assert.match(html, /required=""/);
+  assert.doesNotMatch(html, /ID interno|<input/);
+  assert.match(html, /Confirmar/);
+  assert.equal(find(view.confirmationTree(), node => node.type === "input"), null);
   assert.equal(view.requests.length, 0, "opening confirmation must never delete a routine");
+  assert.deepEqual(bundle, before, "opening confirmation must not mutate programme data");
   const dialog = modal.type(modal.props);
   dialog.props.onCancel();
   assert.ok(!find(view.tree(), node => node.type?.name === "ModalFrame"));
   assert.equal(view.requests.length, 0, "cancelling must never call the API");
+  assert.deepEqual(bundle, before, "cancelling must leave programme data intact");
 });
 
-test("confirming routine deletion sends only the selected routine and its optimistic version then refreshes", async () => {
-  const bundle = fixture(), before = structuredClone(bundle);
-  const view = harness(bundle, { requestApi: async path => path.includes("/snapshot?") ? bundle : { deleted: true } });
-  find(view.tree(), node => node.props?.label === "Eliminar Jazz primero").props.onClick();
-  const input = find(view.confirmationTree(), node => node.type === "input");
-  input.props.onChange({ target: { value: "m1" } });
-  await view.confirmationTree().props.onSubmit({ preventDefault() {} });
-  assert.equal(view.requests.length, 2);
-  assert.equal(view.requests[0].path, "/api/registration/admin/judging/workspace/delete-routine?eventId=event");
-  assert.equal(view.requests[0].options.method, "POST");
-  assert.deepEqual(JSON.parse(view.requests[0].options.body), { routine_id: "m1", expected_updated_at: "2026-11-11", confirmation: "m1" });
-  assert.equal(view.requests[1].path, "/api/registration/admin/judging/workspace/snapshot?eventId=event");
-  assert.ok(!find(view.tree(), node => node.type?.name === "ModalFrame"));
-  assert.deepEqual(bundle, before, "the UI must not remove rows or scores from the source snapshot itself");
+test("confirming routine deletion automatically sends the selected ID, confirmation and optimistic version then refreshes", async () => {
+  for (const routineId of ["m1", "m2"]) {
+    const bundle = fixture();
+    const selected = bundle.routines.find(routine => routine.routine_id === routineId);
+    selected.updated_at = routineId === "m1" ? "2026-11-11" : "2026-11-12";
+    const before = structuredClone(bundle);
+    const view = harness(bundle, { requestApi: async path => path.includes("/snapshot?") ? bundle : { deleted: true } });
+    find(view.tree(), node => node.props?.label === `Eliminar ${selected.name}`).props.onClick();
+    assert.equal(find(view.confirmationTree(), node => node.type === "input"), null);
+    assert.equal(view.requests.length, 0, "opening the dialog must not send a delete request");
+    await view.confirmationTree().props.onSubmit({ preventDefault() {} });
+    assert.equal(view.requests.length, 2);
+    assert.equal(view.requests[0].path, "/api/registration/admin/judging/workspace/delete-routine?eventId=event");
+    assert.equal(view.requests[0].options.method, "POST");
+    assert.deepEqual(JSON.parse(view.requests[0].options.body), {
+      routine_id: selected.routine_id,
+      expected_updated_at: selected.updated_at,
+      confirmation: selected.routine_id,
+    });
+    assert.equal(view.requests[1].path, "/api/registration/admin/judging/workspace/snapshot?eventId=event");
+    assert.ok(!find(view.tree(), node => node.type?.name === "ModalFrame"));
+    assert.deepEqual(bundle, before, "the UI must not remove rows or scores from the source snapshot itself");
+  }
 });
 
 test("a rejected deletion preserves the selected routine and shows the error in its confirmation", async () => {
   const bundle = fixture(), before = structuredClone(bundle);
   const view = harness(bundle, { requestApi: async () => { throw new Error("La coreografía cambió. Actualiza y vuelve a intentar."); } });
   find(view.tree(), node => node.props?.label === "Eliminar Jazz primero").props.onClick();
-  find(view.confirmationTree(), node => node.type === "input").props.onChange({ target: { value: "m1" } });
+  assert.equal(find(view.confirmationTree(), node => node.type === "input"), null);
   await view.confirmationTree().props.onSubmit({ preventDefault() {} });
   const html = renderToStaticMarkup(view.confirmationTree());
   assert.match(html, /role="alert"/);
   assert.match(html, /La coreografía cambió\. Actualiza y vuelve a intentar\./);
-  assert.match(html, /ID interno m1 para confirmar/);
-  assert.match(html, /value="m1"/);
+  assert.doesNotMatch(html, /ID interno|<input/);
+  assert.match(html, /Confirmar/);
   assert.equal(view.requests.length, 1, "a failed delete must not refresh as if it succeeded");
   assert.deepEqual(bundle, before);
 });

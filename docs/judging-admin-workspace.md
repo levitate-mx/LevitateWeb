@@ -15,8 +15,8 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
   metadatos editables, movimiento entre bloques y eliminacion confirmada.
   En **Editar calificaciones**, tanto el administrador general como el admin
   de jueceo pueden usar la papelera **Eliminar [coreografía]** al final de la
-  fila. La confirmación identifica número, nombre y academia, y exige escribir
-  el ID interno. El borrado quita esa coreografía del evento junto con sus
+  fila. La confirmación identifica número, nombre y academia y requiere pulsar
+  **Confirmar**, sin escribir el ID interno. El borrado quita esa coreografía del evento junto con sus
   notas, devoluciones, penalizaciones, favoritos y premios vinculados; conserva
   bloques, inscripciones y fotos. No se puede deshacer desde la web.
   Editar metadatos, mover coreografías, importar y configurar el programa
