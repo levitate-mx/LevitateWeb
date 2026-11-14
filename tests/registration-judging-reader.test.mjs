@@ -80,9 +80,17 @@ test('the full event reader computes the overall champion while participant bloc
   const championIndex = final.specialAwards.findIndex(award => award.id === 'champion_of_champions');
   assert.ok(championIndex >= 0);
   assert.equal(final.specialAwards[championIndex].isAssigned, true);
+  assert.equal(final.specialAwards[championIndex].title, 'MVP');
+  assert.equal(final.specialAwards[championIndex].isPartial, false);
   assert.equal(final.specialAwards[championIndex].routineId, 'r1');
   assert.match(final.specialAwards[championIndex].displayValue, /Ganadora del primer bloque/);
   assert.equal(final.specialAwards[championIndex + 1].id, 'award_4');
+
+  data.scores = data.scores.filter(row => row.routine_id !== 'r2' || row.judge_id === 'j1');
+  const incomplete = await getJudgingScores(scopedEnv, id, { fetcher: server.fetcher });
+  const provisional = incomplete.report.blocks.at(-1).specialAwards.find(award => award.id === 'champion_of_champions');
+  assert.equal(provisional.title, 'MVP'); assert.equal(provisional.isAssigned, true); assert.equal(provisional.isPartial, true);
+  assert.equal(provisional.routineId, 'r1'); assert.match(provisional.displayValue, /^Parcial: .*Ganadora del primer bloque/);
 
   const sheets = await getJudgingSheets(scopedEnv, id, { routineIds: ['r2'], fetcher: async (input, options) => {
     const response = await server.fetcher(input, options);
@@ -93,7 +101,7 @@ test('the full event reader computes the overall champion while participant bloc
   assert.equal(sheets.rows.length, 1);
   assert.equal(sheets.rows[0].id, 'r2');
   assert.ok(sheets.report.blocks.every(block => !block.specialAwards.some(award => award.id === 'champion_of_champions')),
-    'a complete block of participant sheets cannot stand in for the complete event');
+    'a block of participant sheets cannot stand in for the complete event, even for a provisional MVP');
 });
 
 test('judging event reads use GET-only column allowlists and continue through a server cap below the requested page size', async () => {

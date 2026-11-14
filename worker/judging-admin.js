@@ -448,6 +448,7 @@ export async function handleJudgingAdmin(
       "web-account",
       "upsert-judge",
       "delete-judge",
+      "delete-routine",
       "special-award",
       "sheet-release",
     ].includes(action)

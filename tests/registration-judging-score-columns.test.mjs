@@ -54,9 +54,9 @@ function find(element, predicate) {
   return predicate(element) ? element : find(element.props?.children, predicate);
 }
 
-function harness(bundle = fixture()) {
-  const state = [ [bundle.event], bundle.event.id, bundle, "scores", "motion", "", "all", [], false, "", "", "", "Admin", "judging_admin", null, "", [], "dark" ];
-  const navigation = [];
+function harness(bundle = fixture(), { role = "judging_admin", requestApi } = {}) {
+  const state = [ [bundle.event], bundle.event.id, bundle, "scores", "motion", "", "all", [], false, "", "", "", "Admin", role, null, "", [], "dark" ];
+  const navigation = [], requests = [];
   let cursor = 0;
   const mockedReact = {
     useState(initial) {
@@ -69,12 +69,16 @@ function harness(bundle = fixture()) {
     useCallback(callback) { return callback; },
   };
   const scope = {
-    exports: {}, URLSearchParams, Date, Map, Set,
+    exports: {}, URLSearchParams, Date, Map, Set, Error,
     location: { search: "?event=event&view=scores", assign: url => navigation.push(url) },
     localStorage: { getItem: () => "dark" },
     require(name) {
       if (name === "react") return mockedReact;
-      if (name.endsWith("registrationApi")) return { requestRegistrationApi() { throw new Error("Unexpected API call"); } };
+      if (name.endsWith("registrationApi")) return { requestRegistrationApi(path, options) {
+        requests.push({ path, options });
+        if (!requestApi) throw new Error("Unexpected API call");
+        return requestApi(path, options);
+      } };
       if (name.endsWith("JudgingScoresPanel")) return {};
       if (name.endsWith("judging-category-title.js")) return { compactJudgingCategoryTitle };
       if (name.endsWith("judgePortraits")) return { resolveJudgePortrait: () => undefined };
@@ -94,6 +98,14 @@ function harness(bundle = fixture()) {
   return {
     tree,
     navigation,
+    requests,
+    confirmationTree() {
+      const modal = find(tree(), node => node.type?.name === "ModalFrame");
+      assert.ok(modal, "Expected confirmation dialog");
+      const content = modal.props.modal.content;
+      assert.equal(content.type.name, "ConfirmForm");
+      return content.type(content.props);
+    },
     activity(value) {state[7] = value;},
     header() {
       const matrix = find(tree(), (element) => element.type === "table" && element.props.className === "ja-matrix");
@@ -105,6 +117,81 @@ function harness(bundle = fixture()) {
     view(value) { state[3] = value; },
   };
 }
+
+test("admin and judging admin can delete routines while program management remains exclusive to admin", () => {
+  for (const role of ["admin", "judging_admin"]) {
+    const view = harness(fixture(), { role });
+    const tree = view.tree();
+    const button = find(tree, node => node.props?.label === "Eliminar Jazz primero");
+    assert.ok(button, `${role} must receive the named delete action`);
+    assert.match(renderToStaticMarkup(button), /aria-label="Eliminar Jazz primero"/);
+    assert.ok(find(tree, node => node.type === "th" && node.props.className === "ja-actions-column"));
+    for (const label of ["Editar datos de Jazz primero", "Mover Jazz primero a otro bloque"]) {
+      assert.equal(Boolean(find(tree, node => node.props?.label === label)), role === "admin", `${role}: ${label}`);
+    }
+    assert.equal(Boolean(find(tree, node => node.props?.["aria-label"] === "Importar Excel")), role === "admin");
+    assert.equal(Boolean(find(tree, node => node.type === "button" && node.props?.["aria-pressed"] === false
+      && renderToStaticMarkup(node).includes("Configuración"))), role === "admin");
+    assert.equal(view.requests.length, 0);
+  }
+  for (const role of ["judge", "judging_viewer", "academy", ""]) {
+    const view = harness(fixture(), { role });
+    assert.ok(!find(view.tree(), node => node.props?.label?.startsWith("Eliminar ")), role);
+    assert.ok(!find(view.tree(), node => node.type === "th" && node.props.className === "ja-actions-column"), role);
+    assert.equal(view.requests.length, 0);
+  }
+});
+
+test("routine delete first confirms name, programme number, academy and internal ID and can be cancelled without a request", () => {
+  const bundle = fixture();
+  Object.assign(bundle.routines[0], { name: "Vuelo <final>", program_number: " 194 a ", academy: "Academia Águila" });
+  const view = harness(bundle);
+  const button = find(view.tree(), node => node.props?.label === "Eliminar Vuelo <final>");
+  button.props.onClick();
+  const modal = find(view.tree(), node => node.type?.name === "ModalFrame");
+  assert.equal(modal.props.modal.title, "Eliminar coreografía");
+  const html = renderToStaticMarkup(view.confirmationTree());
+  assert.match(html, /#194 a · Vuelo &lt;final&gt; · Academia Águila/);
+  assert.match(html, /notas, devoluciones, penalizaciones, favoritos y premios vinculados/);
+  assert.match(html, /ID interno m1 para confirmar/);
+  assert.match(html, /required=""/);
+  assert.equal(view.requests.length, 0, "opening confirmation must never delete a routine");
+  const dialog = modal.type(modal.props);
+  dialog.props.onCancel();
+  assert.ok(!find(view.tree(), node => node.type?.name === "ModalFrame"));
+  assert.equal(view.requests.length, 0, "cancelling must never call the API");
+});
+
+test("confirming routine deletion sends only the selected routine and its optimistic version then refreshes", async () => {
+  const bundle = fixture(), before = structuredClone(bundle);
+  const view = harness(bundle, { requestApi: async path => path.includes("/snapshot?") ? bundle : { deleted: true } });
+  find(view.tree(), node => node.props?.label === "Eliminar Jazz primero").props.onClick();
+  const input = find(view.confirmationTree(), node => node.type === "input");
+  input.props.onChange({ target: { value: "m1" } });
+  await view.confirmationTree().props.onSubmit({ preventDefault() {} });
+  assert.equal(view.requests.length, 2);
+  assert.equal(view.requests[0].path, "/api/registration/admin/judging/workspace/delete-routine?eventId=event");
+  assert.equal(view.requests[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(view.requests[0].options.body), { routine_id: "m1", expected_updated_at: "2026-11-11", confirmation: "m1" });
+  assert.equal(view.requests[1].path, "/api/registration/admin/judging/workspace/snapshot?eventId=event");
+  assert.ok(!find(view.tree(), node => node.type?.name === "ModalFrame"));
+  assert.deepEqual(bundle, before, "the UI must not remove rows or scores from the source snapshot itself");
+});
+
+test("a rejected deletion preserves the selected routine and shows the error in its confirmation", async () => {
+  const bundle = fixture(), before = structuredClone(bundle);
+  const view = harness(bundle, { requestApi: async () => { throw new Error("La coreografía cambió. Actualiza y vuelve a intentar."); } });
+  find(view.tree(), node => node.props?.label === "Eliminar Jazz primero").props.onClick();
+  find(view.confirmationTree(), node => node.type === "input").props.onChange({ target: { value: "m1" } });
+  await view.confirmationTree().props.onSubmit({ preventDefault() {} });
+  const html = renderToStaticMarkup(view.confirmationTree());
+  assert.match(html, /role="alert"/);
+  assert.match(html, /La coreografía cambió\. Actualiza y vuelve a intentar\./);
+  assert.match(html, /ID interno m1 para confirmar/);
+  assert.match(html, /value="m1"/);
+  assert.equal(view.requests.length, 1, "a failed delete must not refresh as if it succeeded");
+  assert.deepEqual(bundle, before);
+});
 
 test("score columns follow the selected block's snapshot judges and preserve both Daniel identities", () => {
   const view = harness();

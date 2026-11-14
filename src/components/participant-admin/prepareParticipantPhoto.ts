@@ -1,8 +1,8 @@
 import {
   PHOTO_WATERMARK_VERSION,
+  PHOTO_WATERMARK_OPACITY,
   addPreparedPhotoMarker,
   validatePreparedParticipantPhoto,
-  watermarkStampFontSize,
   watermarkStampPng,
 } from '../../../shared/participant-photo-watermark.js';
 
@@ -38,26 +38,17 @@ function loadStamp(): Promise<HTMLImageElement> {
 
 async function burnWatermark(context: CanvasRenderingContext2D, width: number, height: number) {
   const stamp = await loadStamp();
-  const fontSize = Math.max(14, Math.round(Math.min(width, height) * 0.043));
-  const ratio = fontSize / watermarkStampFontSize;
-  const stampWidth = Math.max(1, Math.round(stamp.naturalWidth * ratio));
-  const stampHeight = Math.max(1, Math.round(stamp.naturalHeight * ratio));
-  const stepX = stampWidth + Math.max(24, Math.floor(width / 10));
-  const stepY = Math.max(55, Math.floor(height / 4));
-  const margin = Math.ceil(Math.max(width, height) / Math.min(stepX, stepY)) + 2;
-  const radians = 24 * Math.PI / 180;
-  const cosine = Math.cos(radians), sine = Math.sin(radians);
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  for (let row = -margin; row <= margin; row++) {
-    for (let column = -margin; column <= margin; column++) {
-      const x = column * stepX + (Math.abs(row) % 2 ? stepX / 2 : 0);
-      const y = row * stepY;
-      const left = Math.round(cosine * x + sine * y + width / 2 - stampWidth / 2);
-      const top = Math.round(-sine * x + cosine * y + height / 2 - stampHeight / 2);
-      if (left >= width || top >= height || left + stampWidth <= 0 || top + stampHeight <= 0) continue;
-      context.drawImage(stamp, left, top, stampWidth, stampHeight);
-    }
+  const scale = Math.max(width / stamp.naturalWidth, height / stamp.naturalHeight);
+  const stampWidth = stamp.naturalWidth * scale;
+  const stampHeight = stamp.naturalHeight * scale;
+  context.save();
+  try {
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.globalAlpha = PHOTO_WATERMARK_OPACITY;
+    context.drawImage(stamp, (width - stampWidth) / 2, (height - stampHeight) / 2, stampWidth, stampHeight);
+  } finally {
+    context.restore();
   }
 }
 

@@ -146,7 +146,7 @@ test('award labels remain readable across multiple A4 pages with long names', as
   assert.doesNotMatch(result.text, /#120 a/);
 });
 
-test('ceremony PDF moves from independent Relevé to special awards, champion and porra without Top Score', async () => {
+test('ceremony PDF moves from independent Relevé to special awards, MVP and porra without Top Score', async () => {
   const bundle = fixture([
     { score: 199.5, medal: 'oro', row: { name: 'Vuelo campeón' } },
     { score: 182, medal: 'oro', row: { name: 'Competencia Aerial' } },
@@ -169,7 +169,7 @@ test('ceremony PDF moves from independent Relevé to special awards, champion an
     { id: 'award_2', title: 'Mejor música', displayValue: 'Academia del Sol' },
     { id: 'award_1', title: 'Mejor vestuario', displayValue: 'Academia Águila' },
     { id: 'award_3', title: 'Mejor idea coreográfica', displayValue: 'Academia del Valle' },
-    { id: 'champion_of_champions', title: 'Campeón de campeones',
+    { id: 'champion_of_champions', title: 'MVP', isPartial: false,
       displayValue: 'Vuelo campeón · Academia Águila · 200 puntos' },
     { id: 'award_4', title: 'Mejor porra', displayValue: 'Academia del Ritmo' },
   ];
@@ -184,7 +184,7 @@ test('ceremony PDF moves from independent Relevé to special awards, champion an
   const choreography = text.indexOf('Mejor idea coreográfica:');
   const wardrobe = text.indexOf('Mejor vestuario:');
   const music = text.indexOf('Mejor música:');
-  const champion = text.indexOf('Campeón de campeones:');
+  const champion = text.indexOf('MVP:');
   const porra = text.indexOf('Mejor porra:');
   assert.ok(motion >= 0 && motion < aerial && aerial < releve);
   assert.match(text, /PREMIO RELEVÉ Premiación independiente Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces. Maestro Relevé Motion · Academia Águila · 28 votos Relevé Motion/);
@@ -194,16 +194,50 @@ test('ceremony PDF moves from independent Relevé to special awards, champion an
   assert.match(text, /Jurado: 45 · Público: 28 votos · Bono: \+5 · Final hasta 50 puntos/);
   assert.match(text, /Jurado: 43 · Público: 17 votos · Bono: Empate por definir/);
   assert.match(text, /Pendiente del público Medalla pendiente/);
-  assert.match(text, /Campeón de campeones: Vuelo campeón · Academia Águila · 200 puntos/);
+  assert.match(text, /MVP: Vuelo campeón · Academia Águila · 200 puntos/);
   assert.ok(text.indexOf('Maestra Relevé Aerial') < specialAwards);
   assert.ok(releve < specialAwards && specialAwards < music && music < wardrobe
     && wardrobe < choreography && choreography < champion && champion < porra);
   assert.doesNotMatch(text, /TOP SCORE/);
-  assert.deepEqual([...text.matchAll(/(Mejor idea coreográfica|Mejor vestuario|Mejor música|Campeón de campeones|Mejor porra):/g)]
-    .map((match) => match[1]), ['Mejor música', 'Mejor vestuario', 'Mejor idea coreográfica', 'Campeón de campeones', 'Mejor porra']);
+  assert.deepEqual([...text.matchAll(/(Mejor idea coreográfica|Mejor vestuario|Mejor música|MVP|Mejor porra):/g)]
+    .map((match) => match[1]), ['Mejor música', 'Mejor vestuario', 'Mejor idea coreográfica', 'MVP', 'Mejor porra']);
   assert.match(text, /Mejor porra: Academia del Ritmo/);
   if (process.env.LEVITATE_RELEVE_PDF_PREVIEW) {
     await writeFile(process.env.LEVITATE_RELEVE_PDF_PREVIEW, bytes);
+  }
+});
+
+test('MVP displays the backend partial flag exactly once and keeps the recorded leader before porra', async () => {
+  for (const prefix of ['', 'Parcial: ']) {
+    const bundle = fixture([{ score: 19, row: { status: 'partial', name: 'Rutina líder parcial' } }]);
+    bundle.snapshot.report.blocks[0].specialAwards = [
+      { id: 'award_1', title: 'Mejor vestuario', displayValue: 'Academia del Valle' },
+      { id: 'champion_of_champions', title: 'MVP', isPartial: true,
+        displayValue: `${prefix}Rutina líder parcial · Academia Águila · 19 puntos` },
+      { id: 'award_4', title: 'Mejor porra', displayValue: 'Academia del Ritmo' },
+    ];
+    const before = structuredClone(bundle);
+    const bytes = await generateAdminReportPdf(bundle, 'b1');
+    const text = contentText(await PDFDocument.load(bytes)).replace(/\s+/g, ' ');
+    assert.match(text, /MVP · Parcial: Rutina líder parcial · Academia Águila · 19 puntos/);
+    assert.equal(text.match(/Parcial/g)?.length, 1, 'the backend fallback prefix must not duplicate the explicit status');
+    assert.ok(text.indexOf('Mejor vestuario:') < text.indexOf('MVP · Parcial:'));
+    assert.ok(text.indexOf('MVP · Parcial:') < text.indexOf('Mejor porra:'));
+    assert.doesNotMatch(text, /Campeón de campeones:|TOP SCORE/);
+    assert.deepEqual(bundle, before, 'the PDF must not recompute the leader or mutate the trusted report');
+    if (process.env.LEVITATE_MVP_PDF_PREVIEW && !prefix) await writeFile(process.env.LEVITATE_MVP_PDF_PREVIEW, bytes);
+  }
+});
+
+test('final and legacy MVP awards do not invent a partial status when the signal is absent', async () => {
+  for (const award of [
+    { id: 'champion_of_champions', title: 'MVP', isPartial: false, displayValue: 'Rutina final · Academia Águila · 43 puntos' },
+    { id: 'champion_of_champions', title: 'Campeón de campeones', displayValue: 'Rutina final · Academia Águila · 43 puntos' },
+  ]) {
+    const bundle = fixture([{ score: 43 }]); bundle.snapshot.report.blocks[0].specialAwards = [award];
+    const text = contentText(await PDFDocument.load(await generateAdminReportPdf(bundle, 'b1'))).replace(/\s+/g, ' ');
+    assert.ok(text.includes(`${award.title}: Rutina final · Academia Águila · 43 puntos`));
+    assert.doesNotMatch(text, /Parcial|Provisional/);
   }
 });
 

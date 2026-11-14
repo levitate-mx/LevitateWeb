@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { addPreparedPhotoMarker, validatePreparedParticipantPhoto, watermarkStampPng } from "../shared/participant-photo-watermark.js";
+import { addPreparedPhotoMarker, validatePreparedParticipantPhoto, watermarkStampPng, PHOTO_WATERMARK_OPACITY } from "../shared/participant-photo-watermark.js";
 
 const maximumSourceBytes = 8 * 1024 * 1024;
 const maximumPreviewBytes = 1024 * 1024;
@@ -87,14 +87,14 @@ export async function processParticipantPhoto({ images, bytes, contentType, blur
     const scale = Math.min(1, maximumEdge / original.width, maximumEdge / original.height);
     const width = Math.max(1, Math.round(original.width * scale));
     const height = Math.max(1, Math.round(original.height * scale));
-    const stampWidth = Math.max(48, Math.min(360, Math.round(Math.min(width, height) * 0.7)));
-    // Each chain receives a fresh stream. The repeated PNG's translucent text
-    // is composited into the pixels before JPEG encoding, including blurred
-    // previews, rather than being a removable HTML/CSS overlay.
+    const stampEdge = Math.max(width, height);
+    // The supplied square pattern is already tiled and diagonal. Draw it once,
+    // centered and proportional, into the pixels after blur and before JPEG.
+    // A square cover also stays correct when EXIF swaps the output axes.
     let photo = images.input(new Response(bytes).body).transform({ width: maximumEdge, height: maximumEdge,
       fit: "scale-down", metadata: "none", ...(blur ? { blur: 18 } : {}) });
-    photo = photo.draw(images.input(new Response(stampBytes).body).transform({ width: stampWidth }),
-      { repeat: true, opacity: 1 });
+    photo = photo.draw(images.input(new Response(stampBytes).body).transform({ width: stampEdge, height: stampEdge, fit: "scale-down" }),
+      { opacity: PHOTO_WATERMARK_OPACITY });
     const output = await photo.output({ format: "image/jpeg", quality: 78, anim: false });
     if (signal.aborted) throw fault();
     const jpeg = await boundedJpeg(await output.response(), signal);

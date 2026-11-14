@@ -79,7 +79,7 @@ Supabase y calcula la presentación en el servidor.
   ganador al final. Los filtros no vuelven a calcular lugares.
 - El dictamen final muestra los puntajes como enteros y no imprime números de
   presentación, ni en pantalla ni en su PDF. El cálculo de medallas, ranking y
-  campeón conserva toda la precisión; el detalle por juez también conserva sus
+  MVP conserva toda la precisión; el detalle por juez también conserva sus
   valores originales.
 - El evento configura los campos de agrupación, alias de disciplinas y
   premios especiales. Las asignaciones de premios se leen del servidor;
@@ -87,7 +87,7 @@ Supabase y calcula la presentación en el servidor.
 - Relevé se presenta después de la competencia general, en una sección propia
   **Premio Relevé · Premiación independiente**, tanto en pantalla como en el PDF.
   Conserva su agrupación competitiva y el resultado de jurado más el bono del
-  público; sus rutinas no participan en Campeón de campeones.
+  público; sus rutinas no participan en MVP.
 - Antes de leer el ranking de Relevé se anuncia **El más votado por el público**,
   con coreografía, academia y votos confirmados. Mientras la votación esté
   abierta o exista empate pendiente se indica ese estado, sin inventar ganador.
@@ -96,15 +96,19 @@ Supabase y calcula la presentación en el servidor.
   **Mejor porra** cierra la premiación, aunque aparezca antes de otros premios
   en la configuración. El orden es **Mejor música → Mejor vestuario → Mejor idea
   coreográfica → Mejor porra**. En el último bloque, la secuencia de cierre es **Relevé → premios
-  especiales → Campeón de campeones → Mejor porra**; el campeón se inserta
+  especiales → MVP → Mejor porra**; MVP se inserta
   inmediatamente antes de porra.
-- En el último bloque de Estado de México, **Campeón de campeones** aparece
+- En el último bloque de Estado de México, **MVP** aparece
   inmediatamente antes de **Mejor porra**. El servidor lo calcula con el mayor
-  puntaje oficial de la competencia general de todos los bloques del evento.
+  puntaje registrado de la competencia general de todos los bloques del evento.
   Incluye coreografía, academia y puntaje; un empate conserva a todos los
-  ganadores. Queda pendiente mientras falten calificaciones generales completas
-  o haya datos inválidos. Las notas o la votación pendientes de Relevé no lo
-  bloquean. Seleccionar otro bloque o aplicar filtros no recalcula al ganador.
+  ganadores. Con calificaciones generales pendientes o inválidas muestra al
+  líder entre los puntajes válidos disponibles, identificado como **Parcial**
+  en pantalla y PDF. Sólo queda pendiente si aún no hay notas generales
+  utilizables; una coreografía sin notas no se convierte en candidata de cero.
+  Al completarse la competencia general, el mismo cálculo pasa a definitivo.
+  Las notas o la votación pendientes de Relevé no lo bloquean. Seleccionar
+  otro bloque o aplicar filtros no recalcula al ganador.
   Solamente las lecturas del evento completo pueden asignar este premio; las
   consultas de hojas por participante o por bloque no certifican ese resultado.
 - Las notas ausentes se distinguen de una nota válida de cero en el detalle.

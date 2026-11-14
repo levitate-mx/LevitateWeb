@@ -28,7 +28,7 @@ type Bundle = {
             }[];
           }[];
         }[];
-        specialAwards: { id?: string; title: string; displayValue: string }[];
+        specialAwards: { id?: string; title: string; displayValue: string; isPartial?: boolean }[];
         releveAudienceFavorite?: {
           status: "ready" | "pending" | "tie" | "none";
           winner: null | { routineId: string; name: string; academy: string; votes: number };
@@ -258,12 +258,17 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
     }
   }
   if (block.specialAwards.length) {
+    const awardText = (award: (typeof block.specialAwards)[number]) => {
+      const partial = award.id === "champion_of_champions" && award.isPartial === true;
+      const value = award.displayValue || "Sin asignar";
+      return `${award.title}${partial ? " · Parcial" : ""}: ${partial ? value.replace(/^\s*Parcial\s*:\s*/i, "") : value}`;
+    };
     const needed =
       35 +
       block.specialAwards.reduce(
         (sum, a) =>
           sum +
-          wrapped(`${a.title}: ${a.displayValue || "Sin asignar"}`, 515, 10)
+          wrapped(awardText(a), 515, 10)
             .length *
             15 +
           (a.id === "champion_of_champions" ? 28 : 12),
@@ -275,7 +280,7 @@ export async function generateAdminReportPdf(bundle: Bundle, blockId: string) {
     for (const award of block.specialAwards) {
       const isChampion = award.id === "champion_of_champions";
       const lines = wrapped(
-        `${award.title}: ${award.displayValue || "Sin asignar"}`,
+        awardText(award),
         isChampion ? 503 : 515,
         10,
       );

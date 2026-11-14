@@ -286,6 +286,88 @@ async function readyDraftPhoto(t) {
   return { ...f, cookie: access.cookie, routine, asset };
 }
 
+async function regeneratedPhotoFixture(t) {
+  const f = await readyDraftPhoto(t);
+  async function add(id, sourceId, version, createdAt) {
+    const uploaded = await f.admin({ action: 'asset.upload', uploadId: id, eventId: 'test-event', routineId: f.routine,
+      kind: 'photo', fileName: id + '.jpg', contentType: 'image/jpeg', base64Data: photoSource.toString('base64') });
+    const assetId = uploaded.data.assetId;
+    await f.admin({ action: 'asset.publish', assetId, published: true });
+    f.db.sqlite.prepare(`INSERT INTO participant_portal_drive_files(event_id,dance_id,source_file_id,source_version,source_folder_id,asset_id,status,publication_policy)
+      VALUES('test-event','dance-a',?,?,'source-album',?,'ready','automatic')`).run(sourceId, version, assetId);
+    f.db.sqlite.prepare('UPDATE participant_portal_assets SET created_at=? WHERE id=?').run(createdAt, assetId);
+    return assetId;
+  }
+  f.db.sqlite.prepare('UPDATE participant_portal_assets SET created_at=? WHERE id=?').run('2026-11-13 00:00:01', f.asset);
+  const second = await add('second-original-preview', 'source-b', 'v1', '2026-11-13 00:00:02');
+  const newest = await add('new-art-preview', 'source-photo', 'v2-art', '2026-11-13 00:00:03');
+  return { ...f, old: f.asset, newest, second };
+}
+
+test('regenerated previews keep two different originals and deny superseded direct asset URLs before storage', async t => {
+  const f = await regeneratedPhotoFixture(t);
+  const data = (await f.request('/api/participant/me', { cookie: f.cookie })).data;
+  assert.deepEqual(data.routines[0].photos.items.map(photo => photo.id), [f.newest, f.second]);
+  assert.doesNotMatch(JSON.stringify(data), /sourceFileId|source_file_id|source-photo|source-b/);
+  const reads = f.bucket.reads.length;
+  await f.request('/api/participant/assets/' + f.old, { cookie: f.cookie, expected: 404 });
+  assert.equal(f.bucket.reads.length, reads);
+  await f.request('/api/participant/assets/' + f.newest, { cookie: f.cookie });
+  await f.request('/api/participant/assets/' + f.second, { cookie: f.cookie });
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM participant_portal_assets').get().n, 3, 'reading a regenerated preview preserves previous assets');
+});
+
+test('a held or unpublished replacement falls back to the previously approved version of that original', async t => {
+  const f = await regeneratedPhotoFixture(t);
+  for (const [withdraw, restore] of [
+    [() => f.db.sqlite.prepare("UPDATE participant_portal_drive_files SET publication_policy='held' WHERE asset_id=?").run(f.newest),
+      () => f.db.sqlite.prepare("UPDATE participant_portal_drive_files SET publication_policy='automatic' WHERE asset_id=?").run(f.newest)],
+    [() => f.db.sqlite.prepare('UPDATE participant_portal_assets SET published=0 WHERE id=?').run(f.newest),
+      () => f.db.sqlite.prepare('UPDATE participant_portal_assets SET published=1 WHERE id=?').run(f.newest)],
+  ]) {
+    withdraw();
+    const data = (await f.request('/api/participant/me', { cookie: f.cookie })).data;
+    assert.deepEqual(data.routines[0].photos.items.map(photo => photo.id), [f.second, f.old]);
+    const reads = f.bucket.reads.length;
+    await f.request('/api/participant/assets/' + f.newest, { cookie: f.cookie, expected: 404 });
+    assert.equal(f.bucket.reads.length, reads);
+    await f.request('/api/participant/assets/' + f.old, { cookie: f.cookie });
+    restore();
+  }
+  const restored = (await f.request('/api/participant/me', { cookie: f.cookie })).data;
+  assert.deepEqual(restored.routines[0].photos.items.map(photo => photo.id), [f.newest, f.second]);
+});
+
+test('publishing a replacement during an old-version read rechecks original selection before returning private bytes', { timeout: 5000 }, async t => {
+  const f = await regeneratedPhotoFixture(t);
+  f.db.sqlite.prepare('UPDATE participant_portal_assets SET published=0 WHERE id=?').run(f.newest);
+  const sourceGet = f.bucket.get.bind(f.bucket); let enter, release;
+  const entered = new Promise(resolve => { enter = resolve; });
+  const wait = new Promise(resolve => { release = resolve; });
+  f.bucket.get = async key => { const object = await sourceGet(key); enter(); await wait; return object; };
+  const pending = f.request('/api/participant/assets/' + f.old, { cookie: f.cookie, expected: 404 });
+  await Promise.race([entered, pending.then(() => assert.fail('the old selected version must first reach private storage'))]);
+  try { f.db.sqlite.prepare('UPDATE participant_portal_assets SET published=1 WHERE id=?').run(f.newest); } finally { release(); }
+  const response = await pending;
+  assert.equal(response.data.error.code, 'portal_asset_not_found');
+  assert.equal(response.data instanceof Uint8Array, false);
+});
+
+test('original mappings from another event or choreography cannot collapse unrelated manual previews', async t => {
+  const f = await regeneratedPhotoFixture(t);
+  await f.admin({ action: 'event.upsert', event: { id: 'other-event', title: 'Otra edición', season: '2027', venue: 'edomex', published: true } });
+  f.db.sqlite.prepare('DELETE FROM participant_portal_drive_files').run();
+  for (const [eventId, danceId, status] of [['other-event', 'dance-a', 'ready'], ['test-event', 'dance-b', 'ready'], ['test-event', 'dance-a', 'pending']]) {
+    for (const assetId of [f.newest, f.second]) {
+      f.db.sqlite.prepare(`INSERT INTO participant_portal_drive_files(event_id,dance_id,source_file_id,source_version,source_folder_id,asset_id,status,publication_policy)
+        VALUES(?,?,'same-untrusted-source',?,'foreign-album',?,?,'automatic')`).run(eventId, danceId, assetId, assetId, status);
+    }
+    const data = (await f.request('/api/participant/me', { cookie: f.cookie })).data;
+    assert.deepEqual(data.routines[0].photos.items.map(photo => photo.id), [f.newest, f.second]);
+    f.db.sqlite.prepare('DELETE FROM participant_portal_drive_files').run();
+  }
+});
+
 test('ready previews on draft routines require their own current approvals and exact participant academy and venue', async t => {
   const f = await readyDraftPhoto(t);
   assert.equal(f.db.sqlite.prepare('SELECT status FROM participant_portal_routines WHERE id=?').get(f.routine).status, 'draft');

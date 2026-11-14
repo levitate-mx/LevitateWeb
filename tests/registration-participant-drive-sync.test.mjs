@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { syncParticipantDrivePhotos } from '../worker/participant-drive-sync.js';
-import { validatePreparedParticipantPhoto } from '../shared/participant-photo-watermark.js';
+import { validatePreparedParticipantPhoto, PHOTO_WATERMARK_VERSION, PHOTO_WATERMARK_ART_REVISION } from '../shared/participant-photo-watermark.js';
 
 const marked = await validatePreparedParticipantPhoto(new Uint8Array(await readFile(new URL('./fixtures/participant-photo-prepared.jpg', import.meta.url))));
 const raw = new Uint8Array(await readFile(new URL('./fixtures/participant-photo-source.png', import.meta.url)));
@@ -53,6 +53,56 @@ async function fixture(t, { hidden = false, admin = false, demo = false, photos 
   const expire = () => db.sqlite.exec("UPDATE participant_portal_drive_sync SET next_check_at=NULL,lease_token=NULL,lease_until=NULL");
   return { db, calls, options, album, run, rows, expire };
 }
+
+function seedLegacyPreview(f, policy = 'automatic') {
+  f.db.sqlite.exec(`INSERT INTO participant_portal_routines(id,event_id,dance_id,photos_published)
+      VALUES('legacy-routine','edition','dance-a',1);
+    INSERT INTO participant_portal_assets(id,event_id,routine_id,kind,object_key,file_name,content_type,sha256,byte_size,width,height,published)
+      VALUES('legacy-preview','edition','legacy-routine','photo','google_drive:legacy-file','old.jpg','image/jpeg','legacy-digest',100,512,320,${policy === 'held' ? 0 : 1});
+    INSERT INTO participant_portal_drive_files(event_id,dance_id,source_file_id,source_version,source_folder_id,asset_id,status,publication_policy,created_at,updated_at)
+      VALUES('edition','dance-a','source-file-1','levitate-preview-v2:revision-1','private-folder','legacy-preview','ready','${policy}',datetime('now','-2 days'),datetime('now','-2 days'));`);
+}
+
+test('new brand artwork regenerates a preview from its original once while preserving legacy approved files and v2 validation', async t => {
+  const f = await fixture(t); seedLegacyPreview(f);
+  const legacy = f.rows('participant_portal_assets')[0], prior = f.rows('participant_portal_drive_files')[0];
+  const first = await f.run(); assert.equal(first.imported, 1);
+  assert.equal(f.calls.processing, 1); assert.equal(f.calls.reads, 1);
+  assert.equal(f.rows('participant_portal_assets').length, 2);
+  assert.deepEqual(f.rows('participant_portal_assets').find(row => row.id === 'legacy-preview'), legacy);
+  assert.deepEqual(f.rows('participant_portal_drive_files').find(row => row.asset_id === 'legacy-preview'), prior);
+  const fresh = f.rows('participant_portal_drive_files').find(row => row.asset_id !== 'legacy-preview');
+  assert.equal(fresh.source_version, `${PHOTO_WATERMARK_VERSION}:${PHOTO_WATERMARK_ART_REVISION}:revision-1`);
+  assert.equal(fresh.publication_policy, 'automatic');
+  assert.notEqual(fresh.asset_id, legacy.id);
+  assert.equal((await validatePreparedParticipantPhoto(marked.bytes)).watermarkVersion, 'levitate-preview-v2');
+  f.expire(); assert.equal((await f.run()).imported, 0); assert.equal(f.calls.processing, 1);
+});
+
+test('cosmetic regeneration never unhides the latest held original but a later explicit re-enable wins', async t => {
+  const held = await fixture(t); seedLegacyPreview(held, 'held');
+  assert.equal((await held.run()).imported, 0);
+  assert.equal(held.calls.reads, 0); assert.equal(held.calls.processing, 0);
+  assert.equal(held.rows('participant_portal_drive_files').length, 1);
+  assert.equal(held.rows('participant_portal_assets')[0].published, 0);
+
+  const resumed = await fixture(t); seedLegacyPreview(resumed);
+  resumed.db.sqlite.exec(`INSERT INTO participant_portal_drive_files(event_id,dance_id,source_file_id,source_version,source_folder_id,status,publication_policy,created_at,updated_at)
+    VALUES('edition','dance-a','source-file-1','older-held-version','private-folder','ready','held',datetime('now','-3 days'),datetime('now','-3 days'));`);
+  assert.equal((await resumed.run()).imported, 1, 'an older historical hold cannot override a later explicit approval');
+  assert.equal(resumed.rows('participant_portal_assets').find(row => row.id !== 'legacy-preview').published, 1);
+});
+
+test('a legacy original withdrawn while new artwork is processing also holds the newly generated copy', async t => {
+  const f = await fixture(t); seedLegacyPreview(f);
+  await f.run({ processPhoto: async () => {
+    f.db.sqlite.exec("UPDATE participant_portal_assets SET published=0 WHERE id='legacy-preview'; UPDATE participant_portal_drive_files SET publication_policy='held',updated_at=datetime('now') WHERE asset_id='legacy-preview'");
+    return marked;
+  } });
+  assert.equal(f.rows('participant_portal_assets').length, 2);
+  assert.ok(f.rows('participant_portal_assets').every(row => row.published === 0));
+  assert.ok(f.rows('participant_portal_drive_files').every(row => row.publication_policy === 'held'));
+});
 
 test('automatic Drive lookup authenticates before reading participant context or making upstream calls', async t => {
   const f = await fixture(t);

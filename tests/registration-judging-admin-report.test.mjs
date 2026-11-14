@@ -353,11 +353,11 @@ test("Relevé has its own final dictamen panel after ordinary competition in adm
   }
 });
 
-test("the event-wide champion remains immediately before Mejor porra when dictamen rows are filtered", () => {
+test("the event-wide MVP remains before porra and distinguishes partial, final and pending data through filters", () => {
   for (const readOnly of [false, true]) {
     const bundle = fixture();
     bundle.snapshot.report.blocks[0].specialAwards.push(
-      { id: "champion_of_champions", title: "Campeón de campeones", displayValue: "Vuelo ganador · Academia Águila · 145 puntos", isAssigned: true, routineId: "earlier-block-winner" },
+      { id: "champion_of_champions", title: "MVP", displayValue: "Vuelo ganador · Academia Águila · 145 puntos", isAssigned: true, isPartial: false, routineId: "earlier-block-winner" },
       { id: "award_4", title: "Mejor porra", displayValue: "Academia del público", isAssigned: true, routineId: null },
     );
     const view = harness(bundle, readOnly);
@@ -366,18 +366,28 @@ test("the event-wide champion remains immediately before Mejor porra when dictam
     const champion = findElement(view.tree(), node => node.type === "div" && node.props?.className?.includes("is-champion"));
     assert.ok(champion, "the champion must have visual emphasis");
     assert.match(renderToStaticMarkup(champion), /Vuelo ganador · Academia Águila · 145 puntos/);
-    assert.ok(ui.indexOf("Campeón de campeones") < ui.indexOf("Mejor porra"));
-    assert.ok(ui.indexOf("Mejor vestuario") < ui.indexOf("Campeón de campeones"));
+    assert.ok(ui.indexOf("MVP") < ui.indexOf("Mejor porra"));
+    assert.ok(ui.indexOf("Mejor vestuario") < ui.indexOf("MVP"));
+    assert.doesNotMatch(renderToStaticMarkup(champion), /Parcial|Campeón de campeones/);
     assert.match(ui, /1 de 5 coreografías/);
     assert.doesNotMatch(ui, /Ver detalle de Vuelo 1/);
     const award = bundle.snapshot.report.blocks[0].specialAwards[1];
+    award.isPartial = true;
+    award.displayValue = "Parcial: Líder actual · Academia Águila · 43 puntos";
+    bundle.snapshot.rows.forEach(row => { row.status = "partial"; row.completedJudges = 0; row.expectedJudges = 3; });
+    const before = structuredClone(bundle);
+    const partial = view.html();
+    assert.match(partial, />MVP<\/span><strong>Parcial: Líder actual · Academia Águila · 43 puntos<\/strong>/);
+    assert.doesNotMatch(partial, /Vuelo ganador|Campeón de campeones/);
+    assert.ok(partial.indexOf("MVP") < partial.indexOf("Mejor porra"));
+    assert.deepEqual(bundle, before, "the UI must not calculate or finalize the MVP from filtered rows");
     award.isAssigned = false;
     award.routineId = null;
-    award.displayValue = "Pendiente de completar las calificaciones";
+    award.displayValue = "Pendiente de calificaciones de competencia general";
     const pending = view.html();
     assert.match(pending, /class="is-champion is-unassigned"/);
-    assert.match(pending, /Pendiente de completar las calificaciones/);
-    assert.doesNotMatch(pending, /Vuelo ganador/);
+    assert.match(pending, /Pendiente de calificaciones de competencia general/);
+    assert.doesNotMatch(pending, /Vuelo ganador|Líder actual|>0 puntos</);
   }
 });
 
@@ -391,7 +401,7 @@ test("the final ceremony goes from ordinary results to Relevé and awards ending
     report.specialAwards.push(
       { id: "award_2", title: "Mejor música", displayValue: "Academia musical", isAssigned: true, routineId: null },
       { id: "award_3", title: "Mejor idea coreográfica", displayValue: "Academia creativa", isAssigned: true, routineId: null },
-      { id: "champion_of_champions", title: "Campeón de campeones", displayValue: "Ganador general · 145 puntos", isAssigned: true, routineId: "earlier-block-winner" },
+      { id: "champion_of_champions", title: "MVP", displayValue: "Ganador general · 145 puntos", isAssigned: true, isPartial: false, routineId: "earlier-block-winner" },
       { id: "award_4", title: "Mejor porra", displayValue: "Academia del público", isAssigned: true, routineId: null },
     );
     assert.ok(report.topScore, "the server can still provide block-wide score metadata");
@@ -403,12 +413,12 @@ test("the final ceremony goes from ordinary results to Relevé and awards ending
     assert.doesNotMatch(ui, /TOP SCORE|ja-top-score/);
     const awards = findElement(view.tree(), node => node.props?.className === "ja-awards-report");
     const titles = awards.props.children[1].map(row => row.props.children[0].props.children);
-    assert.deepEqual(titles, ["Mejor vestuario", "Mejor música", "Mejor idea coreográfica", "Campeón de campeones", "Mejor porra"]);
+    assert.deepEqual(titles, ["Mejor vestuario", "Mejor música", "Mejor idea coreográfica", "MVP", "Mejor porra"]);
     view.change("query", "Danza Áurea");
     const filtered = view.html();
     assert.match(filtered, /Premio Relevé|Ganador general · 145 puntos/);
     assert.doesNotMatch(filtered, /TOP SCORE|ja-top-score/);
-    assert.ok(filtered.indexOf("Campeón de campeones") < filtered.indexOf("Mejor porra"));
+    assert.ok(filtered.indexOf("MVP") < filtered.indexOf("Mejor porra"));
     assert.deepEqual(bundle, before, "the ceremony presentation must not rewrite backend metadata or order");
   }
 });

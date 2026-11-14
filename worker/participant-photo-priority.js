@@ -20,5 +20,14 @@ export function selectParticipantPhotoAssets(dances, assets) {
     .sort((left, right) => rank.get(left.danceId ?? left.dance_id) - rank.get(right.danceId ?? right.dance_id)
       || compare(String(right.created_at || ''), String(left.created_at || ''))
       || compare(String(right.id), String(left.id)))
-    .filter(asset => !seen.has(asset.id) && seen.add(asset.id)).slice(0, PHOTO_PREVIEW_LIMIT);
+    .filter(asset => {
+      // Regenerating a preview creates another asset for the same original.
+      // Eligibility is checked by the reader before selecting the newest copy.
+      const sourceId = asset.sourceFileId ?? asset.source_file_id;
+      const identity = sourceId
+        ? JSON.stringify(['source', asset.eventId ?? asset.event_id, asset.danceId ?? asset.dance_id, sourceId])
+        : JSON.stringify(['asset', asset.id]);
+      if (seen.has(identity)) return false;
+      seen.add(identity); return true;
+    }).slice(0, PHOTO_PREVIEW_LIMIT);
 }

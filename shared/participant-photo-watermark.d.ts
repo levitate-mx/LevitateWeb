@@ -1,4 +1,6 @@
 export const PHOTO_WATERMARK_VERSION: "levitate-preview-v2";
+export const PHOTO_WATERMARK_ART_REVISION: "levitate-brand-v1";
+export const PHOTO_WATERMARK_OPACITY: 0.22;
 export const watermarkStampPng: string;
 export const watermarkStampFontSize: number;
 

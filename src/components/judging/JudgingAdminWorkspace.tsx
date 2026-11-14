@@ -382,6 +382,7 @@ export function JudgingAdminWorkspace() {
     return saved === "light" || saved === "dark" ? saved : "dark";
   });
   const canManagePrograms = userRole === "admin";
+  const canDeleteRoutines = userRole === "admin" || userRole === "judging_admin";
   const primaryItems = primary.filter((item) => canManagePrograms || item.id !== "import");
   useEffect(() => {
     if (userRole === "judging_admin" && (view === "import" || view === "settings")) {
@@ -556,13 +557,13 @@ export function JudgingAdminWorkspace() {
     });
   }
   function remove(routine: Routine) {
-    if (!canManagePrograms) return;
+    if (!canDeleteRoutines) return;
     setModal({
       title: "Eliminar coreografía",
       content: (
         <ConfirmForm
           danger
-          message={`Se eliminarán ${routine.name}, sus notas, devoluciones, penalizaciones y favoritos. Esta acción no se puede deshacer desde la web.`}
+          message={`Se eliminará la coreografía #${routine.program_number?.trim() || routine.routine_id} · ${routine.name} · ${routine.academy || "Sin academia"}, junto con sus notas, devoluciones, penalizaciones, favoritos y premios vinculados. Esta acción no se puede deshacer desde la web.`}
           label={`Escribe el ID interno ${routine.routine_id} para confirmar`}
           onConfirm={async (confirmation) => {
             await mutate("delete-routine", {
@@ -1070,7 +1071,7 @@ export function JudgingAdminWorkspace() {
                     <th>
                       Puntaje total
                     </th>
-                    {canManagePrograms ? <th className="ja-actions-column">
+                    {canManagePrograms || canDeleteRoutines ? <th className="ja-actions-column">
                       <span className="ja-sr">Acciones</span>
                     </th> : null}
                   </tr>
@@ -1153,20 +1154,20 @@ export function JudgingAdminWorkspace() {
                           </small>
                           <span className={`ja-status is-${total.status}`}>{total.label}</span>
                         </td>
-                        {canManagePrograms ? <td>
+                        {canManagePrograms || canDeleteRoutines ? <td>
                           <div className="ja-row-actions">
-                            <IconButton
+                            {canManagePrograms ? <IconButton
                               label={`Mover ${r.name} a otro bloque`}
                               onClick={() => move(r)}
                             >
                               <ArrowRight size={17} />
-                            </IconButton>
-                            <IconButton
+                            </IconButton> : null}
+                            {canDeleteRoutines ? <IconButton
                               label={`Eliminar ${r.name}`}
                               onClick={() => remove(r)}
                             >
                               <Trash2 size={17} />
-                            </IconButton>
+                            </IconButton> : null}
                           </div>
                         </td> : null}
                       </tr>

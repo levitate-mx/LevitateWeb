@@ -228,20 +228,23 @@ function releveAudienceFavorite(eventId, results, voting) {
 
 function championAward(results) {
   const candidates = results.filter((item) => !isReleveResult(item));
+  const available = candidates.filter((item) => numeric(item.score) !== null && numeric(item.maximumScore) !== null
+    && item.maximumScore > 0 && item.score >= 0 && item.score <= item.maximumScore
+    && item.row.status !== 'pending' && item.row.status !== 'unavailable' && item.row.recordedScores > 0
+    && array(item.row.judges).some(judge => numeric(judge.total) !== null));
+  const isPartial = !candidates.length || candidates.some((item) => item.row.status !== 'complete'
+    || !Number.isInteger(item.row.expectedJudges) || item.row.expectedJudges < 1
+    || item.row.completedJudges !== item.row.expectedJudges || !available.includes(item));
   const pending = {
-    id: CHAMPION_AWARD_ID, title: "Campeón de campeones",
-    displayValue: "Pendiente de completar las calificaciones de competencia general",
+    id: CHAMPION_AWARD_ID, title: 'MVP', isPartial,
+    displayValue: 'Pendiente de calificaciones de competencia general',
     isAssigned: false, routineId: null,
   };
-  // A complete event read establishes the candidate pool; every general routine
-  // must also have its full jury sheet before this becomes a final award.
-  if (!candidates.length || candidates.some((item) => item.row.status !== "complete"
-    || !Number.isInteger(item.row.expectedJudges) || item.row.expectedJudges < 1
-    || item.row.completedJudges !== item.row.expectedJudges || item.row.recordedScores < 1
-    || numeric(item.score) === null || numeric(item.maximumScore) === null || item.maximumScore <= 0
-    || item.score < 0 || item.score > item.maximumScore)) return pending;
-  const maximum = Math.max(...candidates.map((item) => item.score));
-  const winners = candidates.filter((item) => Math.abs(item.score - maximum) < EPSILON)
+  // Event coverage is required, but jury completion is not. These are sums of
+  // actual recorded totals; an unscored routine never becomes a zero candidate.
+  if (!available.length) return pending;
+  const maximum = Math.max(...available.map((item) => item.score));
+  const winners = available.filter((item) => item.score === maximum)
     .sort((left, right) => routineOrder(left.row, right.row));
   const scoreLabel = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(maximum);
   const winnerLabel = (item) => [
@@ -249,8 +252,8 @@ function championAward(results) {
     text(item.row.academy) || "Sin academia",
   ].join(" · ");
   return {
-    id: CHAMPION_AWARD_ID, title: "Campeón de campeones",
-    displayValue: `${winners.length > 1 ? "Empate: " : ""}${winners.map(winnerLabel).join(" / ")} · ${scoreLabel} puntos`,
+    id: CHAMPION_AWARD_ID, title: 'MVP', isPartial,
+    displayValue: `${isPartial ? 'Parcial: ' : ''}${winners.length > 1 ? "Empate: " : ""}${winners.map(winnerLabel).join(" / ")} · ${scoreLabel} puntos`,
     isAssigned: true, routineId: winners.length === 1 ? winners[0].row.id : null,
   };
 }

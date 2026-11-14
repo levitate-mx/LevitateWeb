@@ -53,6 +53,8 @@ test('the automatic champion uses the highest general score across all blocks an
   assert.equal(final.specialAwards.at(-1).id, 'award_4');
   assert.equal(award(result.report).routineId, '1');
   assert.equal(award(result.report).isAssigned, true);
+  assert.equal(award(result.report).title, 'MVP');
+  assert.equal(award(result.report).isPartial, false);
   assert.match(award(result.report).displayValue, /Rutina 1.*Academia 1.*149 puntos/);
   assert.doesNotMatch(award(result.report).displayValue, /P-1|#1/);
   assert.ok(result.report.blocks.filter(block => block.id !== finalBlockId).every(block => !block.specialAwards.some(item => item.id === awardId)));
@@ -97,6 +99,7 @@ test('pending or malformed Relevé entries stay separate and cannot block the co
   for (const fields of [{ score: undefined }, { score: 151 }, { name: 'Identidad Relevé sin verificar' }]) {
     const result = snapshot(fixture([{ id: '1', block: 'first', score: 149 }, releveEntry(fields)]));
     assert.equal(award(result.report).isAssigned, true);
+    assert.equal(award(result.report).isPartial, false, 'Relevé never holds the separate general MVP provisional');
     assert.equal(award(result.report).routineId, '1');
     assert.equal(result.report.blocks.find(block => block.id === finalBlockId).sections.at(-1).kind, 'releve');
   }
@@ -108,16 +111,70 @@ test('pending or malformed Relevé entries stay separate and cannot block the co
   }
 });
 
-test('a general result must be complete and valid before a global champion can be announced', () => {
+test('incomplete or invalid general peers leave the best available MVP explicitly partial', () => {
   for (const score of [undefined, 151, -1, NaN]) {
     const result = snapshot(fixture([{ id: '1', block: 'first', score: 149 }, { id: '2', block: finalBlockId, score }]));
-    assert.equal(award(result.report).isAssigned, false, String(score));
-    assert.equal(award(result.report).routineId, null);
-    assert.match(award(result.report).displayValue, /Pendiente/);
+    assert.equal(award(result.report).isAssigned, true, String(score));
+    assert.equal(award(result.report).isPartial, true);
+    assert.equal(award(result.report).routineId, '1');
+    assert.match(award(result.report).displayValue, /^Parcial: .*Rutina 1.*149 puntos$/);
   }
   const partial = fixture();
   partial.judges.push({ event_id: releveJudgingEventId, judge_id: 'j2', name: 'Juez 2', role: 'judge' });
-  assert.equal(award(snapshot(partial).report).isAssigned, false);
+  const mvp = award(snapshot(partial).report);
+  assert.equal(mvp.isAssigned, true); assert.equal(mvp.isPartial, true); assert.equal(mvp.routineId, '1');
+  assert.match(mvp.displayValue, /^Parcial: .*149 puntos$/);
+});
+
+test('a partially evaluated routine can lead across all blocks, and the partial label disappears once every general jury finishes', () => {
+  const data = fixture([{ id: '1', block: 'first', score: 120 }, { id: '2', block: finalBlockId, score: 50 }]);
+  data.judges.push({ event_id: releveJudgingEventId, judge_id: 'j2', name: 'Juez 2', role: 'judge' });
+  data.scores.push({ event_id: releveJudgingEventId, routine_id: '2', judge_id: 'j2', criterion_id: 1, value: 60 });
+  const partial = snapshot(data);
+  assert.equal(partial.rows.find(row => row.id === '1').status, 'partial');
+  assert.equal(partial.rows.find(row => row.id === '2').status, 'complete');
+  assert.equal(award(partial.report).routineId, '1'); assert.equal(award(partial.report).isPartial, true);
+  assert.match(award(partial.report).displayValue, /^Parcial: .*Rutina 1.*120 puntos$/);
+  const standing = partial.report.blocks[0].sections[0].categories[0].rows[0];
+  assert.equal(standing.score, 120); assert.ok(standing.medal, 'available category results already remain visible while incomplete');
+  data.scores.push({ event_id: releveJudgingEventId, routine_id: '1', judge_id: 'j2', criterion_id: 1, value: 20 });
+  const final = award(snapshot(data).report);
+  assert.equal(final.title, 'MVP'); assert.equal(final.isPartial, false); assert.equal(final.routineId, '1');
+  assert.match(final.displayValue, /140 puntos$/); assert.doesNotMatch(final.displayValue, /Parcial/);
+});
+
+test('a completely unscored general field has no MVP and never fabricates a zero winner', () => {
+  for (const score of [undefined, 151, -1, NaN]) {
+    const mvp = award(snapshot(fixture([{ id: '1', block: 'first', score }])).report);
+    assert.equal(mvp.title, 'MVP'); assert.equal(mvp.isAssigned, false); assert.equal(mvp.routineId, null);
+    assert.equal(mvp.isPartial, true); assert.match(mvp.displayValue, /Pendiente/);
+  }
+  const mvp = award(snapshot(fixture([{ id: '1', block: 'first', score: undefined }, { id: '2', block: finalBlockId, score: 0 }])).report);
+  assert.equal(mvp.isAssigned, true); assert.equal(mvp.routineId, '2'); assert.equal(mvp.isPartial, true);
+  assert.match(mvp.displayValue, /^Parcial: .*Rutina 2.*0 puntos$/);
+});
+
+test('a legitimate partially filled judge sheet contributes only its actual recorded total to the partial MVP', () => {
+  const data = fixture([{ id: '1', block: 'first', score: 19 }, { id: '2', block: finalBlockId, score: undefined }]);
+  data.criteria.push({ ...data.criteria[0], criterion_id: 2, label: 'Otro criterio pendiente', max_score: 50 });
+  const result = snapshot(data);
+  assert.equal(result.rows[0].judges[0].status, 'partial'); assert.equal(result.rows[0].judges[0].total, 19);
+  assert.equal(award(result.report).routineId, '1'); assert.equal(award(result.report).isPartial, true);
+  assert.match(award(result.report).displayValue, /^Parcial: .*19 puntos$/);
+  const unavailable = fixture([{ id: '1', block: 'first', score: 19 }, { id: '2', block: finalBlockId, score: 140, genre: 'Sin rúbrica' }]);
+  unavailable.criteria = unavailable.criteria.filter(criterion => criterion.template_id !== 't1');
+  const unavailableResult = snapshot(unavailable);
+  assert.equal(unavailableResult.rows[1].status, 'unavailable');
+  assert.equal(award(unavailableResult.report).routineId, '1'); assert.equal(award(unavailableResult.report).isPartial, true);
+});
+
+test('partial MVP retains exact raw ties and never ties different totals just because display values round alike', () => {
+  const tied = award(snapshot(fixture([{ id: '2', block: 'first', score: 149 }, { id: '1', block: finalBlockId, score: 149 },
+    { id: '3', block: 'middle', score: undefined }])).report);
+  assert.equal(tied.routineId, null); assert.equal(tied.isPartial, true);
+  assert.match(tied.displayValue, /^Parcial: Empate: .*Rutina 1.*Rutina 2.*149 puntos$/);
+  const precise = award(snapshot(fixture([{ id: '1', block: 'first', score: 149.00001 }, { id: '2', block: finalBlockId, score: 149.00002 }])).report);
+  assert.equal(precise.routineId, '2'); assert.doesNotMatch(precise.displayValue, /Empate/);
 });
 
 test('equal maxima retain all co-champions rather than selecting one routine arbitrarily', () => {

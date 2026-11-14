@@ -13,6 +13,16 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
   el avance de evaluacion y las proximas coreografias con la identidad de Levitate.
 - Matriz por coreografia y juez, estados completos/incompletos, filtros,
   metadatos editables, movimiento entre bloques y eliminacion confirmada.
+  En **Editar calificaciones**, tanto el administrador general como el admin
+  de jueceo pueden usar la papelera **Eliminar [coreografía]** al final de la
+  fila. La confirmación identifica número, nombre y academia, y exige escribir
+  el ID interno. El borrado quita esa coreografía del evento junto con sus
+  notas, devoluciones, penalizaciones, favoritos y premios vinculados; conserva
+  bloques, inscripciones y fotos. No se puede deshacer desde la web.
+  Editar metadatos, mover coreografías, importar y configurar el programa
+  siguen reservados al administrador general.
+  Si ya se habían habilitado hojas de ese bloque, el cambio en su programa
+  requiere pulsar nuevamente **Enviar hojas de jueceo** para las restantes.
   El total se muestra sin decimales y se identifica como provisional mientras
   faltan evaluaciones; solo una fila completa se identifica como oficial.
   La columna suma las notas reales de los jueces, con la penalizacion ya
@@ -71,6 +81,8 @@ operaciones transaccionales. Mover una coreografia conserva notas, devoluciones,
 penalizaciones y todos los favoritos, incluidos los anteriores. Los cambios de
 metadatos, jueces y evento comprueban `updated_at`; un conflicto no sobrescribe
 una edicion posterior. La bitacora no es una papelera ni una funcion de deshacer.
+El borrado también exige la revisión vigente y la confirmación exacta del ID,
+conservando el alcance por evento y la identidad del administrador en la bitácora.
 
 `npm run db:prepare:registration` agrega exclusivamente las nuevas tablas D1.
 Debe ejecutarse antes de publicar el Worker. No modifica participantes, nombres,

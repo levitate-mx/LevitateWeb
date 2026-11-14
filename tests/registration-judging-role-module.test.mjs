@@ -158,6 +158,7 @@ test("other-brand events are rejected for all dedicated judging entry points bef
   const f = fixture(t);
   for (const [handler, action, body, editor] of [
     [handleJudgingAdmin, "snapshot", undefined, false],
+    [handleJudgingAdmin, "delete-routine", { routine_id: 'r1', expected_updated_at: revision, confirmation: 'r1' }, false],
     [handleAdminJudgeEditor, "session", undefined, true],
     [handleJudgingExports, "export-start", { block_id: "b1" }, false],
   ]) {
@@ -168,13 +169,63 @@ test("other-brand events are rejected for all dedicated judging entry points bef
 
 test("programme and block changes stay exclusive to the global administrator before reading input or contacting data sources", async t => {
   const f = fixture(t);
-  for (const action of ["import", "metadata", "move-routine", "delete-routine", "activate", "archive", "restore", "configuration", "unknown-future-action"]) {
+  for (const action of ["import", "metadata", "move-routine", "activate", "archive", "restore", "configuration", "unknown-future-action"]) {
     const request = new Request(`https://levitate.mx/api/registration/admin/judging/workspace/${action}?eventId=${eventId}`, { method: "POST", headers: { origin: "https://levitate.mx", "content-type": "application/json" }, body: "invalid json" });
     await assert.rejects(handleJudgingAdmin(request, f.env, judgingAdmin, { fetcher: f.fetcher }), error => error.statusCode === 403 && error.code === "judging_program_forbidden");
     assert.equal(request.bodyUsed, false);
   }
   assert.equal(f.calls.length, 0);
   assert.equal(f.queries.length, 0);
+});
+
+test('global and judging administrators may delete a confirmed routine only through the trusted event-scoped bridge', async t => {
+  for (const session of [judgingAdmin, { user: { id: 'global-mixed', role: 'admin' } }]) {
+    const f = fixture(t);
+    const response = await handleJudgingAdmin(f.request('delete-routine', {
+      routine_id: 'r1', expected_updated_at: revision, confirmation: 'r1',
+      actor_id: 'forged-actor', event_id: foreignId, allowed_event_ids: [foreignId], delete_all: true,
+    }), f.env, session, { fetcher: f.fetcher });
+    assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /no-store/);
+    const calls = f.calls.filter(call => call.url.pathname.endsWith('/levitate-web-admin'));
+    assert.equal(calls.length, 1); assert.equal(calls[0].method, 'POST');
+    const body = JSON.parse(calls[0].body);
+    assert.deepEqual(body, { action: 'delete-routine', event_id: eventId, allowed_event_ids: [eventId], actor_id: session.user.id,
+      data: { routine_id: 'r1', expected_updated_at: revision, confirmation: 'r1' } });
+    assert.deepEqual(f.data.routines.map(row => row.routine_id), ['r1'], 'this capability test never deletes real or fixture source records');
+  }
+});
+
+test('routine deletion still rejects other roles, foreign origins, invalid revisions and mismatched confirmation before any bridge mutation', async t => {
+  const f = fixture(t);
+  const input = { routine_id: 'r1', expected_updated_at: revision, confirmation: 'r1' };
+  for (const role of ['judge', 'academy', 'judging_viewer', 'scanner']) {
+    const request = f.request('delete-routine', input);
+    await assert.rejects(handleJudgingAdmin(request, f.env, { user: { id: 'other', role } }, { fetcher: f.fetcher }),
+      error => error.statusCode === 403 && error.code === 'judging_admin_forbidden');
+    assert.equal(request.bodyUsed, false);
+  }
+  await assert.rejects(handleJudgingAdmin(f.request('delete-routine', input, { origin: 'https://untrusted.test' }), f.env, judgingAdmin,
+    { fetcher: f.fetcher }), error => error.statusCode === 403 && error.code === 'judging_invalid_origin');
+  for (const [override, code] of [[{ confirmation: 'r2' }, 'judging_confirmation'],
+    [{ expected_updated_at: null }, 'judging_revision_missing'], [{ expected_updated_at: 'not-a-date' }, 'judging_revision_missing'],
+    [{ routine_id: 'r1&event_id=other' }, 'judging_invalid_id']]) {
+    await assert.rejects(handleJudgingAdmin(f.request('delete-routine', { ...input, ...override }), f.env, judgingAdmin,
+      { fetcher: f.fetcher }), error => error.statusCode === 400 && error.code === code);
+  }
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+});
+
+test('a stale routine deletion stays a conflict and cannot be retried as an unrestricted write', async t => {
+  const f = fixture(t);
+  const message = 'La coreografia cambio. Actualiza antes de volver a guardar.';
+  await assert.rejects(handleJudgingAdmin(f.request('delete-routine', {
+    routine_id: 'r1', expected_updated_at: '2026-11-09T00:00:00Z', confirmation: 'r1',
+  }), f.env, judgingAdmin, { fetcher: async (url, options) => {
+    const response = await f.fetcher(url, options);
+    return new URL(url).pathname.endsWith('/levitate-web-admin') ? Response.json({ error: message }, { status: 409 }) : response;
+  } }), error => error.code === 'judging_admin_rejected' && error.statusCode === 409 && error.message === message);
+  const writes = f.calls.filter(call => call.method === 'POST');
+  assert.equal(writes.length, 1); assert.equal(JSON.parse(writes[0].body).data.expected_updated_at, '2026-11-09T00:00:00Z');
 });
 
 test("judge access toggles cannot target privileged accounts even when legacy judge flags are present", async t => {

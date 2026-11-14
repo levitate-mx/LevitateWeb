@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { processParticipantPhoto } from '../worker/participant-photo-process.js';
-import { validatePreparedParticipantPhoto } from '../shared/participant-photo-watermark.js';
+import { validatePreparedParticipantPhoto, watermarkStampPng, PHOTO_WATERMARK_OPACITY } from '../shared/participant-photo-watermark.js';
 
 // Exercise the real orchestration and real raster compositing locally. Sharp
 // implements the small documented Images binding subset used by this module;
@@ -25,9 +26,16 @@ function rasterImages() {
     async output(options) {
       calls.push({ output: options });
       const base = await this.pixels();
-      const overlays = await Promise.all(this.overlays.map(async ({ handle, options }) => ({
-        input: await handle.pixels(), tile: options.repeat === true, blend: 'over',
-      })));
+      const baseInfo = await sharp(base).metadata();
+      const overlays = await Promise.all(this.overlays.map(async ({ handle, options }) => {
+        const { data, info } = await sharp(await handle.pixels()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        for (let index = 3; index < data.length; index += 4) data[index] = Math.round(data[index] * (options.opacity ?? 1));
+        // The binding centers overlays on the base canvas and clips overflow.
+        const width = Math.min(info.width, baseInfo.width), height = Math.min(info.height, baseInfo.height);
+        const input = await sharp(data, { raw: info }).extract({ left: Math.floor((info.width - width) / 2),
+          top: Math.floor((info.height - height) / 2), width, height }).png().toBuffer();
+        return { input, tile: options.repeat === true, blend: 'over' };
+      }));
       const bytes = await sharp(base).composite(overlays).jpeg({ quality: options.quality }).toBuffer();
       return { response: () => new Response(bytes, { headers: { 'content-type': options.format } }) };
     }
@@ -47,7 +55,7 @@ const greySource = async (width = 512, height = 320) => new Uint8Array(await sha
   width, height, channels: 3, background: '#606060',
 } }).png().toBuffer());
 
-test('server photo processing burns a repeated watermark into JPEG pixels and returns a valid immutable preview', async () => {
+test('server photo processing burns the supplied brand pattern once into JPEG pixels and returns a valid immutable preview', async () => {
   const images = rasterImages(), source = await greySource();
   const copy = source.slice();
   const result = await processParticipantPhoto({ images, bytes: source, contentType: 'image/png' });
@@ -60,11 +68,19 @@ test('server photo processing burns a repeated watermark into JPEG pixels and re
   const { data } = await sharp(result.bytes).raw().toBuffer({ resolveWithObject: true });
   const minimum = data.reduce((value, pixel) => Math.min(value, pixel), 255);
   const maximum = data.reduce((value, pixel) => Math.max(value, pixel), 0);
-  assert.ok(maximum - minimum > 35, 'the flat photograph must contain visible rasterized watermark text');
+  assert.ok(maximum - minimum > 25, 'the flat photograph must contain visible rasterized brand artwork');
   assert.ok(data.filter(pixel => pixel > 120).length > 500, 'the watermark must affect visible image pixels');
-  assert.deepEqual(images.calls.find(call => call.draw)?.draw, { repeat: true, opacity: 1 });
+  assert.deepEqual(images.calls.find(call => call.draw)?.draw, { opacity: PHOTO_WATERMARK_OPACITY });
+  assert.equal(images.calls.filter(call => call.draw).length, 1);
   assert.equal(images.calls.filter(call => call.output).length, 1);
   assert.equal(images.calls.find(call => call.output)?.output.format, 'image/jpeg');
+});
+
+test('the shared raster is the supplied square transparent artwork, not an altered or regenerated logo', async () => {
+  const original = await readFile(new URL('../public/assets/participant-photo-watermark.png', import.meta.url));
+  assert.deepEqual(Buffer.from(watermarkStampPng, 'base64'), original);
+  const metadata = await sharp(original).metadata();
+  assert.equal(metadata.width, 2000); assert.equal(metadata.height, 2000); assert.equal(metadata.hasAlpha, true);
 });
 
 test('server previews use actual auto-oriented output dimensions and remove private EXIF metadata', async () => {

@@ -5,7 +5,7 @@ import test from 'node:test';
 import sharp from 'sharp';
 import worker from '../worker/index.js';
 import { handleParticipantPortal } from '../worker/participant-portal.js';
-import { validatePreparedParticipantPhoto } from '../shared/participant-photo-watermark.js';
+import { PHOTO_WATERMARK_OPACITY, validatePreparedParticipantPhoto } from '../shared/participant-photo-watermark.js';
 
 const endpoint = '/api/registration/admin/participant-portal';
 const adminCookie = 'levitate_registration_session=admin-session';
@@ -39,7 +39,7 @@ function imagesBinding(state) {
   class Handle {
     constructor(stream) { this.source = new Response(stream).arrayBuffer().then(value => Buffer.from(value)); this.transforms = []; this.layers = []; }
     transform(options) { this.transforms.push(options); return this; }
-    draw(handle, options) { this.layers.push({ handle, options }); return this; }
+    draw(handle, options) { (state.watermarkDraws ||= []).push(options); this.layers.push({ handle, options }); return this; }
     async pixels() {
       let image = sharp(await this.source).rotate();
       for (const options of this.transforms) {
@@ -50,8 +50,18 @@ function imagesBinding(state) {
     }
     async output(options) {
       state.generations++;
-      const layers = await Promise.all(this.layers.map(async ({ handle, options: drawing }) => ({ input: await handle.pixels(), tile: drawing.repeat === true, blend: 'over' })));
-      const bytes = await sharp(await this.pixels()).composite(layers).jpeg({ quality: options.quality }).toBuffer();
+      const base = await this.pixels();
+      const baseInfo = await sharp(base).metadata();
+      const layers = await Promise.all(this.layers.map(async ({ handle, options: drawing }) => {
+        const { data, info } = await sharp(await handle.pixels()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        for (let index = 3; index < data.length; index += 4) data[index] = Math.round(data[index] * (drawing.opacity ?? 1));
+        // Images centers an overlay and clips its overflow to the base canvas.
+        const width = Math.min(info.width, baseInfo.width), height = Math.min(info.height, baseInfo.height);
+        const input = await sharp(data, { raw: info }).extract({ left: Math.floor((info.width - width) / 2),
+          top: Math.floor((info.height - height) / 2), width, height }).png().toBuffer();
+        return { input, tile: drawing.repeat === true, blend: 'over' };
+      }));
+      const bytes = await sharp(base).composite(layers).jpeg({ quality: options.quality }).toBuffer();
       await state.onProcess?.();
       return { response: () => new Response(bytes, { headers: { 'content-type': options.format } }) };
     }
@@ -159,7 +169,10 @@ test('a personal passport generates and stores a real marked JPEG for only its o
   const prepared = await validatePreparedParticipantPhoto(stored.bytes);
   assert.equal(prepared.sha256, asset.sha256); assert.notDeepEqual(stored.bytes, rawSource);
   const { data } = await sharp(stored.bytes).raw().toBuffer({ resolveWithObject: true });
-  assert.ok(Math.max(...data.subarray(0, 100000)) - Math.min(...data.subarray(0, 100000)) > 35, 'watermark changes the flat source pixels');
+  assert.ok(Math.max(...data.subarray(0, 100000)) - Math.min(...data.subarray(0, 100000)) > 25,
+    'the corporate artwork remains visibly burned into the flat source pixels at its supplied opacity');
+  assert.ok(data.filter(pixel => pixel > 120).length > 500, 'the mark affects a substantial visible part of the photo');
+  assert.deepEqual(f.state.watermarkDraws, [{ opacity: PHOTO_WATERMARK_OPACITY }], 'the supplied pattern is applied once without another repeat or rotation');
   assert.doesNotMatch(JSON.stringify(response.data), /google_drive|googleapis|private-source|Original-photo/);
   assert.equal((await f.call('/api/participant/me', { cookie: other.cookie })).data.routines[0].photos.count, 0);
   await f.call('/api/participant/assets/' + asset.id, { cookie: other.cookie, expected: 404 });

@@ -1,4 +1,4 @@
-import { PHOTO_WATERMARK_VERSION } from '../shared/participant-photo-watermark.js';
+import { PHOTO_WATERMARK_VERSION, PHOTO_WATERMARK_ART_REVISION } from '../shared/participant-photo-watermark.js';
 import { PHOTO_PREVIEW_LIMIT, prioritizedPhotoDances } from './participant-photo-priority.js';
 
 const pending = (participantId, eventId, status = 'pending', extra = {}) => ({ status, hasMore: false, imported: 0, participantId, eventId, ...extra });
@@ -12,6 +12,12 @@ const parsedBindings = value => {
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(value);
 const safeError = cause => typeof cause?.code === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(cause.code) ? cause.code : 'photo_sync_unavailable';
 const unavailable = () => Object.assign(new Error('No pudimos preparar las vistas previas por el momento.'), { code: 'portal_photo_sync_unavailable', statusCode: 503 });
+// Pending cosmetic copies cannot supersede the source photo's last published
+// decision. A ready copy explicitly re-enabled later can supersede an old hold.
+const sourceIsNotHeld = alias => `coalesce((SELECT history.publication_policy FROM participant_portal_drive_files history
+  WHERE history.event_id=${alias}.event_id AND history.dance_id=${alias}.dance_id AND history.source_file_id=${alias}.source_file_id
+    AND (history.source_version<>${alias}.source_version OR ${alias}.status='ready')
+  ORDER BY history.updated_at DESC,history.created_at DESC,history.source_version DESC LIMIT 1),'draft')<>'held'`;
 
 async function context(db, env, participantId, eventId, adminPreview) {
   const participant = await first(db, `SELECT p.id,p.full_name,p.academy_id,a.name AS academy_name FROM registration_participants p
@@ -61,7 +67,7 @@ async function promoteReadyPreview(db, { eventId, participantId, nonce, danceId,
     JOIN participant_portal_assets a ON a.id=f.asset_id AND a.event_id=f.event_id
     JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=f.event_id AND r.dance_id=f.dance_id
     WHERE f.event_id=? AND f.dance_id=? AND f.source_file_id=? AND f.source_version=? AND f.asset_id=?
-      AND f.status='ready' AND f.publication_policy='draft' AND coalesce(r.publication_blocked,0)=0
+      AND f.status='ready' AND f.publication_policy='draft' AND ${sourceIsNotHeld('f')} AND coalesce(r.publication_blocked,0)=0
       AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
         WHERE settings.event_id=f.event_id AND settings.dance_id=f.dance_id AND settings.publication_paused=1)
       AND ${member.sql})`;
@@ -111,7 +117,7 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
         AND (?=1 OR (f.publication_policy='automatic' AND a.published=1 AND r.photos_published=1
           AND coalesce(r.publication_blocked,0)=0 AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
             WHERE settings.event_id=f.event_id AND settings.dance_id=f.dance_id AND settings.publication_paused=1))) LIMIT 1`,
-    eventId, participantId, initial.participant.academy_id, `${PHOTO_WATERMARK_VERSION}:%`, adminPreview ? 1 : 0);
+    eventId, participantId, initial.participant.academy_id, `${PHOTO_WATERMARK_VERSION}:${PHOTO_WATERMARK_ART_REVISION}:%`, adminPreview ? 1 : 0);
     return pending(participantId, eventId, ready ? 'ready' : 'pending');
   }
   let file, finished = false;
@@ -155,8 +161,14 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
         if (seenPhotos.size >= PHOTO_PREVIEW_LIMIT) break;
         if (!sourcePhoto || !identifier(sourcePhoto.id) || typeof sourcePhoto.revision !== 'string' || !sourcePhoto.revision || sourcePhoto.revision.length > 300
           || !['image/jpeg','image/png','image/webp'].includes(sourcePhoto.mimeType) || typeof sourcePhoto.read !== 'function' || seenPhotos.has(sourcePhoto.id)) continue;
-        const photo = { ...sourcePhoto, revision: `${PHOTO_WATERMARK_VERSION}:${sourcePhoto.revision}` };
+        const photo = { ...sourcePhoto, revision: `${PHOTO_WATERMARK_VERSION}:${PHOTO_WATERMARK_ART_REVISION}:${sourcePhoto.revision}` };
         seenPhotos.add(photo.id);
+        // A cosmetic regeneration cannot undo an operator's latest withdrawal
+        // of this source photo. A later explicit approval can resume it.
+        const previous = await first(db, `SELECT publication_policy FROM participant_portal_drive_files
+          WHERE event_id=? AND dance_id=? AND source_file_id=? AND (source_version<>? OR status='ready')
+          ORDER BY updated_at DESC,created_at DESC,source_version DESC LIMIT 1`, eventId, danceId, photo.id, photo.revision);
+        if (previous?.publication_policy === 'held') continue;
         const prior = await first(db, `SELECT status,asset_id,publication_policy,
           CASE WHEN status='failed' AND updated_at>datetime('now','-60 seconds') THEN 1 ELSE 0 END AS cooling_down
           FROM participant_portal_drive_files
@@ -223,7 +235,7 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
     const guard = `EXISTS(SELECT 1 FROM participant_portal_drive_files f JOIN participant_portal_drive_sync s ON s.event_id=f.event_id
       WHERE f.event_id=? AND f.dance_id=? AND f.source_file_id=? AND f.source_version=? AND f.lease_token=?
         AND f.lease_until>datetime('now') AND s.participant_id=? AND s.lease_token=? AND s.lease_until>datetime('now')
-        AND f.publication_policy<>'held' AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
+        AND f.publication_policy<>'held' AND ${sourceIsNotHeld('f')} AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
           WHERE settings.event_id=f.event_id AND settings.dance_id=f.dance_id AND settings.publication_paused=1))
       AND ${member.sql}`;
     const guardArgs = [eventId, file.danceId, file.photo.id, file.photo.revision, nonce, participantId, nonce, ...member.args];
@@ -235,7 +247,7 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
         WHERE id=? AND event_id=? AND coalesce(publication_blocked,0)=0 AND ${guard}`).bind(routine.id, eventId, ...guardArgs));
     }
     statements.push(db.prepare(`UPDATE participant_portal_drive_files SET asset_id=?,status='ready',
-      publication_policy=CASE WHEN publication_policy='held' THEN 'held' WHEN ?=1
+      publication_policy=CASE WHEN publication_policy='held' OR NOT(${sourceIsNotHeld('participant_portal_drive_files')}) THEN 'held' WHEN ?=1
         AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
           WHERE settings.event_id=participant_portal_drive_files.event_id AND settings.dance_id=participant_portal_drive_files.dance_id AND settings.publication_paused=1)
         THEN 'automatic' ELSE 'draft' END,

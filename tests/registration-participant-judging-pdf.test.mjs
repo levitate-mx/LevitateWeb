@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { PDFDocument, decodePDFRawStream } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFName, decodePDFRawStream } from 'pdf-lib';
 import { generateParticipantJudgingPdf, summarizeParticipantJudgingSheet } from '../shared/participant-judging-sheet.js';
 
 const criterion = (id, value = 9.5, maximumScore = 10) => ({ id, label: `Técnica y expresión ${id}`, section: 'TÉCNICA', value, maximumScore });
@@ -79,14 +79,23 @@ test('each judge starts a separate A4 sheet and the preview flag marks complete 
   assert.equal(text.match(/VISTA PREVIA - NO OFICIAL/g).length, 2);
 });
 
-test('brand artwork preserves every score and preview warning on one page per judge', async () => {
-  const watermarkBytes = await readFile(new URL('../public/assets/judging-sheet-watermark.png', import.meta.url));
-  const options = { eventTitle: 'Levitate MX', routine, judges: [judge(), judge({ status: 'partial' })] };
-  const plain = await PDFDocument.load(await generateParticipantJudgingPdf(options));
-  const branded = await PDFDocument.load(await generateParticipantJudgingPdf({ ...options, watermarkBytes }));
-  assert.equal(branded.getPageCount(), 2);
-  assert.equal(contentText(branded), contentText(plain));
-  assert.equal(contentText(branded).match(/VISTA PREVIA - NO OFICIAL/g).length, 1);
+test('judging sheets retain their header logo but never fetch or embed the photo-preview watermark', async t => {
+  const watermarkBytes = await readFile(new URL('../public/assets/participant-photo-watermark.png', import.meta.url));
+  const logoBytes = await readFile(new URL('../public/assets/judging-sheet-logo-white.png', import.meta.url));
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {} });
+  t.after(() => previousWindow ? Object.defineProperty(globalThis, 'window', previousWindow) : delete globalThis.window);
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async url => { requests.push(url); throw new Error('No background image should be requested'); });
+  const pdf = await PDFDocument.load(await generateParticipantJudgingPdf({ eventTitle: 'Levitate MX', routine,
+    judges: [judge(), judge({ status: 'partial' })], logoBytes, watermarkBytes }));
+  assert.equal(pdf.getPageCount(), 2);
+  for (const page of pdf.getPages()) {
+    const images = page.node.Resources().lookup(PDFName.of('XObject'), PDFDict);
+    assert.equal(images.keys().length, 1, 'only the header logo is embedded');
+  }
+  assert.deepEqual(requests, []);
+  assert.equal(contentText(pdf).match(/VISTA PREVIA - NO OFICIAL/g).length, 1);
 });
 
 test('sixteen criteria, long metadata, all sections and 350 feedback characters fit one readable A4 sheet', async () => {

@@ -63,7 +63,7 @@ export type ReportBlock = {
   title: string;
   isActive: boolean;
   sections: { id: string; label: string; kind?: "competition" | "releve"; categories: { id: string; title: string; rows: ReportStanding[] }[] }[];
-  specialAwards: { id: string; title: string; displayValue: string; isAssigned: boolean; routineId: string | null }[];
+  specialAwards: { id: string; title: string; displayValue: string; isAssigned: boolean; isPartial?: boolean; routineId: string | null }[];
   releveAudienceFavorite?: { status: "ready" | "pending" | "tie" | "none"; winner: { routineId: string; name: string; academy: string; votes: number } | null };
   counts: { disciplines: number; categories: number; scored: number; total: number };
   topScore: { routineId: string; score: number } | null;

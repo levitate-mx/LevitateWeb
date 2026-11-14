@@ -161,6 +161,9 @@ async function me(db, env, request, getJudgingSnapshot) {
 // source must not hide a ready preview, and a ready preview releases no scores.
 async function readApprovedParticipantPhotos(db, participantId, eventId, adminPreview = false) {
   const assets = await all(db, `SELECT a.*,r.dance_id AS danceId,d.title AS danceTitle,
+    (SELECT source.source_file_id FROM participant_portal_drive_files source
+      WHERE source.event_id=a.event_id AND source.dance_id=r.dance_id AND source.asset_id=a.id AND source.status='ready'
+      ORDER BY source.updated_at DESC,source.source_file_id LIMIT 1) AS sourceFileId,
     (SELECT COUNT(*) FROM registration_dance_participants members WHERE members.dance_id=d.id) AS participant_count
     FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id=a.routine_id AND r.event_id=a.event_id

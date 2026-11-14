@@ -37,6 +37,5 @@ export function generateParticipantJudgingPdf(options: {
   };
   judges: ParticipantJudgingJudge[];
   logoBytes?: Uint8Array | ArrayBuffer;
-  watermarkBytes?: Uint8Array | ArrayBuffer;
   preview?: boolean;
 }): Promise<Uint8Array>;

@@ -23,12 +23,22 @@ for (const name of ["statusLabels", "scoreFormatter"]) {
   assert.ok(declaration, `missing application constant ${name}`);
   declarations.unshift(declaration.getText(syntax));
 }
-const javascript = ts.transpileModule(`${declarations.join("\n")}\nglobalThis.helpers = { ${functionNames.join(",")} };`, {
+let awardsSection;
+function findAwardsSection(node) {
+  if (ts.isJsxElement(node) && node.openingElement.tagName.getText(syntax) === "section"
+    && node.openingElement.attributes.properties.some(attribute => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(syntax) === "className" && attribute.initializer?.text === "judging-scores__awards")) awardsSection = node;
+  ts.forEachChild(node, findAwardsSection);
+}
+findAwardsSection(syntax);
+assert.ok(awardsSection, "legacy awards tests must render the actual application section");
+declarations.push(`function LegacyAwards({ selectedBlock, rowLookup }) { return (${awardsSection.getText(syntax)}); }`);
+const javascript = ts.transpileModule(`${declarations.join("\n")}\nglobalThis.helpers = { ${functionNames.join(",")}, LegacyAwards };`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, compactJudgingCategoryTitle, Building2, ChevronDown, MapPin };
 vm.runInNewContext(javascript, scope);
-const { scoreValue, reportScoreValue, disciplineName, blockKey, blockLabel, JudgeBreakdown, filterReportSections, ReleveAudienceFavorite, DictamenEntry } = scope.helpers;
+const { scoreValue, reportScoreValue, disciplineName, blockKey, blockLabel, JudgeBreakdown, filterReportSections, ReleveAudienceFavorite, DictamenEntry, LegacyAwards } = scope.helpers;
 
 const judge = (overrides = {}) => ({
   id: "judge-1", name: "Jueza de prueba", status: "complete", subtotal: 98.25, penalty: 1.5,
@@ -102,6 +112,30 @@ const choreography = (id, overrides = {}) => ({
 });
 const standing = (routineId, rank, score) => ({ routineId, score, medal: "oro", directCompetition: true, eligibleCount: 3,
   placement: { rank, label: `${rank}°`, isFirstPlace: rank === 1, isParticipation: false } });
+
+test("legacy MVP cards preserve the server's partial, final and pending announcements before porra", () => {
+  const selectedBlock = { specialAwards: [
+    { id: "champion_of_champions", title: "MVP", displayValue: "Parcial: Vuelo líder · Academia Águila · 43 puntos", isAssigned: true, isPartial: true, routineId: "other-block" },
+    { id: "award_4", title: "Mejor porra", displayValue: "Academia del público", isAssigned: true, routineId: null },
+  ] };
+  const render = () => renderToStaticMarkup(LegacyAwards({ selectedBlock, rowLookup: new Map() }));
+  const before = structuredClone(selectedBlock);
+  const partial = render();
+  assert.match(partial, /is-champion/);
+  assert.match(partial, /<h4>MVP<\/h4><strong>Parcial: Vuelo líder · Academia Águila · 43 puntos<\/strong>/);
+  assert.doesNotMatch(partial, /is-unassigned|Campeón de campeones/);
+  assert.ok(partial.indexOf("MVP") < partial.indexOf("Mejor porra"));
+  assert.deepEqual(selectedBlock, before);
+  const mvp = selectedBlock.specialAwards[0];
+  mvp.isPartial = false; mvp.displayValue = "Vuelo ganador · Academia Águila · 143 puntos";
+  assert.match(render(), /<h4>MVP<\/h4><strong>Vuelo ganador · Academia Águila · 143 puntos<\/strong>/);
+  assert.doesNotMatch(render(), /Parcial/);
+  mvp.isPartial = true; mvp.isAssigned = false; mvp.routineId = null;
+  mvp.displayValue = "Pendiente de calificaciones de competencia general";
+  assert.match(render(), /is-unassigned is-champion/);
+  assert.match(render(), /Pendiente de calificaciones de competencia general/);
+  assert.doesNotMatch(render(), /Vuelo ganador|Vuelo líder|>0 puntos</);
+});
 
 test("dictamen filters preserve the complete block's places and server announcement order", () => {
   const announced = [standing("2", 3, 112), standing("1", 2, 125), standing("3", 1, 140)];
