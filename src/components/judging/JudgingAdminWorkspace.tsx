@@ -351,6 +351,17 @@ function ConfirmForm({
   );
 }
 
+function readScoresBlock(eventId: string) {
+  try { return sessionStorage.getItem(`levitate-judging-scores-block:${eventId}`) || ""; }
+  catch { return ""; }
+}
+
+function rememberScoresBlock(eventId: string, blockId: string) {
+  if (!eventId || !blockId) return;
+  try { sessionStorage.setItem(`levitate-judging-scores-block:${eventId}`, blockId); }
+  catch { /* The workspace remains usable when browser storage is unavailable. */ }
+}
+
 export function JudgingAdminWorkspace() {
   const params = new URLSearchParams(location.search);
   const [events, setEvents] = useState<Event[]>([]),
@@ -369,6 +380,8 @@ export function JudgingAdminWorkspace() {
     [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
     [activity, setActivity] = useState<Presence[]>([]);
+  const currentView = useRef(view);
+  currentView.current = view;
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
@@ -450,11 +463,11 @@ export function JudgingAdminWorkspace() {
         const data = await api<Bundle>("snapshot");
         if (current !== generation.current) return;
         setBundle(data);
-        setBlockId((old) =>
-          data.blocks.some((b) => b.block_id === old)
-            ? old
-            : data.blocks[0]?.block_id || "",
-        );
+        setBlockId((old) => {
+          if (data.blocks.some((b) => b.block_id === old)) return old;
+          const saved = currentView.current === "scores" ? readScoresBlock(eventId) : "";
+          return data.blocks.some((b) => b.block_id === saved) ? saved : data.blocks[0]?.block_id || "";
+        });
         setError("");
       } catch (e) {
         if (current === generation.current) setError(errorText(e));
@@ -480,6 +493,11 @@ export function JudgingAdminWorkspace() {
     url.searchParams.set("view", view);
     history.replaceState(null, "", url);
   }, [eventId, view]);
+  useEffect(() => {
+    if (view === "scores" && bundle?.event.id === eventId && bundle.blocks.some((b) => b.block_id === blockId)) {
+      rememberScoresBlock(eventId, blockId);
+    }
+  }, [view, eventId, blockId, bundle]);
   useEffect(() => {
     if (!eventId || !bundle) return;
     let live = true;
@@ -512,6 +530,7 @@ export function JudgingAdminWorkspace() {
     setNotice("Cambios guardados.");
   }
   function openEditor(routine: Routine, judge: Judge) {
+    if (view === "scores") rememberScoresBlock(eventId, blockId);
     const p = new URLSearchParams({
       mode: "admin-editor",
       event: eventId,
@@ -877,7 +896,10 @@ export function JudgingAdminWorkspace() {
                 <select
                   value={blockId}
                   disabled={!bundle.blocks.length}
-                  onChange={(e) => setBlockId(e.target.value)}
+                  onChange={(e) => {
+                    setBlockId(e.target.value);
+                    if (view === "scores") rememberScoresBlock(eventId, e.target.value);
+                  }}
                 >
                   {!bundle.blocks.length ? (
                     <option value="">Sin bloques registrados</option>

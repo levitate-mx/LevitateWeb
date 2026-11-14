@@ -27,6 +27,10 @@ con parametros de URL. No se crearon nuevos administradores en produccion.
   faltan evaluaciones; solo una fila completa se identifica como oficial.
   La columna suma las notas reales de los jueces, con la penalizacion ya
   incluida en cada nota; no convierte esa suma a la escala de 150 puntos.
+  **Editar calificaciones** recuerda el bloque seleccionado por pestaña y evento
+  al actualizar datos, recargar la página y volver de una hoja. La preferencia
+  se valida contra los bloques actuales; si el bloque ya no existe se usa el
+  primero disponible. Esta persistencia se aplica exclusivamente a esa vista.
 - El puntaje abre la hoja Flutter ya utilizada por los jueces, en modo editor
   administrativo. Usa endpoints administrativos separados y almacenamiento
   local aislado por administrador, evento y juez. No simula actividad del juez.
