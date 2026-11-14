@@ -41,7 +41,7 @@ diff --git a/scripts/build-judge-web.mjs b/scripts/build-judge-web.mjs
 diff --git a/test/obligatory_division_test.dart b/test/obligatory_division_test.dart
 --- /dev/null
 +++ b/test/obligatory_division_test.dart
-@@ -0,0 +1,183 @@
+@@ -0,0 +1,275 @@
 +import 'package:flutter/material.dart';
 +import 'package:flutter_test/flutter_test.dart';
 +import 'package:jueceo_coreografias_tablet/judging_store.dart';
@@ -175,6 +175,98 @@ diff --git a/test/obligatory_division_test.dart b/test/obligatory_division_test.
 +        expect(result.score(checkedCount: selected.length, maxScore: 3), saved);
 +      }
 +    }
++  });
++
++  test('saved scores infer exact checkbox IDs in catalogue order', () {
++    final expectedByGenre = {
++      'TELA': {
++        1.0: ['tela-intermedio-subida', 'tela-intermedio-flexibilidad'],
++        2.0: [
++          'tela-intermedio-subida',
++          'tela-intermedio-flexibilidad',
++          'tela-intermedio-fuerza'
++        ],
++        3.0: [
++          'tela-intermedio-subida',
++          'tela-intermedio-flexibilidad',
++          'tela-intermedio-fuerza',
++          'tela-intermedio-tijera',
++          'tela-intermedio-caidas'
++        ],
++      },
++      'ARO': {
++        1.0: ['aro-intermedio-subida'],
++        2.0: ['aro-intermedio-subida', 'aro-intermedio-flexibilidad'],
++        3.0: [
++          'aro-intermedio-subida',
++          'aro-intermedio-flexibilidad',
++          'aro-intermedio-fuerza',
++          'aro-intermedio-caidas'
++        ],
++      },
++    };
++    for (final entry in expectedByGenre.entries) {
++      final checklist = ObligatoryChecklist.forRoutine(
++          routine('TEEN: 14 A 17 AÑOS', genre: entry.key),
++          criterion: obligatory)!;
++      for (final score in entry.value.entries) {
++        expect(
++            checklist
++                .initialCheckedIds(savedScore: score.key, maxScore: 3)
++                .toList(),
++            orderedEquals(score.value),
++            reason: '${entry.key}, saved score ${score.key}');
++      }
++    }
++  });
++
++  testWidgets(
++      'existing nonconsecutive draft checkboxes take precedence over score inference',
++      (tester) async {
++    SharedPreferences.setMockInitialValues(
++        {'selectedJudge': 'DANIEL.H', 'selectedRoutineId': '133'});
++    final data = checklistProgram();
++    final api = FakeJudgingApi()..programData = data;
++    final store = JudgingStore(api,
++        automaticSync: false, localRepository: MemoryJudgingRepository())
++      ..appData = data
++      ..selectedEvent = event('event-a')
++      ..selectedJudge = 'DANIEL.H'
++      ..selectedRoutineId = '133'
++      ..selectedBlockId = 'block-1';
++    final scoreKey = store.scoreKey('133', 'DANIEL.H', 15);
++    store.scores[scoreKey] = 2;
++    const draftSelections = [
++      'tela-intermedio-subida',
++      'tela-intermedio-fuerza',
++      'tela-intermedio-caidas'
++    ];
++    final draft = {
++      'scores': {'15': '2'},
++      'obligatory': {'15': draftSelections},
++      'penalty': '0'
++    };
++    expect(await store.saveDraft(store.currentScope, '133', 'DANIEL.H', draft),
++        isTrue);
++    tester.view.devicePixelRatio = 1;
++    tester.view.physicalSize = const Size(1280, 720);
++    addTearDown(tester.view.resetPhysicalSize);
++    addTearDown(tester.view.resetDevicePixelRatio);
++    await tester.pumpWidget(MaterialApp(
++        theme: levitateWebTheme(Brightness.dark),
++        home: Scaffold(body: JudgingPage(store: store))));
++    await tester.pump();
++    final field = tester.widget<ObligatoryChecklistField>(
++        find.byType(ObligatoryChecklistField));
++    expect(field.score, 2);
++    expect(field.checkedIds.toList(), orderedEquals(draftSelections));
++    expect(field.checkedIds, isNot(contains('tela-intermedio-flexibilidad')));
++    expect(store.draftFor(data.routines.single, 'DANIEL.H'), draft);
++    expect(store.scores[scoreKey], 2);
++    expect(api.scoreRequests, 0);
++    expect(tester.takeException(), isNull);
++    await tester.pumpWidget(const SizedBox());
++    await store.close();
 +  });
 +
 +  testWidgets(

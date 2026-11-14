@@ -19,7 +19,9 @@ the mandatory-element checklist when the programme division includes an age
 suffix (for example `PETITE: 7 A 10 AÑOS`) without rewriting the original division,
 score formula, draft format or submission payload. Its regression verifies
 existing scores survive opening the checklist and local checkbox edits do not
-submit grades. This repair does not update the historical checklist catalogue
+submit grades. When only a numeric grade exists, the existing initializer marks
+the first requirements in order to reproduce that grade. Explicit checklist IDs
+in a local draft take precedence and remain unchanged. This repair does not update the historical checklist catalogue
 to every modality in `niveles-obligatorios-aerial-otono-2026.pdf`.
 
 ## Website appearance
