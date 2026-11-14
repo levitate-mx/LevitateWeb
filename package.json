@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/version-judge-web-assets.mjs && tsc -b && vite build",
     "test:registration": "node --test tests/registration-*.test.mjs",
     "db:check:registration": "node scripts/prepare-registration-db.mjs --remote --check",
     "db:check:registration:local": "node scripts/prepare-registration-db.mjs --local --check",

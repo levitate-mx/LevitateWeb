@@ -24,6 +24,14 @@ the first requirements in order to reproduce that grade. Explicit checklist IDs
 in a local draft take precedence and remain unchanged. This repair does not update the historical checklist catalogue
 to every modality in `niveles-obligatorios-aerial-otono-2026.pdf`.
 
+The website build runs `scripts/version-judge-web-assets.mjs` after Flutter
+packaging. It adds a content revision to the bootstrap URL and its `mainJsPath`,
+so a new compilation does not reuse the browser's previous application script.
+The revision changes only when `main.dart.js` changes. This does not clear
+IndexedDB, drafts, pending uploads, sessions or browser caches, and does not
+reload an already open judging sheet. Judges still save and reload their tab
+to load a new release; refreshing programme data alone keeps the running app.
+
 ## Website appearance
 
 The web entry supplies `levitateWebTheme` from
