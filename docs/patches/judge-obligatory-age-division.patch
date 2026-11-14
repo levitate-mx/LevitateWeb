@@ -1,0 +1,227 @@
+diff --git a/lib/models.dart b/lib/models.dart
+--- a/lib/models.dart
++++ b/lib/models.dart
+@@ -451,7 +451,7 @@
+       return isObligatoryCriterionScope ? _defaultCompletedChecklist() : null;
+     }
+ 
+-    final divisionKey = normalizedKey(routine.division);
++    final divisionKey = _checklistDivisionKey(routine.division);
+     if (_autoCompletedDivisions.contains(divisionKey)) {
+       return _autoCompletedChecklist(
+           apparatus: apparatus, divisionKey: divisionKey);
+@@ -484,6 +484,16 @@
+     'BABY',
+     'LEGACY',
+   };
++
++  static String _checklistDivisionKey(String division) {
++    final key = normalizedKey(division);
++    // Programme divisions include age ranges, e.g. PETITE: 7 A 10 AÑOS.
++    // Only checklist lookup uses the base name; retain the original division.
++    final match = RegExp(
++      r'^(BABY|PETITE|JUNIOR|TEEN|SENIOR|LEGACY)(?=$|\s|:|\(|-)',
++    ).firstMatch(key);
++    return match?.group(1) ?? key;
++  }
+ 
+   static ObligatoryChecklist _defaultCompletedChecklist() {
+     return const ObligatoryChecklist(
+diff --git a/scripts/build-judge-web.mjs b/scripts/build-judge-web.mjs
+--- a/scripts/build-judge-web.mjs
++++ b/scripts/build-judge-web.mjs
+@@ -14,6 +14,7 @@
+   'test/releve_rubric_test.dart',
+   'test/judging_save_feedback_test.dart',
+   'test/judge_activity_order_test.dart',
++  'test/obligatory_division_test.dart',
+ ];
+ for (const test of requiredTests) {
+   if (!existsSync(resolve(root, test))) {
+diff --git a/test/obligatory_division_test.dart b/test/obligatory_division_test.dart
+--- /dev/null
++++ b/test/obligatory_division_test.dart
+@@ -0,0 +1,183 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:jueceo_coreografias_tablet/judging_store.dart';
++import 'package:jueceo_coreografias_tablet/levitate_web_theme.dart';
++import 'package:jueceo_coreografias_tablet/main.dart';
++import 'package:jueceo_coreografias_tablet/models.dart';
++import 'package:shared_preferences/shared_preferences.dart';
++
++import 'support/judging_fixture.dart';
++import 'support/memory_judging_repository.dart';
++
++final obligatory = Criterion(
++  id: 15,
++  section: 'PERFORMANCE',
++  label: 'Ejecución completa de Obligatorios',
++  maxScore: 3,
++);
++
++Routine routine(String division,
++        {String genre = 'TELA', String level = 'INTERMEDIO'}) =>
++    Routine.fromJson({
++      'routine_id': '133',
++      'block_id': 'block-1',
++      'block': 'Block 1',
++      'name': 'Rutina de prueba',
++      'division': division,
++      'genre': genre,
++      'level': level,
++      'category': 'SOLO',
++    });
++
++AppData checklistProgram() => AppData(
++      sourceName: 'Prueba local',
++      blocks: program().blocks,
++      routines: [routine('PETITE: 7 A 10 AÑOS')],
++      templates: [
++        JudgingTemplate(
++          templateId: 'tela',
++          genre: 'TELA',
++          title: 'Hoja de tela',
++          maxScore: 3,
++          criteria: [obligatory],
++        ),
++      ],
++      judges: program().judges,
++      judgeProfiles: program().judgeProfiles,
++    );
++
++void main() {
++  TestWidgetsFlutterBinding.ensureInitialized();
++
++  for (final division in [
++    'PETITE: 7 A 10 AÑOS',
++    'JUNIOR: 11 A 13 AÑOS',
++    'TEEN: 14 A 17 AÑOS',
++    'SENIOR: 18 A 39 AÑOS',
++  ]) {
++    test('age-qualified $division recognizes the same Tela and Aro items', () {
++      for (final genre in ['TELA', 'ARO']) {
++        final input = routine(division, genre: genre);
++        final expected = ObligatoryChecklist.forRoutine(
++            routine(division.split(':').first, genre: genre),
++            criterion: obligatory)!;
++        final result =
++            ObligatoryChecklist.forRoutine(input, criterion: obligatory);
++        expect(result, isNotNull, reason: '$division / $genre');
++        expect(result!.isAutoCompleted, isFalse);
++        expect(result.items.map((item) => item.id),
++            expected.items.map((item) => item.id));
++        expect(result.id, expected.id);
++        expect(input.division, division,
++            reason: 'The displayed programme division must not be rewritten');
++      }
++    });
++  }
++
++  test('Baby and Legacy age labels keep their automatic three-point policy',
++      () {
++    for (final division in [
++      'BABY',
++      'BABY: HASTA LOS 6 AÑOS',
++      'LEGACY',
++      'LEGACY: 40 AÑOS EN ADELANTE',
++    ]) {
++      for (final genre in ['TELA', 'ARO']) {
++        final result = ObligatoryChecklist.forRoutine(
++            routine(division, genre: genre),
++            criterion: obligatory);
++        expect(result, isNotNull, reason: '$division / $genre');
++        expect(result!.isAutoCompleted, isTrue);
++        expect(result.items, isEmpty);
++        expect(result.score(checkedCount: 0, maxScore: 3), 3);
++      }
++    }
++  });
++
++  test(
++      'division matching does not add requirements to Relevé or ordinary criteria',
++      () {
++    expect(
++        ObligatoryChecklist.forRoutine(routine('RELEVÉ'),
++            criterion: obligatory),
++        isNull);
++    expect(
++        ObligatoryChecklist.forRoutine(routine('PETITEX: 7 A 10 AÑOS'),
++            criterion: obligatory),
++        isNull);
++    expect(
++        ObligatoryChecklist.forRoutine(routine('TEEN: 14 A 17 AÑOS'),
++            criterion: Criterion(
++                id: 1, section: 'TÉCNICA', label: 'Musicalidad', maxScore: 5)),
++        isNull);
++  });
++
++  test('age-qualified checklists keep score tiers and saved scores unchanged',
++      () {
++    for (final genre in ['TELA', 'ARO']) {
++      final result = ObligatoryChecklist.forRoutine(
++          routine('SENIOR: 18 A 39 AÑOS', genre: genre),
++          criterion: obligatory)!;
++      expect(result.score(checkedCount: 0, maxScore: 3), 0);
++      expect(result.score(checkedCount: 1, maxScore: 3), 1);
++      expect(
++          result.score(
++              checkedCount: (result.items.length / 2).ceil(), maxScore: 3),
++          2);
++      expect(result.score(checkedCount: result.items.length, maxScore: 3), 3);
++      for (final saved in [1.0, 2.0, 3.0]) {
++        final selected =
++            result.initialCheckedIds(savedScore: saved, maxScore: 3);
++        expect(result.score(checkedCount: selected.length, maxScore: 3), saved);
++      }
++    }
++  });
++
++  testWidgets(
++      'web sheet shows clickable requirements for an age-qualified routine without rewriting the saved grade',
++      (tester) async {
++    SharedPreferences.setMockInitialValues(
++        {'selectedJudge': 'DANIEL.H', 'selectedRoutineId': '133'});
++    final data = checklistProgram();
++    final api = FakeJudgingApi()..programData = data;
++    final store = JudgingStore(api,
++        automaticSync: false, localRepository: MemoryJudgingRepository())
++      ..appData = data
++      ..selectedEvent = event('event-a')
++      ..selectedJudge = 'DANIEL.H'
++      ..selectedRoutineId = '133'
++      ..selectedBlockId = 'block-1';
++    final scoreKey = store.scoreKey('133', 'DANIEL.H', 15);
++    store.scores[scoreKey] = 2;
++    tester.view.devicePixelRatio = 1;
++    tester.view.physicalSize = const Size(1280, 720);
++    addTearDown(tester.view.resetPhysicalSize);
++    addTearDown(tester.view.resetDevicePixelRatio);
++    await tester.pumpWidget(MaterialApp(
++        theme: levitateWebTheme(Brightness.dark),
++        home: Scaffold(body: JudgingPage(store: store))));
++    await tester.pump();
++    expect(find.byType(ObligatoryChecklistField), findsOneWidget);
++    expect(find.byType(ScoreStepperField), findsNothing);
++    var field = tester.widget<ObligatoryChecklistField>(
++        find.byType(ObligatoryChecklistField));
++    expect(field.score, 2);
++    expect(field.checkedIds.length, 3);
++    expect(find.text('Obligatorios TELA'), findsOneWidget);
++    final requirement = find.text('Uso de tijera');
++    await tester.ensureVisible(requirement);
++    await tester.tap(requirement);
++    await tester.pump();
++    field = tester.widget<ObligatoryChecklistField>(
++        find.byType(ObligatoryChecklistField));
++    expect(field.checkedIds, contains('tela-intermedio-tijera'));
++    expect(field.checkedIds.length, 4);
++    expect(field.score, 2);
++    expect(store.scores[scoreKey], 2,
++        reason: 'Opening or checking an item cannot rewrite a submitted grade');
++    expect(api.scoreRequests, 0);
++    expect(tester.takeException(), isNull);
++    await tester.pumpWidget(const SizedBox());
++    await store.close();
++  });
++}

@@ -14,6 +14,14 @@ The required build check and its geometry contract are preserved in
 `docs/patches/judge-web-rebuild-validation.patch`; apply it after the four client
 patches when restoring a shared Flutter checkout.
 
+Apply `docs/patches/judge-obligatory-age-division.patch` afterwards. It restores
+the mandatory-element checklist when the programme division includes an age
+suffix (for example `PETITE: 7 A 10 AÑOS`) without rewriting the original division,
+score formula, draft format or submission payload. Its regression verifies
+existing scores survive opening the checklist and local checkbox edits do not
+submit grades. This repair does not update the historical checklist catalogue
+to every modality in `niveles-obligatorios-aerial-otono-2026.pdf`.
+
 ## Website appearance
 
 The web entry supplies `levitateWebTheme` from
