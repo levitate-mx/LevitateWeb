@@ -89,6 +89,36 @@ for (const example of native.grouping) {
   });
 }
 
+test('Open Motion aliases stay separate from aerial apparatuses without changing source scores or genres', () => {
+  const routines = [
+    { id: '1', genre: 'OPEN: MOTION', score: 80 },
+    { id: '2', genre: 'OPEN:MOTION', score: 90 },
+    { id: '3', genre: 'OPEN MOTION', score: 100 },
+    { id: '4', genre: 'OPEN:CINTAS', score: 70 },
+    { id: '5', genre: 'OPEN:Pole', score: 75 },
+    { id: '6', genre: 'OPEN', score: 60 },
+  ];
+  const data = fixture(routines);
+  const before = structuredClone(data);
+  const result = buildJudgingScoreSnapshot(data, at);
+  const sections = new Map(result.report.blocks[0].sections.map(section => [section.label, section]));
+  assert.equal(sections.size, 3);
+  assert.deepEqual(sections.get('OPEN MOTION')?.categories[0].rows.map(entry => entry.routineId), ['1', '2', '3']);
+  assert.deepEqual(sections.get('OPEN AÉREO')?.categories[0].rows.map(entry => entry.routineId), ['4', '5']);
+  assert.deepEqual(sections.get('OPEN PISO')?.categories[0].rows.map(entry => entry.routineId), ['6']);
+  const entries = new Map(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry]));
+  for (const routine of routines) {
+    assert.equal(entries.get(routine.id).score, routine.score);
+    assert.equal(entries.get(routine.id).maximumScore, 150);
+    assert.equal(result.rows.find(entry => entry.id === routine.id).genre, routine.genre);
+  }
+  assert.deepEqual(['1', '2', '3'].map(id => entries.get(id).placement.rank), [3, 2, 1]);
+  assert.deepEqual(['4', '5'].map(id => entries.get(id).placement.rank), [2, 1]);
+  assert.equal(entries.get('6').placement, null);
+  assert.deepEqual(data, before);
+  assert.deepEqual(result.warnings, []);
+});
+
 test('a solo category receives its score medal without an invented ranking place', () => {
   for (const [score, medal] of [[0, 'participacion'], [1, 'participacion'], [50, 'participacion'],
     [100, 'participacion'], [110, 'bronce'], [120, 'plata'], [130, 'oro'], [150, 'oro']]) {

@@ -71,6 +71,7 @@ function groupLabel(field, row, danceAliases = false) {
   const clean = text(row[field]) || fallbacks[field] || "SIN DATO";
   if (field !== "genre" || !danceAliases) return clean;
   const key = normalized(clean).replace(/\s*:\s*/g, ":");
+  if (key.replace(/[\s:]+/g, "") === "OPENMOTION") return "OPEN MOTION";
   return key === "OPEN" ? "OPEN PISO" : key.startsWith("OPEN:") ? "OPEN AÉREO" : clean;
 }
 
