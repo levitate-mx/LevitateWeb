@@ -7761,7 +7761,7 @@ function getParticipantPhotoDiscovery(env) {
       authFailureCode: 'portal_drive_auth_failed', authFailureMessage: 'No pudimos comprobar el acceso a Drive.', signal,
     }),
     expectedEmail: dedicatedPhotos ? env.PARTICIPANT_PHOTO_DRIVE_ACCOUNT_EMAIL : env.PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL,
-    ...(dedicatedPhotos ? { layout: "academy_dance" } : {}),
+    ...(dedicatedPhotos ? { layout: "presentation_number" } : {}),
   });
 }
 

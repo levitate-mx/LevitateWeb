@@ -4,7 +4,7 @@ const folderFields = "id,name,mimeType,trashed,parents,owners(emailAddress),perm
 const idPattern = /^[A-Za-z0-9_-]{10,200}$/;
 const scopePattern = /^[A-Za-z0-9_-]{1,100}$/;
 export const PARTICIPANT_PHOTO_ACCOUNT = "ati.levitatemx@gmail.com";
-export const PARTICIPANT_PHOTO_HIERARCHY = Object.freeze({ root: "source_root_v2", academy: "academy_v2", album: "source_album_v2" });
+export const PARTICIPANT_PHOTO_HIERARCHY = Object.freeze({ root: "source_root_v3", album: "source_album_v3" });
 
 const email = value => typeof value === "string" ? value.trim().toLowerCase() : "";
 function fail(code = "portal_photo_hierarchy_unavailable", message = "No pudimos preparar las carpetas de fotografías.", statusCode = 503) {
@@ -18,24 +18,28 @@ function label(value) {
   if (typeof value !== "string" || !value.trim() || value.length > 400 || /[\u0000-\u001f\u007f]/.test(value)) throw fail("portal_photo_source_invalid", "Revisa los nombres de las carpetas de fotos.", 400);
   return value.trim().replace(/\s+/g, " ");
 }
+function presentationNumber(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}$/.test(value.trim())) {
+    throw fail("portal_photo_source_invalid", "Revisa los números de presentación del lote.", 400);
+  }
+  return value.trim();
+}
 function manifest(input) {
   const eventId = id(input?.eventId, scopePattern);
-  const rootName = label(input.rootName || "Mi Levitate · Fotos · Estado de México 2026");
-  if (!Array.isArray(input.academies) || input.academies.length > 8) throw fail("portal_photo_source_invalid", "Prepara hasta ocho coreografías por lote.", 400);
-  const academyIds = new Set(), danceIds = new Set();
-  const academies = input.academies.map(academy => {
-    const academyId = id(academy?.id, scopePattern), name = label(academy.name);
-    if (academyIds.has(academyId) || !Array.isArray(academy.dances) || !academy.dances.length) throw fail("portal_photo_source_invalid", "Revisa las academias del lote.", 400);
-    academyIds.add(academyId);
-    const dances = academy.dances.map(dance => {
-      const danceId = id(dance?.id, scopePattern), title = label(dance.title);
-      if (danceIds.has(danceId)) throw fail("portal_photo_source_invalid", "Hay una coreografía repetida en el lote.", 400);
-      danceIds.add(danceId); return { id: danceId, title };
-    });
-    return { id: academyId, name, dances };
+  const rootName = label(input.rootName || "Mi Levitate · Fotos por número · Estado de México 2026");
+  if (!Array.isArray(input.presentations) || !input.presentations.length || input.presentations.length > 8) {
+    throw fail("portal_photo_source_invalid", "Prepara de una a ocho presentaciones por lote.", 400);
+  }
+  const danceIds = new Set(), numbers = new Set();
+  const presentations = input.presentations.map(presentation => {
+    const danceId = id(presentation?.id, scopePattern), number = presentationNumber(presentation?.number);
+    if (danceIds.has(danceId) || numbers.has(number.toUpperCase())) {
+      throw fail("portal_photo_source_invalid", "Hay una coreografía o número de presentación repetido en el lote.", 400);
+    }
+    danceIds.add(danceId); numbers.add(number.toUpperCase());
+    return { id: danceId, number };
   });
-  if (danceIds.size > 8) throw fail("portal_photo_source_invalid", "Prepara hasta ocho coreografías por lote.", 400);
-  return { eventId, rootName, academies };
+  return { eventId, rootName, presentations };
 }
 function validateFolder(value, owner, parent, properties, actualRootId) {
   if (!value || value.mimeType !== folderMime || value.trashed !== false || value.shared !== false || value.driveId
@@ -49,14 +53,15 @@ function validateFolder(value, owner, parent, properties, actualRootId) {
   id(value.id); label(value.name);
   const actual = value.appProperties || {};
   if (Object.entries(properties).some(([key, expected]) => actual[key] !== expected)
-    || ["levitateEventId", "levitateAcademyId", "levitateDanceId", "levitateParticipantId"].some(key => actual[key] !== undefined && actual[key] !== properties[key])) {
-    throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta edición, academia y coreografía.", 409);
+    || ["levitateEventId", "levitateAcademyId", "levitateDanceId", "levitateParticipantId", "levitatePresentationNumber"]
+      .some(key => actual[key] !== undefined && actual[key] !== properties[key])) {
+    throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta edición y número de presentación.", 409);
   }
   return value;
 }
 
 /** Operational/server-only writer. The caller authenticates the administrator
- * and builds the manifest from registration_academies + registration_dances.
+ * and builds the manifest from registered dances plus their verified programme numbers.
  * Never adopts folders by display name, modifies existing files, or changes
  * permissions. Serialize operational batches; duplicate markers fail closed.
  */
@@ -130,20 +135,18 @@ export async function getParticipantDriveHierarchy({ getConfig, getAccessToken, 
       };
       const rootProperties = { levitatePhotoAlbum: PARTICIPANT_PHOTO_HIERARCHY.root, levitateEventId: context.eventId };
       const root = await ensureFolder("root", context.rootName, rootProperties);
-      const academies = [];
-      for (const academy of context.academies) {
-        const academyProperties = { levitatePhotoAlbum: PARTICIPANT_PHOTO_HIERARCHY.academy, levitateEventId: context.eventId, levitateAcademyId: academy.id };
-        const folder = await ensureFolder(root.id, academy.name, academyProperties), dances = [];
-        for (const dance of academy.dances) {
-          const properties = { levitatePhotoAlbum: PARTICIPANT_PHOTO_HIERARCHY.album, levitateEventId: context.eventId, levitateAcademyId: academy.id, levitateDanceId: dance.id };
-          const album = await ensureFolder(folder.id, dance.title, properties);
-          dances.push({ danceId: dance.id, folderId: album.id, folderName: album.name });
+      const presentations = [];
+      for (const presentation of context.presentations) {
+        const properties = { levitatePhotoAlbum: PARTICIPANT_PHOTO_HIERARCHY.album, levitateEventId: context.eventId,
+          levitateDanceId: presentation.id, levitatePresentationNumber: presentation.number };
+        const album = await ensureFolder(root.id, `#${presentation.number}`, properties);
+        if (album.name !== `#${presentation.number}`) {
+          throw fail("portal_photo_source_mismatch", "La carpeta debe conservar el número exacto de la presentación.", 409);
         }
-        validateFolder(await metadata(folder.id), owner, root.id, academyProperties, actualRootId);
-        academies.push({ academyId: academy.id, folderId: folder.id, folderName: folder.name, dances });
+        presentations.push({ danceId: presentation.id, presentationNumber: presentation.number, folderId: album.id, folderName: album.name });
       }
       validateFolder(await metadata(root.id), owner, "root", rootProperties, actualRootId);
-      return { rootFolderId: root.id, rootFolderName: root.name, accountEmail: owner, academies, created };
+      return { rootFolderId: root.id, rootFolderName: root.name, accountEmail: owner, presentations, created };
     } finally { operationRunning = false; }
   };
   return { ensure };

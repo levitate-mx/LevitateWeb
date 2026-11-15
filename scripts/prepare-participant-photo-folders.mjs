@@ -6,6 +6,7 @@ import { createWranglerDatabase } from './prepare-registration-db.mjs';
 import { getParticipantPhotoDriveConfig } from '../worker/participant-photo-drive-config.js';
 import { getParticipantDriveHierarchy, PARTICIPANT_PHOTO_ACCOUNT } from '../worker/participant-drive-hierarchy.js';
 import { getParticipantDriveStorage } from '../worker/participant-drive-storage.js';
+import { getJudgingRoutineDirectory } from '../worker/judging-reader.js';
 import { prepareParticipantDemoPhoto, serveParticipantDemoPhoto } from '../worker/participant-demo-media.js';
 import { participantDemoMediaDefinitions } from '../shared/participant-demo-media.js';
 
@@ -16,39 +17,55 @@ const photoNames = ['PARTICIPANT_PHOTO_DRIVE_OAUTH_CLIENT_ID', 'PARTICIPANT_PHOT
 /** Only DB identities are used to associate folders. This command never reads
  * music files or writes to D1, and never receives existing music credentials.
  */
-export async function loadPhotoFolderManifest(db, eventId) {
+export async function loadPhotoFolderManifest(db, eventId, getJudgingDirectory) {
   if (!eventPattern.test(eventId || '')) throw new Error('Choose a valid Mi Levitate event ID.');
+  if (typeof getJudgingDirectory !== 'function') throw new Error('The presentation-number directory is required.');
   const [events] = await db.read([`SELECT id,title,season,venue FROM participant_portal_events WHERE id='${eventId}'`]);
   if (events.length !== 1 || !['edomex','cdmx','puebla','veracruz'].includes(events[0].venue)) throw new Error('Mi Levitate event not found.');
   const event = events[0];
-  const [rows] = await db.read([`SELECT a.id AS academy_id,a.name AS academy_name,d.id AS dance_id,d.title
-    FROM registration_dances d JOIN registration_academies a ON a.id=d.academy_id
-    WHERE d.venue='${event.venue}' ORDER BY a.name,a.id,d.title,d.id`]);
-  const academies = new Map();
-  for (const row of rows) {
-    if (!academies.has(row.academy_id)) academies.set(row.academy_id, {id:row.academy_id,name:row.academy_name,dances:[]});
-    academies.get(row.academy_id).dances.push({id:row.dance_id,title:row.title});
+  const [rows] = await db.read([`SELECT d.id AS dance_id,r.source_event_id,r.source_routine_id
+    FROM registration_dances d LEFT JOIN participant_portal_routines r ON r.event_id='${eventId}' AND r.dance_id=d.id
+    WHERE d.venue='${event.venue}' ORDER BY d.id`]);
+  if (!rows.length || rows.some(row => !row.source_event_id || !row.source_routine_id)) {
+    throw new Error('Every presentation must be linked to the imported judging programme before preparing Drive folders.');
   }
-  return {event,eventId:event.id,academies:[...academies.values()]};
+  const sourceEvents = new Set(rows.map(row => row.source_event_id));
+  if (sourceEvents.size !== 1) throw new Error('The presentations must belong to one judging programme.');
+  const sourceEventId = [...sourceEvents][0];
+  const directory = await getJudgingDirectory(sourceEventId);
+  if (directory?.event?.id !== sourceEventId || !Array.isArray(directory.rows)) throw new Error('Could not verify the presentation-number directory.');
+  const expectedIds = new Set(rows.map(row => row.source_routine_id)), byId = new Map();
+  for (const routine of directory.rows) {
+    const id = typeof routine?.id === 'string' ? routine.id.trim() : '';
+    if (!expectedIds.has(id)) continue;
+    const number = typeof routine?.programNumber === 'string' ? routine.programNumber.trim() : '';
+    if (!id || byId.has(id) || !/^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}$/.test(number)) {
+      throw new Error('Every imported presentation must have one valid presentation number.');
+    }
+    byId.set(id, number);
+  }
+  const numbers = new Set(), presentations = rows.map(row => {
+    const number = byId.get(row.source_routine_id);
+    if (!number || numbers.has(number.toUpperCase())) throw new Error('Presentation numbers must be present and unique.');
+    numbers.add(number.toUpperCase());
+    return {id:row.dance_id,number};
+  });
+  return {event,eventId:event.id,sourceEventId,presentations};
 }
 
-export function photoFolderBatches(academies) {
-  const batches = []; let batch = [], count = 0;
-  for (const academy of academies) for (const dance of academy.dances) {
-    if (count === 8) { batches.push(batch); batch = []; count = 0; }
-    let entry = batch.find(item => item.id === academy.id);
-    if (!entry) { entry = {id:academy.id,name:academy.name,dances:[]}; batch.push(entry); }
-    entry.dances.push(dance); count++;
-  }
-  if (count) batches.push(batch);
+export function photoFolderBatches(presentations) {
+  const batches = [];
+  for (let offset = 0; offset < presentations.length; offset += 8) batches.push(presentations.slice(offset, offset + 8));
   return batches;
 }
 
-export async function preparePhotoFolders({ db, env, eventId, rootName, outputFile, fetchImpl = fetch, log = console.log }) {
+export async function preparePhotoFolders({ db, env, eventId, rootName, outputFile, fetchImpl = fetch, getJudgingDirectory, log = console.log }) {
   const config = getParticipantPhotoDriveConfig(env);
   if (!config || config.expectedEmail !== PARTICIPANT_PHOTO_ACCOUNT) throw new Error('Use the dedicated Ati photo connection only.');
-  const manifest = await loadPhotoFolderManifest(db, eventId);
-  if (!manifest.academies.length) throw new Error('No registered choreographies were found for this edition.');
+  const judgingDirectory = getJudgingDirectory || ((sourceEventId) => getJudgingRoutineDirectory(env, sourceEventId,
+    { fetcher: fetchImpl, trustedEventId: sourceEventId }));
+  const manifest = await loadPhotoFolderManifest(db, eventId, judgingDirectory);
+  if (!manifest.presentations.length) throw new Error('No numbered presentations were found for this edition.');
   let tokenPromise;
   const getAccessToken = () => tokenPromise ||= (async () => {
     const response = await fetchImpl('https://oauth2.googleapis.com/token', {
@@ -62,17 +79,16 @@ export async function preparePhotoFolders({ db, env, eventId, rootName, outputFi
     return result.access_token;
   })();
   const hierarchy = await getParticipantDriveHierarchy({getConfig:()=>config,getAccessToken,expectedEmail:config.expectedEmail,fetchImpl});
-  const allAcademies = new Map(), batches = photoFolderBatches(manifest.academies);
+  const allPresentations = new Map(), batches = photoFolderBatches(manifest.presentations);
   let created = 0, root;
-  for (const [index,academies] of batches.entries()) {
-    const result = await hierarchy.ensure({eventId,rootName,academies});
+  for (const [index,presentations] of batches.entries()) {
+    const result = await hierarchy.ensure({eventId,rootName,presentations});
     if (root && root.rootFolderId !== result.rootFolderId) throw new Error('The root folder changed during setup. Stop and review the association.');
     root ||= result; created += result.created;
-    for (const academy of result.academies) {
-      let entry = allAcademies.get(academy.academyId);
-      if (!entry) { entry = {...academy,dances:[]}; allAcademies.set(academy.academyId,entry); }
-      if (entry.folderId !== academy.folderId) throw new Error('An academy folder changed during setup. Stop and review the association.');
-      entry.dances.push(...academy.dances);
+    for (const presentation of result.presentations) {
+      const previous = allPresentations.get(presentation.danceId);
+      if (previous && previous.folderId !== presentation.folderId) throw new Error('A presentation folder changed during setup. Stop and review the association.');
+      allPresentations.set(presentation.danceId,presentation);
     }
     log(`Photo folders: batch ${index+1}/${batches.length} verified.`);
   }
@@ -85,7 +101,7 @@ export async function preparePhotoFolders({ db, env, eventId, rootName, outputFi
   const url = new URL(metadata.webViewLink);
   if (url.origin !== 'https://drive.google.com' || url.pathname !== `/drive/folders/${root.rootFolderId}` || url.username || url.password) throw new Error('Invalid final folder link.');
   const result = {eventId,accountEmail:config.expectedEmail,rootFolderId:root.rootFolderId,rootFolderName:root.rootFolderName,
-    rootFolderUrl:metadata.webViewLink,created,academies:[...allAcademies.values()],verifiedAt:new Date().toISOString()};
+    rootFolderUrl:metadata.webViewLink,created,presentations:[...allPresentations.values()],verifiedAt:new Date().toISOString()};
   // Prepare the new private cache and the two approved archival demo images
   // before activating Ati in production. No historical Drive file is read or
   // moved, and the public demo retains its already-watermarked exact bytes.
@@ -120,7 +136,7 @@ export async function main(argv = process.argv.slice(2)) {
   const env = JSON.parse(await readFile(resolve(values['credentials-file']),'utf8'));
   if (!env || typeof env!=='object' || Array.isArray(env) || Object.keys(env).some(key=>!photoNames.includes(key))) throw new Error('Use a file containing only the four dedicated photo variables.');
   const result = await preparePhotoFolders({db:createWranglerDatabase({remote:true}),env,eventId:values['event-id'],rootName:values['root-name'],outputFile:values['output-file']});
-  console.log(`Verified ${result.academies.length} academies and ${result.academies.reduce((total,academy)=>total+academy.dances.length,0)} choreography folders in Ati. Music was not accessed.`);
+  console.log(`Verified ${result.presentations.length} presentation-number folders in Ati. Music was not accessed.`);
   console.log(result.rootFolderUrl);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

@@ -4,8 +4,9 @@ import { getParticipantDriveHierarchy, PARTICIPANT_PHOTO_ACCOUNT } from "../work
 
 const owner = PARTICIPANT_PHOTO_ACCOUNT, secret = "SYNTHETIC_PRIVATE_ATI_TOKEN";
 const rootId = "my_drive_root_00000001", folderMime = "application/vnd.google-apps.folder";
-const input = { eventId: "edomex-2026", academies: [{ id: "academy-a", name: "Academia Águila",
-  dances: [{ id: "dance-a", title: "Amanecer" }, { id: "dance-b", title: "Amanecer" }] }] };
+const input = { eventId: "edomex-2026", presentations: [
+  { id: "dance-a", number: "194 a" }, { id: "dance-b", number: "237" },
+] };
 function folder(id, parent, name, appProperties) {
   return { id, name, appProperties, mimeType: folderMime, parents: [parent], trashed: false, shared: false,
     owners: [{ emailAddress: owner }], permissions: [{ type: "user", role: "owner", emailAddress: owner }],
@@ -62,46 +63,35 @@ const controlled = (code, statusCode = 503) => error => {
   assert.doesNotMatch(error.message, /SYNTHETIC|Bearer|https:\/\//); return true;
 };
 
-test("hierarchy creates only private photo folders with stable edition, academy and choreography markers", async () => {
+test("hierarchy creates private folders directly under the root using only presentation numbers", async () => {
   const f = fixture(), before = structuredClone([...f.files]);
   const result = await (await f.create()).ensure(input);
-  assert.equal(result.created, 4); assert.equal(result.accountEmail, owner);
-  assert.equal(result.rootFolderName, "Mi Levitate · Fotos · Estado de México 2026");
-  assert.equal(result.academies[0].folderName, input.academies[0].name);
-  assert.deepEqual(result.academies[0].dances.map(dance => dance.folderName), ["Amanecer", "Amanecer"]);
-  assert.notEqual(result.academies[0].dances[0].folderId, result.academies[0].dances[1].folderId);
-  const root = f.files.get(result.rootFolderId), academy = f.files.get(result.academies[0].folderId);
-  assert.deepEqual(root.appProperties, { levitatePhotoAlbum: "source_root_v2", levitateEventId: input.eventId });
-  assert.deepEqual(academy.appProperties, { levitatePhotoAlbum: "academy_v2", levitateEventId: input.eventId, levitateAcademyId: "academy-a" });
-  for (const dance of result.academies[0].dances) {
-    const album = f.files.get(dance.folderId);
-    assert.deepEqual(album.parents, [academy.id]);
-    assert.deepEqual(album.appProperties, { levitatePhotoAlbum: "source_album_v2", levitateEventId: input.eventId, levitateAcademyId: "academy-a", levitateDanceId: dance.danceId });
+  assert.equal(result.created, 3); assert.equal(result.accountEmail, owner);
+  assert.equal(result.rootFolderName, "Mi Levitate · Fotos por número · Estado de México 2026");
+  assert.deepEqual(result.presentations.map(item => item.folderName), ["#194 a", "#237"]);
+  assert.notEqual(result.presentations[0].folderId, result.presentations[1].folderId);
+  const root = f.files.get(result.rootFolderId);
+  assert.deepEqual(root.appProperties, { levitatePhotoAlbum: "source_root_v3", levitateEventId: input.eventId });
+  for (const presentation of result.presentations) {
+    const album = f.files.get(presentation.folderId);
+    assert.deepEqual(album.parents, [root.id]);
+    assert.deepEqual(album.appProperties, { levitatePhotoAlbum: "source_album_v3", levitateEventId: input.eventId,
+      levitateDanceId: presentation.danceId, levitatePresentationNumber: presentation.presentationNumber });
   }
   for (const [key, original] of before) assert.deepEqual(f.files.get(key), original);
-  assert.equal(writes(f).length, 4);
+  assert.equal(writes(f).length, 3);
   assert.doesNotMatch(JSON.stringify(result), /SYNTHETIC|googleapis|curp|participantId|permission/i);
 });
 
-test("repeated batches reuse IDs and retain operator-edited names without PATCH or permission edits", async () => {
+test("repeated batches reuse IDs while presentation folders keep the exact numbered name", async () => {
   const f = fixture(), hierarchy = await f.create();
   const result = await hierarchy.ensure(input), originalWrites = writes(f).length;
-  f.files.get(result.academies[0].folderId).name = "Nombre corregido";
-  const again = await (await f.create()).ensure({ ...input, rootName: "Nombre nuevo solicitado", academies: [{ ...input.academies[0], name: "Academia distinta" }] });
+  const again = await (await f.create()).ensure({ ...input, rootName: "Nombre nuevo solicitado" });
   assert.equal(again.rootFolderId, result.rootFolderId); assert.equal(again.created, 0);
-  assert.equal(again.academies[0].folderName, "Nombre corregido");
-  assert.deepEqual(again.academies[0].dances, result.academies[0].dances);
+  assert.deepEqual(again.presentations, result.presentations);
   assert.equal(writes(f).length, originalWrites);
-});
-
-test("duplicate display names across academies cannot merge their folders", async () => {
-  const f = fixture(), result = await (await f.create()).ensure({ eventId: input.eventId, academies: [
-    { id: "academy-a", name: "Academia", dances: [{ id: "dance-a", title: "Amanecer" }] },
-    { id: "academy-b", name: "Academia", dances: [{ id: "dance-b", title: "Amanecer" }] },
-  ] });
-  assert.equal(result.created, 5);
-  assert.notEqual(result.academies[0].folderId, result.academies[1].folderId);
-  assert.notEqual(result.academies[0].dances[0].folderId, result.academies[1].dances[0].folderId);
+  f.files.get(result.presentations[0].folderId).name = "Nombre de coreografía";
+  await assert.rejects((await f.create()).ensure(input), controlled("portal_photo_source_mismatch", 409));
 });
 
 test("invalid manifests and accounts fail before any folder creation", async () => {
@@ -111,10 +101,11 @@ test("invalid manifests and accounts fail before any folder creation", async () 
   const hierarchy = await f.create();
   for (const invalid of [
     { ...input, eventId: "unsafe' and injected" },
-    { ...input, academies: [{ ...input.academies[0], name: "bad\nname" }] },
-    { ...input, academies: [...input.academies, input.academies[0]] },
-    { ...input, academies: [{ ...input.academies[0], dances: [{ id: "dance-a", title: "A" }, { id: "dance-a", title: "B" }] }] },
-    { ...input, academies: [{ ...input.academies[0], dances: Array.from({ length: 9 }, (_, i) => ({ id: `dance-${i}`, title: "A" })) }] },
+    { ...input, presentations: [] },
+    { ...input, presentations: [{ id: "dance-a", number: "bad\nnumber" }] },
+    { ...input, presentations: [{ id: "dance-a", number: "1" }, { id: "dance-a", number: "2" }] },
+    { ...input, presentations: [{ id: "dance-a", number: "1" }, { id: "dance-b", number: "1" }] },
+    { ...input, presentations: Array.from({ length: 9 }, (_, i) => ({ id: `dance-${i}`, number: String(i + 1) })) },
   ]) await assert.rejects(hierarchy.ensure(invalid), controlled("portal_photo_source_invalid", 400));
   assert.equal(f.calls.length, 0);
   const wrong = fixture({ aboutOwner: "musica.levitate@gmail.com" });
@@ -136,31 +127,30 @@ test("existing duplicate, public, foreign, moved or personal markers are rejecte
   }
 });
 
-test("an operational interruption resumes without recreating verified root and academy folders", async () => {
+test("an operational interruption resumes without recreating the verified numbered root", async () => {
   let failOnce = true;
   const f = fixture({ intercept({ options }) {
-    if (options.method === "POST" && JSON.parse(options.body).appProperties.levitatePhotoAlbum === "source_album_v2" && failOnce) {
+    if (options.method === "POST" && JSON.parse(options.body).appProperties.levitatePhotoAlbum === "source_album_v3" && failOnce) {
       failOnce = false; return new Response("SYNTHETIC_SECRET_PROVIDER_DETAIL", { status: 503 });
     }
   } });
   await assert.rejects((await f.create()).ensure(input), controlled("portal_photo_hierarchy_unavailable"));
   const result = await (await f.create()).ensure(input);
-  assert.equal(result.created, 2); assert.equal(result.academies[0].dances.length, 2);
-  assert.equal([...f.files.values()].filter(file => file.appProperties.levitatePhotoAlbum === "source_root_v2").length, 1);
-  assert.equal([...f.files.values()].filter(file => file.appProperties.levitatePhotoAlbum === "academy_v2").length, 1);
+  assert.equal(result.created, 2); assert.equal(result.presentations.length, 2);
+  assert.equal([...f.files.values()].filter(file => file.appProperties.levitatePhotoAlbum === "source_root_v3").length, 1);
 });
 
 test("duplicate creation races fail closed rather than picking or deleting an album", async () => {
   let duplicated = false;
   const f = fixture({ intercept({ options }, state) {
     if (!duplicated && options.method === "GET") {
-      const root = [...state.files.values()].find(file => file.appProperties.levitatePhotoAlbum === "source_root_v2");
+      const root = [...state.files.values()].find(file => file.appProperties.levitatePhotoAlbum === "source_root_v3");
       if (root) { duplicated = true; state.files.set("racing_root_folder_01", { ...structuredClone(root), id: "racing_root_folder_01" }); }
     }
   } });
   await assert.rejects((await f.create()).ensure(input), controlled("portal_photo_source_ambiguous", 409));
   assert.equal(writes(f).length, 1);
-  assert.equal([...f.files.values()].filter(file => file.appProperties.levitatePhotoAlbum === "source_root_v2").length, 2);
+  assert.equal([...f.files.values()].filter(file => file.appProperties.levitatePhotoAlbum === "source_root_v3").length, 2);
 });
 
 test("one hierarchy instance serializes batches and sanitizes redirects and timeouts", async () => {

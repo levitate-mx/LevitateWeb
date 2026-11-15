@@ -107,7 +107,7 @@ function thumbnailUrl(value, resize = false) {
  */
 export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, expectedEmail, fetchImpl = fetch, timeoutMs = 10000, layout } = {}) {
   const owner = email(expectedEmail);
-  const hierarchy = layout === "academy_dance";
+  const hierarchy = layout === "presentation_number";
   if ((layout !== undefined && !hierarchy) || (hierarchy && owner !== PARTICIPANT_PHOTO_ACCOUNT)) throw fail("portal_storage_wrong_account", "La conexión de fotos debe pertenecer a Ati Levitate.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner) || typeof getConfig !== "function" || typeof getAccessToken !== "function") throw fail();
   let config;
@@ -188,16 +188,9 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     const properties = value.appProperties || {};
     if (value.mimeType !== folderMime || value.capabilities?.canListChildren !== true
       || (hierarchy ? properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.root || properties.levitateEventId !== context?.eventId
-        || properties.levitateAcademyId !== undefined || properties.levitateDanceId !== undefined || properties.levitateParticipantId !== undefined || properties.demo !== undefined
+        || properties.levitateAcademyId !== undefined || properties.levitateDanceId !== undefined
+        || properties.levitateParticipantId !== undefined || properties.levitatePresentationNumber !== undefined || properties.demo !== undefined
         : !roots.has(properties.levitatePhotoAlbum))) throw fail();
-  };
-  const validateAcademy = (value, root, context) => {
-    restrictedItem(value, owner, root.id);
-    const properties = value.appProperties || {};
-    if (value.mimeType !== folderMime || value.capabilities?.canListChildren !== true
-      || properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.academy || properties.levitateEventId !== context.eventId
-      || properties.levitateAcademyId !== context.academyId || properties.levitateDanceId !== undefined
-      || properties.levitateParticipantId !== undefined || properties.demo !== undefined) throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta academia.", 409);
   };
   const validateAlbum = (album, root, context, dance, exactName = true) => {
     if (hierarchy) restrictedItem(album, owner, root.id);
@@ -206,9 +199,13 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     if (hierarchy) {
       if (album.mimeType !== folderMime || album.capabilities?.canListChildren !== true
         || properties.levitatePhotoAlbum !== PARTICIPANT_PHOTO_HIERARCHY.album || properties.levitateEventId !== context.eventId
-        || properties.levitateAcademyId !== context.academyId || properties.levitateDanceId !== dance.id
-        || properties.levitateParticipantId !== undefined || properties.demo !== undefined) throw fail("portal_photo_source_mismatch", "La carpeta no corresponde a esta coreografía.", 409);
-      text(album.name, 1200);
+        || properties.levitateDanceId !== dance.id || properties.levitateAcademyId !== undefined
+        || properties.levitateParticipantId !== undefined || properties.demo !== undefined
+        || typeof properties.levitatePresentationNumber !== "string"
+        || !/^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}$/.test(properties.levitatePresentationNumber)
+        || album.name !== `#${properties.levitatePresentationNumber}`) {
+        throw fail("portal_photo_source_mismatch", "La carpeta no corresponde al número de esta presentación.", 409);
+      }
       return { demo: false, trusted: true };
     }
     if (album.mimeType !== folderMime || !albums.has(properties.levitatePhotoAlbum) || album.capabilities?.canListChildren !== true
@@ -267,14 +264,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     }
     const context = scope(input), root = await rootFolder(context);
     if (!root || !context.dances.length) return { albums: [] };
-    let albumParent = root;
-    if (hierarchy) {
-      const academies = await list(`'${root.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and appProperties has { key='levitatePhotoAlbum' and value='${PARTICIPANT_PHOTO_HIERARCHY.academy}' } and appProperties has { key='levitateEventId' and value='${context.eventId}' } and appProperties has { key='levitateAcademyId' and value='${context.academyId}' }`, "id", 2);
-      if (academies.nextPageToken || academies.files.length > 1) throw fail("portal_photo_source_ambiguous", "Hay dos carpetas para la misma academia. Revisa la asociación.", 409);
-      if (!academies.files.length) return { albums: [] };
-      albumParent = await metadata(academies.files[0].id, baseFields);
-      validateAcademy(albumParent, root, context);
-    }
+    const albumParent = root;
     const folders = await list(`'${albumParent.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}'`);
     if (folders.nextPageToken) throw fail("portal_photo_source_ambiguous", "Hay muchas carpetas de fotos. Revisa la asociación antes de continuar.", 409);
     const result = [];
@@ -288,7 +278,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
       const candidates = folders.files.filter(folder => {
         const properties = folder.appProperties || {};
         if (hierarchy) return properties.levitatePhotoAlbum === PARTICIPANT_PHOTO_HIERARCHY.album
-          && properties.levitateEventId === context.eventId && properties.levitateAcademyId === context.academyId && properties.levitateDanceId === dance.id;
+          && properties.levitateEventId === context.eventId && properties.levitateDanceId === dance.id;
         if (properties.levitateEventId !== context.eventId || properties.levitateDanceId !== dance.id
           || !albums.has(properties.levitatePhotoAlbum) || (properties.demo === "true" && !context.adminPreview)) return false;
         const name = typeof folder.name === "string" ? folder.name : "";
@@ -309,8 +299,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
           read: async () => {
             const freshRoot = await metadata(root.id, baseFields);
             validateRoot(freshRoot, root.parents[0], context);
-            const freshParent = hierarchy ? await metadata(albumParent.id, baseFields) : freshRoot;
-            if (hierarchy) validateAcademy(freshParent, freshRoot, context);
+            const freshParent = freshRoot;
             validateAlbum(await metadata(album.id, baseFields), freshParent, context, dance, !boundId);
             const current = await metadata(listed.id);
             validatePhoto(current, album.id, context, dance);
@@ -345,7 +334,6 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
             validatePhoto(after, album.id, context, dance);
             if (revision(after) !== expectedRevision) throw fail("portal_photo_source_changed", "La foto cambió mientras se preparaba. Vuelve a consultar el pasaporte.", 409);
             validateAlbum(await metadata(album.id, baseFields), freshParent, context, dance, !boundId);
-            if (hierarchy) validateAcademy(await metadata(albumParent.id, baseFields), freshRoot, context);
             const finalRoot = await metadata(root.id, baseFields);
             validateRoot(finalRoot, root.parents[0], context);
             return loaded;
