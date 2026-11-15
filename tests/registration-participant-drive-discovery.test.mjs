@@ -20,7 +20,7 @@ function item(id, parent, extra = {}) {
     capabilities: { canDownload: true, canListChildren: true, canAddChildren: true }, ...extra };
 }
 const publicMetadata = value => { const { bytes, ...metadata } = value; return structuredClone(metadata); };
-function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hierarchy ? PARTICIPANT_PHOTO_ACCOUNT : owner } = {}) {
+function fixture({ demo = false, intercept, hierarchy = false, listCap = 1000, aboutOwner = hierarchy ? PARTICIPANT_PHOTO_ACCOUNT : owner } = {}) {
   const files = new Map(), calls = [], sessions = new Map();
   const state = { files, intercept, next: 0, tokenCalls: 0, thumbnailBytes, omitFilePermissions: new Set(), quota: { limit: "15000000000", usage: "1000" } };
   const exposedMetadata = value => {
@@ -77,7 +77,12 @@ function fixture({ demo = false, intercept, hierarchy = false, aboutOwner = hier
         && (!q.includes("'me' in owners") || value.owners.some(value => value.emailAddress === aboutOwner))
         && (!types.length || types.includes(value.mimeType))
         && [...props].every(([name, values]) => values.includes(value.appProperties?.[name])));
-      return Response.json({ files: result.map(exposedMetadata) });
+      result.sort((a,b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      const pageToken = url.searchParams.get("pageToken"), offset = pageToken === null ? 0 : Number(pageToken.match(/^opaque\+\/=(\d+)$/)?.[1]);
+      assert.ok(Number.isInteger(offset) && offset >= 0, "opaque page tokens must be returned unchanged");
+      const size = Math.min(Number(url.searchParams.get("pageSize")), listCap), end = offset + size;
+      return Response.json({ files: result.slice(offset,end).map(exposedMetadata),
+        ...(end < result.length ? {nextPageToken:`opaque+/=${end}`} : {}) });
     }
     if (url.pathname === "/upload/drive/v3/files" && options.method === "POST") {
       const metadata = JSON.parse(options.body);
@@ -544,4 +549,116 @@ test("two photographer-owned previews across albums keep all ACL rechecks within
   assert.equal(imageReads(f).length, 2);
   assert.ok(f.calls.length <= 40, `${f.calls.length} upstream calls must remain bounded`);
   assert.equal(writes(f).length, 0);
+});
+
+const rootLists = f => f.calls.filter(({url}) => url.pathname === "/drive/v3/files" && url.searchParams.get("q").startsWith("'root' in parents"));
+const folderLists = f => f.calls.filter(({url}) => url.pathname === "/drive/v3/files" && url.searchParams.get("q").startsWith(`'${rootId}' in parents`));
+function populateFolderCatalog(f, count) {
+  Object.assign(f.files.get(albumId), {name:"#9999", appProperties:{...f.files.get(albumId).appProperties,levitatePresentationNumber:"9999"}});
+  for(let index=0;index<count-1;index++) {
+    const number=String(index).padStart(4,"0"),id=`catalog_album_${number}_00001`;
+    f.files.set(id,{...structuredClone(f.files.get(albumId)),id,name:`#${number}`,
+      appProperties:{...f.files.get(albumId).appProperties,levitateDanceId:`unrelated-${number}`,levitatePresentationNumber:number}});
+  }
+}
+
+test("233 numbered folders are read as 100 + 100 + 33 and a member album only on the last page remains accessible",async()=>{
+  const f=fixture({hierarchy:true,listCap:100});populateFolderCatalog(f,233);
+  const result=await (await f.reader()).discover({...context,maxPhotos:2});
+  assert.equal(result.albums.length,1);assert.equal(result.albums[0].id,albumId);
+  assert.equal(result.albums[0].photos[0].id,sourceId);
+  const pages=folderLists(f);
+  assert.deepEqual(pages.map(({url})=>url.searchParams.get("pageToken")),[null,"opaque+/=100","opaque+/=200"]);
+  for(const {url}of pages) {
+    assert.equal(url.searchParams.get("q"),pages[0].url.searchParams.get("q"));
+    assert.equal(url.searchParams.get("fields"),"nextPageToken,files(id,name,appProperties)");
+    assert.equal(url.searchParams.get("orderBy"),"name");assert.equal(url.searchParams.get("spaces"),"drive");
+    assert.equal(url.searchParams.get("pageSize"),"1000");
+  }
+  assert.deepEqual((await result.albums[0].photos[0].read()).bytes,thumbnailBytes);
+  assert.ok(f.calls.length<=40);assert.equal(writes(f).length,0);
+});
+
+test("a root continuation token may follow an empty or populated first page without implying ambiguity",async()=>{
+  for(const emptyFirst of [true,false]) {
+    const f=fixture({hierarchy:true,intercept({url}) {
+      if(url.pathname!=="/drive/v3/files"||!url.searchParams.get("q").startsWith("'root' in parents"))return;
+      if(!url.searchParams.has("pageToken"))return Response.json({files:emptyFirst?[]:[{id:rootId}],nextPageToken:"root+/=opaque"});
+      assert.equal(url.searchParams.get("pageToken"),"root+/=opaque");
+      return Response.json({files:emptyFirst?[{id:rootId}]:[]});
+    }});
+    const result=await (await f.reader()).discover(context);
+    assert.equal(result.albums[0].id,albumId);assert.equal(rootLists(f).length,2);
+    assert.equal(imageReads(f).length,0);assert.equal(writes(f).length,0);
+  }
+});
+
+test("two distinct roots or two matching dance folders on separate pages remain ambiguous",async()=>{
+  const rootFixture=fixture({hierarchy:true,intercept({url}) {
+    if(url.pathname!=="/drive/v3/files"||!url.searchParams.get("q").startsWith("'root' in parents"))return;
+    return Response.json(url.searchParams.has("pageToken")?{files:[{id:"second_root_0000001"}]}:{files:[{id:rootId}],nextPageToken:"next-root"});
+  }});
+  await assert.rejects((await rootFixture.reader()).discover(context),controlled("portal_photo_source_ambiguous",409));
+  assert.equal(rootLists(rootFixture).length,2);assert.equal(imageReads(rootFixture).length,0);
+  const albumFixture=fixture({hierarchy:true,listCap:1});
+  albumFixture.files.set("duplicate_album_00001",{...structuredClone(albumFixture.files.get(albumId)),id:"duplicate_album_00001",name:"#195",
+    appProperties:{...albumFixture.files.get(albumId).appProperties,levitatePresentationNumber:"195"}});
+  await assert.rejects((await albumFixture.reader()).discover(context),controlled("portal_photo_source_ambiguous",409));
+  assert.equal(folderLists(albumFixture).length,2);assert.equal(imageReads(albumFixture).length,0);
+  assert.equal(writes(rootFixture).length+writes(albumFixture).length,0);
+});
+
+test("identical overlapping catalog IDs are deduplicated but inconsistent repeats fail closed",async()=>{
+  for(const changed of [false,true]) {
+    const f=fixture({hierarchy:true,intercept({url},state) {
+      if(url.pathname!=="/drive/v3/files"||!url.searchParams.get("q").startsWith(`'${rootId}' in parents`))return;
+      const album=publicMetadata(state.files.get(albumId));
+      if(url.searchParams.has("pageToken")) {
+        album.appProperties=Object.fromEntries(Object.entries(album.appProperties).reverse());
+        if(changed)album.name="#changed";
+        return Response.json({files:[album]});
+      }
+      return Response.json({files:[album],nextPageToken:"overlapping-page"});
+    }});
+    if(changed)await assert.rejects((await f.reader()).discover(context),controlled("portal_photo_source_unavailable"));
+    else assert.equal((await (await f.reader()).discover(context)).albums.length,1);
+    assert.equal(folderLists(f).length,2);assert.equal(imageReads(f).length,0);assert.equal(writes(f).length,0);
+  }
+});
+
+test("invalid or repeated root pagination tokens never yield a partial discovery",async()=>{
+  for(const token of [0,12,null,""," ","bad\ntoken","x".repeat(4097)]) {
+    const f=fixture({hierarchy:true,intercept({url}) {
+      if(url.pathname==="/drive/v3/files"&&url.searchParams.get("q").startsWith("'root' in parents"))return Response.json({files:[{id:rootId}],nextPageToken:token});
+    }});
+    await assert.rejects((await f.reader()).discover(context),controlled("portal_photo_source_unavailable"));
+    assert.equal(rootLists(f).length,1);assert.equal(imageReads(f).length,0);assert.equal(writes(f).length,0);
+  }
+  const repeated=fixture({hierarchy:true,intercept({url}) {
+    if(url.pathname==="/drive/v3/files"&&url.searchParams.get("q").startsWith("'root' in parents"))return Response.json({files:[],nextPageToken:"same-opaque-token"});
+  }});
+  await assert.rejects((await repeated.reader()).discover(context),controlled("portal_photo_source_unavailable"));
+  assert.equal(rootLists(repeated).length,2);assert.equal(imageReads(repeated).length,0);
+});
+
+test("catalog pagination rejects more than 1000 entries or exhausted 40-call budgets before returning photos",async()=>{
+  const large=fixture({hierarchy:true,listCap:100});populateFolderCatalog(large,1001);
+  await assert.rejects((await large.reader()).discover(context),controlled("portal_photo_source_budget",429));
+  assert.equal(folderLists(large).length,11);assert.equal(imageReads(large).length,0);assert.equal(writes(large).length,0);
+  let sequence=0;
+  const budget=fixture({hierarchy:true,intercept({url}) {
+    if(url.pathname==="/drive/v3/files"&&url.searchParams.get("q").startsWith("'root' in parents"))return Response.json({files:[],nextPageToken:`unique-page-${++sequence}`});
+  }});
+  await assert.rejects((await budget.reader()).discover(context),controlled("portal_photo_source_budget",429));
+  assert.equal(budget.calls.length,40);assert.equal(imageReads(budget).length,0);assert.equal(writes(budget).length,0);
+});
+
+test("catalog pagination leaves image pages bounded and reports truncation without following their tokens",async()=>{
+  const f=fixture({hierarchy:true,listCap:1});
+  f.files.set("second_photo_000001",{...structuredClone(f.files.get(sourceId)),id:"second_photo_000001",name:"Z-second.jpg"});
+  const result=await (await f.reader()).discover({...context,maxPhotos:2});
+  assert.equal(result.albums[0].photos.length,1);assert.equal(result.albums[0].truncated,true);
+  const images=f.calls.filter(({url})=>url.pathname==="/drive/v3/files"&&url.searchParams.get("q").includes("mimeType='image/jpeg'"));
+  assert.equal(images.length,1);assert.equal(images[0].url.searchParams.get("pageToken"),null);
+  assert.equal(imageReads(f).length,0);assert.equal(writes(f).length,0);
 });

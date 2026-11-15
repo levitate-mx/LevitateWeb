@@ -180,6 +180,14 @@ enumera en la salida y el informe las inscripciones sin enlace o cuya rutina
 fue borrada. Esas omisiones no reciben números inventados ni carpetas nuevas.
 La preparación no mueve originales ni cambia permisos de archivos existentes.
 
+El lector recorre todas las páginas del catálogo antes de resolver asociaciones,
+con un máximo de 1000 entradas y el presupuesto compartido de 40 consultas.
+Una página incompleta de Drive no se considera una carpeta duplicada; sólo
+las asociaciones distintas repetidas se rechazan como ambiguas. Los límites,
+tokens inválidos o cambios inconsistentes cierran la lectura sin entregar un
+catálogo parcial. Cada carpeta y foto seleccionada conserva la comprobación
+de propietario, permisos, parentesco y edición.
+
 ### Comprobación interna de almacenamiento
 
 La comprobación inicial puede usar **Guardar fotos de la demo en Drive**. Esta acción administrativa copia únicamente las dos imágenes de archivo aprobadas de la demo. No crea fichas, eventos, accesos ni asociaciones a participantes. Sus rutas públicas `/media/mi-levitate-demo/foto-1.jpg` y `/media/mi-levitate-demo/foto-2.jpg` leen las copias privadas de Drive y verifican el hash, tamaño y dimensiones contra la lista fija incluida en el código. No aceptan otros archivos, IDs o consultas; los recursos de participantes reales conservan su autenticación. La caché de esta demo dura cinco minutos y está ligada al hash de cada imagen. La cabecera `X-Levitate-Media-Source: google-drive` permite verificar la fuente; no hay sustitución por archivos estáticos si Drive falla.

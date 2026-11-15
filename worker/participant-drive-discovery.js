@@ -160,10 +160,33 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     return { ...value, permissions: acl.permissions };
   };
   const metadata = async (id, fields = fileFields) => hierarchyPermissions(await json(`files/${identifier(id)}`, { query: { fields, supportsAllDrives: "true" } }));
-  const list = async (q, fields = baseFields, pageSize = 1000) => {
-    const value = await json("files", { query: { q, fields: `nextPageToken,files(${fields})`, spaces: "drive", pageSize, orderBy: "name" } });
+  const list = async (q, fields = baseFields, pageSize = 1000, pageToken) => {
+    const value = await json("files", { query: { q, fields: `nextPageToken,files(${fields})`, spaces: "drive", pageSize, orderBy: "name",
+      ...(pageToken === undefined ? {} : { pageToken }) } });
     if (!Array.isArray(value.files) || value.files.length > pageSize) throw fail();
     return value;
+  };
+  const listCatalog = async (q, fields, pageSize = 1000) => {
+    const files = new Map(), tokens = new Set();
+    const stable = value => value && typeof value === "object"
+      ? Array.isArray(value) ? value.map(stable) : Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]))
+      : value;
+    let pageToken, received = 0;
+    for (;;) {
+      const page = await list(q, fields, pageSize, pageToken);
+      if ((received += page.files.length) > 1000) throw fail("portal_photo_source_budget", "Hay muchas carpetas para revisar de una vez. Vuelve a consultar el pasaporte.", 429);
+      for (const file of page.files) {
+        if (!file || typeof file !== "object" || Array.isArray(file)) throw fail();
+        const id = identifier(file.id), previous = files.get(id);
+        if (previous && JSON.stringify(stable(previous)) !== JSON.stringify(stable(file))) throw fail();
+        if (!previous) files.set(id, file);
+      }
+      if (!Object.hasOwn(page, "nextPageToken")) return { files: [...files.values()] };
+      const next = page.nextPageToken;
+      if (typeof next !== "string" || !next.trim() || next.length > 4096 || /[\u0000-\u001f\u007f]/.test(next) || tokens.has(next)) throw fail();
+      tokens.add(next);
+      pageToken = next;
+    }
   };
   let account;
   const verifyAccount = () => account ||= json("about", { query: { fields: "user(emailAddress),storageQuota(limit,usage)" } }).then(value => {
@@ -175,8 +198,8 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     const marker = hierarchy
       ? `appProperties has { key='levitatePhotoAlbum' and value='${PARTICIPANT_PHOTO_HIERARCHY.root}' } and appProperties has { key='levitateEventId' and value='${context.eventId}' }`
       : "(appProperties has { key='levitatePhotoAlbum' and value='demo_root_v1' } or appProperties has { key='levitatePhotoAlbum' and value='source_root_v1' })";
-    const result = await list(`'root' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and ${marker}`, "id", 2);
-    if (result.nextPageToken || result.files.length > 1) throw fail("portal_photo_source_ambiguous", "Hay más de una carpeta de fotos configurada. Revisa la asociación.", 409);
+    const result = await listCatalog(`'root' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}' and ${marker}`, "id", 2);
+    if (result.files.length > 1) throw fail("portal_photo_source_ambiguous", "Hay más de una carpeta de fotos configurada. Revisa la asociación.", 409);
     if (!result.files.length) return null;
     const root = await metadata(result.files[0].id, baseFields);
     validateRoot(root, undefined, context);
@@ -265,8 +288,7 @@ export async function getParticipantDriveDiscovery({ getConfig, getAccessToken, 
     const context = scope(input), root = await rootFolder(context);
     if (!root || !context.dances.length) return { albums: [] };
     const albumParent = root;
-    const folders = await list(`'${albumParent.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}'`);
-    if (folders.nextPageToken) throw fail("portal_photo_source_ambiguous", "Hay muchas carpetas de fotos. Revisa la asociación antes de continuar.", 409);
+    const folders = await listCatalog(`'${albumParent.id}' in parents and 'me' in owners and trashed = false and mimeType = '${folderMime}'`, "id,name,appProperties");
     const result = [];
     let collectedPhotos = 0;
     for (const dance of context.dances) {
