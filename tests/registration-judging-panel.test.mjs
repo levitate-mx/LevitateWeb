@@ -9,10 +9,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { Building2, ChevronDown, MapPin } from "lucide-react";
 import { normalizeAdminSearch } from "../src/components/admin/adminNavigation.ts";
+import { audienceAnnouncement, awardAnnouncement, routineAnnouncement } from "../src/components/judging/dictamenAnnouncements.ts";
 
 const source = await readFile(new URL("../src/components/admin/JudgingScoresPanel.tsx", import.meta.url), "utf8");
 const syntax = ts.createSourceFile("JudgingScoresPanel.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const functionNames = ["scoreValue", "reportScoreValue", "disciplineName", "blockKey", "blockLabel", "JudgeBreakdown", "filterReportSections", "ReleveAudienceFavorite", "DictamenEntry"];
+const functionNames = ["scoreValue", "reportScoreValue", "disciplineName", "blockKey", "blockLabel", "JudgeBreakdown", "filterReportSections", "reportAnnouncementItems", "ReleveAudienceFavorite", "DictamenEntry"];
 const declarations = functionNames.map((name) => {
   const declaration = syntax.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === name);
   assert.ok(declaration, `missing application function ${name}`);
@@ -23,6 +24,13 @@ for (const name of ["statusLabels", "scoreFormatter"]) {
   assert.ok(declaration, `missing application constant ${name}`);
   declarations.unshift(declaration.getText(syntax));
 }
+const checkSource = await readFile(new URL("../src/components/judging/DictamenAnnouncementCheck.tsx", import.meta.url), "utf8");
+const checkSyntax = ts.createSourceFile("checks.tsx", checkSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+for (const name of ["DictamenAnnouncementCheck", "DictamenAnnouncementProgress"]) {
+  const declaration = checkSyntax.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+  assert.ok(declaration);
+  declarations.push(declaration.getText(checkSyntax));
+}
 let awardsSection;
 function findAwardsSection(node) {
   if (ts.isJsxElement(node) && node.openingElement.tagName.getText(syntax) === "section"
@@ -32,11 +40,12 @@ function findAwardsSection(node) {
 }
 findAwardsSection(syntax);
 assert.ok(awardsSection, "legacy awards tests must render the actual application section");
-declarations.push(`function LegacyAwards({ selectedBlock, rowLookup }) { return (${awardsSection.getText(syntax)}); }`);
+declarations.push(`function LegacyAwards({ selectedBlock, rowLookup, announcementFor = () => ({ checked: false, onChange() {} }) }) { return (${awardsSection.getText(syntax)}); }`);
 const javascript = ts.transpileModule(`${declarations.join("\n")}\nglobalThis.helpers = { ${functionNames.join(",")}, LegacyAwards };`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
-const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, compactJudgingCategoryTitle, Building2, ChevronDown, MapPin };
+const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, compactJudgingCategoryTitle,
+  audienceAnnouncement, awardAnnouncement, routineAnnouncement, Building2, ChevronDown, MapPin };
 vm.runInNewContext(javascript, scope);
 const { scoreValue, reportScoreValue, disciplineName, blockKey, blockLabel, JudgeBreakdown, filterReportSections, ReleveAudienceFavorite, DictamenEntry, LegacyAwards } = scope.helpers;
 
@@ -112,6 +121,61 @@ const choreography = (id, overrides = {}) => ({
 });
 const standing = (routineId, rank, score) => ({ routineId, score, medal: "oro", directCompetition: true, eligibleCount: 3,
   placement: { rank, label: `${rank}°`, isFirstPlace: rank === 1, isParticipation: false } });
+
+function findNode(element, predicate) {
+  if (!element || typeof element !== "object") return null;
+  if (Array.isArray(element)) {
+    for (const child of element) { const match = findNode(child, predicate); if (match) return match; }
+    return null;
+  }
+  return predicate(element) ? element : findNode(element.props?.children, predicate);
+}
+
+test("shared routine and audience checks remain accessible without judge-sheet permission and are reversible", () => {
+  const announcement = { checked: false, onChange(checked) { announcement.checked = checked; } };
+  const row = choreography("3", { name: "Vuelo <final>" }), result = standing("3", 1, 140);
+  const renderEntry = () => DictamenEntry({ standing: result, row, maximumScore: 210, eventId: "event", blockId: "block",
+    expanded: false, onToggle() { assert.fail("announcing must not expand a judge sheet"); }, allowDetails: false, announcement });
+  const check = element => {
+    const component = findNode(element, node => node.type?.name === "DictamenAnnouncementCheck");
+    assert.ok(component);
+    return findNode(component.type(component.props), node => node.type === "input" && node.props.type === "checkbox");
+  };
+  assert.equal(check(renderEntry()).props["aria-label"], "Anunciado: Vuelo <final>");
+  assert.equal(check(renderEntry()).props.disabled, undefined);
+  check(renderEntry()).props.onChange({ target: { checked: true } });
+  assert.match(renderToStaticMarkup(renderEntry()), /judging-scores__entry is-first is-announced/);
+  assert.doesNotMatch(renderToStaticMarkup(renderEntry()), /Ver detalle|judging-scores__detail/);
+  check(renderEntry()).props.onChange({ target: { checked: false } });
+  assert.doesNotMatch(renderEntry().props.className, /is-announced/);
+  const renderAudience = () => ReleveAudienceFavorite({ favorite: { status: "ready", winner: { routineId: "3", name: row.name, academy: row.academy, votes: 28 } }, announcement });
+  assert.equal(check(renderAudience()).props["aria-label"], "Anunciado: Bono del público");
+  check(renderAudience()).props.onChange({ target: { checked: true } });
+  assert.match(renderAudience().props.className, /is-announced/);
+  assert.match(renderToStaticMarkup(renderAudience()), /28 votos/);
+});
+
+test("legacy special-award checks use each server item and preserve MVP and porra while marking and undoing", () => {
+  const selectedBlock = { sections: [], specialAwards: [
+    { id: "champion_of_champions", title: "MVP", displayValue: "Parcial: Vuelo · 43 puntos", isAssigned: true, isPartial: true, routineId: "3" },
+    { id: "award_4", title: "Mejor porra", displayValue: "Academia del público", isAssigned: true, routineId: null },
+  ] };
+  const before = structuredClone(selectedBlock), marks = new Map();
+  const announcementFor = item => ({ checked: marks.get(item.id) === item.fingerprint,
+    onChange(checked) { if (checked) marks.set(item.id, item.fingerprint); else marks.delete(item.id); } });
+  const render = () => LegacyAwards({ selectedBlock, rowLookup: new Map(), announcementFor });
+  const toggle = (label, checked) => {
+    const control = findNode(render(), node => node.type?.name === "DictamenAnnouncementCheck" && node.props.label === label);
+    findNode(control.type(control.props), node => node.type === "input").props.onChange({ target: { checked } });
+  };
+  toggle("MVP", true);
+  assert.match(renderToStaticMarkup(render()), /is-champion is-announced/);
+  assert.ok(renderToStaticMarkup(render()).indexOf("MVP") < renderToStaticMarkup(render()).indexOf("Mejor porra"));
+  toggle("MVP", false);
+  assert.doesNotMatch(renderToStaticMarkup(render()), /is-announced/);
+  assert.deepEqual(selectedBlock, before);
+  assert.equal(scope.helpers.reportAnnouncementItems(selectedBlock, []).length, 2);
+});
 
 test("legacy MVP cards preserve the server's partial, final and pending announcements before porra", () => {
   const selectedBlock = { specialAwards: [

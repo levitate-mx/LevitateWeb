@@ -23,8 +23,13 @@ function declarations(source, functions, constants) {
 }
 const previous = await readFile(new URL("../src/components/admin/JudgingScoresPanel.tsx", import.meta.url), "utf8");
 const workspace = await readFile(new URL("../src/components/judging/JudgingAdminWorkspace.tsx", import.meta.url), "utf8");
+const checkSource = await readFile(new URL("../src/components/judging/DictamenAnnouncementCheck.tsx", import.meta.url), "utf8");
+const announcementJavascript = ts.transpileModule(await readFile(new URL("../src/components/judging/dictamenAnnouncements.ts", import.meta.url), "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText;
 const javascript = ts.transpileModule([
-  declarations(previous, ["scoreValue", "reportScoreValue", "blockKey", "blockLabel", "JudgeBreakdown", "filterReportSections", "ReleveAudienceFavorite", "DictamenEntry"], ["statusLabels", "scoreFormatter"]),
+  declarations(checkSource, ["DictamenAnnouncementCheck", "DictamenAnnouncementProgress"], []),
+  declarations(previous, ["scoreValue", "reportScoreValue", "blockKey", "blockLabel", "JudgeBreakdown", "filterReportSections", "reportAnnouncementItems", "ReleveAudienceFavorite", "DictamenEntry"], ["statusLabels", "scoreFormatter"]),
   declarations(workspace, ["Empty", "SheetReleaseControl", "ReportPanel"], ["labels", "number"]),
   "globalThis.renderReport = ReportPanel; globalThis.releaseControl = SheetReleaseControl;",
 ].join("\n"), {
@@ -82,27 +87,70 @@ function findElement(element, predicate) {
   return predicate(element) ? element : findElement(element.props?.children, predicate);
 }
 
-function harness(bundle = fixture(), readOnly = false) {
+function memoryStorage() {
+  const values = new Map(), writes = [];
+  return { values, writes, getItem: key => values.get(key) ?? null, setItem(key, value) { writes.push([key, value]); values.set(key, value); } };
+}
+
+function announcementControl(element, label) {
+  if (!element || typeof element !== "object") return null;
+  if (Array.isArray(element)) {
+    for (const child of element) { const result = announcementControl(child, label); if (result) return result; }
+    return null;
+  }
+  if (element.type?.name === "DictamenAnnouncementCheck" && element.props.label === label) return element;
+  if (["DictamenEntry", "ReleveAudienceFavorite"].includes(element.type?.name)) return announcementControl(element.type(element.props), label);
+  return announcementControl(element.props?.children, label);
+}
+
+function harness(bundle = fixture(), readOnly = false, storage = memoryStorage()) {
   const state = [];
   const selectedBlocks = [];
-  let cursor = 0;
-  const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, compactJudgingCategoryTitle, ChevronDown, Trophy, X,
+  let cursor = 0, selectedBlockId = "b1";
+  const mockedReact = {
     useEffect() {},
     useState(initial) {
       const index = cursor++;
-      if (!(index in state)) state[index] = initial;
-      return [state[index], (value) => { state[index] = value; }];
+      if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
+      return [state[index], (value) => { state[index] = typeof value === "function" ? value(state[index]) : value; }];
     },
+    useRef(initial) {
+      const index = cursor++;
+      if (!(index in state)) state[index] = { current: initial };
+      return state[index];
+    },
+  };
+  const announcementModule = { exports: {} };
+  vm.runInNewContext(announcementJavascript, { exports: announcementModule.exports, window: { localStorage: storage },
+    require(name) { assert.equal(name, "react"); return mockedReact; } });
+  const scope = { require: createRequire(import.meta.url), exports: {}, normalizeAdminSearch, isJudgingGroupCategory, compactJudgingCategoryTitle, ChevronDown, Trophy, X,
+    ...mockedReact, ...announcementModule.exports,
+    requestRegistrationApi() { assert.fail("local announcement checks must not call the server"); },
   };
   vm.runInNewContext(javascript, scope);
   const tree = () => {
     cursor = 0;
-    return scope.renderReport({ report: bundle.snapshot.report.blocks[0], bundle, blockId: "b1", onBlockChange: value => selectedBlocks.push(value), readOnly });
+    return scope.renderReport({ report: bundle.snapshot.report.blocks.find(block => block.id === selectedBlockId), bundle, blockId: selectedBlockId,
+      onBlockChange: value => { selectedBlocks.push(value); selectedBlockId = value; }, readOnly });
   };
   return {
     html: () => renderToStaticMarkup(tree()),
     tree,
     selectedBlocks,
+    storage,
+    block(value) { selectedBlockId = value; },
+    check(label, checked) {
+      const control = announcementControl(tree(), label);
+      assert.ok(control, `missing announcement checkbox ${label}`);
+      const input = findElement(control.type(control.props), node => node.type === "input" && node.props.type === "checkbox");
+      assert.equal(input.props["aria-label"], `Anunciado: ${label}`);
+      input.props.onChange({ target: { checked } });
+    },
+    checked(label) {
+      const control = announcementControl(tree(), label);
+      assert.ok(control, `missing announcement checkbox ${label}`);
+      return control.props.announcement.checked;
+    },
     change(field, value) {
       const element = findElement(tree(), (node) => field === "query" ? node.type === "input"
         : node.type === "select" && node.props.value === state[field === "discipline" ? 1 : 2]
@@ -123,8 +171,98 @@ function harness(bundle = fixture(), readOnly = false) {
   };
 }
 
+test("admin and reader locally mark routines, Relevé, audience and awards without changing ceremony results", () => {
+  for (const readOnly of [false, true]) {
+    const bundle = fixture(), report = bundle.snapshot.report.blocks[0];
+    report.sections[1].kind = "releve";
+    report.releveAudienceFavorite = { status: "ready", winner: { routineId: "2", name: "Danza Áurea", academy: "Academia Águila", votes: 28 } };
+    report.specialAwards.push(
+      { id: "champion_of_champions", title: "MVP", displayValue: "Parcial: Otra coreografía · 43 puntos", isAssigned: true, isPartial: true, routineId: "other-block" },
+      { id: "award_4", title: "Mejor porra", displayValue: "Academia del público", isAssigned: true, routineId: null },
+    );
+    const before = structuredClone(bundle), view = harness(bundle, readOnly);
+    assert.match(view.html(), /0 de 9 anunciados/);
+    assert.match(view.html(), /Guardado en este navegador/);
+    assert.equal(view.storage.writes.length, 0, "reading the dictamen must not write local marks");
+    for (const label of ["Vuelo 1", "Danza Áurea", "Bono del público", "Mejor vestuario", "MVP", "Mejor porra"]) {
+      view.check(label, true);
+      assert.equal(view.checked(label), true);
+    }
+    const html = view.html();
+    assert.match(html, /6 de 9 anunciados/);
+    assert.match(html, /judging-scores__entry is-first is-announced/);
+    assert.match(html, /judging-scores__audience-favorite is-announced/);
+    assert.match(html, /class="is-champion is-announced"/);
+    assert.ok(html.indexOf("MVP") < html.indexOf("Mejor porra"));
+    assert.match(html, />Medalla<\/span><strong>Oro<\/strong>/);
+    assert.match(html, />Lugar<\/span><strong>1\.º lugar<\/strong>/);
+    view.change("query", "Danza Áurea");
+    assert.match(view.html(), /6 de 9 anunciados/);
+    assert.match(view.html(), /1 de 5 coreografías/);
+    view.change("query", "Sin coincidencias");
+    assert.match(view.html(), /6 de 9 anunciados/);
+    view.check("MVP", false);
+    assert.equal(view.checked("MVP"), false);
+    assert.match(view.html(), /5 de 9 anunciados/);
+    assert.deepEqual(bundle, before, "announcement clicks must not modify official report data");
+    assert.equal(view.storage.writes.length, 7);
+  }
+});
+
+test("local marks survive refresh and remount, while changed results require another announcement", () => {
+  const bundle = fixture(), view = harness(bundle, true);
+  view.check("Vuelo 1", true); view.check("Mejor vestuario", true);
+  bundle.snapshot.fetchedAt = "2026-11-15T12:00:00Z";
+  bundle.snapshot.rows[0].judges[0].feedback = "Comentario nuevo que no cambia el anuncio";
+  assert.equal(view.checked("Vuelo 1"), true);
+  const remounted = harness(bundle, true, view.storage);
+  assert.equal(remounted.checked("Vuelo 1"), true);
+  assert.equal(remounted.checked("Mejor vestuario"), true);
+  assert.match(remounted.html(), /2 de 6 anunciados/);
+  bundle.snapshot.report.blocks[0].sections[0].categories[0].rows.find(row => row.routineId === "1").score = 141;
+  assert.equal(remounted.checked("Vuelo 1"), false);
+  assert.equal(remounted.checked("Mejor vestuario"), true);
+  assert.match(remounted.html(), /1 de 6 anunciados/);
+  bundle.snapshot.report.blocks[0].specialAwards[0].displayValue = "Otra academia premiada";
+  assert.equal(remounted.checked("Mejor vestuario"), false);
+  assert.match(remounted.html(), /0 de 6 anunciados/);
+  assert.equal(view.storage.writes.length, 2, "invalidating a mark must not automatically rewrite its history");
+});
+
+test("changing blocks without remounting and changing events never carries another ceremony's marks", () => {
+  const bundle = fixture();
+  bundle.snapshot.report.blocks.push({ ...structuredClone(bundle.snapshot.report.blocks[0]), id: "b2", title: "Otro bloque" });
+  const view = harness(bundle, true);
+  view.check("Vuelo 1", true);
+  view.block("b2");
+  assert.equal(view.checked("Vuelo 1"), false);
+  assert.match(view.html(), /0 de 6 anunciados/);
+  view.check("Mejor vestuario", true);
+  view.block("b1");
+  assert.equal(view.checked("Vuelo 1"), true);
+  assert.equal(view.checked("Mejor vestuario"), false);
+  bundle.event.id = "another-edition";
+  assert.equal(view.checked("Vuelo 1"), false);
+  bundle.event.id = "levitate-fixture";
+  assert.equal(view.checked("Vuelo 1"), true);
+  assert.equal(view.storage.writes.length, 2, "switching views must not write or migrate marks");
+});
+
+test("unavailable local storage is explained and keeps reversible checks working on the current page", () => {
+  const storage = { getItem() { throw new Error("Storage blocked"); }, setItem() { throw new Error("Storage blocked"); } };
+  const view = harness(fixture(), true, storage);
+  assert.match(view.html(), /no se pudieron guardar en este navegador/);
+  assert.doesNotMatch(view.html(), /Guardado en este navegador/);
+  view.check("Vuelo 1", true);
+  assert.equal(view.checked("Vuelo 1"), true);
+  assert.match(view.html(), /1 de 6 anunciados/);
+  view.check("Vuelo 1", false);
+  assert.equal(view.checked("Vuelo 1"), false);
+  assert.match(view.html(), /0 de 6 anunciados/);
+});
+
 test("the new admin reuses the existing read-only entry and filter implementations", () => {
-  assert.match(workspace, /import \{ DictamenEntry, filterReportSections, ReleveAudienceFavorite \} from "\.\.\/admin\/JudgingScoresPanel"/);
+  assert.match(workspace, /import \{ DictamenEntry, filterReportSections, ReleveAudienceFavorite, reportAnnouncementItems \} from "\.\.\/admin\/JudgingScoresPanel"/);
   assert.match(workspace, /key=\{`\$\{eventId\}:\$\{blockId\}:\$\{view\}`\}/, "event, block and view changes reset local report filters and expanded details");
   const ui = harness().html();
   assert.match(ui, /Filtros del dictamen/);

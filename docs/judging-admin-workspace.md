@@ -66,6 +66,21 @@ Releve permite abrir y cerrar la votacion real y consultar resultados privados.
 La instalacion queda cerrada. Ver `releve-voting-preview.md` para el control
 aproximado por dispositivo y la persistencia.
 
+## Resultados anunciados
+
+El dictamen final permite marcar y desmarcar **Anunciado** en cada coreografía,
+el premio del público de Relevé y los premios especiales, incluidos MVP y mejor
+porra. El contador del bloque incluye todos sus anuncios, aunque se apliquen
+filtros. Está disponible tanto para el administrador como para el lector del
+dictamen y en la consulta de puntuaciones del panel general.
+
+Las marcas se conservan en este navegador, separadas por evento y bloque, al
+actualizar datos o recargar la página. Si cambia el resultado anunciado, esa
+marca deja de estar vigente y hay que anunciarlo nuevamente. Las marcas son
+un apoyo para la lectura: no cambian calificaciones, premios, publicaciones ni
+el PDF. Si el navegador impide guardarlas, la pantalla indica que sólo se
+mantendrán mientras siga abierta.
+
 ## Escrituras y seguridad
 
 Las rutas `/api/registration/admin/judging/workspace/*` y `editor/*` verifican el

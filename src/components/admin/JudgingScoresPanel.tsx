@@ -4,6 +4,9 @@ import { normalizeAdminSearch } from "./adminNavigation";
 import { requestRegistrationApi } from "./registrationApi";
 import { isJudgingGroupCategory } from '../../../shared/judging-group.js';
 import { compactJudgingCategoryTitle } from '../../../shared/judging-category-title.js';
+import { audienceAnnouncement, awardAnnouncement, routineAnnouncement, useDictamenAnnouncements } from '../judging/dictamenAnnouncements';
+import type { AnnouncementItem, AnnouncementState } from '../judging/dictamenAnnouncements';
+import { DictamenAnnouncementCheck, DictamenAnnouncementProgress } from '../judging/DictamenAnnouncementCheck';
 import "./JudgingScoresPanel.css";
 
 type JudgingEvent = {
@@ -164,18 +167,30 @@ export function filterReportSections(block: ReportBlock | null, rows: Choreograp
   })).filter((section) => section.categories.length > 0);
 }
 
-export function ReleveAudienceFavorite({ favorite, heading = "h3" }: { favorite: ReportBlock["releveAudienceFavorite"]; heading?: "h3" | "h4" }) {
+export function reportAnnouncementItems(block: ReportBlock | null | undefined, rows: ChoreographyScore[]) {
+  const lookup = new Map(rows.map(row => [String(row.id), row]));
+  const items = (block?.sections || []).flatMap(section => section.categories.flatMap(category => category.rows.flatMap(standing => {
+    const row = lookup.get(String(standing.routineId));
+    return row ? [routineAnnouncement(standing, row)] : [];
+  })));
+  if (block?.sections.some(section => section.kind === "releve")) items.push(audienceAnnouncement(block.releveAudienceFavorite));
+  items.push(...(block?.specialAwards || []).map(awardAnnouncement));
+  return [...new Map(items.map(item => [item.id, item])).values()];
+}
+
+export function ReleveAudienceFavorite({ favorite, heading = "h3", announcement }: { favorite: ReportBlock["releveAudienceFavorite"]; heading?: "h3" | "h4"; announcement?: AnnouncementState }) {
   const Heading = heading;
   const winner = favorite?.status === "ready" ? favorite.winner : null;
   const message = favorite?.status === "tie" ? "Empate del público · resultado por definir."
     : favorite?.status === "none" ? "Sin votos registrados." : "Pendiente del cierre de votación.";
-  return <section className="judging-scores__audience-favorite" aria-label="Bono del público">
+  return <section className={`judging-scores__audience-favorite${announcement?.checked ? " is-announced" : ""}`} aria-label="Bono del público">
     <Heading>{winner ? "Esto le otorgó 5 puntos extras sobre su calificación final dada por los jueces." : "Bono del público"}</Heading>
     {winner ? <><strong>{winner.name}</strong><p>{winner.academy || "Sin academia"} · {winner.votes} votos</p></> : <p>{message}</p>}
+    {announcement ? <DictamenAnnouncementCheck announcement={announcement} label="Bono del público" /> : null}
   </section>;
 }
 
-export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded, onToggle, showMetadata = false, allowDetails = true }: {
+export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, expanded, onToggle, showMetadata = false, allowDetails = true, announcement }: {
   standing: ReportStanding;
   row: ChoreographyScore;
   maximumScore: number;
@@ -185,6 +200,7 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
   onToggle: () => void;
   showMetadata?: boolean;
   allowDetails?: boolean;
+  announcement?: AnnouncementState;
 }) {
   const detailId = `judging-score-detail-${encodeURIComponent(eventId)}-${encodeURIComponent(blockId)}-${encodeURIComponent(String(row.id))}`;
   const effectiveMaximumScore = standing.maximumScore === undefined ? maximumScore : standing.maximumScore;
@@ -204,8 +220,9 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
     : standing.placement === null ? "—" : "Sin lugar de podio";
   const isGroup = isJudgingGroupCategory(row.category);
   const participantCount = Number.isSafeInteger(row.participantCount) && Number(row.participantCount) > 0 ? row.participantCount : null;
+  const medalDisplay = <div className={`judging-scores__medal${medalText ? ` is-${medal}` : " is-pending"}`}><span>Medalla</span><strong>{medalText || (row.status === "unavailable" ? "No disponible" : "Pendiente")}</strong></div>;
   return (
-    <article className={`judging-scores__entry${rank === 1 ? " is-first" : ""}${isGroup ? " is-group" : ""}`}>
+    <article className={`judging-scores__entry${rank === 1 ? " is-first" : ""}${isGroup ? " is-group" : ""}${announcement?.checked ? " is-announced" : ""}${announcement ? " has-announcement" : ""}`}>
       <div className="judging-scores__standing">
         <div className={`judging-scores__points${isNumericScore ? "" : " is-text"}`}><span>{audience ? audiencePending ? "Jurado" : "Puntaje final" : "Puntaje"}</span><strong>{scoreText}</strong></div>
         <div className="judging-scores__entry-info">
@@ -221,7 +238,7 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
         <div className="judging-scores__recognition">
           {directCompetition ? <div className={`judging-scores__placement${rank === null && standing.placement !== null ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{place === "—" ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>
             : null}
-          <div className={`judging-scores__medal${medalText ? ` is-${medal}` : " is-pending"}`}><span>Medalla</span><strong>{medalText || (row.status === "unavailable" ? "No disponible" : "Pendiente")}</strong></div>
+          {announcement ? <div className="judging-scores__medal-row"><DictamenAnnouncementCheck announcement={announcement} label={row.name || `Coreografía ${row.id}`} />{medalDisplay}</div> : medalDisplay}
           {!directCompetition ? <p className="judging-scores__competition-note">Sin competencia directa</p> : null}
         </div>
       </div>
@@ -330,6 +347,10 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
   const selectedBlock = current?.report.blocks.find((block) => block.id === blockFilter)
     || current?.report.blocks.find((block) => block.isActive) || current?.report.blocks[0] || null;
   const rowLookup = useMemo(() => new Map((current?.rows || []).map((row) => [String(row.id), row])), [current]);
+  const announcements = useDictamenAnnouncements(eventId, selectedBlock?.id || "");
+  const announcementItems = reportAnnouncementItems(selectedBlock, current?.rows || []);
+  const announcedCount = announcementItems.filter(item => announcements.isAnnounced(item)).length;
+  const announcementFor = (item: AnnouncementItem): AnnouncementState => ({ checked: announcements.isAnnounced(item), onChange: checked => announcements.setAnnounced(item, checked) });
   const sections = useMemo(() => filterReportSections(selectedBlock, current?.rows || [], {
     query, discipline: disciplineFilter, status: statusFilter,
   }), [selectedBlock, current, query, disciplineFilter, statusFilter]);
@@ -372,7 +393,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
       {!eventsLoading && !eventsError && !events.length ? <p className="judging-scores__empty" role="status">Todavía no hay eventos de Levitate disponibles para consultar.</p> : null}
       {current ? <>
         {current.warnings.length ? <div className="judging-scores__warnings" role="status"><ul>{current.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div> : null}
-        <header className="judging-scores__report-heading"><h2>{selectedBlock?.name || selectedBlock?.title || "Dictamen final"}</h2></header>
+        <header className="judging-scores__report-heading"><h2>{selectedBlock?.name || selectedBlock?.title || "Dictamen final"}</h2>{selectedBlock ? <DictamenAnnouncementProgress announced={announcedCount} total={announcementItems.length} storageError={announcements.storageError} /> : null}</header>
         {selectedBlock ? <>
           <details className="judging-scores__filter-drawer">
             <summary>Buscar y filtrar{hasFilters ? " · Filtros activos" : ""}</summary>
@@ -389,7 +410,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
               const repeatsBlock = !isReleve && [selectedBlock.name, selectedBlock.title].some((value) => normalizeAdminSearch(value) === normalizeAdminSearch(section.label));
               return <section className={`judging-scores__genre${repeatsBlock ? " judging-scores__genre--without-heading" : ""}${isReleve ? " judging-scores__genre--releve" : ""}`} key={section.id} aria-label={isReleve ? "Premio Relevé" : compactJudgingCategoryTitle(section.label)}>
               {!repeatsBlock ? <header><h3>{isReleve ? "Premio Relevé" : compactJudgingCategoryTitle(section.label)}</h3>{isReleve ? <p>Premiación independiente</p> : null}</header> : null}
-              {isReleve ? <ReleveAudienceFavorite favorite={selectedBlock.releveAudienceFavorite} heading="h4" /> : null}
+              {isReleve ? <ReleveAudienceFavorite favorite={selectedBlock.releveAudienceFavorite} heading="h4" announcement={announcementFor(audienceAnnouncement(selectedBlock.releveAudienceFavorite))} /> : null}
               <div className="judging-scores__categories">
                 {section.categories.map((category) => <section className="judging-scores__category" key={category.id} aria-label={compactJudgingCategoryTitle(category.title)}>
                   <header><h4>{compactJudgingCategoryTitle(category.title)}</h4></header>
@@ -398,6 +419,7 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
                       key={String(row.id)} standing={standing} row={row} maximumScore={standing.maximumScore ?? current.report.maximumScore}
                       eventId={eventId} blockId={selectedBlock.id} expanded={expandedId === String(row.id)}
                       onToggle={() => setExpandedId(expandedId === String(row.id) ? "" : String(row.id))}
+                      announcement={announcementFor(routineAnnouncement(standing, row))}
                     />)}
                   </div>
                 </section>)}
@@ -408,7 +430,8 @@ export function JudgingScoresPanel({ refreshKey = 0, onUpdated }: { refreshKey?:
           </div>
           {selectedBlock.specialAwards.length ? <section className="judging-scores__awards" aria-label="Premios especiales del bloque"><header><h3>Premios especiales</h3></header><div className="judging-scores__awards-grid">{selectedBlock.specialAwards.map((award) => {
             const routine = award.routineId === null ? null : rowLookup.get(String(award.routineId));
-            return <article className={`${award.isAssigned ? "" : "is-unassigned"}${award.id === "champion_of_champions" ? " is-champion" : ""}`} key={award.id}><h4>{award.title}</h4><strong>{award.displayValue || "Sin asignar"}</strong>{routine ? <p>{routine.academy || "Sin academia"}{routine.state ? ` · ${routine.state}` : ""}</p> : null}</article>;
+            const announcement = announcementFor(awardAnnouncement(award));
+            return <article className={`${award.isAssigned ? "" : "is-unassigned"}${award.id === "champion_of_champions" ? " is-champion" : ""}${announcement.checked ? " is-announced" : ""}`} key={award.id}><h4>{award.title}</h4><strong>{award.displayValue || "Sin asignar"}</strong>{routine ? <p>{routine.academy || "Sin academia"}{routine.state ? ` · ${routine.state}` : ""}</p> : null}<DictamenAnnouncementCheck announcement={announcement} label={award.title} /></article>;
           })}</div></section> : null}
         </> : <p className="judging-scores__empty" role="status">Este evento todavía no tiene bloques de competencia disponibles.</p>}
       </> : !loading && scoresError ? <p className="judging-scores__muted">Usa Actualizar para volver a consultar las puntuaciones.</p> : null}

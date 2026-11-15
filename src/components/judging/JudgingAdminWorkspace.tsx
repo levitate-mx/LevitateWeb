@@ -31,7 +31,10 @@ import {
   X,
 } from "lucide-react";
 import { requestRegistrationApi } from "../admin/registrationApi";
-import { DictamenEntry, filterReportSections, ReleveAudienceFavorite } from "../admin/JudgingScoresPanel";
+import { DictamenEntry, filterReportSections, ReleveAudienceFavorite, reportAnnouncementItems } from "../admin/JudgingScoresPanel";
+import { audienceAnnouncement, awardAnnouncement, routineAnnouncement, useDictamenAnnouncements } from './dictamenAnnouncements';
+import type { AnnouncementItem, AnnouncementState } from './dictamenAnnouncements';
+import { DictamenAnnouncementCheck, DictamenAnnouncementProgress } from './DictamenAnnouncementCheck';
 import type {
   ChoreographyScore,
   ReportBlock,
@@ -1912,6 +1915,10 @@ export function ReportPanel({
   const [status, setStatus] = useState("all");
   const [expandedId, setExpandedId] = useState("");
   const lookup = new Map(bundle.snapshot.rows.map((r) => [r.id, r]));
+  const announcements = useDictamenAnnouncements(bundle.event.id, blockId);
+  const announcementItems = reportAnnouncementItems(report, bundle.snapshot.rows);
+  const announcedCount = announcementItems.filter(item => announcements.isAnnounced(item)).length;
+  const announcementFor = (item: AnnouncementItem): AnnouncementState => ({ checked: announcements.isAnnounced(item), onChange: checked => announcements.setAnnounced(item, checked) });
   const sections = report ? filterReportSections(report, bundle.snapshot.rows, {
     query,
     discipline,
@@ -1951,6 +1958,7 @@ export function ReportPanel({
         onToggle={() => setExpandedId(expandedId === row.id ? "" : row.id)}
         showMetadata
         allowDetails={!readOnly}
+        announcement={announcementFor(routineAnnouncement(standing, row))}
       />
     );
   };
@@ -2017,6 +2025,7 @@ export function ReportPanel({
       </div>
       <header>
         <h2>{report?.title || report?.name || "Dictamen final"}</h2>
+        <DictamenAnnouncementProgress announced={announcedCount} total={announcementItems.length} storageError={announcements.storageError} />
       </header>
       {!readOnly && report && blockId ? <SheetReleaseControl key={`${bundle.event.id}:${blockId}`} eventId={bundle.event.id} blockId={blockId} revision={bundle.snapshot.fetchedAt} /> : null}
       {hasFilters ? (
@@ -2033,7 +2042,7 @@ export function ReportPanel({
       {sections.map((section) => (
           <section className={section.kind === "releve" ? "ja-report-releve" : undefined} aria-label={section.kind === "releve" ? "Premio Relevé" : compactJudgingCategoryTitle(section.label)} key={section.id}>
             {section.kind === "releve" ? <header><h2>Premio Relevé</h2><p>Premiación independiente</p></header> : <h2>{compactJudgingCategoryTitle(section.label)}</h2>}
-            {section.kind === "releve" ? <ReleveAudienceFavorite favorite={report?.releveAudienceFavorite} /> : null}
+            {section.kind === "releve" ? <ReleveAudienceFavorite favorite={report?.releveAudienceFavorite} announcement={announcementFor(audienceAnnouncement(report?.releveAudienceFavorite))} /> : null}
             {section.categories.map((c) => (
               <section className="ja-report-category" key={c.id}>
                 <h3>{compactJudgingCategoryTitle(c.title)}</h3>
@@ -2053,12 +2062,14 @@ export function ReportPanel({
       ) : null}
       <section className="ja-awards-report">
         <h2>Premios especiales</h2>
-        {(report?.specialAwards || []).map((a) => (
-          <div className={`${a.id === "champion_of_champions" ? "is-champion" : ""}${a.isAssigned ? "" : " is-unassigned"}`} key={a.id}>
+        {(report?.specialAwards || []).map((a) => {
+          const announcement = announcementFor(awardAnnouncement(a));
+          return <div className={`${a.id === "champion_of_champions" ? "is-champion" : ""}${a.isAssigned ? "" : " is-unassigned"}${announcement.checked ? " is-announced" : ""}`} key={a.id}>
             <span>{a.title}</span>
             <strong>{a.displayValue || "Sin asignar"}</strong>
-          </div>
-        ))}
+            <DictamenAnnouncementCheck announcement={announcement} label={a.title} />
+          </div>;
+        })}
       </section>
     </section>
   );

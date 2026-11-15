@@ -79,7 +79,7 @@ function harness(bundle = fixture(), { role = "judging_admin", requestApi } = {}
         if (!requestApi) throw new Error("Unexpected API call");
         return requestApi(path, options);
       } };
-      if (name.endsWith("JudgingScoresPanel")) return {};
+      if (name.endsWith("JudgingScoresPanel") || name.endsWith("dictamenAnnouncements") || name.endsWith("DictamenAnnouncementCheck")) return {};
       if (name.endsWith("judging-category-title.js")) return { compactJudgingCategoryTitle };
       if (name.endsWith("judgePortraits")) return { resolveJudgePortrait: () => undefined };
       if (name.endsWith('ReleveVotingAdminPanel')) return { ReleveVotingAdminPanel: () => null };

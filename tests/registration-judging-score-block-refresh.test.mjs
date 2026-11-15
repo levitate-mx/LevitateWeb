@@ -98,7 +98,7 @@ function harness({ view = 'scores', eventId = 'event-one', storage = memoryStora
         if (url.pathname.endsWith('/activity')) return { activity: [] };
         throw new Error(`Unexpected request ${path}`);
       } };
-      if (name.endsWith('JudgingScoresPanel')) return {};
+      if (name.endsWith('JudgingScoresPanel') || name.endsWith('dictamenAnnouncements') || name.endsWith('DictamenAnnouncementCheck')) return {};
       if (name.endsWith('judging-category-title.js')) return { compactJudgingCategoryTitle };
       if (name.endsWith('judgePortraits')) return { resolveJudgePortrait: () => undefined };
       if (name.endsWith('ReleveVotingAdminPanel')) return { ReleveVotingAdminPanel: () => null };
