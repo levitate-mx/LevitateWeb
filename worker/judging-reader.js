@@ -162,7 +162,7 @@ export async function getJudgingRoutineDirectory(env, eventId, { fetcher = fetch
   const config = configuration(env);
   const event = await readEvent(config, eventId, fetcher, "id,name,event_type");
   const routines = await readRows(config, "routines", {
-    select: "event_id,routine_id,name,academy", event_id: `eq.${eventId}`, order: tableOrders.routines,
+    select: "event_id,routine_id,program_number,name,academy", event_id: `eq.${eventId}`, order: tableOrders.routines,
   }, fetcher);
   const ids = new Set();
   const rows = routines.map(row => {
@@ -171,7 +171,8 @@ export async function getJudgingRoutineDirectory(env, eventId, { fetcher = fetch
       fail("judging_invalid_response", "No pudimos comprobar las identidades del programa de JueceoCore.", 502);
     }
     ids.add(id);
-    return { id, name: typeof row.name === "string" ? row.name.trim() : "", academy: typeof row.academy === "string" ? row.academy.trim() : "" };
+    return { id, programNumber: typeof row.program_number === "string" ? row.program_number.trim() || null : null,
+      name: typeof row.name === "string" ? row.name.trim() : "", academy: typeof row.academy === "string" ? row.academy.trim() : "" };
   });
   return { event: { id: eventId, name: typeof event.name === "string" ? event.name.trim() : "" }, rows };
 }

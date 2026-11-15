@@ -16,7 +16,7 @@ function upstream({ events = [event()], routines = [routine()], cap = 1000 } = {
     assert.equal(options.redirect, "manual"); assert.equal(options.body, undefined);
     assert.ok(options.signal instanceof AbortSignal); assert.equal(options.headers.apikey, env.JUDGING_SUPABASE_PUBLISHABLE_KEY);
     assert.ok(["events", "routines"].includes(table), "the directory must never read scoring tables");
-    assert.equal(url.searchParams.get("select"), table === "events" ? "id,name,event_type" : "event_id,routine_id,name,academy");
+    assert.equal(url.searchParams.get("select"), table === "events" ? "id,name,event_type" : "event_id,routine_id,program_number,name,academy");
     assert.equal(url.searchParams.get("limit"), "1000");
     if (table === "events") {
       assert.equal(url.searchParams.get("id"), `eq.${eventId}`);
@@ -34,7 +34,7 @@ function upstream({ events = [event()], routines = [routine()], cap = 1000 } = {
 test("routine directory reads only minimal event and programme identities with GET", async () => {
   const server = upstream();
   const result = await getJudgingRoutineDirectory(env, eventId, server);
-  assert.deepEqual(result, { event: { id: eventId, name: "Levitate Noviembre" }, rows: [{ id: "routine-1", name: "Vuelo", academy: "Academia Uno" }] });
+  assert.deepEqual(result, { event: { id: eventId, name: "Levitate Noviembre" }, rows: [{ id: "routine-1", programNumber: null, name: "Vuelo", academy: "Academia Uno" }] });
   assert.deepEqual(server.calls.map(call => call.url.pathname), ["/rest/v1/events", "/rest/v1/events", "/rest/v1/routines", "/rest/v1/routines"]);
 });
 
@@ -43,7 +43,7 @@ test("directory output cannot carry unrelated scoring or private configuration f
     routines: [routine("routine-1", { scores: ["PRIVATE SCORE"], comments: "PRIVATE FEEDBACK", event: "PRIVATE EVENT", raw: { token: "PRIVATE TOKEN" } })] });
   const result = await getJudgingRoutineDirectory(env, eventId, server);
   assert.deepEqual(Object.keys(result.event), ["id", "name"]);
-  assert.deepEqual(Object.keys(result.rows[0]), ["id", "name", "academy"]);
+  assert.deepEqual(Object.keys(result.rows[0]), ["id", "programNumber", "name", "academy"]);
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE|scores|comments|access_code|token|competition_config/);
 });
 
@@ -95,7 +95,19 @@ test("foreign scope and ambiguous or missing routine IDs reject the whole direct
 test("zero-like string IDs and sparse metadata are preserved without inventing associations", async () => {
   const server = upstream({ routines: [routine("0", { name: null, academy: null }), routine("dance-uuid", { name: " Vuelo ", academy: " Academia Uno " })] });
   const result = await getJudgingRoutineDirectory(env, eventId, server);
-  assert.deepEqual(result.rows, [{ id: "0", name: "", academy: "" }, { id: "dance-uuid", name: "Vuelo", academy: "Academia Uno" }]);
+  assert.deepEqual(result.rows, [{ id: "0", programNumber: null, name: "", academy: "" }, { id: "dance-uuid", programNumber: null, name: "Vuelo", academy: "Academia Uno" }]);
+});
+
+test("directory preserves real programme numbers separately from internal routine IDs without inventing missing numbers", async () => {
+  const server = upstream({ routines: [
+    routine("internal-1", { program_number: " 194 a " }), routine("237", { program_number: null }),
+    routine("internal-3", { program_number: " " }), routine("internal-4", { program_number: 194 }),
+  ] });
+  const result = await getJudgingRoutineDirectory(env, eventId, server);
+  assert.deepEqual(result.rows.map(({ id, programNumber }) => ({ id, programNumber })), [
+    { id: "internal-1", programNumber: "194 a" }, { id: "237", programNumber: null },
+    { id: "internal-3", programNumber: null }, { id: "internal-4", programNumber: null },
+  ]);
 });
 
 test("upstream failures remain sanitized and never return a partially read programme", async () => {

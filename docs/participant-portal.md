@@ -159,6 +159,27 @@ Se conservan las fuentes estándar cuando admiten el texto. Para caracteres adic
 
 La consulta del 9 de noviembre de 2026 encontró solo eventos de prueba en JueceoCore y ninguna calificación cargada. No se vinculó una demo con la edición real ni se publicó esa edición. El programa real debe estar importado y asociado antes de que sus hojas puedan aparecer.
 
+### Carpetas de originales por número
+
+El lector de fotos usa la raíz privada de Ati con marcadores `source_root_v3` y
+`source_album_v3`. Las carpetas `#número` se asocian por el ID de inscripción y
+la edición, con números comprobados contra el programa de jueceo. Crear o
+renombrar carpetas desde otra cuenta no establece esa asociación. Los
+marcadores privados deben prepararse con el mismo cliente OAuth que usa el
+servidor; los originales y las previews conservan carpetas independientes.
+
+`scripts/prepare-participant-photo-folders.mjs` requiere `--credentials-file`
+con las cuatro variables de fotos y `--judging-credentials-file` con sólo
+`JUDGING_SUPABASE_URL` y `JUDGING_SUPABASE_PUBLISHABLE_KEY`, además de `--remote`
+y `--event-id`. Los dos archivos son privados y se validan por separado.
+`--output-file` guarda el informe verificado de carpetas y asociaciones.
+
+Por defecto se exige un programa completamente asociado. La opción explícita
+`--current-program-only` prepara únicamente las presentaciones vigentes y
+enumera en la salida y el informe las inscripciones sin enlace o cuya rutina
+fue borrada. Esas omisiones no reciben números inventados ni carpetas nuevas.
+La preparación no mueve originales ni cambia permisos de archivos existentes.
+
 ### Comprobación interna de almacenamiento
 
 La comprobación inicial puede usar **Guardar fotos de la demo en Drive**. Esta acción administrativa copia únicamente las dos imágenes de archivo aprobadas de la demo. No crea fichas, eventos, accesos ni asociaciones a participantes. Sus rutas públicas `/media/mi-levitate-demo/foto-1.jpg` y `/media/mi-levitate-demo/foto-2.jpg` leen las copias privadas de Drive y verifican el hash, tamaño y dimensiones contra la lista fija incluida en el código. No aceptan otros archivos, IDs o consultas; los recursos de participantes reales conservan su autenticación. La caché de esta demo dura cinco minutos y está ligada al hash de cada imagen. La cabecera `X-Levitate-Media-Source: google-drive` permite verificar la fuente; no hay sustitución por archivos estáticos si Drive falla.
