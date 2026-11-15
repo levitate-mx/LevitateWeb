@@ -14,6 +14,7 @@ import { handleReleveVoting } from "./releve-voting.js";
 import { getMediaDriveDiagnostic, parseMediaDriveFolderId } from "./media-drive.js";
 import { readSettings as readMediaDriveSettings, saveSettings as saveMediaDriveSettings } from "./media-drive-settings.js";
 import { handleParticipantPortal } from "./participant-portal.js";
+import { handleAcademyJudgingSheets } from "./academy-judging-sheets.js";
 import { getParticipantDriveStorage } from "./participant-drive-storage.js";
 import { getParticipantDriveDiscovery } from "./participant-drive-discovery.js";
 import { getParticipantPhotoDriveConfig, hasParticipantPhotoDriveConfig } from "./participant-photo-drive-config.js";
@@ -760,6 +761,10 @@ export default {
       return handleRegistrationMe(request, env);
     }
 
+    if (url.pathname === "/api/registration/judging-sheets") {
+      return handleRegistrationAcademyJudgingSheets(request, env);
+    }
+
     if (url.pathname === "/api/registration/bootstrap") {
       return handleRegistrationBootstrap(request, env);
     }
@@ -1385,6 +1390,25 @@ async function handleRegistrationMe(request, env) {
     return sendJson(session);
   } catch (error) {
     return sendRegistrationError(error);
+  }
+}
+
+async function handleRegistrationAcademyJudgingSheets(request, env) {
+  try {
+    assertMethod(request, ["GET"]);
+    const db = getDb(env);
+    const session = await requireRegistrationAcademy(request, db);
+    return await handleAcademyJudgingSheets(request, {
+      db,
+      academyId: session.academy.id,
+      getJudgingSnapshot: (eventId, options) => getJudgingSheets(env, eventId, options),
+    });
+  } catch (error) {
+    const response = sendRegistrationError(error);
+    response.headers.set("cache-control", "private, no-store");
+    response.headers.set("vary", "Cookie");
+    response.headers.set("x-content-type-options", "nosniff");
+    return response;
   }
 }
 

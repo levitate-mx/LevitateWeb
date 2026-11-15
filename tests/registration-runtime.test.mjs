@@ -265,6 +265,54 @@ test('judging admin routes authenticate before upstream reads and never write to
     'the real SQLite database confirms that all judging API probes were read-only');
 });
 
+test('academy judging sheets route is academy-only, GET-only and private', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'academy-sheets');
+  const otherAcademy = await seedAcademy(f, 'academy-sheets-other');
+  const admin = await seedAcademy(f, 'academy-sheets-admin', { role: 'admin' });
+  const insertDance = f.db.sqlite.prepare(`INSERT INTO registration_dances
+    (id,academy_id,title,genre,subgenre,category,level,venue)
+    VALUES(?, ?, ?, 'aereo', 'tela', 'solo', 'intermedio', 'edomex')`);
+  insertDance.run('academy-sheet-own', academy.academyId, 'Coreografía propia');
+  insertDance.run('academy-sheet-foreign', otherAcademy.academyId, 'Coreografía privada ajena');
+  let upstreamReads = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    upstreamReads += 1;
+    throw new Error('unlinked academy dances must not contact JueceoCore');
+  });
+
+  for (const [cookie, status] of [[undefined, 401], [admin.cookie, 403]]) {
+    const response = await worker.fetch(new Request('http://localhost/api/registration/judging-sheets', {
+      headers: cookie ? { cookie } : {},
+    }), f.env);
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.match(response.headers.get('vary'), /Cookie/i);
+  }
+
+  const response = await worker.fetch(new Request('http://localhost/api/registration/judging-sheets', {
+    headers: { cookie: academy.cookie },
+  }), f.env);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { sheets: [{
+    danceId: 'academy-sheet-own',
+    title: 'Coreografía propia',
+    status: 'pending',
+    judgeCount: 0,
+  }] });
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.match(response.headers.get('vary'), /Cookie/i);
+
+  const otherResponse = await worker.fetch(new Request('http://localhost/api/registration/judging-sheets', {
+    headers: { cookie: otherAcademy.cookie },
+  }), f.env);
+  assert.equal(otherResponse.status, 200);
+  assert.deepEqual((await otherResponse.json()).sheets.map(sheet => sheet.danceId), ['academy-sheet-foreign']);
+
+  await f.request('/judging-sheets', { method: 'POST', cookie: academy.cookie, status: 405 });
+  assert.equal(upstreamReads, 0);
+});
+
 test('judging API missing configuration and upstream failures stay explicit, private and safe to display', async t => {
   const f = await fixture(t);
   const admin = await seedAcademy(f, 'judging-errors-admin', { role: 'admin' });

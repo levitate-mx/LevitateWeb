@@ -104,6 +104,7 @@ import { AdminCommunications, AdminWorkspaceHome } from "./AdminWorkspace";
 import { JudgingScoresPanel } from "./JudgingScoresPanel";
 import { ReleveVotingPreview } from "./ReleveVotingPreview";
 import { MediaDriveConnectionPanel } from "./MediaDriveConnectionPanel";
+import { AcademyJudgingSheetsPanel } from "./AcademyJudgingSheetsPanel";
 import { adminSectionPaths, getAdminSectionFromPath, type AdminSection } from "./adminNavigation";
 import { RegistrationApiError, requestRegistrationApi } from "./registrationApi";
 import { getRegistrationHomePath } from "./registrationAccess";
@@ -9650,21 +9651,12 @@ function MusicUploadPanel({
 function FeedbackPanel({ dances }: { dances: RegistrationDance[] }) {
   return (
     <AdminPanel className="levitate-admin-panel--feedback" eyebrow="Jueceo" title="Hojas de jueceo">
-      <div className="levitate-admin-feedback-list">
-        {dances.map((dance) => (
-          <article className="levitate-admin-feedback-card" key={dance.id}>
-            <div>
-              <span>{getOptionLabel(danceCategories, dance.category)}</span>
-              <h2>{dance.title}</h2>
-              <p>{dance.participants.map((participant) => participant.fullName).join(", ")}</p>
-            </div>
-            <strong>Por publicar</strong>
-          </article>
-        ))}
-        {dances.length === 0 ? (
-          <p className="levitate-admin-empty-state">Todavía no hay coreografías registradas para mostrar hojas de jueceo.</p>
-        ) : null}
-      </div>
+      <AcademyJudgingSheetsPanel dances={dances.map((dance) => ({
+        categoryLabel: getOptionLabel(danceCategories, dance.category),
+        id: dance.id,
+        participantNames: dance.participants.map((participant) => participant.fullName),
+        title: dance.title,
+      }))} />
     </AdminPanel>
   );
 }
