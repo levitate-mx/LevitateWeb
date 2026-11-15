@@ -101,8 +101,9 @@ function categoryRows(results) {
   const scoredIds = new Set(eligible.map((item) => item.row.id));
   let rank = 0;
   let previous = null;
-  eligible.forEach((item, index) => {
-    if (previous === null || Math.abs(item.score - previous) >= EPSILON) { rank = index + 1; previous = item.score; }
+  eligible.forEach((item) => {
+    // Tied totals share a place; each distinct score advances one podium level.
+    if (previous === null || Math.abs(item.score - previous) >= EPSILON) { rank += 1; previous = item.score; }
     if (directCompetition) byId.set(item.row.id, placement(rank <= 3 ? rank : null));
   });
   // Assign places in descending order, then announce/display low to high.

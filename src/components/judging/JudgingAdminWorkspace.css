@@ -1423,18 +1423,9 @@
   grid-column: 2;
   grid-row: 1;
 }
-.ja-report .judging-scores__participants {
-  grid-column: 3;
-  grid-row: 1;
-}
-.ja-report .judging-scores__participants > span {
+.ja-report .judging-scores__participant-count {
   color: var(--ja-muted);
-  font-size: 11px;
-}
-.ja-report .judging-scores__participants > strong {
-  color: var(--ja-text);
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 12px;
 }
 .ja-report .judging-scores__recognition {
   grid-column: 3;
@@ -2389,15 +2380,6 @@
   .ja-tooltip {
     display: none !important;
   }
-}
-@media (min-width: 781px) {
-  .ja-report .judging-scores__entry.is-group .judging-scores__standing {
-    grid-template-columns: 88px minmax(0, 1fr) 120px 120px;
-  }
-  .ja-report .judging-scores__entry.is-group .judging-scores__recognition { grid-column: 4; }
-}
-@media (max-width: 780px) {
-  .ja-report .judging-scores__participants { grid-column: 1; grid-row: 2; }
 }
 @media print {
   .ja-sidebar,

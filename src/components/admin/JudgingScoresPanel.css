@@ -105,12 +105,4 @@
 .judging-scores__audience-favorite :is(h3, h4) { margin: 0 0 12px; color: var(--ja-pink, #8e2b58); font-size: 15px; font-weight: 650; line-height: 1.4; }
 .judging-scores__audience-favorite strong { display: block; color: var(--ja-text, #25222a); font-size: 21px; line-height: 1.4; overflow-wrap: anywhere; }
 .judging-scores__audience-favorite p { margin: 8px 0 0; color: var(--ja-muted, #62586b); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
-.judging-scores__participants { min-width: 0; font-variant-numeric: tabular-nums; }
-.judging-scores__participants > span { display: block; margin-bottom: 6px; color: #69606f; font-size: 14px; line-height: 1.3; }
-.judging-scores__participants > strong { color: #25222a; font-size: 23px; font-weight: 700; line-height: 1.3; }
-@media (min-width: 781px) {
-  .judging-scores__entry.is-group .judging-scores__standing { grid-template-columns: 110px minmax(0, 1fr) 130px 150px; }
-}
-@media (max-width: 780px) {
-  .judging-scores__participants { grid-column: 1; grid-row: 2; }
-}
+.judging-scores__participant-count { margin: 6px 0 0; min-width: 0; color: #69606f; font-size: 14px; line-height: 1.5; font-weight: 500; font-variant-numeric: tabular-nums; }

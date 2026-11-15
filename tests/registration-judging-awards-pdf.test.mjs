@@ -5,6 +5,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { PDFDocument, PDFName, decodePDFRawStream } from 'pdf-lib';
 import ts from 'typescript';
+import { buildJudgingScoreSnapshot } from '../worker/judging-score-data.js';
 
 const source = await readFile(new URL('../src/components/judging/judgingAdminPdf.ts', import.meta.url), 'utf8');
 const font = await readFile(new URL('../public/assets/participant-recognition-unicode.ttf', import.meta.url));
@@ -79,6 +80,42 @@ async function render(entries) {
   const pdf = await PDFDocument.load(bytes);
   return { bytes, pdf, text: contentText(pdf).replace(/\s+/g, ' ') };
 }
+
+test('dictamen PDF keeps consecutive podium levels after three first-place ties from the real score calculation', async () => {
+  const eventId = 'dense-podium-pdf';
+  const scoped = row => ({ event_id: eventId, ...row });
+  const entries = [
+    ['1', 'ARMY', 188], ['2', 'TRIBU', 188], ['3', 'OTRO EMPATE', 188],
+    ['4', 'SEGUNDO A', 170], ['5', 'SEGUNDO B', 170],
+    ['6', 'ROCKSTAR', 148], ['7', 'CUARTO PUNTAJE', 130],
+  ];
+  const snapshot = buildJudgingScoreSnapshot({
+    event: { id: eventId, name: 'Verificación de empates consecutivos', competition_config: {} },
+    blocks: [scoped({ block_id: 'b1', name: 'Bloque 1', title: 'Premiación', sort_order: 0 })],
+    routines: entries.map(([id, name], index) => scoped({ routine_id: id, name, academy: 'Academia de prueba',
+      genre: 'Jazz', division: 'Teen', level: 'Élite', category: 'Solo', block_id: 'b1', sort_order: index })),
+    judges: [1, 2, 3].map(id => scoped({ judge_id: `j${id}`, name: `Juez ${id}`, role: 'judge' })),
+    templates: [scoped({ template_id: 'jazz', genre: 'Jazz', max_score: 70 })],
+    criteria: [scoped({ template_id: 'jazz', criterion_id: 1, label: 'Evaluación', section: 'Jurado', max_score: 70 })],
+    scores: entries.flatMap(([id, , total]) => [1, 2, 3].map(judge => scoped({ routine_id: id, judge_id: `j${judge}`,
+      criterion_id: 1, value: judge === 3 ? total - 2 * Math.floor(total / 3) : Math.floor(total / 3) }))),
+    penalties: [], feedback: [], specialAwards: [],
+  }, '2026-11-15T20:00:00Z');
+  const rows = snapshot.report.blocks[0].sections.flatMap(section => section.categories.flatMap(category => category.rows));
+  const lookup = new Map(rows.map(row => [row.routineId, row]));
+  assert.deepEqual(entries.map(([id]) => lookup.get(id).placement.rank), [1, 1, 1, 2, 2, 3, null]);
+  const before = structuredClone(snapshot);
+  const bytes = await generateAdminReportPdf({ event: snapshot.event, snapshot }, 'b1');
+  const text = contentText(await PDFDocument.load(bytes)).replace(/\s+/g, ' ');
+  assert.equal(text.match(/1\.º lugar/g)?.length, 3);
+  assert.equal(text.match(/2\.º lugar/g)?.length, 2);
+  assert.equal(text.match(/3\.º lugar/g)?.length, 1);
+  assert.doesNotMatch(text, /4\.º lugar|5\.º lugar|6\.º lugar/);
+  assert.match(text, /130 Sin lugar de podio Medalla de participación/);
+  assert.match(text, /148 3\.º lugar Medalla de bronce/);
+  assert.deepEqual(snapshot, before);
+  if (process.env.LEVITATE_DENSE_PDF_PREVIEW) await writeFile(process.env.LEVITATE_DENSE_PDF_PREVIEW, bytes);
+});
 
 test('dictamen PDF separates medals and podium places without printing presentation numbers', async () => {
   const result = await render([

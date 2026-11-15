@@ -5,15 +5,15 @@ import { participantMedalForScore, pendingParticipantResult, projectParticipantR
 
 const eventId = "levitate-event";
 const scoped = value => ({ event_id: eventId, ...value });
-function source({ totals = [48, 45, 40, 30], scoring, otherCategory = false } = {}) {
+function source({ totals = [48, 45, 40, 30], scoring, otherCategory = false, maximum = 50 } = {}) {
   const input = {
     event: { id: eventId, name: "Levitate", competition_config: { scoring } },
     blocks: [scoped({ block_id: "block-1", name: "Bloque 1" })],
     routines: totals.map((_, index) => scoped({ routine_id: String(index + 1), name: `Pieza ${index + 1}`, academy: "Academia",
       block_id: "block-1", block: "Bloque 1", genre: "Aro", division: otherCategory && index === totals.length - 1 ? "Adulto" : "Junior", level: "Intermedio", category: "Solo" })),
     judges: [scoped({ judge_id: "judge-1", name: "Juez Uno", role: "judge" })],
-    templates: [scoped({ template_id: "aerial", genre: "DANZA AEREA", max_score: 50 })],
-    criteria: [scoped({ template_id: "aerial", criterion_id: 1, label: "Técnica", max_score: 50 })],
+    templates: [scoped({ template_id: "aerial", genre: "DANZA AEREA", max_score: maximum })],
+    criteria: [scoped({ template_id: "aerial", criterion_id: 1, label: "Técnica", max_score: maximum })],
     scores: totals.flatMap((value, index) => value === null ? [] : [scoped({ routine_id: String(index + 1), judge_id: "judge-1", criterion_id: 1, value })]),
     penalties: [], feedback: [],
   };
@@ -59,9 +59,22 @@ test("singleton category has a score-tier medal but no fabricated direct podium"
   assert.equal(value.eligibleCount, 1); assert.equal(value.directCompetition, false); assert.equal(value.place, null);
 });
 
-test("equal official scores preserve competition ranks and top-three-only places", () => {
+test("equal official scores preserve dense ranks across the three highest distinct totals", () => {
   const data = snapshot({ totals: [48, 48, 40, 30] });
-  assert.deepEqual(["1", "2", "3", "4"].map(id => project(data, id).place), [1, 1, 3, null]);
+  assert.deepEqual(["1", "2", "3", "4"].map(id => project(data, id).place), [1, 1, 2, 3]);
+});
+
+test("participant places preserve three first-place ties, two second-place ties and only three distinct podium totals", () => {
+  const data=snapshot({totals:[188,188,188,161,161,148,100],maximum:210});
+  assert.deepEqual(['1','2','3','4','5','6','7'].map(id=>project(data,id).place),[1,1,1,2,2,3,null]);
+  assert.deepEqual(['1','2','3','4','5','6','7'].map(id=>[project(data,id).score,project(data,id).medal]),
+    [[188,'oro'],[188,'oro'],[188,'oro'],[161,'plata'],[161,'plata'],[148,'bronce'],[100,'participacion']]);
+});
+
+test("participant results project the photographed 188, 188 and 148 as places 1, 1 and 2", () => {
+  const data=snapshot({totals:[188,188,148],maximum:210});
+  assert.deepEqual(['1','2','3'].map(id=>[project(data,id).score,project(data,id).place,project(data,id).maxScore]),
+    [[188,1,210],[188,1,210],[148,2,210]]);
 });
 
 test("own complete score is available while incomplete category peers withhold all final places", () => {

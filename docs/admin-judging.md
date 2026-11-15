@@ -74,9 +74,17 @@ Supabase y calcula la presentación en el servidor.
   Los campos `ranked_positions` y `use_solo_placement_thresholds` del evento no
   cambian esta regla de la web.
 - Las posiciones utilizan el puntaje sin redondearlo. Los empates con
-  diferencia menor a 0.0001 comparten lugar, por ejemplo 1.º, 1.º, 3.º. Las
-  filas se presentan de menor a mayor puntaje dentro de su grupo, con el
+  diferencia menor a 0.0001 comparten lugar y el siguiente puntaje distinto
+  recibe el lugar consecutivo: 1.º, 1.º, 1.º, 2.º, 2.º, 3.º. La cantidad de
+  empates no consume lugares del podio. Después del tercer puntaje distinto
+  se indica **Sin lugar de podio**. Esta regla se comparte con Relevé,
+  Mi Levitate y el PDF. Las filas se presentan de menor a mayor puntaje dentro de su grupo, con el
   ganador al final. Los filtros no vuelven a calcular lugares.
+- Cada coreografía muestra la cantidad de participantes registrados debajo
+  de su modalidad (SOLO, DÚO, TRÍO, etc.). El dato se obtiene del vínculo exacto
+  con la inscripción; si falta, muestra **Participantes por confirmar** sin
+  deducirlo del nombre de la modalidad. Agregar este dato no borra los checks
+  de **Anunciado** guardados previamente.
 - El dictamen final muestra los puntajes como enteros y no imprime números de
   presentación, ni en pantalla ni en su PDF. El cálculo de medallas, ranking y
   MVP conserva toda la precisión; el detalle por juez también conserva sus

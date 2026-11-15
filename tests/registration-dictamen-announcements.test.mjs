@@ -69,6 +69,49 @@ test('routine identities and signatures survive polling, property order and priv
     t.routineAnnouncement({ ...legacyScale, maximumScore: null }, row).fingerprint, 'unknown and legacy scale states stay distinct');
 });
 
+test('participant counts are descriptive metadata and never change a new routine result signature',()=>{
+  const t=tab(),value=standing(),row=routine();
+  const item=t.routineAnnouncement(value,row);
+  assert.equal(JSON.parse(item.fingerprint).length,21);
+  for(const participantCount of [undefined,null,1,2,3,8]) {
+    assert.equal(t.routineAnnouncement(value,{...row,participantCount}).fingerprint,item.fingerprint);
+  }
+  const state=t.render();state.setAnnounced(item,true);
+  assert.equal(t.render().isAnnounced(t.routineAnnouncement(value,{...row,participantCount:8})),true);
+});
+
+test('legacy 22-slot routine marks ignore only the old count while preserving every other announcement change',()=>{
+  for(const oldCount of [null,8]) {
+    const t=tab(),value=standing(),row={...routine(),participantCount:1};
+    const item=t.routineAnnouncement(value,row),legacy=JSON.parse(item.fingerprint);
+    legacy.splice(9,0,oldCount);
+    t.render();const key=t.reads.at(-1),saved=JSON.stringify({version:1,marks:{[item.id]:JSON.stringify(legacy)}});
+    t.values.set(key,saved);t.emit();
+    assert.equal(t.render().isAnnounced(item),true);
+    assert.equal(t.values.get(key),saved,'reading compatibility never rewrites existing marks');
+    assert.equal(t.writes.length,0);
+    for(const change of [entry=>{entry.score=181;},entry=>{entry.medal='oro';},
+      entry=>{entry.placement={rank:2,label:'2.º lugar',isFirstPlace:false,isParticipation:false};}]) {
+      const changed=standing();change(changed);
+      assert.equal(t.render().isAnnounced(t.routineAnnouncement(changed,row)),false);
+    }
+    assert.equal(t.render().isAnnounced(t.routineAnnouncement(value,{...row,name:'Otra pieza'})),false);
+    assert.equal(t.render().isAnnounced(t.routineAnnouncement(value,{...row,academy:'Otra academia'})),false);
+    assert.equal(t.writes.length,0);
+  }
+});
+
+test('routine compatibility rejects malformed legacy signatures and never normalizes another announcement type',()=>{
+  const t=tab(),item=t.routineAnnouncement(standing(),routine());t.render();const key=t.reads.at(-1);
+  const legacy=JSON.parse(item.fingerprint);legacy.splice(9,0,null);
+  for(const fingerprint of ['{broken',JSON.stringify([...legacy,'extra']),JSON.stringify(legacy.slice(1)),
+    JSON.stringify(['award',...legacy.slice(1)])]) {
+    t.values.set(key,JSON.stringify({version:1,marks:{[item.id]:fingerprint}}));t.emit();
+    assert.equal(t.render().isAnnounced(item),false);
+  }
+  assert.equal(t.writes.length,0);
+});
+
 test('award and audience signatures distinguish winners, partial/final state and announced text with separate identity types', () => {
   const t = tab(), original = award(), item = t.awardAnnouncement(original);
   for (const change of [{ routineId: '2' }, { isPartial: false }, { displayValue: 'Nueva academia · 181 puntos' }, { isAssigned: false }]) {

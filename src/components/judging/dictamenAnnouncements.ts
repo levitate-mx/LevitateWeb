@@ -12,7 +12,7 @@ const signature = (value: unknown) => JSON.stringify(value);
 export function routineAnnouncement(standing: ReportStanding, row: ChoreographyScore): AnnouncementItem {
   return { id: `routine:${standing.routineId}`, label: row.name || 'Coreografía sin nombre',
     fingerprint: signature(['routine', standing.routineId, row.name, row.academy, row.state, row.genre, row.division,
-      row.level, row.category, row.participantCount ?? null, row.status, row.completedJudges, row.expectedJudges, row.recordedScores,
+      row.level, row.category, row.status, row.completedJudges, row.expectedJudges, row.recordedScores,
       standing.score, standing.maximumScore === undefined ? 'legacy-maximum' : standing.maximumScore,
       standing.medal, standing.directCompetition, standing.eligibleCount,
       standing.placement ? [standing.placement.rank, standing.placement.label, standing.placement.isFirstPlace, standing.placement.isParticipation] : null,
@@ -31,6 +31,20 @@ export function audienceAnnouncement(favorite: ReportBlock['releveAudienceFavori
   return { id: 'audience-favorite', label: 'El más votado por el público',
     fingerprint: signature(['audience-favorite', favorite?.status ?? 'pending', winner
       ? [winner.routineId, winner.name, winner.academy, winner.votes] : null]) };
+}
+
+function matchesFingerprint(stored: string | undefined, item: AnnouncementItem): boolean {
+  if (stored === item.fingerprint) return true;
+  if (!stored || !item.id.startsWith('routine:')) return false;
+  try {
+    const previous: unknown = JSON.parse(stored), current: unknown = JSON.parse(item.fingerprint);
+    if (!Array.isArray(previous) || previous.length !== 22 || previous[0] !== 'routine'
+      || !Array.isArray(current) || current.length !== 21 || current[0] !== 'routine') return false;
+    // v1 included descriptive membership counts at slot 9. Ignore only that
+    // slot, preserving every result/content comparison and stored mark as-is.
+    previous.splice(9, 1);
+    return signature(previous) === item.fingerprint;
+  } catch { return false; }
 }
 
 function readMarks(key: string): { marks: Marks; storageError: boolean } {
@@ -92,7 +106,7 @@ export function useDictamenAnnouncements(eventId: string, blockId: string) {
   }, [key, enabled]);
 
   const isAnnounced = (item: AnnouncementItem) => enabled && active.current === key
-    && cache.current.get(key)?.marks[item.id] === item.fingerprint;
+    && matchesFingerprint(cache.current.get(key)?.marks[item.id], item);
   const setAnnounced = (item: AnnouncementItem, checked: boolean) => {
     // A delayed click from a previously displayed block cannot write there.
     if (!enabled || active.current !== key) return;

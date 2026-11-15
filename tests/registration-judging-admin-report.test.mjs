@@ -291,20 +291,31 @@ test("report-only viewers retain results and filters without individual-sheet co
   assert.doesNotMatch(view.html(), /Ver detalle|aria-expanded/);
 });
 
-test('participant counts appear only for groups in both admin and report-only views', () => {
+test('every choreography shows its real participant count below category metadata in admin and reader views', () => {
   for (const readOnly of [false, true]) {
     const bundle = fixture();
-    bundle.snapshot.rows[0].category = 'GRUPO';
-    bundle.snapshot.rows[0].participantCount = 8;
-    bundle.snapshot.rows[1].participantCount = 2;
-    bundle.snapshot.rows[2].category = 'Grupo';
-    bundle.snapshot.rows[2].participantCount = null;
-    const ui = harness(bundle, readOnly).html();
-    assert.equal((ui.match(/Cantidad de participantes/g) || []).length, 2);
-    assert.match(ui, /judging-scores__participants.*?<strong>8<\/strong>/);
-    assert.match(ui, /judging-scores__participants.*?<strong>Por confirmar<\/strong>/);
-    assert.doesNotMatch(ui, /judging-scores__participants.*?<strong>2<\/strong>/);
-    assert.match(ui, />1\.º lugar</);
+    const cases = [['SOLO', 1, '1 participante'], ['DÚO', 2, '2 participantes'], ['TRÍO', 3, '3 participantes'],
+      ['GRUPO', 8, '8 participantes'], ['GRUPO', null, 'Participantes por confirmar']];
+    bundle.snapshot.rows.forEach((row, index) => { row.category = cases[index][0]; row.participantCount = cases[index][1]; });
+    const before = structuredClone(bundle), view = harness(bundle, readOnly);
+    cases.forEach(([category, , text], index) => {
+      const entry = findElement(view.tree(), node => node.props?.standing?.routineId === String(index + 1));
+      const card = entry.type(entry.props);
+      const info = findElement(card, node => node.props?.className === 'judging-scores__entry-info');
+      const count = findElement(info, node => node.props?.className === 'judging-scores__participant-count');
+      assert.equal(count.props.children, text);
+      const html = renderToStaticMarkup(info);
+      assert.ok(html.indexOf(category) < html.indexOf(text), 'count belongs below the choreography category');
+      if (!readOnly) assert.ok(html.indexOf(text) < html.indexOf('judging-scores__entry-action'));
+      assert.equal((renderToStaticMarkup(card).match(/judging-scores__participant-count/g) || []).length, 1);
+      assert.ok(!findElement(card, node => node.props?.className === 'judging-scores__participants'), 'no lateral duplicate remains');
+    });
+    assert.match(view.html(), />1\.º lugar</);
+    view.check('Danza Áurea', true);
+    view.change('query', 'Danza Áurea');
+    assert.equal(view.checked('Danza Áurea'), true);
+    assert.match(view.html(), /2 participantes/);
+    assert.deepEqual(bundle, before, 'showing participant counts must not change results, metadata or announcement identity');
   }
 });
 

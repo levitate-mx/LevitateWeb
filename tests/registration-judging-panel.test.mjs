@@ -131,6 +131,37 @@ function findNode(element, predicate) {
   return predicate(element) ? element : findNode(element.props?.children, predicate);
 }
 
+test("routine participant summaries use server counts for every format, with a single compact line in the information column", () => {
+  for (const [category, participantCount, expected] of [['SOLO', 1, '1 participante'], ['DÚO', 2, '2 participantes'],
+    ['TRÍO', 3, '3 participantes'], ['GRUPO', 8, '8 participantes'], ['DÚO: 2 APARATOS', 5, '5 participantes']]) {
+    for (const showMetadata of [false, true]) {
+      const row = choreography('3', { category, participantCount });
+      const before = structuredClone(row);
+      const card = DictamenEntry({ standing: standing('3', 1, 140), row, maximumScore: 210, eventId: 'event', blockId: 'block',
+        expanded: false, onToggle() {}, showMetadata, allowDetails: false });
+      const info = findNode(card, node => node.props?.className === 'judging-scores__entry-info');
+      const count = findNode(info, node => node.props?.className === 'judging-scores__participant-count');
+      assert.equal(count.props.children, expected);
+      const html = renderToStaticMarkup(card);
+      assert.equal((html.match(/judging-scores__participant-count/g) || []).length, 1);
+      assert.doesNotMatch(html, /judging-scores__participants|Cantidad de participantes/);
+      assert.ok(html.indexOf('judging-scores__participant-count') < html.indexOf('judging-scores__recognition'));
+      if (showMetadata) assert.ok(html.indexOf(category) < html.indexOf(expected));
+      else assert.doesNotMatch(html, /judging-scores__entry-metadata/, 'legacy display need not repeat all metadata');
+      assert.deepEqual(row, before);
+    }
+  }
+});
+
+test("missing or invalid participant counts never guess membership from a solo, duo or group label", () => {
+  for (const participantCount of [undefined, null, 0, -1, 1.5, Infinity, '2']) {
+    const card = DictamenEntry({ standing: standing('3', 1, 140), row: choreography('3', { category: 'DÚO', participantCount }), maximumScore: 210,
+      eventId: 'event', blockId: 'block', expanded: false, onToggle() {}, showMetadata: true });
+    const summary = findNode(card, node => node.props?.className === 'judging-scores__participant-count');
+    assert.equal(summary.props.children, 'Participantes por confirmar');
+  }
+});
+
 test("shared routine and audience checks remain accessible without judge-sheet permission and are reversible", () => {
   const announcement = { checked: false, onChange(checked) { announcement.checked = checked; } };
   const row = choreography("3", { name: "Vuelo <final>" }), result = standing("3", 1, 140);

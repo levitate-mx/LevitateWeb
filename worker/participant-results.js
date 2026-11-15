@@ -79,8 +79,8 @@ export function projectParticipantResult({ snapshot, routineId } = {}) {
   const eligibleCount = category.rows.length;
   const directCompetition = eligibleCount >= 2;
   let place = null;
-  // The source report already resolves equal totals with competition ranks
-  // (1,1,3), and top-three only. A numeric score from incomplete peers must not
+  // The source report already resolves equal totals with dense ranks
+  // (1,1,2), and top-three only. A numeric score from incomplete peers must not
   // establish a final position. A zero total has no native podium position.
   if (directCompetition && categoryComplete && standing.score > 0) {
     const rank = standing.placement?.rank;

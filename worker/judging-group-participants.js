@@ -1,9 +1,6 @@
-import { isJudgingGroupCategory } from '../shared/judging-group.js';
-
 // Called after judging authorization. Resolve exact, enabled programme links;
 // return counts only, without reading participant names or identifiers.
 export async function withJudgingGroupParticipants(env, snapshot) {
-  if (!snapshot.rows.some(row => isJudgingGroupCategory(row.category))) return snapshot;
   const editions = [...new Set(String(env.PARTICIPANT_REGISTRATION_EVENT_IDS || '').split(',').map(id => id.trim()).filter(Boolean))];
   const counts = new Map();
   if (env.DB && editions.length) {
@@ -25,6 +22,5 @@ export async function withJudgingGroupParticipants(env, snapshot) {
         : Number.isSafeInteger(count) && count > 0 ? count : null);
     }
   }
-  return { ...snapshot, rows: snapshot.rows.map(row => isJudgingGroupCategory(row.category)
-    ? { ...row, participantCount: counts.get(String(row.id)) ?? null } : row) };
+  return { ...snapshot, rows: snapshot.rows.map(row => ({ ...row, participantCount: counts.get(String(row.id)) ?? null })) };
 }

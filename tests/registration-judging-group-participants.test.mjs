@@ -35,15 +35,15 @@ function fixture(t) {
   return { sqlite, link, snapshot, env: { DB, PARTICIPANT_REGISTRATION_EVENT_IDS: 'edition' }, queries: () => queries };
 }
 
-test('exact programme IDs return group membership counts without changing results or exposing participants', async t => {
+test('exact programme IDs return real membership counts for groups, solos, duos and trios without exposing participants', async t => {
   const f = fixture(t);
   f.link('group-one', 'r1', 4); f.link('group-two', 'r2', 3);
+  f.link('solo-one','solo',1);f.link('duo-one','duo',2);f.link('trio-one','trio',3);
   f.link('foreign-edition', 'r1', 2, 'other-edition');
   f.link('foreign-event', 'r1', 1, 'disabled-edition', 'foreign-event');
   const before = structuredClone(f.snapshot);
   const result = await withJudgingGroupParticipants(f.env, f.snapshot);
-  assert.deepEqual(result.rows.slice(0, 2).map(r => r.participantCount), [4, 3]);
-  for (const row of result.rows.slice(2)) assert.equal(Object.hasOwn(row, 'participantCount'), false);
+  assert.deepEqual(result.rows.map(r => r.participantCount), [4, 3, 1, 2, 3]);
   assert.strictEqual(result.report, f.snapshot.report);
   assert.equal(result.rows[0].score, 123);
   assert.deepEqual(f.snapshot, before);
@@ -51,26 +51,40 @@ test('exact programme IDs return group membership counts without changing result
   assert.equal(f.queries(), 1);
 });
 
-test('missing, empty, disabled or ambiguous group links stay unconfirmed instead of guessing a count', async t => {
+test('missing, empty, disabled or ambiguous links stay unconfirmed for every category instead of guessing a count', async t => {
   const f = fixture(t);
   f.link('empty', 'r1', 0);
   f.link('disabled', 'r2', 4, 'disabled-edition');
   let result = await withJudgingGroupParticipants({ ...f.env, PARTICIPANT_REGISTRATION_EVENT_IDS: 'edition,disabled-edition' }, f.snapshot);
-  assert.deepEqual(result.rows.slice(0, 2).map(r => r.participantCount), [null, null]);
+  assert.deepEqual(result.rows.map(r => r.participantCount), [null, null, null, null, null]);
   f.link('valid', 'r2', 4);
   f.link('ambiguous', 'r2', 4, 'other-edition');
+  f.link('valid-duo','duo',2);f.link('ambiguous-duo','duo',2,'other-edition');
   result = await withJudgingGroupParticipants({ ...f.env, PARTICIPANT_REGISTRATION_EVENT_IDS: 'edition,other-edition' }, f.snapshot);
   assert.equal(result.rows[1].participantCount, null);
+  assert.equal(result.rows[3].participantCount, null);
   f.sqlite.prepare("DELETE FROM participant_portal_routines WHERE id='valid'").run();
   result = await withJudgingGroupParticipants(f.env, f.snapshot);
   assert.equal(result.rows[1].participantCount, null);
 });
 
-test('solo, duo and trio results never query membership or acquire a participants column', async t => {
+test('solo, duo and trio query real membership even without any group and never infer it from the category label', async t => {
   const f = fixture(t);
+  f.link('solo-one','solo',1);f.link('duo-one','duo',4);f.link('trio-one','trio',2);
   const snapshot = { ...f.snapshot, rows: f.snapshot.rows.slice(2) };
-  assert.strictEqual(await withJudgingGroupParticipants(f.env, snapshot), snapshot);
-  assert.equal(f.queries(), 0);
-  const result = await withJudgingGroupParticipants({}, f.snapshot);
-  assert.equal(result.rows[0].participantCount, null);
+  const result=await withJudgingGroupParticipants(f.env,snapshot);
+  assert.deepEqual(result.rows.map(row=>row.participantCount),[1,4,2]);
+  assert.equal(f.queries(),1);
+  assert.ok(snapshot.rows.every(row=>!Object.hasOwn(row,'participantCount')),'source snapshots remain unchanged');
+});
+
+test('missing DB or edition scope reports unavailable counts on every routine without issuing a query',async t=>{
+  const f=fixture(t);
+  f.link('group-one','r1',4);f.link('solo-one','solo',1);
+  for(const env of [{},{PARTICIPANT_REGISTRATION_EVENT_IDS:'edition'},{DB:f.env.DB},
+    {DB:f.env.DB,PARTICIPANT_REGISTRATION_EVENT_IDS:' , '}]) {
+    const result=await withJudgingGroupParticipants(env,f.snapshot);
+    assert.deepEqual(result.rows.map(row=>row.participantCount),[null,null,null,null,null]);
+  }
+  assert.equal(f.queries(),0);
 });

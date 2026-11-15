@@ -171,15 +171,52 @@ test('each category retains an independent top-three podium and ascending score 
   }
 });
 
-test('equal scores share competition ranks while ranks outside the top three have no podium place', () => {
+test('equal scores share dense ranks while the podium includes only the three highest distinct scores', () => {
   const result = buildJudgingScoreSnapshot(fixture([
     { id: '2', score: 130 }, { id: '1', score: 130 }, { id: '4', score: 120 },
     { id: '3', score: 120 }, { id: '5', score: 100 },
   ]), at);
   assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => [entry.routineId, entry.placement.rank, entry.placement.label]), [
-    ['5', null, 'Sin lugar de podio'], ['3', 3, '3.º lugar'], ['4', 3, '3.º lugar'], ['1', 1, '1.º lugar'], ['2', 1, '1.º lugar'],
+    ['5', 3, '3.º lugar'], ['3', 2, '2.º lugar'], ['4', 2, '2.º lugar'], ['1', 1, '1.º lugar'], ['2', 1, '1.º lugar'],
   ]);
   assert.deepEqual(reportRows(result.report.blocks[0]).map(entry => entry.medal), ['participacion', 'plata', 'plata', 'oro', 'oro']);
+});
+
+test('three first-place ties and two second-place ties leave third place available but never rank an unscored entry', () => {
+  const routines = [
+    {id:'3',score:140},{id:'1',score:140},{id:'2',score:140},
+    {id:'5',score:120},{id:'4',score:120},{id:'6',score:110},{id:'7',score:100},{id:'8'},
+  ];
+  const data=fixture(routines),before=structuredClone(data),result=buildJudgingScoreSnapshot(data,at);
+  const entries=new Map(reportRows(result.report.blocks[0]).map(entry=>[entry.routineId,entry]));
+  assert.deepEqual(['1','2','3','4','5','6','7'].map(id=>entries.get(id).placement.rank),[1,1,1,2,2,3,null]);
+  assert.equal(entries.get('7').placement.label,'Sin lugar de podio');
+  assert.equal(entries.get('8').placement,null);assert.equal(entries.get('8').medal,null);
+  assert.deepEqual(reportRows(result.report.blocks[0]).map(entry=>entry.routineId),['8','7','6','4','5','1','2','3']);
+  assert.deepEqual(['1','2','3','4','5','6','7'].map(id=>[entries.get(id).score,entries.get(id).medal]),
+    [[140,'oro'],[140,'oro'],[140,'oro'],[120,'plata'],[120,'plata'],[110,'bronce'],[100,'participacion']]);
+  assert.deepEqual(data,before);
+});
+
+test('ties in second and third place share their dense podium levels without consuming later entries', () => {
+  const result=buildJudgingScoreSnapshot(fixture([140,120,120,110,110,100].map((score,index)=>({id:String(index+1),score}))),at);
+  const entries=new Map(reportRows(result.report.blocks[0]).map(entry=>[entry.routineId,entry]));
+  assert.deepEqual(['1','2','3','4','5','6'].map(id=>entries.get(id).placement.rank),[1,2,2,3,3,null]);
+});
+
+test('the photographed totals 188, 188 and 148 receive places 1, 1 and 2 with unchanged scores and medals', () => {
+  const result=buildJudgingScoreSnapshot(fixture([188,188,148].map((score,index)=>({id:String(index+1),score})),{maximum:210}),at);
+  const entries=new Map(reportRows(result.report.blocks[0]).map(entry=>[entry.routineId,entry]));
+  assert.deepEqual(['1','2','3'].map(id=>[entries.get(id).score,entries.get(id).placement.rank,entries.get(id).medal]),
+    [[188,1,'oro'],[188,1,'oro'],[148,2,'bronce']]);
+});
+
+test('dense ranks preserve the existing score tolerance and never round different raw totals into a tie', () => {
+  const totals=[100.00005,100,99.9998,99.9996];
+  const result=buildJudgingScoreSnapshot(fixture(totals.map((score,index)=>({id:String(index+1),score}))),at);
+  const entries=new Map(reportRows(result.report.blocks[0]).map(entry=>[entry.routineId,entry]));
+  assert.deepEqual(['1','2','3','4'].map(id=>entries.get(id).placement.rank),[1,1,2,3]);
+  assert.deepEqual(['1','2','3','4'].map(id=>entries.get(id).score),totals);
 });
 
 test('a direct-competition winner can earn any medal and never upgrades the score medal by place', () => {

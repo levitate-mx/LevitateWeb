@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { normalizeAdminSearch } from "./adminNavigation";
 import { requestRegistrationApi } from "./registrationApi";
-import { isJudgingGroupCategory } from '../../../shared/judging-group.js';
 import { compactJudgingCategoryTitle } from '../../../shared/judging-category-title.js';
 import { audienceAnnouncement, awardAnnouncement, routineAnnouncement, useDictamenAnnouncements } from '../judging/dictamenAnnouncements';
 import type { AnnouncementItem, AnnouncementState } from '../judging/dictamenAnnouncements';
@@ -218,11 +217,10 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
     && [1, 2, 3].includes(standing.placement.rank) ? standing.placement.rank : null;
   const place = audiencePending ? "Pendiente" : rank !== null ? `${rank}.º lugar`
     : standing.placement === null ? "—" : "Sin lugar de podio";
-  const isGroup = isJudgingGroupCategory(row.category);
   const participantCount = Number.isSafeInteger(row.participantCount) && Number(row.participantCount) > 0 ? row.participantCount : null;
   const medalDisplay = <div className={`judging-scores__medal${medalText ? ` is-${medal}` : " is-pending"}`}><span>Medalla</span><strong>{medalText || (row.status === "unavailable" ? "No disponible" : "Pendiente")}</strong></div>;
   return (
-    <article className={`judging-scores__entry${rank === 1 ? " is-first" : ""}${isGroup ? " is-group" : ""}${announcement?.checked ? " is-announced" : ""}${announcement ? " has-announcement" : ""}`}>
+    <article className={`judging-scores__entry${rank === 1 ? " is-first" : ""}${announcement?.checked ? " is-announced" : ""}${announcement ? " has-announcement" : ""}`}>
       <div className="judging-scores__standing">
         <div className={`judging-scores__points${isNumericScore ? "" : " is-text"}`}><span>{audience ? audiencePending ? "Jurado" : "Puntaje final" : "Puntaje"}</span><strong>{scoreText}</strong></div>
         <div className="judging-scores__entry-info">
@@ -232,9 +230,9 @@ export function DictamenEntry({ standing, row, maximumScore, eventId, blockId, e
             {audiencePending ? <span>{audience.status === 'tie_pending' ? 'Empate del público · bono por definir' : audience.status === 'open' ? 'Votación abierta · resultado provisional' : audience.status === 'unavailable' ? 'No se pudo comprobar la votación' : 'Pendiente del cierre de votación'}</span> : null}</p> : null}
           {showMetadata ? <div className="judging-scores__entry-metadata">{row.level ? <span>{row.level}</span> : null}{row.category ? <span>{row.category}</span> : null}<span className={`judging-scores__status is-${row.status}`}>{statusLabels[row.status]}</span></div>
             : row.status === "partial" ? <span className="judging-scores__incomplete is-partial">{statusLabels[row.status]}</span> : null}
+          <p className="judging-scores__participant-count">{participantCount === null ? "Participantes por confirmar" : `${participantCount} ${participantCount === 1 ? "participante" : "participantes"}`}</p>
           {allowDetails ? <button className="judging-scores__entry-action" aria-expanded={expanded} aria-controls={detailId} aria-label={`${expanded ? "Cerrar" : "Ver"} detalle de ${row.name || `coreografía ${row.id}`}`} onClick={onToggle} type="button">{expanded ? "Cerrar" : "Detalle"}<ChevronDown aria-hidden="true" size={16} /></button> : null}
         </div>
-        {isGroup ? <div className="judging-scores__participants"><span>Cantidad de participantes</span><strong>{participantCount ?? 'Por confirmar'}</strong></div> : null}
         <div className="judging-scores__recognition">
           {directCompetition ? <div className={`judging-scores__placement${rank === null && standing.placement !== null ? " is-participation" : ""}${standing.placement === null ? " is-pending" : ""}`}><span>Lugar</span><strong>{place === "—" ? <span role="img" aria-label="Sin lugar asignado">{place}</span> : place}</strong></div>
             : null}
