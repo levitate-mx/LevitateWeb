@@ -91,13 +91,17 @@ const mvpPerformances: MvpPerformance[] = [
 ].sort((left, right) => left.sortOrder - right.sortOrder);
 
 const scholarshipDownloads = [
-  { label: "Edo. México - Otoño 2026" },
+  {
+    label: "Edo. México - Otoño 2026",
+    href: "/assets/becados-levitate-2027-edomex.pdf",
+  },
 ];
 
 export function HallOfFamePage() {
   const [activeMvpIndex, setActiveMvpIndex] = useState(0);
   const [selectedScholarshipIndex, setSelectedScholarshipIndex] = useState(0);
   const activePerformance = mvpPerformances[activeMvpIndex] ?? mvpPerformances[0];
+  const selectedScholarship = scholarshipDownloads[selectedScholarshipIndex] ?? scholarshipDownloads[0];
 
   const showMvp = (step: number) => {
     setActiveMvpIndex((currentIndex) => (currentIndex + step + mvpPerformances.length) % mvpPerformances.length);
@@ -175,10 +179,15 @@ export function HallOfFamePage() {
                   </select>
                   <ChevronDown aria-hidden="true" size={20} />
                 </label>
-                <button className="levitate-scholarships__download" disabled type="button">
+                <a
+                  aria-label={`Descargar PDF de becados: ${selectedScholarship.label}`}
+                  className="levitate-scholarships__download"
+                  download="becados-levitate-2027-edomex.pdf"
+                  href={selectedScholarship.href}
+                >
                   <Download aria-hidden="true" size={20} />
                   Descargar PDF
-                </button>
+                </a>
               </div>
             </div>
 
