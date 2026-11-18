@@ -572,12 +572,12 @@ export function LevitateHeader({
           </div>
         </header>
 
-        {isPillMenuOpen ? (
-          <>
           <div
             className={`levitate-pill-menu${selectedPillSection ? " has-submenu" : ""}`}
             id="levitate-pill-menu"
             ref={pillMenuRef}
+            hidden={!isPillMenuOpen}
+            inert={!isPillMenuOpen}
           >
             <button
               aria-label="Cerrar menú"
@@ -618,10 +618,12 @@ export function LevitateHeader({
                       </a>
                     )}
 
-                    {activePillSection === section.title && section.links ? (
+                    {section.links ? (
                       <aside
                         className="levitate-pill-menu__submenu levitate-pill-menu__submenu--inline"
                         aria-label={`${section.title} submenu`}
+                        hidden={activePillSection !== section.title}
+                        inert={activePillSection !== section.title}
                       >
                         {section.links.map((link) => (
                           link.disabled ? (
@@ -687,7 +689,7 @@ export function LevitateHeader({
             </div>
           </div>
 
-          {selectedPillSection ? (
+          {isPillMenuOpen && selectedPillSection ? (
             <aside
               className="levitate-pill-menu__submenu levitate-pill-menu__submenu--side"
               id={`levitate-pill-submenu-${selectedPillSection.title.toLowerCase().replace(/\s+/g, "-")}`}
@@ -708,8 +710,6 @@ export function LevitateHeader({
               ))}
             </aside>
           ) : null}
-          </>
-        ) : null}
       </div>
     );
 

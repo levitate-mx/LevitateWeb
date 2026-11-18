@@ -18051,6 +18051,11 @@ button {
   display: none;
 }
 
+.levitate-home-redesign .levitate-pill-menu[hidden],
+.levitate-home-redesign .levitate-pill-menu__submenu--inline[hidden] {
+  display: none !important;
+}
+
 .levitate-home-redesign .levitate-pill-menu__submenu::before {
   display: none;
 }

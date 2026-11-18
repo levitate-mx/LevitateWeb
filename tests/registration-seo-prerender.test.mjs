@@ -23,6 +23,31 @@ test('the public home prerender contains the real React heading, navigation and 
   assert.equal(renderer.render('/'), html, 'initial HTML remains deterministic');
 });
 
+test('the closed home menu exposes real crawlable modality links in the first HTML without adding visible navigation', () => {
+  const html = renderer.render('/');
+  const links = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(([, attributes, content]) => ({
+    attributes,
+    href: attributes.match(/\bhref="([^"]*)"/)?.[1],
+    label: content.replace(/<[^>]*>/g, '').trim(),
+  }));
+  for (const [label, path] of [['Motion', '/modalidades/levitate-motion/generos'], ['Aerial', '/modalidades/levitate-aerial/evaluacion']]) {
+    const matches = links.filter(link => link.href === path && link.label === label);
+    assert.equal(matches.length, 1, `${label} is an actual navigation anchor, present before any menu click`);
+    assert.doesNotMatch(matches[0].attributes, /nofollow|aria-disabled="true"|javascript:/);
+  }
+  const menu = html.match(/<div\b(?=[^>]*\bid="levitate-pill-menu")[^>]*>/)?.[0];
+  assert.ok(menu, 'the existing menu, rather than a separate SEO-only list, is rendered');
+  assert.match(menu, /\shidden=""/);
+  assert.match(menu, /\sinert=""/);
+  const sections = [...html.matchAll(/<aside\b[^>]*class="[^"]*levitate-pill-menu__submenu--inline[^>]*>/g)];
+  assert.ok(sections.length > 0);
+  for (const [section] of sections) {
+    assert.match(section, /\shidden=""/);
+    assert.match(section, /\sinert=""/);
+  }
+  assert.doesNotMatch(html, /levitate-pill-menu__submenu--side/, 'the desktop panel still opens only after interaction');
+});
+
 test('Motion and Aerial prerenders use their actual distinct page components and content', () => {
   const motion = renderer.render('/modalidades/levitate-motion/generos');
   assert.match(motion, /motion-genres-page/);
@@ -69,6 +94,10 @@ test('postbuild emits eleven internal public pages while preserving hashed asset
     if (renderer.prerenderedPaths.includes(page.path)) {
       assert.ok(html.includes(`data-prerender-path="${page.path}"`));
       assert.match(html, /<main/);
+      if (page.path === '/') {
+        assert.match(html, /href="\/modalidades\/levitate-motion\/generos"/);
+        assert.match(html, /href="\/modalidades\/levitate-aerial\/evaluacion"/);
+      }
     } else {
       assert.ok(html.includes(`<div id="root" data-site-page="${page.key}"></div>`));
       assert.doesNotMatch(html, /data-prerender-path|<main/);
