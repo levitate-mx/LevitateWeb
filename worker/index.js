@@ -1,4 +1,5 @@
 import { handleJudgingReport, requireJudgingReportReader, enforceJudgingReportRequest } from './judging-report-viewer.js';
+import { servePublicSitePage } from './public-site-pages.js';
 import registrationPolicyDefaults from "../shared/registration-policy.json" with { type: "json" };
 import { resolveRegistrationPolicy } from "../shared/registration-policy.js";
 import { getAdminOrderPage, getAdminOrderExport } from "./admin-orders.js";
@@ -789,7 +790,7 @@ export default {
       return sendJson({ error: { code: "not_found", message: "API route not found" } }, 404);
     }
 
-    return env.ASSETS.fetch(request);
+    return await servePublicSitePage(request, env) || env.ASSETS.fetch(request);
   },
 };
 

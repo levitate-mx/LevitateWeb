@@ -167,6 +167,7 @@ export function LevitateHeader({
   const [activePillSection, setActivePillSection] = useState<string | null>(null);
   const [isScrollCompact, setIsScrollCompact] = useState(false);
   const [isPastHero, setIsPastHero] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const capsuleMenuRef = useRef<HTMLDivElement>(null);
   const pillMenuRef = useRef<HTMLDivElement>(null);
   const pillSubmenuRef = useRef<HTMLElement>(null);
@@ -175,6 +176,7 @@ export function LevitateHeader({
   const renderedNavItem = navItems.find((item) => item.label === renderedMenu && item.children);
   const selectedPillSection = pillMenuSections.find((section) => section.title === activePillSection && section.links);
   const [pillSubmenuLayout, setPillSubmenuLayout] = useState<{ left: number; reach: number; top: number } | null>(null);
+  useEffect(() => { setPortalReady(true); }, []);
   const pillMenuStyle = selectedPillSection && pillSubmenuLayout
     ? ({
         "--levitate-pill-submenu-left": `${pillSubmenuLayout.left}px`,
@@ -721,7 +723,9 @@ export function LevitateHeader({
       </div>
     );
 
-    return typeof document !== "undefined" ? createPortal(pillHeaderPortal, document.body) : pillHeaderPortal;
+    // Keep SSR and the first browser render identical before restoring the
+    // existing body portal, which avoids clipping the fixed navigation.
+    return portalReady && typeof document !== "undefined" ? createPortal(pillHeaderPortal, document.body) : pillHeaderPortal;
   }
 
   return (
