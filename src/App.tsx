@@ -222,6 +222,10 @@ export default function App() {
       return <SedesPage venueKey="veracruz" />;
     }
 
+    if (venueSlug === "cdmx") {
+      return <SedesPage venueKey="cdmx" />;
+    }
+
     return <HomePage />;
   }
 

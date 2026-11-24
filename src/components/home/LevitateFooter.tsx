@@ -28,6 +28,8 @@ export function LevitateFooter(_props: LevitateFooterProps) {
             </a>
           ))}
         </nav>
+
+        <a className="levitate-footer__credits" href="/creditos-de-imagen.html">Créditos de imagen</a>
       </div>
     </footer>
   );

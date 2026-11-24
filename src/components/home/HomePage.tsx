@@ -16,18 +16,18 @@ import { LevitateHeader } from "./LevitateHeader";
 
 const venues = [
   {
-    title: "Teatro Gran Recinto",
-    city: "Tlalnepantla, Edo. Méx.",
-    date: "13, 14 y 15 noviembre 2026",
-    image: "/assets/sedes-edomex-hero.jpg",
-    href: "/sedes/estado-de-mexico",
-  },
-  {
     title: "Teatro Ignacio de la Llave",
     city: "Orizaba, Veracruz",
     date: "27 y 28 de febrero 2027",
     image: "/assets/sedes-orizaba-teatro-ignacio-de-la-llave.webp",
     href: "/sedes/orizaba",
+  },
+  {
+    title: "CDMX",
+    city: "Lugar por definir",
+    date: "16, 17 y 18 de abril 2027",
+    image: "/assets/sedes-cdmx-angel-independencia.jpg",
+    href: "/sedes/cdmx",
   },
 ];
 
@@ -233,7 +233,12 @@ export function HomePage() {
           {venues.map((venue) => {
             const content = (
               <>
-                <img src={venue.image} alt="" loading="lazy" />
+                <img
+                  className={venue.href === "/sedes/cdmx" ? "levitate-home-venue-card__image--cdmx" : undefined}
+                  src={venue.image}
+                  alt=""
+                  loading="lazy"
+                />
                 <div>
                   <h3>{venue.title}</h3>
                   {venue.city ? (

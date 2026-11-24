@@ -68,7 +68,13 @@ export const sitePages = Object.freeze([
     key: "veracruz", path: "/sedes/veracruz",
     title: "Levitate Veracruz: competencia de danza | Levitate MX",
     description: "Conoce la edición de Levitate MX en Veracruz y consulta la información publicada sobre la sede y las modalidades Motion y Aerial.",
-    image: "/assets/sedes-veracruz-primavera-2027.png", imageAlt: "Edición de Levitate MX en Veracruz",
+    image: "/assets/sedes-orizaba-teatro-ignacio-de-la-llave.webp", imageAlt: "Teatro Ignacio de la Llave, sede de Levitate MX en Orizaba, Veracruz",
+  },
+  {
+    key: "cdmx", path: "/sedes/cdmx",
+    title: "Levitate CDMX: competencia de danza | Levitate MX",
+    description: "Conoce la nueva edición de Levitate MX en CDMX y consulta la información publicada sobre la sede, las modalidades Motion y Aerial y los accesos de inscripción.",
+    image: "/assets/sedes-cdmx-angel-independencia.jpg", imageAlt: "Ángel de la Independencia, imagen representativa de la edición CDMX de Levitate MX",
   },
 ].map(page => Object.freeze({ ...page, canonical: `${siteOrigin}${page.path}`, image: `${siteOrigin}${page.image}` })));
 
@@ -76,8 +82,9 @@ const aliases = Object.freeze({
   "/premio-releve": "/releve",
   "/modalidades/releve": "/releve",
   "/modalidades/levitate-releve": "/releve",
-  "/sedes": "/sedes/estado-de-mexico",
+  "/sedes": "/sedes/veracruz",
   "/sedes/edomex": "/sedes/estado-de-mexico",
+  "/sedes/orizaba": "/sedes/veracruz",
 });
 const byPath = new Map(sitePages.map(page => [page.path, page]));
 

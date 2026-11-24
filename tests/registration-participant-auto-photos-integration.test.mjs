@@ -81,8 +81,9 @@ async function fixture(t, { published = true, demo = false, seeded = true } = {}
         ('academy-user','academy','Academia','academy','academy@example.test','unused','academy',datetime('now'));
     INSERT INTO registration_participants(id,academy_id,full_name,curp,division,shirt_size)
       VALUES('person-a','academy','Alison Prueba','PRUA000000MXXAAA00','teen','s'),('person-b','academy','Otra Persona','PRUB000000MXXAAA00','teen','m');
-    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue)
-      VALUES('dance-a','academy','Beyond the strings','aereo','tela','solo','intermedio','edomex'),('dance-b','academy','Otra rutina','aereo','aro','solo','intermedio','edomex');
+    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id)
+      VALUES('dance-a','academy','Beyond the strings','aereo','tela','solo','intermedio','edomex','automatic-photos-test'),
+        ('dance-b','academy','Otra rutina','aereo','aro','solo','intermedio','edomex','automatic-photos-test');
     INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-a'),('dance-b','person-b');`);
   const digest = async text => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))).toString('hex');
   for (const actor of ['admin', 'academy-user']) db.sqlite.prepare("INSERT INTO registration_sessions(id,user_id,session_token_hash,expires_at) VALUES(?,?,?,datetime('now','+1 day'))")

@@ -7,7 +7,7 @@ import { servePublicSitePage } from '../worker/public-site-pages.js';
 
 const origin = 'https://levitate.mx';
 const paths = [...new Set(sitePages.flatMap(page => page.path === '/' ? ['/'] : [page.path, `${page.path}/`]))];
-const aliases = ['/sedes', '/sedes/', '/sedes/edomex', '/sedes/edomex/', '/premio-releve', '/premio-releve/',
+const aliases = ['/sedes', '/sedes/', '/sedes/edomex', '/sedes/edomex/', '/sedes/orizaba', '/sedes/orizaba/', '/premio-releve', '/premio-releve/',
   '/modalidades/releve', '/modalidades/releve/', '/modalidades/levitate-releve', '/modalidades/levitate-releve/'];
 
 function fixture() {

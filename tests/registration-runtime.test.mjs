@@ -146,6 +146,13 @@ const curpA = 'AAAA100101MDFBBB01';
 const curpB = 'BBBB100101MDFBBB01';
 const phone = { buyerPhoneCountryCode: '+52', buyerPhoneNumber: '5555555555' };
 const proof = { fileName: 'comprobante.png', contentType: 'image/png', dataUrl: 'data:image/png;base64,AQID', fileSize: 3 };
+const currentEventIdByVenue = {
+  cdmx: 'cdmx-2026',
+  'cdmx-2027': 'cdmx-2027',
+  puebla: 'puebla-2026',
+  edomex: 'edomex-2026-otono',
+  veracruz: 'orizaba-2027',
+};
 
 test('Relevé voting preview is private to admins and cannot record votes or change registration data', async t => {
   const f = await fixture(t);
@@ -665,7 +672,7 @@ async function activateTicketScanner(f, admin, deviceName = 'Puerta de prueba') 
   return { ...activation, headers: { authorization: `Scanner ${activation.deviceToken}` } };
 }
 
-async function createDance(f, academy, curp = curpA) {
+async function createDance(f, academy, curp = curpA, venue = 'edomex') {
   const options = { method: 'POST', cookie: academy.cookie, status: 201 };
   const { json: { participant } } = await f.request('/participants', {
     ...options, body: { fullName: `Participante ${curp}`, curp, birthDate: '2010-01-01', age: 16, division: 'teen', shirtSize: 'm' },
@@ -675,13 +682,13 @@ async function createDance(f, academy, curp = curpA) {
   });
   const { json: { dance } } = await f.request('/dances', {
     ...options, body: { title: 'Vuelo de prueba', genre: 'aereo', subgenre: 'open_otro', subgenreDetail: 'Aparato propio', level: 'principiante',
-      category: 'solo', venue: 'edomex', choreographerIds: [choreographer.id], participantIds: [participant.id] },
+      category: 'solo', venue, eventId: currentEventIdByVenue[venue], choreographerIds: [choreographer.id], participantIds: [participant.id] },
   });
   return { participant, choreographer, dance };
 }
 
-async function createAerialPricingDances(f, academy, categories) {
-  const record = await createDance(f, academy);
+async function createAerialPricingDances(f, academy, categories, venue = 'edomex') {
+  const record = await createDance(f, academy, curpA, venue);
   const participantIds = [record.participant.id];
   for (const curp of [curpB, 'CCCC100101MDFBBB01']) {
     const { json: { participant } } = await f.request('/participants', {
@@ -694,7 +701,7 @@ async function createAerialPricingDances(f, academy, categories) {
     await f.request('/dances', {
       method: 'POST', cookie: academy.cookie, status: 201,
       body: { title: `Coreografía ${index + 1}`, genre: 'aereo', subgenre: 'aro', level: 'intermedio', category,
-        venue: 'edomex', choreographerIds: [record.choreographer.id], participantIds: participantIds.slice(0, participantCount) },
+        venue, eventId: currentEventIdByVenue[venue], choreographerIds: [record.choreographer.id], participantIds: participantIds.slice(0, participantCount) },
     });
   }
 }
@@ -722,6 +729,200 @@ test('domestic Aerial prices match each category in presale and normal periods w
     assert.deepEqual(lookup.lines.map(line => line.baseAmount), [solo, solo, duo, duo, trio, trio]);
     assert.deepEqual(lookup.lines.map(line => line.discountRate), [0, 0.5, 0, 0.5, 0, 0.5]);
   }
+});
+
+test('Orizaba ordinary registration prices switch at midnight after January 10 in Mexico City', async t => {
+  const f = await fixture(t);
+  const categories = [
+    ['solo', 1], ['dupla_1_aparato', 2], ['duo_2_aparatos', 2], ['terna_1_aparato', 3], ['trio_3_aparatos', 3],
+  ];
+  const domesticAcademy = await seedAcademy(f, 'orizaba-prices');
+  await createAerialPricingDances(f, domesticAcademy, categories, 'veracruz');
+  const internationalAcademy = await seedAcademy(f, 'orizaba-international-prices', { originType: 'international' });
+  await createAerialPricingDances(f, internationalAcademy, categories, 'veracruz');
+  const historicalAcademy = await seedAcademy(f, 'historical-prices');
+  await createDance(f, historicalAcademy);
+  const releveAcademy = await seedAcademy(f, 'orizaba-releve-prices');
+  const releveRecord = await createDance(f, releveAcademy, curpA, 'veracruz');
+  f.db.sqlite.prepare('UPDATE registration_dances SET is_releve = 1 WHERE id = ?').run(releveRecord.dance.id);
+
+  let now;
+  t.mock.method(Date, 'now', () => now);
+  for (const [date, domesticPrices, internationalPrices] of [
+    ['2027-01-11T05:59:59.999Z', [1500, 1500, 1300, 1300, 950, 950], [55, 55, 70, 70, 85, 85]],
+    ['2027-01-11T06:00:00.000Z', [1750, 1750, 1400, 1400, 1200, 1200], [70, 70, 80, 80, 100, 100]],
+  ]) {
+    now = Date.parse(date);
+    const { json: domesticLookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: domesticAcademy.cookie, body: { curp: curpA },
+    });
+    assert.equal(domesticLookup.currency, 'MXN');
+    assert.deepEqual(domesticLookup.lines.map(line => line.baseAmount), domesticPrices, date);
+    assert.deepEqual(domesticLookup.lines.map(line => line.discountRate), [0, 0.5, 0, 0.5, 0, 0.5]);
+
+    const { json: internationalLookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: internationalAcademy.cookie, body: { curp: curpA },
+    });
+    assert.equal(internationalLookup.currency, 'USD');
+    assert.deepEqual(internationalLookup.lines.map(line => line.baseAmount), internationalPrices, date);
+    assert.deepEqual(internationalLookup.lines.map(line => line.discountRate), [1, 1, 0, 0.5, 0, 0.5]);
+
+    const { json: historicalLookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: historicalAcademy.cookie, body: { curp: curpA },
+    });
+    assert.deepEqual(historicalLookup.lines, [], 'a concluded edition must not reopen in a new checkout');
+    assert.equal(historicalLookup.order, null);
+
+    const { json: releveLookup } = await f.request('/inscription/lookup', {
+      method: 'POST', cookie: releveAcademy.cookie, body: { curp: curpA },
+    });
+    assert.equal(releveLookup.lines[0].baseAmount, 1500, 'Relevé must keep its historical cutoff');
+  }
+});
+
+test('a pending Orizaba order is repriced when regenerated after the presale cutoff', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'orizaba-order-cutoff');
+  await createDance(f, academy, curpA, 'veracruz');
+  let now = Date.parse('2027-01-11T05:59:59.999Z');
+  t.mock.method(Date, 'now', () => now);
+
+  const { json: { order: presaleOrder } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(presaleOrder.amount, 1500);
+
+  now = Date.parse('2027-01-11T06:00:00.000Z');
+  const { json: { order: normalOrder } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(normalOrder.id, presaleOrder.id);
+  assert.equal(normalOrder.amount, 1750);
+  assert.equal(
+    f.db.sqlite.prepare('SELECT amount FROM registration_inscription_orders WHERE id = ?').get(normalOrder.id).amount,
+    1750,
+  );
+});
+
+test('Orizaba proof submission enforces the cutoff while a timely proof keeps presale', async t => {
+  const f = await fixture(t);
+  const admin = await seedAcademy(f, 'orizaba-proof-admin', { role: 'admin' });
+  const earlyAcademy = await seedAcademy(f, 'orizaba-proof-early');
+  const lateAcademy = await seedAcademy(f, 'orizaba-proof-late');
+  const latePaymentAcademy = await seedAcademy(f, 'orizaba-payment-proof-late');
+  const latePaymentCurp = 'CCCC100101MDFBBB01';
+  await createDance(f, earlyAcademy, curpA, 'veracruz');
+  await createDance(f, lateAcademy, curpB, 'veracruz');
+  await createDance(f, latePaymentAcademy, latePaymentCurp, 'veracruz');
+  let now = Date.parse('2027-01-11T05:59:59.999Z');
+  t.mock.method(Date, 'now', () => now);
+
+  const orders = [];
+  for (const [academy, curp] of [
+    [earlyAcademy, curpA],
+    [lateAcademy, curpB],
+    [latePaymentAcademy, latePaymentCurp],
+  ]) {
+    const { json: { order } } = await f.request('/inscription/order', {
+      method: 'POST', cookie: academy.cookie, body: { curp, ...phone }, status: 201,
+    });
+    assert.equal(order.amount, 1500);
+    orders.push(order);
+  }
+  await f.request('/participants', {
+    method: 'POST', cookie: earlyAcademy.cookie, status: 201,
+    body: { fullName: 'Participante compartida', curp: latePaymentCurp, birthDate: '2010-01-01', age: 16, division: 'teen', shirtSize: 'm' },
+  });
+
+  let proofCrossedCutoff = false;
+  f.db.beforeRun = sql => {
+    if (!proofCrossedCutoff && /INSERT INTO registration_inscription_payment_proofs/.test(sql)) {
+      proofCrossedCutoff = true;
+      now = Date.parse('2027-01-11T06:00:00.000Z');
+    }
+  };
+  const { json: earlyProof } = await f.request('/inscription/order/proof', {
+    method: 'POST', cookie: earlyAcademy.cookie,
+    body: { orderId: orders[0].id, curp: curpA, ...proof }, status: 201,
+  });
+  f.db.beforeRun = undefined;
+  assert.equal(proofCrossedCutoff, true);
+  assert.equal(earlyProof.order.amount, 1500);
+  assert.equal(earlyProof.order.status, 'payment_reported');
+  assert.ok(
+    f.db.sqlite.prepare('SELECT uploaded_at FROM registration_inscription_payment_proofs WHERE order_id = ?').get(orders[0].id).uploaded_at
+      < '2027-01-11 06:00:00',
+    'the proof keeps the server request receipt time used for pricing',
+  );
+
+  now = Date.parse('2027-01-11T06:00:00.000Z');
+  await f.request('/inscription/payment-lookup', {
+    method: 'POST', cookie: earlyAcademy.cookie, status: 403,
+    body: { curp: latePaymentCurp, orderId: orders[2].id },
+  });
+  assert.equal(
+    f.db.sqlite.prepare('SELECT amount FROM registration_inscription_orders WHERE id = ?').get(orders[2].id).amount,
+    1500,
+    'an academy cannot trigger repricing on another academy order',
+  );
+  const { json: linkedLookup } = await f.request('/inscription/payment-lookup', {
+    method: 'POST', cookie: latePaymentAcademy.cookie, body: { curp: latePaymentCurp, orderId: orders[2].id },
+  });
+  assert.equal(linkedLookup.subtotal, 1750, 'a direct order link must show the current amount');
+  assert.equal(linkedLookup.order.amount, 1750);
+
+  const { json: lateProof } = await f.request('/inscription/order/proof', {
+    method: 'POST', cookie: lateAcademy.cookie,
+    body: { orderId: orders[1].id, curp: curpB, ...proof }, status: 201,
+  });
+  assert.equal(lateProof.order.amount, 1750);
+  assert.equal(lateProof.order.status, 'payment_reported');
+
+  const { json: latePaymentProof } = await f.request('/inscription/payment-proof', {
+    method: 'POST', cookie: latePaymentAcademy.cookie,
+    body: { orderId: orders[2].id, curp: latePaymentCurp, ...proof }, status: 201,
+  });
+  assert.equal(latePaymentProof.order.amount, 1750);
+  assert.equal(latePaymentProof.order.status, 'payment_reported');
+
+  const { json: approvedEarly } = await f.request('/admin/inscription-order/status', {
+    method: 'POST', cookie: admin.cookie,
+    body: { id: orders[0].id, status: 'paid', paidAmount: 1500 },
+  });
+  assert.equal(approvedEarly.order.amount, 1500, 'a proof received before the cutoff reserves presale');
+  assert.equal(approvedEarly.order.status, 'paid');
+});
+
+test('academy and admin order lists expose current Orizaba pending totals after the cutoff', async t => {
+  const f = await fixture(t);
+  const academyListOwner = await seedAcademy(f, 'orizaba-list-academy');
+  const adminListOwner = await seedAcademy(f, 'orizaba-list-admin-owner');
+  const admin = await seedAcademy(f, 'orizaba-list-admin', { role: 'admin' });
+  await createDance(f, academyListOwner, curpA, 'veracruz');
+  await createDance(f, adminListOwner, curpB, 'veracruz');
+  let now = Date.parse('2027-01-11T05:59:59.999Z');
+  t.mock.method(Date, 'now', () => now);
+
+  const academyOrder = (await f.request('/inscription/order', {
+    method: 'POST', cookie: academyListOwner.cookie, body: { curp: curpA, ...phone }, status: 201,
+  })).json.order;
+  const adminOrder = (await f.request('/inscription/order', {
+    method: 'POST', cookie: adminListOwner.cookie, body: { curp: curpB, ...phone }, status: 201,
+  })).json.order;
+  assert.equal(academyOrder.amount, 1500);
+  assert.equal(adminOrder.amount, 1500);
+
+  now = Date.parse('2027-01-11T06:00:00.000Z');
+  const { json: academyOrders } = await f.request('/inscription/orders', { cookie: academyListOwner.cookie });
+  assert.equal(academyOrders.orders.find(order => order.id === academyOrder.id).amount, 1750);
+  assert.equal(
+    f.db.sqlite.prepare('SELECT amount FROM registration_inscription_orders WHERE id = ?').get(adminOrder.id).amount,
+    1500,
+    'an academy-scoped read must not update another academy',
+  );
+
+  const { json: adminOrders } = await f.request('/admin/inscription-orders', { cookie: admin.cookie });
+  assert.equal(adminOrders.orders.find(order => order.id === adminOrder.id).amount, 1750);
 });
 
 test('Hot Presale discounts only Relevé registration lines by 30 percent during the CDMX window', async t => {
@@ -853,7 +1054,7 @@ test('same-name academies stay isolated across bootstrap, participants, dances, 
     '2020-01-01 00:00:00', 'session activity updates remain enabled');
   const countsBefore = f.db.sqlite.prepare('SELECT count(*) AS total FROM registration_dances').get().total;
   await f.request('/dances', { method: 'POST', cookie: b.cookie, status: 404,
-    body: { title: 'Not allowed', genre: 'motion', subgenre: 'jazz', category: 'solo', venue: 'edomex',
+    body: { title: 'Not allowed', genre: 'motion', subgenre: 'jazz', category: 'solo', venue: 'edomex', eventId: 'edomex-2026-otono',
       choreographerIds: [other.choreographer.id], participantIds: [record.participant.id] } });
   await f.request('/inscription/lookup', { method: 'POST', cookie: b.cookie, body: { curp: curpA }, status: 403 });
   await f.request('/admin/participants', { cookie: a.cookie, status: 403 });
@@ -912,12 +1113,121 @@ test('Baby Aerial choreographies omit the level even when the academy has older 
   for (const [title, level] of [['Baby sin nivel', undefined], ['Baby con nivel heredado', 'elite']]) {
     const { json: { dance } } = await f.request('/dances', {
       method: 'POST', cookie: academy.cookie, status: 201,
-      body: { title, genre: 'aereo', subgenre: 'aro', category: 'solo', venue: 'edomex', level,
+      body: { title, genre: 'aereo', subgenre: 'aro', category: 'solo', venue: 'edomex', eventId: 'edomex-2026-otono', level,
         choreographerIds: [existing.choreographer.id], participantIds: [baby.id] },
     });
     assert.equal(dance.level, null);
     assert.deepEqual(dance.participants.map(participant => participant.id), [baby.id]);
   }
+});
+
+test('participant age and division follow each event edition without mutating the participant master record', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'edition-division');
+  const admin = await seedAcademy(f, 'edition-division-admin', { role: 'admin' });
+  const { json: { participant } } = await f.request('/participants', {
+    method: 'POST', cookie: academy.cookie, status: 201,
+    body: {
+      fullName: 'Participante entre divisiones', curp: 'CCCC130301MDFDDD01', birthDate: '2013-03-01',
+      age: 99, division: 'legacy', eventId: 'orizaba-2027', shirtSize: 'm',
+    },
+  });
+  assert.equal(participant.age, 13);
+  assert.equal(participant.division, 'junior');
+  const { json: { choreographer } } = await f.request('/choreographers', {
+    method: 'POST', cookie: academy.cookie, status: 201,
+    body: { fullName: 'Coreógrafa por edición', email: 'ediciones@example.test', phone: '5555555555', shirtSize: 'm' },
+  });
+
+  const createEditionDance = async ({ title, venue, eventId }) => (await f.request('/dances', {
+    method: 'POST', cookie: academy.cookie, status: 201,
+    body: {
+      title, genre: 'motion', subgenre: 'jazz', category: 'solo', venue, eventId,
+      choreographerIds: [choreographer.id], participantIds: [participant.id],
+    },
+  })).json.dance;
+  const orizaba = await createEditionDance({ title: 'Orizaba junior', venue: 'veracruz', eventId: 'orizaba-2027' });
+  const cdmx = await createEditionDance({ title: 'CDMX teen', venue: 'cdmx-2027', eventId: 'cdmx-2027' });
+
+  assert.deepEqual(
+    { eventId: orizaba.eventId, venue: orizaba.venue, age: orizaba.participants[0].age, division: orizaba.participants[0].division },
+    { eventId: 'orizaba-2027', venue: 'veracruz', age: 13, division: 'junior' },
+  );
+  assert.deepEqual(
+    { eventId: cdmx.eventId, venue: cdmx.venue, age: cdmx.participants[0].age, division: cdmx.participants[0].division },
+    { eventId: 'cdmx-2027', venue: 'cdmx-2027', age: 14, division: 'teen' },
+  );
+  assert.deepEqual(
+    { ...f.db.sqlite.prepare('SELECT venue, event_id FROM registration_dances WHERE id = ?').get(cdmx.id) },
+    { venue: 'cdmx', event_id: 'cdmx-2027' },
+  );
+  assert.deepEqual(
+    { ...f.db.sqlite.prepare('SELECT age, division FROM registration_participants WHERE id = ?').get(participant.id) },
+    { age: 13, division: 'junior' },
+  );
+
+  const { json: program } = await f.request('/admin/program', { cookie: admin.cookie });
+  const byEvent = new Map(program.dances.map(dance => [dance.eventId, dance]));
+  assert.equal(byEvent.get('orizaba-2027').participants[0].division, 'junior');
+  assert.equal(byEvent.get('cdmx-2027').participants[0].division, 'teen');
+});
+
+test('Orizaba and CDMX 2027 generate separate checkout orders for the same participant', async t => {
+  const f = await fixture(t);
+  const academy = await seedAcademy(f, 'future-edition-orders');
+  const admin = await seedAcademy(f, 'future-edition-orders-admin', { role: 'admin' });
+  const { participant, choreographer, dance: orizabaDance } = await createDance(f, academy, curpA, 'veracruz');
+  const { json: { dance: cdmxDance } } = await f.request('/dances', {
+    method: 'POST', cookie: academy.cookie, status: 201,
+    body: {
+      title: 'CDMX independiente', genre: 'motion', subgenre: 'jazz', category: 'solo',
+      venue: 'cdmx-2027', eventId: 'cdmx-2027', choreographerIds: [choreographer.id], participantIds: [participant.id],
+    },
+  });
+
+  const { json: firstLookup } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA },
+  });
+  assert.equal(firstLookup.eventId, 'orizaba-2027');
+  assert.equal(firstLookup.venue, 'veracruz');
+  assert.deepEqual(firstLookup.lines.map(line => line.id), [orizabaDance.id]);
+  assert.deepEqual(new Set(firstLookup.mediaLines.map(line => line.eventId)), new Set(['orizaba-2027', 'cdmx-2027']));
+
+  const { json: { order: orizabaOrder } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(orizabaOrder.eventId, 'orizaba-2027');
+  assert.equal(orizabaOrder.venue, 'veracruz');
+  assert.deepEqual(
+    { ...f.db.sqlite.prepare('SELECT venue, event_id FROM registration_inscription_orders WHERE id = ?').get(orizabaOrder.id) },
+    { venue: 'veracruz', event_id: 'orizaba-2027' },
+  );
+  await f.request('/inscription/order/proof', {
+    method: 'POST', cookie: academy.cookie, status: 201,
+    body: { orderId: orizabaOrder.id, curp: curpA, ...proof },
+  });
+  await f.request('/admin/inscription-order/status', {
+    method: 'POST', cookie: admin.cookie,
+    body: { id: orizabaOrder.id, orderType: 'registration', status: 'paid', paidAmount: orizabaOrder.amount },
+  });
+
+  const { json: secondLookup } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA },
+  });
+  assert.equal(secondLookup.eventId, 'cdmx-2027');
+  assert.equal(secondLookup.venue, 'cdmx-2027');
+  assert.deepEqual(secondLookup.lines.map(line => line.id), [cdmxDance.id]);
+  const { json: { order: cdmxOrder } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: academy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(cdmxOrder.eventId, 'cdmx-2027');
+  assert.equal(cdmxOrder.venue, 'cdmx-2027');
+  assert.notEqual(cdmxOrder.reference, orizabaOrder.reference);
+  assert.deepEqual(
+    { ...f.db.sqlite.prepare('SELECT venue, event_id FROM registration_inscription_orders WHERE id = ?').get(cdmxOrder.id) },
+    { venue: 'cdmx', event_id: 'cdmx-2027' },
+  );
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_inscription_orders').get().total, 2);
 });
 
 test('admin people summaries preserve distinct venues, empty people and latest dance ties', async t => {
@@ -1834,14 +2144,23 @@ test('ticket event remains authoritative when a participant buys from another ve
   const { dance, participant, choreographer } = await createDance(f, academy);
   // Venue follows the latest dance; make the first one unambiguously older
   // even when both HTTP requests finish within SQLite's one-second precision.
-  f.db.sqlite.prepare("UPDATE registration_dances SET venue = 'cdmx', created_at = datetime('now', '-1 day') WHERE id = ?").run(dance.id);
+  f.db.sqlite.prepare("UPDATE registration_dances SET venue = 'cdmx', event_id = 'cdmx-2026', created_at = datetime('now', '-1 day') WHERE id = ?").run(dance.id);
   const order = await createPaidTicketOrder(f, admin, [{ productId: 'full', quantity: 1 }]);
-  assert.equal(order.venue, 'cdmx');
+  assert.equal(order.venue, 'edomex');
+  assert.equal(order.eventId, 'edomex-2026-otono');
   await f.request('/dances', { method: 'POST', cookie: academy.cookie, status: 201, body: {
-    title: 'Nueva sede', genre: 'motion', subgenre: 'ballet', category: 'solo', venue: 'puebla',
+    title: 'Nueva sede', genre: 'motion', subgenre: 'ballet', category: 'solo', venue: 'puebla', eventId: 'puebla-2026',
     choreographerIds: [choreographer.id], participantIds: [participant.id],
   } });
-  assert.equal(f.db.sqlite.prepare('SELECT venue FROM registration_shop_orders WHERE id = ?').get(order.id).venue, 'puebla');
+  const storedTicketOrder = f.db.sqlite.prepare(
+    'SELECT venue, event_id FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id);
+  assert.equal(storedTicketOrder.venue, 'edomex');
+  assert.equal(
+    storedTicketOrder.event_id,
+    'edomex-2026-otono',
+    'participant changes must not reassign a ticket order to another edition',
+  );
   const { json } = await f.request('/admin/ticket/scan', { method: 'POST', cookie: admin.cookie,
     body: { qrPayload: order.tickets[0].qrPayload, blockId: 'bloque-1' } });
   assert.equal(json.admitted, true);
@@ -2351,7 +2670,7 @@ test('ticket shop orders can be created before participant registration and link
     body: { fullName: 'Coreógrafa boleto futuro', email: 'coreografa-boleto@example.test', phone: '5555555555', shirtSize: 's' } });
   await f.request('/dances', { method: 'POST', cookie: academy.cookie, status: 201,
     body: { title: 'Vuelo boleto futuro', genre: 'aereo', subgenre: 'open_otro', subgenreDetail: 'Aparato propio', level: 'principiante',
-      category: 'solo', venue: 'edomex', choreographerIds: [choreographer.id], participantIds: [participant.id] } });
+      category: 'solo', venue: 'edomex', eventId: 'edomex-2026-otono', choreographerIds: [choreographer.id], participantIds: [participant.id] } });
 
   storedOrder = f.db.sqlite.prepare(
     'SELECT participant_name, academy_id, academy_name, venue FROM registration_shop_orders WHERE id = ?',

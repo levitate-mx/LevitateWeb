@@ -11004,10 +11004,31 @@ button {
   transition: color 180ms ease;
 }
 
+.levitate-footer__credits {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-self: center;
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
 .levitate-footer__contact:hover,
 .levitate-footer__contact:focus-visible,
 .levitate-footer__socials a:hover,
 .levitate-footer__socials a:focus-visible {
+  color: var(--lev-pink);
+}
+
+.levitate-footer__credits:hover,
+.levitate-footer__credits:focus-visible {
   color: var(--lev-pink);
 }
 
@@ -18981,6 +19002,12 @@ button {
   margin: 0 auto;
 }
 
+@media (min-width: 1121px) {
+  .levitate-home-venue-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
 .levitate-home-venue-card {
   position: relative;
   min-height: 420px;
@@ -18999,6 +19026,10 @@ button {
   object-fit: cover;
   filter: saturate(1.1) contrast(1.05) brightness(1.02);
   transition: transform 700ms var(--ease-out);
+}
+
+.levitate-home-venue-card img.levitate-home-venue-card__image--cdmx {
+  object-position: 74% center;
 }
 
 .levitate-home-venue-card::after {
@@ -30998,6 +31029,10 @@ button {
   object-position: 50% 50%;
 }
 
+.sedes-hero__image--cdmx {
+  object-position: 74% 50%;
+}
+
 .sedes-hero__shade {
   z-index: -2;
   background:
@@ -32693,6 +32728,10 @@ button {
 
   .sedes-hero__image--veracruz {
     object-position: 50% center;
+  }
+
+  .sedes-hero__image--cdmx {
+    object-position: 76% center;
   }
 
   .sedes-hero__content {

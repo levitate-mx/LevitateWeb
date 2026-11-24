@@ -30,6 +30,21 @@ function withoutAccessScans(schema = baseSchema) {
   return schema.replace(/CREATE TABLE IF NOT EXISTS registration_ticket_access_scans \([\s\S]*?\n\);\n/, "");
 }
 
+function withoutRegistrationEventIdentity(schema = baseSchema) {
+  for (const table of [
+    "registration_dances",
+    "registration_inscription_orders",
+    "registration_shop_orders",
+    "registration_recognition_documents",
+  ]) {
+    schema = removeColumns(schema, table, ["event_id"]);
+  }
+  return schema.replace(
+    /^CREATE INDEX IF NOT EXISTS idx_registration_(?:dances_event_id|inscription_orders_event_recent|shop_orders_event_recent|recognition_documents_event_id).*\n/gm,
+    "",
+  );
+}
+
 function legacySchema({ venue = false } = {}) {
   let schema = baseSchema;
   for (const [table, columns] of Object.entries(removableColumns)) schema = removeColumns(schema, table, columns);
@@ -66,22 +81,26 @@ function fixture(t, schema = baseSchema) {
 }
 
 function seed(sqlite) {
+  const danceHasEventId = sqlite.prepare("PRAGMA table_info(registration_dances)").all().some((column) => column.name === "event_id");
+  const orderHasEventId = sqlite.prepare("PRAGMA table_info(registration_inscription_orders)").all().some((column) => column.name === "event_id");
   sqlite.exec(`
     INSERT INTO registration_academies(id, name, contact_name, email, phone) VALUES ('academy-1', 'Academy', 'Teacher', 'teacher@example.test', '123456');
     INSERT INTO registration_users(id, academy_id, name, username, email, password_hash) VALUES ('user-1', 'academy-1', 'Teacher', 'teacher', 'teacher@example.test', 'original-password-hash');
     INSERT INTO registration_participants(id, academy_id, full_name, curp, division, shirt_size) VALUES ('participant-1', 'academy-1', 'Dancer', 'TEST-CURP', 'adulto', 'm');
     INSERT INTO registration_choreographers(id, academy_id, full_name) VALUES ('teacher-1', 'academy-1', 'Teacher');
-    INSERT INTO registration_dances(id, academy_id, title, genre, subgenre, category, venue) VALUES ('dance-1', 'academy-1', 'Dance', 'motion', 'ballet', 'solo', 'cdmx');
-    INSERT INTO registration_inscription_orders(id, curp, participant_name, academy_id, academy_name, venue, reference, access_token, amount, paid_amount, status)
-      VALUES ('order-1', 'TEST-CURP', 'Dancer', 'academy-1', 'Academy', 'cdmx', 'REF-1', 'inscription-token-original', 12500, 12500, 'paid');
+    INSERT INTO registration_dances(id, academy_id, title, genre, subgenre, category, venue${danceHasEventId ? ", event_id" : ""})
+      VALUES ('dance-1', 'academy-1', 'Dance', 'motion', 'ballet', 'solo', 'cdmx'${danceHasEventId ? ", 'cdmx-2026'" : ""});
+    INSERT INTO registration_inscription_orders(id, curp, participant_name, academy_id, academy_name, venue${orderHasEventId ? ", event_id" : ""}, reference, access_token, amount, paid_amount, status)
+      VALUES ('order-1', 'TEST-CURP', 'Dancer', 'academy-1', 'Academy', 'cdmx'${orderHasEventId ? ", 'cdmx-2026'" : ""}, 'REF-1', 'inscription-token-original', 12500, 12500, 'paid');
   `);
 }
 
 function shopOrder(sqlite, id, token) {
   const columns = sqlite.prepare("PRAGMA table_info(registration_shop_orders)").all();
   const hasToken = columns.some((column) => column.name === "access_token");
-  sqlite.prepare(`INSERT INTO registration_shop_orders (id, curp, participant_name, academy_id, academy_name, venue, reference, amount, paid_amount, status${hasToken ? ", access_token" : ""})
-    VALUES (?, 'TEST-CURP', 'Dancer', 'academy-1', 'Academy', 'cdmx', ?, 8000, 8000, 'paid'${hasToken ? ", ?" : ""})`)
+  const hasEventId = columns.some((column) => column.name === "event_id");
+  sqlite.prepare(`INSERT INTO registration_shop_orders (id, curp, participant_name, academy_id, academy_name, venue${hasEventId ? ", event_id" : ""}, reference, amount, paid_amount, status${hasToken ? ", access_token" : ""})
+    VALUES (?, 'TEST-CURP', 'Dancer', 'academy-1', 'Academy', 'cdmx'${hasEventId ? ", 'cdmx-2026'" : ""}, ?, 8000, 8000, 'paid'${hasToken ? ", ?" : ""})`)
     .run(...[id, `SHOP-${id}`, ...(hasToken ? [token ?? null] : [])]);
 }
 
@@ -97,6 +116,99 @@ test("fresh canonical schema is already prepared and rechecking does not write",
   assert.deepEqual(writes, []);
   seed(sqlite);
   assert.equal(sqlite.prepare("SELECT role FROM registration_users").get().role, "academy");
+});
+
+test("event identity preparation backfills legacy venues without reclassifying explicit editions", async (t) => {
+  const { db, sqlite } = fixture(t, withoutRegistrationEventIdentity());
+  sqlite.exec(`
+    INSERT INTO registration_academies(id, name, contact_name, email, phone)
+      VALUES ('academy-1', 'Academy', 'Teacher', 'teacher@example.test', '123456');
+  `);
+  const expected = new Map([
+    ["cdmx", "cdmx-2026"],
+    ["puebla", "puebla-2026"],
+    ["edomex", "edomex-2026-otono"],
+    ["veracruz", "orizaba-2027"],
+  ]);
+  for (const [venue] of expected) {
+    sqlite.prepare(`INSERT INTO registration_dances
+      (id, academy_id, title, genre, subgenre, category, venue)
+      VALUES (?, 'academy-1', ?, 'motion', 'ballet', 'solo', ?)`)
+      .run(`dance-${venue}`, `Dance ${venue}`, venue);
+    sqlite.prepare(`INSERT INTO registration_inscription_orders
+      (id, curp, participant_name, academy_id, academy_name, venue, reference)
+      VALUES (?, ?, ?, 'academy-1', 'Academy', ?, ?)`)
+      .run(`order-${venue}`, `CURP-${venue}`, `Dancer ${venue}`, venue, `INS-${venue}`);
+    sqlite.prepare(`INSERT INTO registration_shop_orders
+      (id, curp, participant_name, academy_id, academy_name, venue, reference)
+      VALUES (?, ?, ?, 'academy-1', 'Academy', ?, ?)`)
+      .run(`shop-${venue}`, `CURP-${venue}`, `Dancer ${venue}`, venue, `SHOP-${venue}`);
+    sqlite.prepare(`INSERT INTO registration_recognition_documents
+      (id, document_type, academy_id, academy_name, venue, recipient_type, recipient_name)
+      VALUES (?, 'academy_recognition', 'academy-1', 'Academy', ?, 'academy', 'Academy')`)
+      .run(`recognition-${venue}`, venue);
+  }
+
+  const plan = await planRegistrationSchema(db);
+  for (const table of [
+    "registration_dances",
+    "registration_inscription_orders",
+    "registration_shop_orders",
+    "registration_recognition_documents",
+  ]) {
+    assert.ok(plan.steps.some((step) => step.description === `Add ${table}.event_id`));
+    assert.ok(plan.steps.some((step) => step.description === `Backfill legacy event identities in ${table}`));
+  }
+
+  await prepareRegistrationSchema(db, { apply: true });
+  for (const table of [
+    "registration_dances",
+    "registration_inscription_orders",
+    "registration_shop_orders",
+    "registration_recognition_documents",
+  ]) {
+    const identities = sqlite.prepare(`SELECT venue, event_id FROM ${table}`).all();
+    assert.deepEqual(new Map(identities.map((row) => [row.venue, row.event_id])), expected);
+  }
+
+  sqlite.prepare("UPDATE registration_dances SET event_id = 'cdmx-2027' WHERE venue = 'cdmx'").run();
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
+  assert.equal(sqlite.prepare("SELECT event_id FROM registration_dances WHERE venue = 'cdmx'").get().event_id, "cdmx-2027");
+});
+
+test("shop event backfill prefers the saved ticket edition over the participant venue", async (t) => {
+  const { db, sqlite } = fixture(t, withoutRegistrationEventIdentity());
+  sqlite.exec(`
+    INSERT INTO registration_academies(id, name, contact_name, email, phone)
+      VALUES ('academy-1', 'Academy', 'Teacher', 'teacher@example.test', '123456');
+  `);
+  const insert = sqlite.prepare(`INSERT INTO registration_shop_orders
+    (id, curp, participant_name, academy_id, academy_name, venue, reference, line_items_json)
+    VALUES (?, 'TEST-CURP', 'Dancer', 'academy-1', 'Academy', ?, ?, ?)`);
+  insert.run(
+    "ticket-from-another-venue",
+    "cdmx",
+    "SHOP-TICKET",
+    JSON.stringify([{ itemType: "ticket", productId: "full", eventId: "edomex-2026-otono" }]),
+  );
+  insert.run("invalid-json-fallback", "puebla", "SHOP-FALLBACK", "{invalid");
+  insert.run("scalar-json-fallback", "cdmx", "SHOP-SCALAR", JSON.stringify(["legacy"]));
+
+  await prepareRegistrationSchema(db, { apply: true });
+
+  assert.equal(
+    sqlite.prepare("SELECT event_id FROM registration_shop_orders WHERE id = 'ticket-from-another-venue'").get().event_id,
+    "edomex-2026-otono",
+  );
+  assert.equal(
+    sqlite.prepare("SELECT event_id FROM registration_shop_orders WHERE id = 'invalid-json-fallback'").get().event_id,
+    "puebla-2026",
+  );
+  assert.equal(
+    sqlite.prepare("SELECT event_id FROM registration_shop_orders WHERE id = 'scalar-json-fallback'").get().event_id,
+    "cdmx-2026",
+  );
+  assert.equal((await prepareRegistrationSchema(db, { apply: true })).applied, 0);
 });
 
 test("programme metadata preparation preserves identities and demographic data and validates JSON", async t => {
@@ -574,16 +686,16 @@ test("judge-sheet manifests add a nullable column while preserving previous manu
   assert.equal(writes.length, writeCount);
 });
 
-test("existing databases receive the six ordered payment indexes once without changing orders", async t => {
+test("existing databases receive all ordered payment indexes once without changing orders", async t => {
   const { db, sqlite } = fixture(t);
   seed(sqlite);
   shopOrder(sqlite, "page-index-order", "preserved-access-token");
   const original = rows(sqlite, "registration_shop_orders");
   const indexes = sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'idx_registration_%_orders_%recent'").all();
-  assert.equal(indexes.length, 6);
+  assert.equal(indexes.length, 8);
   for (const { name } of indexes) sqlite.exec(`DROP INDEX ${name}`);
   const plan = await planRegistrationSchema(db);
-  assert.equal(plan.steps.length, 6);
+  assert.equal(plan.steps.length, 8);
   assert.ok(plan.steps.every(step => step.sql.startsWith("CREATE INDEX IF NOT EXISTS")));
   await prepareRegistrationSchema(db, { apply: true });
   assert.deepEqual(rows(sqlite, "registration_shop_orders"), original);

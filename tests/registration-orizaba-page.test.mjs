@@ -18,10 +18,16 @@ test("Orizaba is the open public venue while the Veracruz route remains an alias
   assert.match(sede, /eventName: "Teatro Ignacio de la Llave"/);
   assert.match(sede, /date: "27 y 28 de\\nfebrero 2027"/);
   assert.match(sede, /metaValue: "Inscripciones abiertas"/);
+  assert.match(sede, /acquisitionClosedLabel: "Finalizada"/);
+  assert.match(sede, /acquisitionClosedMessage: "¡Gracias por ser parte de Levitate! Nos vemos en tu sede favorita de Primavera 2027\."/);
+  assert.match(sede, /venue\.acquisitionClosedLabel \?\? "Edición concluida"/);
+  assert.match(sede, /venue\.acquisitionClosedMessage \?\? policy\.acquisitionsMessage/);
   assert.match(sede, /SedesPage\(\{ venueKey = "veracruz" \}/);
-  assert.match(sede, /hasRegistrationAction = venueKey === "edomex" \|\| venueKey === "veracruz"/);
+  assert.match(sede, /hasRegistrationAction = venueKey === "edomex" \|\| venueKey === "veracruz" \|\| venueKey === "cdmx"/);
   assert.doesNotMatch(sede, /Descargar convocatoria/);
   assert.match(home, /href="\/sedes\/orizaba"/);
+  assert.match(header, /label: "Convocatoria",\s*href: "\/sedes\/veracruz"/);
+  assert.match(header, /title: "Convocatoria",\s*href: "\/sedes\/veracruz"/);
   assert.match(header, /label: "Orizaba", href: "\/sedes\/orizaba"/);
   assert.match(events, /slug: "orizaba"/);
   assert.doesNotMatch(events, /slug: "veracruz",\s*date: "Próximamente"/);
@@ -47,7 +53,7 @@ test("Orizaba keeps the established Veracruz storage key without renaming the Me
   assert.match(admin, /veracruz: "2027-02-27"/);
   assert.match(admin, /\{ value: "veracruz", label: "Veracruz" \}/);
   assert.match(participantAdmin, /\{ value: "veracruz", label: "Orizaba" \}/);
-  assert.match(worker, /registrationVenues = new Set\(\["cdmx", "puebla", "edomex", "veracruz"\]\)/);
+  assert.match(worker, /registrationVenues = new Set\(\["cdmx", "cdmx-2027", "puebla", "edomex", "veracruz"\]\)/);
 });
 
 test("academy choreography forms honor the final acquisition closure independently of the historical pause", async () => {
@@ -71,4 +77,24 @@ test("academy choreography forms honor the final acquisition closure independent
     assert.match(form, /setErrorMessage\(policy\.acquisitionsMessage\)/);
     assert.match(form, /<AdminStatusMessage message=\{registrationClosureMessage\} \/>/);
   }
+});
+
+test("Orizaba hides only the Relevé academy tab and advertises the correct general presale dates", async () => {
+  const [admin, inscription, worker] = await Promise.all([
+    source("../src/components/admin/RegistrationScreens.tsx"),
+    source("../src/components/inscripciones/InscripcionesPage.tsx"),
+    source("../worker/index.js"),
+  ]);
+  const sidebarStart = admin.indexOf("function AdminSidebar");
+  const sidebarEnd = admin.indexOf("function RegistrationDashboardMetricCard", sidebarStart);
+
+  assert.ok(sidebarStart >= 0 && sidebarEnd > sidebarStart);
+  assert.match(admin.slice(sidebarStart, sidebarEnd), /adminMenuItems\.filter\(\(item\) => item\.screen !== "releve"\)/);
+  assert.match(admin, /if \(screen === "releve"\)/, "the historical Relevé screen remains available outside the menu");
+  assert.match(inscription, /10 de enero de 2027/);
+  assert.match(inscription, /11 de enero de 2027/);
+  assert.match(inscription, /Precio vigente aplicado/);
+  assert.doesNotMatch(inscription, /Precio preventa respetado/);
+  assert.match(worker, /registrationOrizabaInscriptionPresaleEndsAt = Date\.parse\("2027-01-11T06:00:00\.000Z"\)/);
+  assert.match(worker, /dance\?\.venue === "veracruz"/);
 });

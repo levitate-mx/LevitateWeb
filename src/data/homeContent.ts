@@ -80,14 +80,6 @@ export const experiences = [
 
 export const events = [
   {
-    slug: "estado-de-mexico",
-    date: "13 NOV",
-    name: "Levitate MX",
-    venue: "Teatro Gran Recinto",
-    location: "Tlalnepantla, Edo. Méx.",
-    image: assets.venue,
-  },
-  {
     slug: "orizaba",
     date: "27 FEB",
     name: "Levitate MX",
@@ -95,6 +87,14 @@ export const events = [
     location: "Orizaba, Veracruz",
     image: "/assets/sedes-orizaba-teatro-ignacio-de-la-llave.webp",
     isUpcoming: false,
+  },
+  {
+    slug: "cdmx",
+    date: "16 ABR",
+    name: "Levitate MX",
+    venue: "CDMX",
+    location: "Lugar por definir",
+    image: "/assets/sedes-cdmx-angel-independencia.jpg",
   },
 ];
 

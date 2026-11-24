@@ -74,12 +74,12 @@ test('the SSR entry never falls back to rendering the home page for unconfigured
 
 const template = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Old title</title><meta name="description" content="Old description"><script type="module" crossorigin src="/assets/index-hashed123.js"></script><link rel="stylesheet" crossorigin href="/assets/index-hashed456.css"></head><body><div id="root"></div></body></html>';
 
-test('postbuild emits eleven internal public pages while preserving hashed assets and the untouched private SPA shell', async t => {
+test('postbuild emits twelve internal public pages while preserving hashed assets and the untouched private SPA shell', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'levitate-seo-prerender-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, 'index.html'), template);
   const outputs = await prerenderPages({ clientDirectory: directory });
-  assert.equal(outputs.length, 11);
+  assert.equal(outputs.length, 12);
   assert.equal(outputs.filter(page => page.prerendered).length, 3);
   assert.equal(await readFile(join(directory, 'index.html'), 'utf8'), template);
   for (const page of sitePages) {

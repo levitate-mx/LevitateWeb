@@ -56,16 +56,16 @@ function seedExistingData(sqlite) {
       VALUES ('admin-1','academy-1','Admin','admin','admin@example.test','unchanged-password-hash','admin');
     INSERT INTO registration_participants(id,academy_id,full_name,curp,division,shirt_size)
       VALUES ('participant-1','academy-1','Participante','SYNTHETIC-CURP','adulto','m');
-    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,venue)
-      VALUES ('dance-1','academy-1','Danza','motion','ballet','solo','edomex');
+    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,venue,event_id)
+      VALUES ('dance-1','academy-1','Danza','motion','ballet','solo','edomex','edomex-2026-otono');
     INSERT INTO registration_music_uploads(id,academy_id,dance_id,file_name,content_type,file_size,data_url,
       storage_provider,drive_file_id,drive_web_view_link,uploaded_by_user_id)
       VALUES ('music-1','academy-1','dance-1','cancion.mp3','audio/mpeg',100,'','google_drive',
         'unchanged_music_file','https://drive.google.com/file/d/unchanged_music_file/view','admin-1');
     INSERT INTO registration_student_resources(id,curp,resource_type,title,url)
       VALUES ('resource-1','SYNTHETIC-CURP','media_drive','Carpeta anterior','https://drive.google.com/drive/folders/original');
-    INSERT INTO registration_inscription_orders(id,curp,participant_name,academy_name,venue,reference,amount,status,line_items_json)
-      VALUES ('order-1','SYNTHETIC-CURP','Participante','Academia','edomex','UNCHANGED-REF',175000,'paid','[]');
+    INSERT INTO registration_inscription_orders(id,curp,participant_name,academy_name,venue,event_id,reference,amount,status,line_items_json)
+      VALUES ('order-1','SYNTHETIC-CURP','Participante','Academia','edomex','edomex-2026-otono','UNCHANGED-REF',175000,'paid','[]');
     INSERT INTO registration_event_tickets(id,source_order_type,source_order_id,ticket_code,ticket_number,ticket_label,qr_payload)
       VALUES ('ticket-1','registration','order-1','UNCHANGED-QR',1,'Single pass','LEVITATE:TICKET:UNCHANGED-QR');
   `);

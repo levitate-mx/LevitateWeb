@@ -148,8 +148,11 @@ const businessSnapshot = f => Object.fromEntries(businessTables.map(table => [ta
   f.db.sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all().map(row => ({ ...row })),
 ]));
 const assertNoDeletes = f => assert.ok(f.db.writes.every(sql => !/^\s*DELETE\b/i.test(sql)), 'pausing registration must never delete stored records');
+const eventIdByVenue = {
+  cdmx: 'cdmx-2026', puebla: 'puebla-2026', edomex: 'edomex-2026-otono', veracruz: 'orizaba-2027',
+};
 const danceBody = (f, person, venue = 'edomex', isReleve = false) => ({
-  title: 'Formulario abierto antes del cierre', genre: 'motion', subgenre: 'jazz', category: 'solo', venue,
+  title: 'Formulario abierto antes del cierre', genre: 'motion', subgenre: 'jazz', category: 'solo', venue, eventId: eventIdByVenue[venue],
   level: null, isReleve, choreographerIds: [`teacher-${f.academy.id}`], participantIds: isReleve ? [] : [person.id],
 });
 
@@ -283,9 +286,9 @@ test('matching student sessions retain payment access after dance closure, and o
     assert.ok(json.order.amount > 0);
   }
   const allowed = f.person();
-  f.dance({ person: allowed, venue: 'puebla' });
+  f.dance({ person: allowed, venue: 'veracruz' });
   const { json } = await f.request('/inscription/payment-order', { body: { curp: allowed.curp, ...phone }, status: 201 });
-  assert.equal(json.order.venue, 'puebla');
+  assert.equal(json.order.venue, 'veracruz');
   const open = await fixture(t, { pausedVenues: '' });
   const openPerson = open.person();
   const dance = await open.request('/dances', { body: danceBody(open, openPerson), status: 201 });
@@ -775,7 +778,10 @@ test('the historical choreography pause remains independently testable without t
   for (const [date, active] of productionClosureDates) {
     await t.test(date, async t => {
       const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
-      t.mock.method(Date, 'now', () => Date.parse(date));
+      const requestedNow = Date.parse(date);
+      let now = requestedNow;
+      t.mock.method(Date, 'now', () => now);
+      const edomexCheckoutConcluded = date.startsWith('2027-');
       const person = f.person();
       const beforeNewDance = businessSnapshot(f);
       for (const isReleve of [false, true]) {
@@ -790,8 +796,12 @@ test('the historical choreography pause remains independently testable without t
       f.dance({ person: unbilled });
       for (const path of orderPaths) {
         const created = await f.request(path, { body: { curp: unbilled.curp, ...phone }, status: 201 });
-        assert.equal(created.json.order.venue, 'edomex');
-        assert.equal(created.json.order.status, 'pending_payment');
+        if (edomexCheckoutConcluded) {
+          assert.equal(created.json.order, null, 'a concluded edition must not reopen a new checkout');
+        } else {
+          assert.equal(created.json.order.venue, 'edomex');
+          assert.equal(created.json.order.status, 'pending_payment');
+        }
       }
       const unbilledReleve = f.dance({ isReleve: true });
       await f.request('/releve/orders', { cookie: '', body: {}, status: 401 });
@@ -807,15 +817,18 @@ test('the historical choreography pause remains independently testable without t
       for (const path of proofPaths) {
         const owner = f.person();
         f.dance({ person: owner });
+        if (edomexCheckoutConcluded) now = Date.parse('2026-11-15T23:59:59-06:00');
         const previous = await createExistingOrder(f, owner, { status: 'payment_reported' });
+        now = requestedNow;
         const before = orderRow(f, previous.id);
         const login = await f.request('/student/login', { cookie: '', body: { curp: owner.curp } });
         const cookie = login.headers.get('set-cookie')?.split(';')[0];
         assert.ok(cookie);
         for (const lookupPath of lookupPaths) {
-          await f.request(lookupPath, { cookie: '', body: { curp: owner.curp }, status: 401 });
-          await f.request(lookupPath, { cookie: f.other.cookie, body: { curp: owner.curp }, status: 403 });
-          const { json } = await f.request(lookupPath, { cookie, body: { curp: owner.curp } });
+          const lookupBody = { curp: owner.curp, orderId: previous.id };
+          await f.request(lookupPath, { cookie: '', body: lookupBody, status: 401 });
+          await f.request(lookupPath, { cookie: f.other.cookie, body: lookupBody, status: 403 });
+          const { json } = await f.request(lookupPath, { cookie, body: lookupBody });
           assert.equal(json.order.id, previous.id);
           assert.equal(json.order.amount, 777);
           assert.deepEqual(orderRow(f, previous.id), before);
@@ -827,7 +840,10 @@ test('the historical choreography pause remains independently testable without t
         assert.equal(uploaded.json.order.status, 'payment_reported');
         const after = orderRow(f, previous.id);
         for (const field of ['amount', 'paid_amount', 'line_items_json', 'buyer_phone', 'created_at']) assert.equal(after[field], before[field], field);
-        const retrieved = await f.request('/inscription/payment-lookup', { cookie, body: { curp: owner.curp } });
+        const retrieved = await f.request('/inscription/payment-lookup', {
+          cookie,
+          body: { curp: owner.curp, orderId: previous.id },
+        });
         assert.equal(retrieved.json.order.proof.fileName, proof.fileName);
       }
       assertNoDeletes(f);

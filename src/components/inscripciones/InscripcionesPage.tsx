@@ -249,6 +249,7 @@ const levelLabels: Record<string, string> = {
 
 const venueLabels: Record<string, string> = {
   cdmx: "CDMX - 29 /31 mayo 2026",
+  "cdmx-2027": "CDMX - 16, 17 y 18 de abril 2027",
   edomex: "Otoño 2026 - Estado de México",
   puebla: "Puebla",
   veracruz: "Orizaba - 27 y 28 de febrero 2027",
@@ -502,8 +503,8 @@ export function InscripcionesPage() {
                 </span>
               ) : null}
               <span>
-                La preventa general es aplicable hasta el <strong>12 de octubre de 2026.</strong> A partir del 13 de
-                octubre de 2026 se aplica el precio real.
+                Para Orizaba, la preventa general es aplicable hasta el <strong>10 de enero de 2027</strong>, inclusive
+                (hora de CDMX). A partir del <strong>11 de enero de 2027</strong> se aplica el precio normal.
               </span>
               <span>
                 <strong>Relevé: preventa de {relevePresalePrice} hasta el 25 de octubre de 2026</strong>, inclusive
@@ -1596,7 +1597,7 @@ function InscriptionLookupPanel() {
               <div className="inscripciones-checkout-subhead">
                 <span>
                   <CheckCircle2 aria-hidden="true" size={17} />
-                  {lookup.pricingMode === "international" ? "Primeras 2 participaciones cortesía" : "Precio preventa respetado"}
+                  {lookup.pricingMode === "international" ? "Primeras 2 participaciones cortesía" : "Precio vigente aplicado"}
                 </span>
               </div>
 

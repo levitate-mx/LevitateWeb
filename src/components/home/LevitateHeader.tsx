@@ -31,10 +31,11 @@ const navItems: NavItem[] = [
   { label: "Inicio", href: "#inicio" },
   {
     label: "Convocatoria",
-    href: "/sedes/orizaba",
+    href: "/sedes/veracruz",
     children: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
       { label: "Orizaba", href: "/sedes/orizaba" },
+      { label: "CDMX", href: "/sedes/cdmx" },
     ],
   },
   {
@@ -109,7 +110,7 @@ const capsuleNavItems: PillMenuSection[] = [
   },
   {
     title: "Convocatoria",
-    href: "/sedes/orizaba",
+    href: "/sedes/veracruz",
   },
   {
     title: "Inscripciones",
@@ -123,6 +124,7 @@ const pillMenuSections: PillMenuSection[] = [
     links: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
       { label: "Orizaba", href: "/sedes/orizaba" },
+      { label: "CDMX", href: "/sedes/cdmx" },
     ],
   },
   {

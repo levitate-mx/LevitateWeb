@@ -27,6 +27,42 @@ const managedTables = managedStatements.filter((sql) => sql.startsWith("CREATE T
   columns: [...sql.matchAll(/^  (\w+) (?:TEXT|INTEGER)\b/gm)].map((match) => match[1]),
 }));
 
+const registrationEventIdentityTables = [
+  "registration_dances",
+  "registration_inscription_orders",
+  "registration_shop_orders",
+  "registration_recognition_documents",
+];
+const legacyRegistrationEventIdSql = `CASE venue
+  WHEN 'cdmx' THEN 'cdmx-2026'
+  WHEN 'puebla' THEN 'puebla-2026'
+  WHEN 'edomex' THEN 'edomex-2026-otono'
+  WHEN 'veracruz' THEN 'orizaba-2027'
+END`;
+const legacyRegistrationShopOrderEventIdSql = `COALESCE(
+  (
+    SELECT json_extract(json_quote(item.value), '$.eventId')
+    FROM json_each(
+      CASE
+        WHEN json_valid(registration_shop_orders.line_items_json)
+          THEN registration_shop_orders.line_items_json
+        ELSE '[]'
+      END
+    ) AS item
+    WHERE json_extract(json_quote(item.value), '$.eventId') IN (
+      'cdmx-2026',
+      'puebla-2026',
+      'edomex-2026-otono',
+      'orizaba-2027',
+      'cdmx-2027'
+    )
+    ORDER BY CASE WHEN json_extract(json_quote(item.value), '$.itemType') = 'ticket' THEN 0 ELSE 1 END,
+      CAST(item.key AS INTEGER)
+    LIMIT 1
+  ),
+  ${legacyRegistrationEventIdSql}
+)`;
+
 // These additions replace the schema preparation previously done by request handlers.
 // Existing tables, columns, IDs, permissions, and nonempty access tokens are preserved.
 const additions = {
@@ -64,16 +100,22 @@ const additions = {
     subgenre_detail: "TEXT",
     program_json: "TEXT CHECK (program_json IS NULL OR json_valid(program_json))",
     is_releve: "INTEGER NOT NULL DEFAULT 0 CHECK (is_releve IN (0, 1))",
+    event_id: "TEXT",
   },
   registration_inscription_orders: {
+    event_id: "TEXT",
     buyer_phone_country_code: "TEXT",
     buyer_phone_number: "TEXT",
     buyer_phone: "TEXT",
   },
   registration_shop_orders: {
+    event_id: "TEXT",
     access_token: "TEXT",
     buyer_name: "TEXT",
     buyer_email: "TEXT",
+  },
+  registration_recognition_documents: {
+    event_id: "TEXT",
   },
   registration_music_uploads: {
     duration_seconds: "REAL CHECK (duration_seconds IS NULL OR duration_seconds > 0)",
@@ -210,6 +252,7 @@ const createdTables = {
       academy_id: "TEXT REFERENCES registration_academies(id) ON DELETE SET NULL",
       academy_name: "TEXT NOT NULL",
       venue: "TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz'))",
+      event_id: "TEXT",
       reference: "TEXT NOT NULL UNIQUE COLLATE NOCASE",
       access_token: "TEXT UNIQUE",
       amount: "INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0)",
@@ -284,12 +327,16 @@ const indexes = [
   ["idx_registration_event_tickets_event_sales", "registration_event_tickets", "event_id, source_order_type, source_order_id, status, ticket_number"],
   ["idx_registration_dance_participants_participant_dance", "registration_dance_participants", "participant_id, dance_id"],
   ["idx_registration_dance_choreographers_choreographer_dance", "registration_dance_choreographers", "choreographer_id, dance_id"],
+  ["idx_registration_dances_event_id", "registration_dances", "event_id"],
   ["idx_registration_inscription_orders_recent", "registration_inscription_orders", "updated_at DESC, created_at DESC, id DESC"],
   ["idx_registration_inscription_orders_status_recent", "registration_inscription_orders", "status, updated_at DESC, created_at DESC, id DESC"],
   ["idx_registration_inscription_orders_venue_recent", "registration_inscription_orders", "venue, updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_inscription_orders_event_recent", "registration_inscription_orders", "event_id, updated_at DESC, created_at DESC, id DESC"],
   ["idx_registration_shop_orders_recent", "registration_shop_orders", "updated_at DESC, created_at DESC, id DESC"],
   ["idx_registration_shop_orders_status_recent", "registration_shop_orders", "status, updated_at DESC, created_at DESC, id DESC"],
   ["idx_registration_shop_orders_venue_recent", "registration_shop_orders", "venue, updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_shop_orders_event_recent", "registration_shop_orders", "event_id, updated_at DESC, created_at DESC, id DESC"],
+  ["idx_registration_recognition_documents_event_id", "registration_recognition_documents", "event_id"],
 
   ["idx_registration_releve_order_dance", "registration_inscription_orders", "curp", "UNIQUE", "WHERE curp LIKE 'RELEVE:%'"],
   ["idx_registration_shop_orders_curp", "registration_shop_orders", "curp"],
@@ -304,7 +351,12 @@ const indexes = [
 
 /** Adapter: read(sqlStatements) returns one array of rows per statement; write(sqlStatements) applies a batch. */
 export async function planRegistrationSchema(db) {
-  const tableNames = [...new Set([...Object.keys(prerequisites), ...Object.keys(createdTables), ...managedTables.map((table) => table.name)])];
+  const tableNames = [...new Set([
+    ...Object.keys(prerequisites),
+    ...Object.keys(createdTables),
+    ...Object.keys(additions),
+    ...managedTables.map((table) => table.name),
+  ])];
   const [objects, ...columnResults] = await db.read([
     "SELECT name, type, tbl_name FROM sqlite_schema WHERE type IN ('table', 'index', 'trigger', 'view')",
     ...tableNames.map((name) => `PRAGMA table_info(${name})`),
@@ -359,6 +411,32 @@ export async function planRegistrationSchema(db) {
     }
   }
 
+  const eventIdentityTablesWithColumn = registrationEventIdentityTables.filter(
+    (name) => tables.has(name) && columns.get(name)?.has("event_id"),
+  );
+  const eventIdentityCountResults = eventIdentityTablesWithColumn.length
+    ? await db.read(eventIdentityTablesWithColumn.map(
+      (name) => `SELECT COUNT(*) AS count FROM ${name} WHERE event_id IS NULL OR trim(event_id) = ''`,
+    ))
+    : [];
+  const missingEventIdentityCounts = new Map(eventIdentityTablesWithColumn.map(
+    (name, index) => [name, Number(eventIdentityCountResults[index]?.[0]?.count || 0)],
+  ));
+  for (const name of registrationEventIdentityTables) {
+    if (!tables.has(name)) continue;
+    const columnMissing = !columns.get(name)?.has("event_id");
+    if (!columnMissing && !missingEventIdentityCounts.get(name)) continue;
+    const eventIdSql = name === "registration_shop_orders"
+      ? legacyRegistrationShopOrderEventIdSql
+      : legacyRegistrationEventIdSql;
+    steps.push({
+      description: `Backfill legacy event identities in ${name}`,
+      sql: `UPDATE ${name} SET event_id = ${eventIdSql}
+        WHERE (event_id IS NULL OR trim(event_id) = '')
+          AND venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')`,
+    });
+  }
+
   if (tables.has("registration_shop_orders")) {
     const hasToken = columns.get("registration_shop_orders").has("access_token");
     const [missing, duplicates] = await db.read([
@@ -378,6 +456,7 @@ export async function planRegistrationSchema(db) {
     }
   }
   for (const [name, table, column, unique = "", where = ""] of indexes) {
+    if (!tables.has(table) && !Object.hasOwn(createdTables, table)) continue;
     if (!existingIndexes.has(name)) {
       steps.push({ description: `Create ${name}`, sql: `CREATE ${unique ? `${unique} ` : ""}INDEX IF NOT EXISTS ${name} ON ${table}(${column})${where ? ` ${where}` : ""}` });
     }

@@ -68,8 +68,9 @@ async function fixture(t, { partial = false, published = true, mode = 'block_clo
         ('academy-user','academy','Academia','academy','academy@example.test','unused','academy',datetime('now'));
     INSERT INTO registration_participants(id,academy_id,full_name,curp,division,shirt_size)
       VALUES('person-a','academy','Participante Uno','PRUA000000MXXAAA00','teen','s'),('person-b','academy','Participante Dos','PRUB000000MXXAAA00','teen','m');
-    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue)
-      VALUES('dance-a','academy','Vuelo','aereo','tela','solo','principiante','edomex'),('dance-b','academy','Raíz','aereo','aro','solo','principiante','edomex');
+    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id)
+      VALUES('dance-a','academy','Vuelo','aereo','tela','solo','principiante','edomex','block-release-test'),
+        ('dance-b','academy','Raíz','aereo','aro','solo','principiante','edomex','block-release-test');
     INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-a'),('dance-b','person-b');`);
   for (const actor of ['admin', 'academy-user']) {
     db.sqlite.prepare("INSERT INTO registration_sessions(id,user_id,session_token_hash,expires_at) VALUES(?,?,?,datetime('now','+1 day'))")

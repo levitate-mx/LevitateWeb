@@ -59,7 +59,8 @@ test('Relevé accepts exactly one teacher and only the solo category', async t =
   const f = await fixture(t);
   const base = {
     title: 'Relevé individual', genre: 'motion', subgenre: 'jazz', category: 'solo',
-    level: null, venue: 'cdmx', choreographerIds: ['teacher-one'], participantIds: [], isReleve: true,
+    level: null, venue: 'cdmx', eventId: 'cdmx-2026',
+    choreographerIds: ['teacher-one'], participantIds: [], isReleve: true,
   };
   const none = await f.request('/api/registration/dances', { body: { ...base, choreographerIds: [] }, status: 400 });
   assert.equal(none.error.code, 'invalid_releve_choreographers');

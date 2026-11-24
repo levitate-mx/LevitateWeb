@@ -3,6 +3,14 @@ const sources = [
   { type: "shop", table: "registration_shop_orders" },
 ];
 
+const eventFilterDefinitions = {
+  cdmx: { eventId: "cdmx-2026", venue: "cdmx", includesLegacyVenue: true },
+  "cdmx-2027": { eventId: "cdmx-2027", venue: "cdmx" },
+  puebla: { eventId: "puebla-2026", venue: "puebla", includesLegacyVenue: true },
+  edomex: { eventId: "edomex-2026-otono", venue: "edomex", includesLegacyVenue: true },
+  veracruz: { eventId: "orizaba-2027", venue: "veracruz", includesLegacyVenue: true },
+};
+
 function invalid(message) {
   const error = new Error(message);
   error.statusCode = 400;
@@ -19,7 +27,7 @@ export function readAdminOrderFilters(params) {
   };
   if (filters.query.length > 200) invalid("La búsqueda no puede exceder 200 caracteres.");
   if (!["all", "pending_payment", "payment_reported", "paid", "rejected"].includes(filters.status)) invalid("Status inválido.");
-  if (!["all", "cdmx", "puebla", "edomex", "veracruz"].includes(filters.venue)) invalid("Evento inválido.");
+  if (filters.venue !== "all" && !eventFilterDefinitions[filters.venue]) invalid("Evento inválido.");
   if (!["all", "registration", "shop", "releve"].includes(filters.purchaseType)) invalid("Tipo de compra inválido.");
   return filters;
 }
@@ -33,7 +41,14 @@ function whereClause(filters) {
   const clauses = [];
   const values = [];
   if (filters.status !== "all") { clauses.push("status = ?"); values.push(filters.status); }
-  if (filters.venue !== "all") { clauses.push("venue = ?"); values.push(filters.venue); }
+  if (filters.venue !== "all") {
+    const event = eventFilterDefinitions[filters.venue];
+    clauses.push(event.includesLegacyVenue
+      ? "(event_id = ? OR ((event_id IS NULL OR trim(event_id) = '') AND venue = ?))"
+      : "event_id = ?");
+    values.push(event.eventId);
+    if (event.includesLegacyVenue) values.push(event.venue);
+  }
   if (filters.purchaseType === "releve") clauses.push("curp LIKE 'RELEVE:%'");
   else if (filters.purchaseType !== "all") clauses.push("curp NOT LIKE 'RELEVE:%'");
   return { sql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", values };
@@ -41,7 +56,7 @@ function whereClause(filters) {
 
 function matchesSearch(order, query) {
   return [order.paymentReference, order.reference, order.curp, order.participantName,
-    order.buyerName, order.buyerEmail, order.buyerPhone, order.academyName, order.venue]
+    order.buyerName, order.buyerEmail, order.buyerPhone, order.academyName, order.venue, order.eventId]
     .map((value) => value || "").join(" ").toLowerCase().includes(query);
 }
 

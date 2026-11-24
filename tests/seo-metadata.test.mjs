@@ -21,10 +21,10 @@ const shell = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 test('the public metadata catalogue covers exactly the sitemap with distinct copy, absolute URLs and existing public images', async () => {
   const sitemap = await readFile(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
   const paths = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, url]) => new URL(url).pathname);
-  assert.equal(seo.sitePages.length, 11);
+  assert.equal(seo.sitePages.length, 12);
   assert.deepEqual(seo.sitePages.map(page => page.path), paths);
   for (const field of ['key', 'path', 'title', 'description', 'canonical']) {
-    assert.equal(new Set(seo.sitePages.map(page => page[field])).size, 11, `${field} must identify each page separately`);
+    assert.equal(new Set(seo.sitePages.map(page => page[field])).size, 12, `${field} must identify each page separately`);
   }
   for (const page of seo.sitePages) {
     assert.match(page.key, /^[a-z][a-z-]*$/);
@@ -47,8 +47,12 @@ test('existing public aliases, trailing slashes, queries and fragments point to 
     assert.strictEqual(seo.resolveSiteMetadata(alias + '?utm_source=campaign#reglas'), releve);
   }
   const edomex = seo.resolveSiteMetadata('/sedes/estado-de-mexico');
-  for (const alias of ['/sedes', '/sedes/', '/sedes/edomex', '/sedes/edomex/']) {
+  for (const alias of ['/sedes/edomex', '/sedes/edomex/']) {
     assert.strictEqual(seo.resolveSiteMetadata(alias + '?sede=edomex#programa'), edomex);
+  }
+  const veracruz = seo.resolveSiteMetadata('/sedes/veracruz');
+  for (const alias of ['/sedes', '/sedes/', '/sedes/orizaba', '/sedes/orizaba/']) {
+    assert.strictEqual(seo.resolveSiteMetadata(alias + '?sede=orizaba#programa'), veracruz);
   }
   for (const page of seo.sitePages) {
     const resolved = seo.resolveSiteMetadata('https://preview.example.invalid' + page.path + '?code=PRIVATE_TEST_VALUE#details');

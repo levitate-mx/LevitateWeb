@@ -39,8 +39,8 @@ async function fixture(t) {
       VALUES('academy-user','academy','Academia','academy','academy@example.test','not-used','academy',datetime('now'));
     INSERT INTO registration_participants(id,academy_id,full_name,curp,division,shirt_size)
       VALUES('person-a','academy','Mariana Prueba','PRUA000000MXXAAA00','teen','s'),('person-b','academy','Otra Persona','PRUB000000MXXAAA00','teen','m');
-    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue)
-      VALUES('dance-a','academy','Vuelo','aereo','tela','solo','intermedio','edomex'),('dance-b','academy','Otra rutina','aereo','aro','solo','intermedio','edomex');
+    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id)
+      VALUES('dance-a','academy','Vuelo','aereo','tela','solo','intermedio','edomex','test-event'),('dance-b','academy','Otra rutina','aereo','aro','solo','intermedio','edomex','test-event');
     INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-a'),('dance-b','person-b');`);
   for(const actor of ['admin','academy-user'])db.sqlite.prepare("INSERT INTO registration_sessions(id,user_id,session_token_hash,expires_at) VALUES(?,?,?,datetime('now','+1 day'))").run(actor,actor,await digest(actor+'-session'));
   const env={DB:db,PARTICIPANT_MEDIA:bucket,PARTICIPANT_REGISTRATION_EVENT_IDS:'test-event'};
@@ -67,6 +67,14 @@ const judging={judges:[{name:'Juez de prueba',score:47,maxScore:50,criteria:[{la
 const previewPath=(participantId='person-a',eventId='test-event')=>`/api/registration/admin/participant-portal?preview=1&eventId=${encodeURIComponent(eventId)}&participantId=${encodeURIComponent(participantId)}`;
 const adminCookie='levitate_registration_session=admin-session';
 const totalChanges=(db)=>db.sqlite.prepare('SELECT total_changes() AS count').get().count;
+
+test('deployment enables participant registration fallback for the active 2027 editions without reopening CDMX 2026',async()=>{
+  const wrangler=await readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8');
+  const configured=wrangler.match(/"PARTICIPANT_REGISTRATION_EVENT_IDS"\s*:\s*"([^"]+)"/)?.[1]
+    .split(',').map(value=>value.trim()).filter(Boolean);
+  assert.deepEqual(configured,['edomex-2026-otono','orizaba-2027','cdmx-2027']);
+  assert.equal(configured.includes('cdmx-2026'),false);
+});
 
 test('passport uses the choreography programme division while retaining the participant demographic division',async t=>{
   const {db,request,access}=await fixture(t);
@@ -368,7 +376,7 @@ test('original mappings from another event or choreography cannot collapse unrel
   }
 });
 
-test('ready previews on draft routines require their own current approvals and exact participant academy and venue', async t => {
+test('ready previews on draft routines require their own current approvals and exact participant academy and edition', async t => {
   const f = await readyDraftPhoto(t);
   assert.equal(f.db.sqlite.prepare('SELECT status FROM participant_portal_routines WHERE id=?').get(f.routine).status, 'draft');
   let own = (await f.request('/api/participant/me', { cookie: f.cookie })).data.routines[0];
@@ -383,7 +391,7 @@ test('ready previews on draft routines require their own current approvals and e
     ["UPDATE participant_portal_routines SET publication_blocked=1", "UPDATE participant_portal_routines SET publication_blocked=0"],
     ["UPDATE participant_portal_drive_album_settings SET publication_paused=1", "UPDATE participant_portal_drive_album_settings SET publication_paused=0"],
     ["UPDATE participant_portal_drive_files SET publication_policy='held'", "UPDATE participant_portal_drive_files SET publication_policy='automatic'"],
-    ["UPDATE registration_dances SET venue='cdmx' WHERE id='dance-a'", "UPDATE registration_dances SET venue='edomex' WHERE id='dance-a'"],
+    ["UPDATE registration_dances SET event_id='other-event' WHERE id='dance-a'", "UPDATE registration_dances SET event_id='test-event' WHERE id='dance-a'"],
     ["UPDATE registration_dances SET academy_id='foreign-academy' WHERE id='dance-a'", "UPDATE registration_dances SET academy_id='academy' WHERE id='dance-a'"],
     ["DELETE FROM registration_dance_participants WHERE dance_id='dance-a' AND participant_id='person-a'",
       "INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-a','person-a')"],
@@ -549,7 +557,7 @@ test('group members inherit one routine gallery and losing membership immediatel
 
 test('admin searches and pages large event metadata without reading every asset by default',async t=>{
   const {db,request}=await fixture(t);
-  const dance=db.sqlite.prepare("INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue) VALUES(?,'academy',?,'aereo','tela','solo','intermedio','edomex')");
+  const dance=db.sqlite.prepare("INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id) VALUES(?,'academy',?,'aereo','tela','solo','intermedio','edomex','test-event')");
   for(let i=0;i<205;i++)dance.run(`extra-dance-${i}`,`Routine${String(i).padStart(3,'0')}`);
   const asset=db.sqlite.prepare(`INSERT INTO participant_portal_assets(id,event_id,participant_id,kind,object_key,file_name,content_type,sha256,byte_size)
     VALUES(?,'test-event','person-a','diploma',?,'diploma.pdf','application/pdf','hash-fixture',12)`);
@@ -724,11 +732,11 @@ test('public asset authentication happens before reading asset metadata or R2',a
 test('QR grants identify current registered presentations before portal curation without generating records',async t=>{
   const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
   await admin({action:'event.upsert',event:{id:'test-event',title:'Edición sin publicar',season:'Otoño 2026',venue:'edomex',published:false}});
-  db.sqlite.exec(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue)
-    VALUES('dance-a-extra','academy','Vuelo','motion','jazz','solo',NULL,'edomex'),
-      ('dance-other-venue','academy','Otra sede propia','aereo','tela','solo','intermedio','puebla');
+  db.sqlite.exec(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id)
+    VALUES('dance-a-extra','academy','Vuelo','motion','jazz','solo',NULL,'edomex','test-event'),
+      ('dance-other-edition','academy','Otra edición propia','aereo','tela','solo','intermedio','edomex','other-event');
     INSERT INTO registration_dance_participants(dance_id,participant_id)
-      VALUES('dance-a-extra','person-a'),('dance-other-venue','person-a');
+      VALUES('dance-a-extra','person-a'),('dance-other-edition','person-a');
     UPDATE registration_dances SET title='Vuelo' WHERE id='dance-b';
     INSERT INTO registration_academies(id,name,contact_name,email)
       VALUES('other-academy','Otra academia ficticia','Responsable ficticio','other@example.test');
@@ -793,7 +801,10 @@ test('curated edition records override registration fallback without duplicating
 test('registration fallback never borrows results or private assets from another edition of the same routine',async t=>{
   const {db,request,admin,access}=await fixture(t);const {cookie}=await access();
   await admin({action:'event.upsert',event:{id:'other-edition',title:'Otra edición ficticia',season:'Otra temporada',venue:'edomex',published:true}});
-  const saved=await admin({action:'routine.save',eventId:'other-edition',danceId:'dance-a',result:result(),judging,photosPublished:true});
+  db.sqlite.exec(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id)
+    VALUES('other-edition-dance','academy','Vuelo','aereo','tela','solo','intermedio','edomex','other-edition');
+    INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('other-edition-dance','person-a');`);
+  const saved=await admin({action:'routine.save',eventId:'other-edition',danceId:'other-edition-dance',result:result(),judging,photosPublished:true});
   const photo=await admin({action:'asset.upload',eventId:'other-edition',kind:'photo',routineId:saved.data.routineId,fileName:'other-edition.jpg',contentType:'image/jpeg',base64Data:photoSource.toString('base64')});
   await admin({action:'asset.publish',assetId:photo.data.assetId,published:true});
   await admin({action:'routine.publish',routineId:saved.data.routineId});
@@ -818,17 +829,19 @@ test('registration fallback requires an explicitly configured edition while cura
   response=await request('/api/participant/me',{cookie:current.cookie});
   assert.equal(response.data.routines[0].id,'registration:dance-a');
   await admin({action:'event.upsert',event:{id:'future-edition',title:'Edición futura ficticia',season:'Otra temporada',venue:'edomex',published:false}});
+  db.sqlite.exec(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id)
+    VALUES('future-dance','academy','Rutina futura','aereo','aro','solo','intermedio','edomex','future-edition');
+    INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('future-dance','person-a');`);
   const grant=await admin({action:'access.create',eventId:'future-edition',participantId:'person-a'});
   const exchange=await request('/api/participant/access/exchange',{method:'POST',body:{token:grant.data.token}});
   const futureCookie=exchange.headers.get('set-cookie').split(';')[0];
-  db.sqlite.prepare("INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES('dance-b','person-a')").run();
   let before=totalChanges(db);
   response=await request('/api/participant/me',{cookie:futureCookie});
   assert.deepEqual(response.data.routines,[],'the same venue never authorizes fallback into an unconfigured future edition');
   const preview=await request(previewPath('person-a','future-edition'),{cookie:adminCookie});
   assert.deepEqual(preview.data.routines,[],'admin preview uses the same explicit edition boundary');
   assert.equal(totalChanges(db),before);
-  const curated=await admin({action:'routine.save',eventId:'future-edition',danceId:'dance-a',result:result(),judging,photosPublished:false});
+  const curated=await admin({action:'routine.save',eventId:'future-edition',danceId:'future-dance',result:result(),judging,photosPublished:false});
   before=totalChanges(db);
   response=await request('/api/participant/me',{cookie:futureCookie});
   assert.deepEqual(response.data.routines.map(routine=>routine.id),[curated.data.routineId]);
@@ -838,7 +851,7 @@ test('registration fallback requires an explicitly configured edition while cura
   assert.equal(totalChanges(db),before);
   env.PARTICIPANT_REGISTRATION_EVENT_IDS='test-event, future-edition, test-event';
   response=await request('/api/participant/me',{cookie:futureCookie});
-  assert.deepEqual(new Set(response.data.routines.map(routine=>routine.id)),new Set([curated.data.routineId,'registration:dance-b']));
+  assert.deepEqual(new Set(response.data.routines.map(routine=>routine.id)),new Set([curated.data.routineId]));
 });
 
 test('photo uploads require the prepared JPEG and preserve the exact marked bytes',async t=>{
@@ -1028,10 +1041,10 @@ async function guestFixture(t) {
   const f = await fixture(t);
   f.db.sqlite.exec(`INSERT INTO registration_choreographers(id,academy_id,full_name) VALUES('guest-teacher','academy','Maestra Invitada');
     INSERT INTO registration_academies(id,name,contact_name,email) VALUES('other-academy','Otra academia','Otra','other@example.test');
-    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,is_releve) VALUES
-    ('guest-dance','academy','Relevé de invitada','aereo','tela','solo','intermedio','edomex',1),
-    ('guest-student-dance','academy','Grupo del programa','motion','jazz','grupo',NULL,'edomex',0),
-    ('foreign-guest-dance','other-academy','Rutina ajena','motion','jazz','solo',NULL,'edomex',0);
+    INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,level,venue,event_id,is_releve) VALUES
+    ('guest-dance','academy','Relevé de invitada','aereo','tela','solo','intermedio','edomex','test-event',1),
+    ('guest-student-dance','academy','Grupo del programa','motion','jazz','grupo',NULL,'edomex','test-event',0),
+    ('foreign-guest-dance','other-academy','Rutina ajena','motion','jazz','solo',NULL,'edomex','test-event',0);
     INSERT INTO registration_dance_choreographers(dance_id,choreographer_id) VALUES('guest-dance','guest-teacher');`);
   for (const [dance, participants] of [['guest-dance','REGISTRO RELEVÉ'], ['guest-student-dance','Participante Invitada'], ['foreign-guest-dance','Participante Invitada']]) {
     f.db.sqlite.prepare('UPDATE registration_dances SET program_json=? WHERE id=?')

@@ -142,6 +142,7 @@ type ShopOrderLineItem = {
   danceId?: string;
   danceTitle?: string;
   division?: string | null;
+  eventId?: string;
   itemType?: string;
   participantCount?: number;
   productCategory?: string;
@@ -150,6 +151,7 @@ type ShopOrderLineItem = {
   quantity?: number;
   title?: string;
   unitPrice?: number;
+  venue?: string;
 };
 
 type MediaParticipantLookupLine = {
@@ -375,6 +377,7 @@ const mediaDivisionLabels: Record<string, string> = {
 
 const mediaVenueLabels: Record<string, string> = {
   cdmx: "CDMX - 29 /31 mayo 2026",
+  "cdmx-2027": "CDMX - 16, 17 y 18 de abril 2027",
   edomex: "Otoño 2026 - Estado de México",
   puebla: "Puebla",
   veracruz: "Orizaba - 27 y 28 de febrero 2027",

@@ -34,8 +34,22 @@ const registrationStudentSessionCookieName = "levitate_registration_student_sess
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const registrationEmailVerificationMaxAgeMinutes = 60 * 24 * 2;
 const registrationPasswordResetMaxAgeMinutes = 60;
-const registrationVenues = new Set(["cdmx", "puebla", "edomex", "veracruz"]);
+const registrationVenues = new Set(["cdmx", "cdmx-2027", "puebla", "edomex", "veracruz"]);
 const defaultRegistrationEventVenue = "edomex";
+const defaultRegistrationParticipantEventId = "orizaba-2027";
+const registrationEvents = Object.freeze({
+  "cdmx-2026": { date: "2026-05-29", endsOn: "2026-05-31", venue: "cdmx", venueKey: "cdmx" },
+  "puebla-2026": { date: "2026-06-07", endsOn: "2026-06-07", venue: "puebla", venueKey: "puebla" },
+  "edomex-2026-otono": { date: "2026-11-13", endsOn: "2026-11-15", venue: "edomex", venueKey: "edomex" },
+  "orizaba-2027": { date: "2027-02-27", endsOn: "2027-02-28", venue: "veracruz", venueKey: "veracruz" },
+  "cdmx-2027": { date: "2027-04-16", endsOn: "2027-04-18", venue: "cdmx", venueKey: "cdmx-2027" },
+});
+const legacyRegistrationEventIdByVenue = Object.freeze({
+  cdmx: "cdmx-2026",
+  puebla: "puebla-2026",
+  edomex: "edomex-2026-otono",
+  veracruz: "orizaba-2027",
+});
 const registrationAcademyOriginTypes = new Set(["mexico", "international"]);
 const registrationMexicoStates = new Set([
   "aguascalientes",
@@ -173,6 +187,9 @@ const registrationMusicDurationLimitsByDivision = {
 const registrationGoogleDriveScope = "https://www.googleapis.com/auth/drive.file";
 const registrationGmailSendScope = "https://www.googleapis.com/auth/gmail.send";
 const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000Z");
+// Orizaba uses the legacy `veracruz` storage key. Its presale is valid through
+// January 10, 23:59:59.999 in Mexico City.
+const registrationOrizabaInscriptionPresaleEndsAt = Date.parse("2027-01-11T06:00:00.000Z");
 // Relevé's regular presale extends through October 25, 23:59:59 in Mexico City.
 const registrationRelevePresaleEndsAt = Date.parse("2026-10-26T06:00:00.000Z");
 // Hot Presale runs in Mexico City (UTC-6 in October 2026): Oct 6 at 00:00 through Oct 8 at 10:00.
@@ -1484,13 +1501,22 @@ async function handleRegistrationParticipants(request, env) {
       ? normalizeRegistrationDocument(requireString(body.curp, "documentNumber"))
       : normalizeCurp(requireString(body.curp, "curp"));
     const birthDate = requireString(body.birthDate, "birthDate");
-    const age = optionalInteger(body.age, "age");
-    const division = requireRegistrationChoice(body.division, "division", registrationDivisions);
+    const participantEvent = requireRegistrationEvent(body.eventId || defaultRegistrationParticipantEventId);
+    const participantClassification = getRegistrationParticipantEventClassification(
+      { birth_date: birthDate },
+      participantEvent.id,
+    );
+    const age = participantClassification?.age ?? null;
+    const division = participantClassification?.division || "";
     const shirtSize = requireRegistrationChoice(body.shirtSize, "shirtSize", registrationShirtSizes);
     const isReleveTeacher = optionalBoolean(body.isReleveTeacher);
 
     if (age == null) {
-      throwHttpError("validation_error", "age is required", 400);
+      throwHttpError(
+        "invalid_birth_date",
+        `La fecha de nacimiento debe ser válida para la edición ${participantEvent.id}.`,
+        400,
+      );
     }
 
     if (isInternational && curp.length < 3) {
@@ -1723,6 +1749,7 @@ async function handleRegistrationInscriptionPaymentOrder(request, env) {
 async function handleRegistrationInscriptionOrderProof(request, env) {
   try {
     assertMethod(request, ["POST"]);
+    const proofReceivedAt = Date.now();
 
     const db = getDb(env);
     const body = await readJsonBody(request);
@@ -1733,7 +1760,7 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
 
     const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
 
-    const order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    let order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
     if (access.scope === "academy" && order.academy_id !== access.session.academy.id) {
       throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
     }
@@ -1742,7 +1769,8 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
       order.venue,
       getRegistrationPolicy(env).acquisitionsClosedVenues,
     );
-    const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
+    order = await refreshRegistrationOrdinaryInscriptionPrice(db, order, proofReceivedAt);
+    const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body, { receivedAt: proofReceivedAt });
 
     return sendJson({ order: serializePublicRegistrationInscriptionOrder(serializedOrder) }, 201);
   } catch (error) {
@@ -1904,6 +1932,7 @@ async function handleRegistrationShopOrderProof(request, env) {
 async function handleRegistrationInscriptionPaymentProof(request, env) {
   try {
     assertMethod(request, ["POST"]);
+    const proofReceivedAt = Date.now();
 
     const db = getDb(env);
 
@@ -1916,7 +1945,7 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
     }
 
     const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
-    const order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    let order = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
     if (access.scope === "academy" && order.academy_id !== access.session.academy.id) {
       throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
     }
@@ -1925,7 +1954,8 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
       order.venue,
       getRegistrationPolicy(env).acquisitionsClosedVenues,
     );
-    const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
+    order = await refreshRegistrationOrdinaryInscriptionPrice(db, order, proofReceivedAt);
+    const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body, { receivedAt: proofReceivedAt });
 
     return sendJson({ order: serializePublicRegistrationInscriptionPaymentOrder(serializedOrder) }, 201);
   } catch (error) {
@@ -1933,7 +1963,7 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
   }
 }
 
-async function saveRegistrationInscriptionPaymentProof(db, order, body) {
+async function saveRegistrationInscriptionPaymentProof(db, order, body, { receivedAt = Date.now() } = {}) {
   const existingProof = await getLatestRegistrationPaymentProof(db, order.id);
 
   if (existingProof && order.status !== "rejected") {
@@ -1941,6 +1971,7 @@ async function saveRegistrationInscriptionPaymentProof(db, order, body) {
   }
 
   const proof = getRegistrationPaymentProofInput(body);
+  const receivedAtSql = new Date(receivedAt).toISOString().slice(0, 19).replace("T", " ");
 
   await db
     .prepare(
@@ -1951,12 +1982,23 @@ async function saveRegistrationInscriptionPaymentProof(db, order, body) {
           file_name,
           content_type,
           file_size,
-          data_url
+          data_url,
+          uploaded_at,
+          created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
-    .bind(crypto.randomUUID(), order.id, proof.fileName, proof.contentType, proof.fileSize, proof.dataUrl)
+    .bind(
+      crypto.randomUUID(),
+      order.id,
+      proof.fileName,
+      proof.contentType,
+      proof.fileSize,
+      proof.dataUrl,
+      receivedAtSql,
+      receivedAtSql,
+    )
     .run();
 
   try {
@@ -2043,7 +2085,7 @@ async function handleRegistrationReleveOrders(request, env) {
     const acquisitionsClosedVenues = getRegistrationPolicy(env).acquisitionsClosedVenues;
     for (const dance of dances) {
       const order = await ensureRegistrationReleveOrder(db, dance, session.academy, {
-        allowCreate: !acquisitionsClosedVenues.includes(dance.venue),
+        allowCreate: !acquisitionsClosedVenues.includes(getRegistrationDanceVenueKey(dance)),
       });
       if (!order) continue;
       orders.push({
@@ -2060,6 +2102,7 @@ async function handleRegistrationReleveOrders(request, env) {
 async function handleRegistrationReleveOrderProof(request, env) {
   try {
     assertMethod(request, ["POST"]);
+    const proofReceivedAt = Date.now();
     const db = getDb(env);
     const session = await requireRegistrationAcademy(request, db);
     const body = await readJsonBody(request);
@@ -2078,7 +2121,7 @@ async function handleRegistrationReleveOrderProof(request, env) {
       order.venue,
       getRegistrationPolicy(env).acquisitionsClosedVenues,
     );
-    const updatedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
+    const updatedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body, { receivedAt: proofReceivedAt });
     return sendJson({ order: { ...updatedOrder, danceId } }, 201);
   } catch (error) {
     return sendRegistrationError(error);
@@ -2105,7 +2148,8 @@ async function ensureRegistrationReleveOrder(db, dance, academy, { allowCreate =
     category: "releve",
     genre: dance.genre,
     subgenre: dance.subgenre,
-    venue: dance.venue,
+    venue: getRegistrationDanceVenueKey(dance),
+    eventId: getRegistrationDanceEventId(dance),
     academyName: academy.name,
     currency: "MXN",
     amount,
@@ -2117,11 +2161,22 @@ async function ensureRegistrationReleveOrder(db, dance, academy, { allowCreate =
     try {
       await db.prepare(`
         INSERT INTO registration_inscription_orders
-          (id, curp, participant_name, academy_id, academy_name, venue, reference, amount,
+          (id, curp, participant_name, academy_id, academy_name, venue, event_id, reference, amount,
            buyer_phone, line_items_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(crypto.randomUUID(), curp, dance.title, academy.id, academy.name, dance.venue,
-        reference, amount, academy.phone || null, lineItems).run();
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        crypto.randomUUID(),
+        curp,
+        dance.title,
+        academy.id,
+        academy.name,
+        dance.venue,
+        getRegistrationDanceEventId(dance),
+        reference,
+        amount,
+        academy.phone || null,
+        lineItems,
+      ).run();
       return await db.prepare("SELECT * FROM registration_inscription_orders WHERE curp = ? AND academy_id = ? LIMIT 1")
         .bind(curp, academy.id).first();
     } catch (error) {
@@ -2176,6 +2231,121 @@ async function refreshRegistrationRelevePrices(db, { academyId, orderId } = {}) 
     registrationInternationalInscriptionPrices.presale.releve, registrationInscriptionPrices.presale.releve,
     registrationInternationalInscriptionPrices.normal.releve, registrationInscriptionPrices.normal.releve,
   ).run();
+}
+
+// Ordinary inscription references do not reserve a price by themselves. Open
+// or rejected orders follow the price in effect when a valid proof is sent;
+// reported and paid orders keep the amount already submitted for review.
+async function refreshRegistrationOrdinaryInscriptionPrice(db, order, priceAt = Date.now()) {
+  if (
+    !order
+    || String(order.curp || "").startsWith("RELEVE:")
+    || !["pending_payment", "rejected"].includes(order.status)
+  ) {
+    return order;
+  }
+
+  const lines = parseRegistrationOrderLineItems(order.line_items_json);
+  if (!lines.some((line) => line.venue === "veracruz")) {
+    return order;
+  }
+  const isInternational = getRegistrationOrderCurrency(lines) === registrationInscriptionCurrencies.international;
+  const currency = getRegistrationInscriptionCurrency(isInternational);
+  const repricedLines = lines.map((line, index) => {
+    const pricingPosition = Number(line.pricingPosition || index + 1);
+    const isCourtesy = isInternational && pricingPosition <= 2;
+    const discountRate = isCourtesy ? 1 : [2, 4, 6].includes(pricingPosition) ? 0.5 : 0;
+    const baseAmount = getRegistrationInscriptionAmount(line, { isInternational, priceAt });
+    const discountAmount = Math.round(baseAmount * discountRate);
+
+    return {
+      ...line,
+      baseAmount,
+      currency,
+      discountAmount,
+      discountRate,
+      isCourtesy,
+      pricingPosition,
+      pricingType: isCourtesy ? "international_courtesy" : isInternational ? "international" : "mexico",
+      amount: baseAmount - discountAmount,
+    };
+  });
+  const amount = repricedLines.reduce((total, line) => total + Number(line.amount || 0), 0);
+  const lineItemsJson = JSON.stringify(repricedLines);
+
+  if (Number(order.amount || 0) === amount && order.line_items_json === lineItemsJson) {
+    return order;
+  }
+
+  const result = await db
+    .prepare(
+      `
+        UPDATE registration_inscription_orders
+        SET amount = ?,
+            line_items_json = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+          AND status = ?
+          AND amount = ?
+          AND line_items_json = ?
+      `,
+    )
+    .bind(amount, lineItemsJson, order.id, order.status, order.amount, order.line_items_json)
+    .run();
+
+  if (Number(result.meta?.changes || 0) !== 1) {
+    throwHttpError(
+      "registration_inscription_order_changed",
+      "La orden cambió mientras actualizábamos el importe. Vuelve a abrirla antes de enviar el comprobante.",
+      409,
+    );
+  }
+
+  return {
+    ...order,
+    amount,
+    line_items_json: lineItemsJson,
+  };
+}
+
+// Call only after authorizing the requested academy or a global admin. All
+// orders in one read use the same instant so totals cannot straddle a cutoff.
+async function refreshRegistrationOrdinaryInscriptionPrices(db, { academyId, orderId } = {}) {
+  const scope = [];
+  const bindings = [];
+  if (academyId) {
+    scope.push("academy_id = ?");
+    bindings.push(academyId);
+  }
+  if (orderId) {
+    scope.push("id = ?");
+    bindings.push(orderId);
+  }
+  const { results = [] } = await db
+    .prepare(
+      `
+        SELECT *
+        FROM registration_inscription_orders
+        WHERE curp NOT LIKE 'RELEVE:%'
+          AND status IN ('pending_payment', 'rejected')
+          ${scope.length ? `AND ${scope.join(" AND ")}` : ""}
+      `,
+    )
+    .bind(...bindings)
+    .all();
+  const priceAt = Date.now();
+
+  for (const order of results) {
+    try {
+      await refreshRegistrationOrdinaryInscriptionPrice(db, order, priceAt);
+    } catch (error) {
+      if (error?.code !== "registration_inscription_order_changed") {
+        throw error;
+      }
+      // A concurrent proof or review owns the newer snapshot. The following
+      // read will return that committed state instead of failing the listing.
+    }
+  }
 }
 
 async function handleRegistrationInscriptionOrderStatus(request, env) {
@@ -2288,6 +2458,7 @@ async function handleRegistrationAdminPaymentOrders(request, env) {
     const db = getDb(env);
     await requireRegistrationAdmin(request, env, db);
     await refreshRegistrationRelevePrices(db);
+    await refreshRegistrationOrdinaryInscriptionPrices(db);
     await refreshSinglePassPrices(db);
     const params = new URL(request.url).searchParams;
     return sendJson(await (params.get("export") === "1"
@@ -2306,7 +2477,10 @@ async function handleRegistrationAdminPaymentOrder(request, env) {
     const params = new URL(request.url).searchParams;
     const id = requireString(params.get("id"), "id");
     const type = requireRegistrationChoice(params.get("orderType"), "orderType", new Set(["registration", "shop"]));
-    const row = type === "shop" ? await getRegistrationShopOrderRecordById(db, id) : await getRegistrationInscriptionOrderRecordById(db, id);
+    let row = type === "shop" ? await getRegistrationShopOrderRecordById(db, id) : await getRegistrationInscriptionOrderRecordById(db, id);
+    if (type === "registration") {
+      row = await refreshRegistrationOrdinaryInscriptionPrice(db, row);
+    }
     const order = await serializeRegistrationAdminOrderDetail(db, type, row);
     return sendJson({ order });
   } catch (error) {
@@ -3059,9 +3233,15 @@ async function handleRegistrationDances(request, env) {
     const subgenre = requireRegistrationSubgenre(genre, body.subgenre);
     const subgenreDetail = normalizeRegistrationSubgenreDetail(subgenre, body.subgenreDetail);
     const category = requireRegistrationCategory(genre, body.category);
-    const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
-    assertRegistrationAcquisitionOpen(venue, getRegistrationPolicy(env).acquisitionsClosedVenues);
-    assertChoreographyCreationOpen(venue, getRegistrationPolicy(env).pausedVenues);
+    const event = requireRegistrationEvent(body.eventId);
+    const requestedVenue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
+    if (requestedVenue !== event.venueKey) {
+      throwHttpError("registration_event_venue_mismatch", "La edición seleccionada no corresponde a la sede.", 400);
+    }
+    const venue = event.venue;
+    const venueKey = event.venueKey;
+    assertRegistrationAcquisitionOpen(venueKey, getRegistrationPolicy(env).acquisitionsClosedVenues);
+    assertChoreographyCreationOpen(venueKey, getRegistrationPolicy(env).pausedVenues);
     const isReleve = optionalBoolean(body.isReleve);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
     const participantIds = requireStringArray(body.participantIds, "participantIds");
@@ -3110,15 +3290,17 @@ async function handleRegistrationDances(request, env) {
       participantIds,
       "Participante no encontrado",
     );
+    const participantsAtEvent = participantRows.map((participant) =>
+      classifyRegistrationParticipantForEvent(participant, event.id));
     const division = getRegistrationMusicDriveDivision({
       category,
       isReleve,
-      participants: participantRows,
+      participants: participantsAtEvent,
     });
     const level = requireRegistrationLevel(genre, body.level, division);
 
-    assertChoreographyCreationOpen(venue, getRegistrationPolicy(env).pausedVenues);
-    const writeGuard = getChoreographyCreationWriteGuard(env, [venue]);
+    assertChoreographyCreationOpen(venueKey, getRegistrationPolicy(env).pausedVenues);
+    const writeGuard = getChoreographyCreationWriteGuard(env, [venueKey]);
     const danceId = crypto.randomUUID();
     const statements = [
       db
@@ -3135,12 +3317,27 @@ async function handleRegistrationDances(request, env) {
               category,
               level,
               venue,
+              event_id,
               created_by_user_id
             )
-            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${writeGuard.sql}
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${writeGuard.sql}
           `,
         )
-        .bind(danceId, academyId, title, genre, subgenre, subgenreDetail, isReleve ? 1 : 0, category, level, venue, session.user.id, ...writeGuard.values),
+        .bind(
+          danceId,
+          academyId,
+          title,
+          genre,
+          subgenre,
+          subgenreDetail,
+          isReleve ? 1 : 0,
+          category,
+          level,
+          venue,
+          event.id,
+          session.user.id,
+          ...writeGuard.values,
+        ),
       ...choreographerIds.map((choreographerId) =>
         db
           .prepare(
@@ -3642,6 +3839,7 @@ function getPublicSiteUrl(request, env) {
 function getRegistrationVenueLabel(venue) {
   const labels = {
     cdmx: "CDMX - 29 /31 mayo 2026",
+    "cdmx-2027": "CDMX - 16, 17 y 18 de abril 2027",
     puebla: "Puebla - 7 junio 2026",
     edomex: "Otoño 2026 - Estado de México",
     veracruz: "Orizaba - 27 y 28 de febrero 2027",
@@ -4160,6 +4358,7 @@ async function getRegistrationStudentState(db, user) {
           registration_dances.category,
           registration_dances.level,
           registration_dances.venue,
+          registration_dances.event_id,
           registration_academies.name AS academy_name,
           registration_dances.created_at
         FROM registration_dance_participants
@@ -4268,6 +4467,7 @@ async function getRegistrationInscriptionLookup(
               AND registration_choreographers.is_releve_teacher = 1
           ) AS has_releve_teacher_choreographer,
           registration_dances.venue,
+          registration_dances.event_id,
           registration_academies.name AS academy_name,
           registration_academies.origin_type AS academy_origin_type,
           registration_dances.created_at
@@ -4288,26 +4488,33 @@ async function getRegistrationInscriptionLookup(
   const dancesWithParticipants = await attachRegistrationDanceParticipants(db, danceRows);
   const allLines = buildRegistrationInscriptionLines(dancesWithParticipants, { isInternational });
   if (orderId) {
-    const selectedOrder = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
+    let selectedOrder = await getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp);
     if (academyId && selectedOrder.academy_id !== academyId) {
       throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
     }
-    const selectedLines = parseRegistrationOrderLineItems(selectedOrder.line_items_json);
-    const acquisitionClosed = getRegistrationLineVenues(selectedLines, selectedOrder.venue)
+    let selectedLines = parseRegistrationOrderLineItems(selectedOrder.line_items_json);
+    const acquisitionClosed = getRegistrationLineVenues(selectedLines, getRegistrationDanceVenueKey(selectedOrder))
       .some((venue) => acquisitionsClosedVenues.includes(venue));
+    if (!acquisitionClosed) {
+      selectedOrder = await refreshRegistrationOrdinaryInscriptionPrice(db, selectedOrder);
+      selectedLines = parseRegistrationOrderLineItems(selectedOrder.line_items_json);
+    }
     const currency = getRegistrationOrderCurrency(selectedLines);
+    const selectedEventId = getRegistrationDanceEventId(selectedOrder);
+    const selectedVenueKey = getRegistrationDanceVenueKey(selectedOrder);
     return {
       curp,
       academyId: selectedOrder.academy_id,
       participantName: selectedOrder.participant_name,
       academyName: selectedOrder.academy_name,
-      venue: selectedOrder.venue,
+      venue: selectedVenueKey,
+      eventId: selectedEventId,
       reference: selectedOrder.reference,
       paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
         academyId: selectedOrder.academy_id,
         isInternational: currency === "USD",
         orderReference: selectedOrder.reference,
-        venue: selectedOrder.venue,
+        venue: selectedVenueKey,
       }),
       currency,
       pricingMode: currency === "USD" ? "international" : "mexico",
@@ -4325,18 +4532,45 @@ async function getRegistrationInscriptionLookup(
   const orders = await getRegistrationInscriptionOrdersByParticipant(db, curp, primaryRegistration.academy_id);
   const orderHasClosedAcquisition = (candidate) => getRegistrationLineVenues(
     parseRegistrationOrderLineItems(candidate.line_items_json),
-    candidate.venue,
+    getRegistrationDanceVenueKey(candidate),
   ).some((venue) => acquisitionsClosedVenues.includes(venue));
-  const openOrder = orders.find((candidate) => candidate.status !== "paid" && !orderHasClosedAcquisition(candidate)) || null;
+  const orderBelongsToActiveEvent = (candidate) => isRegistrationEventCurrentOrFuture(
+    getRegistrationDanceEventId(candidate),
+  );
+  const openOrder = orders.find((candidate) => (
+    candidate.status !== "paid"
+    && orderBelongsToActiveEvent(candidate)
+    && !orderHasClosedAcquisition(candidate)
+  )) || null;
   const closedOpenOrder = orders.find((candidate) => candidate.status !== "paid" && orderHasClosedAcquisition(candidate)) || null;
-  const paidOrder = orders.find((order) => order.status === "paid") || null;
+  const paidOrder = orders.find((candidate) => (
+    candidate.status === "paid"
+    && (orderBelongsToActiveEvent(candidate) || orderHasClosedAcquisition(candidate))
+  )) || null;
   const paidLineIds = getRegistrationInscriptionOrderLineIds(orders.filter((order) => order.status === "paid"));
   const allUnpaidLines = allLines.filter((line) => !paidLineIds.has(line.id));
-  const unpaidLines = allUnpaidLines.filter((line) => !acquisitionsClosedVenues.includes(line.venue));
+  const activeUnpaidLines = allUnpaidLines.filter((line) => (
+    isRegistrationEventCurrentOrFuture(line.eventId)
+    && !acquisitionsClosedVenues.includes(line.venue)
+  ));
+  const selectedActiveEventId = getRegistrationDanceEventId(openOrder) || [...new Set(activeUnpaidLines.map((line) => line.eventId))]
+    .sort((left, right) => (
+      Date.parse(registrationEvents[left]?.date || "9999-12-31")
+      - Date.parse(registrationEvents[right]?.date || "9999-12-31")
+    ))[0] || "";
+  const unpaidLines = activeUnpaidLines.filter((line) => line.eventId === selectedActiveEventId);
   const closedUnpaidLines = allUnpaidLines.filter((line) => acquisitionsClosedVenues.includes(line.venue));
   const primaryVenue =
-    openOrder?.venue || unpaidLines[0]?.venue || closedOpenOrder?.venue || paidOrder?.venue
-    || allLines[0]?.venue || danceRows[0]?.venue || defaultRegistrationEventVenue;
+    (openOrder && getRegistrationDanceVenueKey(openOrder)) || unpaidLines[0]?.venue
+    || (closedOpenOrder && getRegistrationDanceVenueKey(closedOpenOrder))
+    || (paidOrder && getRegistrationDanceVenueKey(paidOrder))
+    || allLines[0]?.venue || getRegistrationDanceVenueKey(danceRows[0]) || defaultRegistrationEventVenue;
+  const primaryEventId = selectedActiveEventId
+    || getRegistrationDanceEventId(closedOpenOrder)
+    || getRegistrationDanceEventId(paidOrder)
+    || closedUnpaidLines[0]?.eventId
+    || allLines[0]?.eventId
+    || getRegistrationDanceEventId(danceRows[0]);
   const baseReference = buildRegistrationInscriptionReference(curp, primaryVenue, {
     academyId: primaryRegistration.academy_id,
     isInternational,
@@ -4373,6 +4607,7 @@ async function getRegistrationInscriptionLookup(
     participantName: primaryRegistration.full_name,
     academyName: primaryRegistration.academy_name,
     venue: primaryVenue,
+    eventId: primaryEventId,
     reference,
     paymentReference: buildRegistrationInscriptionPaymentReference(curp, {
       academyId: primaryRegistration.academy_id,
@@ -4413,7 +4648,12 @@ async function createOrUpdateRegistrationInscriptionOrder(
     };
   }
 
+  if (lookup.lines.length === 0 && !lookup.order) {
+    return { ...lookup, order: null };
+  }
+
   const existingOrder = await getRegistrationInscriptionOrderByReference(db, lookup.reference);
+  const lookupEvent = getRegistrationEventDefinition(lookup.eventId, lookup.venue);
   const lineItemsJson = JSON.stringify(lookup.lines);
   const buyerPhoneCountryCode = buyerPhoneContact?.countryCode || null;
   const buyerPhoneNumber = buyerPhoneContact?.number || null;
@@ -4459,6 +4699,7 @@ async function createOrUpdateRegistrationInscriptionOrder(
             academy_id = ?,
             academy_name = ?,
             venue = ?,
+            event_id = ?,
             amount = ?,
             line_items_json = ?,
             status = CASE
@@ -4485,7 +4726,8 @@ async function createOrUpdateRegistrationInscriptionOrder(
         lookup.participantName,
         lookup.academyId || null,
         lookup.academyName,
-        lookup.venue,
+        lookupEvent.venue,
+        lookupEvent.id,
         lookup.subtotal,
         lineItemsJson,
         isCourtesyOrder ? 1 : 0,
@@ -4508,6 +4750,7 @@ async function createOrUpdateRegistrationInscriptionOrder(
             academy_id,
             academy_name,
             venue,
+            event_id,
             reference,
             amount,
             status,
@@ -4518,7 +4761,7 @@ async function createOrUpdateRegistrationInscriptionOrder(
             buyer_phone,
             line_items_json
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE NULL END, 'bank_transfer', ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN datetime('now') ELSE NULL END, 'bank_transfer', ?, ?, ?, ?)
         `,
       )
       .bind(
@@ -4527,7 +4770,8 @@ async function createOrUpdateRegistrationInscriptionOrder(
         lookup.participantName,
         lookup.academyId || null,
         lookup.academyName,
-        lookup.venue,
+        lookupEvent.venue,
+        lookupEvent.id,
         lookup.reference,
         lookup.subtotal,
         isCourtesyOrder ? "paid" : "pending_payment",
@@ -4557,6 +4801,18 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
   const participantSnapshot = getRegistrationShopParticipantSnapshot(participant, buyerContact);
 
   normalizedCart.lineItems = await validateRegistrationShopMediaLineItems(db, curp, normalizedCart.lineItems);
+  const lineEventIds = [...new Set(normalizedCart.lineItems.map((line) => optionalString(line.eventId)).filter(Boolean))];
+  if (lineEventIds.length > 1) {
+    throwHttpError(
+      "shop_multiple_events",
+      "Realiza una compra separada para cada edición de Levitate.",
+      400,
+    );
+  }
+  const shopEvent = getRegistrationEventDefinition(
+    lineEventIds[0] || participantSnapshot.eventId,
+    participantSnapshot.venueKey,
+  );
   Object.assign(normalizedCart, getRegistrationShopCartTotals(normalizedCart.lineItems, discountCode));
   const reusableCandidate = await getReusableRegistrationShopOrderWithoutProof(db, curp);
   const reusableOrder = reusableCandidate && !(
@@ -4573,6 +4829,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
             academy_id = ?,
             academy_name = ?,
             venue = ?,
+            event_id = ?,
             amount = ?,
             status = 'pending_payment',
             buyer_name = ?,
@@ -4602,7 +4859,8 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
         participantSnapshot.participantName,
         participantSnapshot.academyId,
         participantSnapshot.academyName,
-        participantSnapshot.venue,
+        shopEvent.venue,
+        shopEvent.id,
         normalizedCart.amount,
         buyerContact.name,
         buyerContact.email,
@@ -4644,6 +4902,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
           academy_id,
           academy_name,
           venue,
+          event_id,
           reference,
           access_token,
           amount,
@@ -4657,7 +4916,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
           discount_amount,
           line_items_json
         )
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'bank_transfer', ?, ?, ?, ?, ?, ?, ?, ?
         WHERE (? = 0 OR unixepoch('now') < ?)
       `,
     )
@@ -4667,7 +4926,8 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
       participantSnapshot.participantName,
       participantSnapshot.academyId,
       participantSnapshot.academyName,
-      participantSnapshot.venue,
+      shopEvent.venue,
+      shopEvent.id,
       reference,
       crypto.randomUUID(),
       normalizedCart.amount,
@@ -4713,6 +4973,15 @@ async function getRegistrationShopParticipantByCurp(db, curp, { required = true 
             ),
             '${defaultRegistrationEventVenue}'
           ) AS venue
+          ,(
+              SELECT registration_dances.event_id
+              FROM registration_dance_participants
+              INNER JOIN registration_dances
+                ON registration_dances.id = registration_dance_participants.dance_id
+              WHERE registration_dance_participants.participant_id = registration_participants.id
+              ORDER BY registration_dances.created_at DESC
+              LIMIT 1
+            ) AS event_id
         FROM registration_participants
         INNER JOIN registration_academies
           ON registration_academies.id = registration_participants.academy_id
@@ -4736,11 +5005,14 @@ async function getRegistrationShopParticipantByCurp(db, curp, { required = true 
 }
 
 function getRegistrationShopParticipantSnapshot(participant, buyerContact) {
+  const eventId = getRegistrationDanceEventId(participant);
   return {
     academyId: participant?.academy_id || null,
     academyName: participant?.academy_name || "Registro pendiente",
     participantName: participant?.full_name || buyerContact.name,
     venue: participant?.venue || defaultRegistrationEventVenue,
+    venueKey: getRegistrationDanceVenueKey(participant),
+    eventId,
   };
 }
 
@@ -4812,7 +5084,6 @@ async function syncRegistrationShopOrdersForParticipantCurp(db, curp, { includeL
           SET participant_name = ?,
             academy_id = ?,
             academy_name = ?,
-            venue = ?,
             updated_at = datetime('now')
           WHERE id = ?
         `,
@@ -4821,7 +5092,6 @@ async function syncRegistrationShopOrdersForParticipantCurp(db, curp, { includeL
         participant.full_name,
         participant.academy_id || null,
         participant.academy_name,
-        participant.venue,
         order.id,
       )
       .run();
@@ -4997,9 +5267,11 @@ async function validateRegistrationShopMediaLineItems(db, curp, lineItems) {
       danceTitle: dance.title || lineItem.danceTitle,
       danceCategory: dance.category,
       danceDivision: dance.division,
+      eventId: dance.eventId,
       participantCount,
       title: [lineItem.productName, dance.title || lineItem.danceTitle].filter(Boolean).join(" · "),
       unitPrice,
+      venue: dance.venue,
     };
   });
 }
@@ -5656,7 +5928,7 @@ async function getRegistrationInscriptionOrderRecordForStatusUpdate(db, orderId,
     throwHttpError("registration_inscription_order_not_found", "Orden de inscripción no encontrada", 404);
   }
 
-  return order;
+  return refreshRegistrationOrdinaryInscriptionPrice(db, order);
 }
 
 async function getRegistrationShopOrderRecordForStatusUpdate(db, orderId) {
@@ -5950,6 +6222,7 @@ async function getRegistrationEventTicketsForCurp(db, curp) {
 async function getRegistrationInscriptionOrders(db, academyId, options) {
   try {
     await refreshRegistrationRelevePrices(db, { academyId });
+    await refreshRegistrationOrdinaryInscriptionPrices(db, { academyId });
     const { results = [] } = await db
       .prepare(
         `
@@ -5975,6 +6248,7 @@ async function getRegistrationInscriptionOrders(db, academyId, options) {
 async function getAllRegistrationInscriptionOrders(db) {
   try {
     await refreshRegistrationRelevePrices(db);
+    await refreshRegistrationOrdinaryInscriptionPrices(db);
     const { results = [] } = await db
       .prepare(
         `
@@ -6764,6 +7038,7 @@ async function serializeRegistrationDances(db, academyId, dances) {
           registration_dance_participants.dance_id,
           registration_participants.id,
           registration_participants.full_name,
+          registration_participants.birth_date,
           registration_participants.age,
           registration_participants.division,
           registration_participants.shirt_size,
@@ -6779,7 +7054,8 @@ async function serializeRegistrationDances(db, academyId, dances) {
     .bind(academyId)
     .all();
   const choreographersByDance = groupRegistrationRelations(choreographers, danceIds);
-  const participantsByDance = groupRegistrationRelations(participants, danceIds);
+  const eventIdsByDance = new Map(dances.map((dance) => [dance.id, getRegistrationDanceEventId(dance)]));
+  const participantsByDance = groupRegistrationRelations(participants, danceIds, eventIdsByDance);
   const musicUploadsByDance = await getRegistrationMusicUploadsByDance(db, academyId, danceIds);
 
   return dances.map((dance) => ({
@@ -6792,7 +7068,8 @@ async function serializeRegistrationDances(db, academyId, dances) {
     isReleve: Boolean(Number(dance.is_releve || 0)),
     category: dance.category,
     level: dance.level,
-    venue: dance.venue,
+    venue: getRegistrationDanceVenueKey(dance),
+    eventId: getRegistrationDanceEventId(dance),
     createdAt: dance.created_at,
     choreographers: choreographersByDance.get(dance.id) || [],
     participants: participantsByDance.get(dance.id) || [],
@@ -6827,6 +7104,7 @@ async function serializeRegistrationProgramDances(db, dances) {
           registration_dance_participants.dance_id,
           registration_participants.id,
           registration_participants.full_name,
+          registration_participants.birth_date,
           registration_participants.age,
           registration_participants.division,
           registration_participants.shirt_size,
@@ -6838,7 +7116,8 @@ async function serializeRegistrationProgramDances(db, dances) {
     )
     .all();
   const choreographersByDance = groupRegistrationRelations(choreographers, danceIds);
-  const participantsByDance = groupRegistrationRelations(participants, danceIds);
+  const eventIdsByDance = new Map(dances.map((dance) => [dance.id, getRegistrationDanceEventId(dance)]));
+  const participantsByDance = groupRegistrationRelations(participants, danceIds, eventIdsByDance);
   const musicUploadsByDance = await getRegistrationProgramMusicUploadsByDance(db, danceIds);
 
   return dances.map((dance) => ({
@@ -6856,7 +7135,8 @@ async function serializeRegistrationProgramDances(db, dances) {
     isReleve: Boolean(Number(dance.is_releve || 0)),
     category: dance.category,
     level: dance.level,
-    venue: dance.venue,
+    venue: getRegistrationDanceVenueKey(dance),
+    eventId: getRegistrationDanceEventId(dance),
     createdAt: dance.created_at,
     choreographers: choreographersByDance.get(dance.id) || [],
     participants: participantsByDance.get(dance.id) || [],
@@ -6883,6 +7163,7 @@ async function attachRegistrationDanceParticipants(db, dances) {
           registration_dance_participants.dance_id,
           registration_participants.id,
           registration_participants.full_name,
+          registration_participants.birth_date,
           registration_participants.age,
           registration_participants.division,
           registration_participants.shirt_size,
@@ -6895,7 +7176,8 @@ async function attachRegistrationDanceParticipants(db, dances) {
     )
     .bind(...Array.from(danceIds))
     .all();
-  const participantsByDance = groupRegistrationRelations(participants, danceIds);
+  const eventIdsByDance = new Map(dances.map((dance) => [dance.id, getRegistrationDanceEventId(dance)]));
+  const participantsByDance = groupRegistrationRelations(participants, danceIds, eventIdsByDance);
 
   return dances.map((dance) => ({
     ...dance,
@@ -6992,7 +7274,7 @@ async function getRegistrationMusicUploadByDanceId(db, academyId, danceId) {
   return upload ? serializeRegistrationMusicUpload(upload) : null;
 }
 
-function groupRegistrationRelations(rows, danceIds) {
+function groupRegistrationRelations(rows, danceIds, eventIdsByDance = null) {
   const grouped = new Map();
 
   for (const row of rows) {
@@ -7000,14 +7282,16 @@ function groupRegistrationRelations(rows, danceIds) {
       continue;
     }
 
+    const eventId = eventIdsByDance?.get(row.dance_id) || "";
+    const relation = eventId ? classifyRegistrationParticipantForEvent(row, eventId) : row;
     const current = grouped.get(row.dance_id) || [];
     current.push({
-      age: row.age == null ? null : Number(row.age),
-      division: row.division,
-      id: row.id,
-      fullName: row.full_name,
-      isReleveTeacher: Boolean(Number(row.is_releve_teacher || 0)),
-      shirtSize: row.shirt_size,
+      age: relation.age == null ? null : Number(relation.age),
+      division: relation.division,
+      id: relation.id,
+      fullName: relation.full_name,
+      isReleveTeacher: Boolean(Number(relation.is_releve_teacher || 0)),
+      shirtSize: relation.shirt_size,
     });
     grouped.set(row.dance_id, current);
   }
@@ -7166,14 +7450,15 @@ function serializeRegistrationStudentDance(dance) {
     title: dance.title,
     category: dance.category,
     level: dance.level,
-    venue: dance.venue,
+    venue: getRegistrationDanceVenueKey(dance),
+    eventId: getRegistrationDanceEventId(dance),
     academyName: dance.academy_name,
   };
 }
 
-function serializeRegistrationInscriptionLine(dance, { isInternational = false } = {}) {
+function serializeRegistrationInscriptionLine(dance, { isInternational = false, priceAt = Date.now() } = {}) {
   const currency = getRegistrationInscriptionCurrency(isInternational);
-  const baseAmount = getRegistrationInscriptionAmount(dance, { isInternational });
+  const baseAmount = getRegistrationInscriptionAmount(dance, { isInternational, priceAt });
 
   return {
     id: dance.id,
@@ -7185,7 +7470,8 @@ function serializeRegistrationInscriptionLine(dance, { isInternational = false }
     division: getRegistrationMusicDriveDivision(dance),
     level: dance.level,
     participantCount: Number(dance.participant_count || 0),
-    venue: dance.venue,
+    venue: getRegistrationDanceVenueKey(dance),
+    eventId: getRegistrationDanceEventId(dance),
     academyName: dance.academy_name,
     baseAmount,
     currency,
@@ -7198,9 +7484,9 @@ function serializeRegistrationInscriptionLine(dance, { isInternational = false }
   };
 }
 
-function buildRegistrationInscriptionLines(dances, { isInternational = false } = {}) {
+function buildRegistrationInscriptionLines(dances, { isInternational = false, priceAt = Date.now() } = {}) {
   return dances
-    .map((dance) => serializeRegistrationInscriptionLine(dance, { isInternational }))
+    .map((dance) => serializeRegistrationInscriptionLine(dance, { isInternational, priceAt }))
     .sort((firstLine, secondLine) => {
       const amountDifference = isInternational
         ? firstLine.baseAmount - secondLine.baseAmount
@@ -7230,20 +7516,30 @@ function buildRegistrationInscriptionLines(dances, { isInternational = false } =
     });
 }
 
-function getRegistrationInscriptionAmount(dance, { isInternational = false } = {}) {
+function getRegistrationInscriptionAmount(dance, { isInternational = false, priceAt = Date.now() } = {}) {
   const priceTable = isInternational ? registrationInternationalInscriptionPrices : registrationInscriptionPrices;
   const priceKey = getRegistrationInscriptionPriceKey(dance);
 
-  if (priceKey === "releve" && isRegistrationReleveHotPresaleActive()) {
+  if (priceKey === "releve" && isRegistrationReleveHotPresaleActive(priceAt)) {
     return getRegistrationReleveHotPresaleAmount(isInternational);
   }
 
-  const presaleEndsAt = priceKey === "releve" ? registrationRelevePresaleEndsAt : registrationInscriptionPresaleEndsAt;
-  const prices = Date.now() < presaleEndsAt
+  const presaleEndsAt = getRegistrationInscriptionPresaleEndsAt(dance, priceKey);
+  const prices = priceAt < presaleEndsAt
     ? priceTable.presale
     : priceTable.normal;
 
   return prices[priceKey] ?? prices.grupo;
+}
+
+function getRegistrationInscriptionPresaleEndsAt(dance, priceKey) {
+  if (priceKey === "releve") {
+    return registrationRelevePresaleEndsAt;
+  }
+
+  return dance?.venue === "veracruz"
+    ? registrationOrizabaInscriptionPresaleEndsAt
+    : registrationInscriptionPresaleEndsAt;
 }
 
 function isRegistrationReleveHotPresaleActive(now = Date.now()) {
@@ -7420,6 +7716,8 @@ function serializeRegistrationInscriptionOrder(order, { includeInternalNotes = f
   const currency = getRegistrationOrderCurrency(lineItems);
   const isInternational = currency === registrationInscriptionCurrencies.international;
   const isReleve = String(order.curp || "").startsWith("RELEVE:");
+  const eventId = getRegistrationDanceEventId(order);
+  const venueKey = getRegistrationDanceVenueKey(order);
 
   return {
     orderType: "registration",
@@ -7428,13 +7726,14 @@ function serializeRegistrationInscriptionOrder(order, { includeInternalNotes = f
     participantName: order.participant_name,
     academyId: order.academy_id,
     academyName: order.academy_name,
-    venue: order.venue,
+    venue: venueKey,
+    eventId,
     reference: order.reference,
     paymentReference: isReleve ? order.reference : buildRegistrationInscriptionPaymentReference(order.curp, {
       academyId: order.academy_id,
       isInternational,
       orderReference: order.reference,
-      venue: order.venue,
+      venue: venueKey,
     }),
     amount: Number(order.amount || 0),
     paidAmount: Number(order.paid_amount || 0),
@@ -7460,6 +7759,7 @@ function serializeRegistrationInscriptionOrder(order, { includeInternalNotes = f
 
 function serializeRegistrationShopOrder(order, { includeInternalNotes = false } = {}) {
   const lineItems = parseRegistrationOrderLineItems(order.line_items_json);
+  const eventId = getRegistrationDanceEventId(order);
 
   return {
     orderType: "shop",
@@ -7468,7 +7768,8 @@ function serializeRegistrationShopOrder(order, { includeInternalNotes = false } 
     participantName: order.participant_name,
     academyId: order.academy_id,
     academyName: order.academy_name,
-    venue: order.venue,
+    venue: getRegistrationDanceVenueKey(order),
+    eventId,
     reference: order.reference,
     accessToken: order.access_token,
     paymentReference: buildRegistrationShopPaymentReference(order),
@@ -7681,6 +7982,7 @@ function serializePublicRegistrationInscriptionPaymentLookup(lookup) {
     participantName: lookup.participantName,
     academyName: lookup.academyName,
     venue: lookup.venue,
+    eventId: lookup.eventId,
     reference: lookup.reference,
     paymentReference: lookup.paymentReference || buildRegistrationInscriptionPaymentReference(lookup.curp),
     currency: lookup.currency || getRegistrationInscriptionCurrency(lookup.pricingMode === "international"),
@@ -7710,6 +8012,7 @@ function serializePublicRegistrationInscriptionPaymentOrder(order) {
     participantName: order.participantName,
     academyName: order.academyName,
     venue: order.venue,
+    eventId: order.eventId,
     reference: order.reference,
     paymentReference: order.paymentReference || buildRegistrationInscriptionPaymentReference(order.curp),
     amount: order.amount,
@@ -8367,6 +8670,117 @@ function serializeRegistrationChoreographer(choreographer) {
     isReleveTeacher: Boolean(Number(choreographer.is_releve_teacher || 0)),
     createdAt: choreographer.created_at,
   };
+}
+
+function requireRegistrationEvent(value, fieldName = "eventId") {
+  const eventId = requireString(value, fieldName);
+  const event = registrationEvents[eventId];
+
+  if (!event) {
+    throwHttpError("validation_error", `${fieldName} is invalid`, 400);
+  }
+
+  return { ...event, id: eventId };
+}
+
+function getRegistrationEventDefinition(eventId, venueKey = "") {
+  const normalizedEventId = String(eventId || "").trim();
+  if (normalizedEventId && registrationEvents[normalizedEventId]) {
+    return { ...registrationEvents[normalizedEventId], id: normalizedEventId };
+  }
+
+  const match = Object.entries(registrationEvents)
+    .find(([, event]) => event.venueKey === String(venueKey || "").trim());
+  if (match) {
+    return { ...match[1], id: match[0] };
+  }
+
+  throwHttpError("registration_event_missing", "No pudimos identificar la edición de esta inscripción.", 409);
+}
+
+function getRegistrationDanceEventId(dance) {
+  const storedEventId = String(dance?.event_id || dance?.eventId || "").trim();
+
+  if (storedEventId && registrationEvents[storedEventId]) {
+    return storedEventId;
+  }
+
+  return legacyRegistrationEventIdByVenue[String(dance?.venue || "").trim()] || "";
+}
+
+function getRegistrationDanceVenueKey(dance) {
+  const eventId = getRegistrationDanceEventId(dance);
+  return registrationEvents[eventId]?.venueKey || String(dance?.venue || "").trim();
+}
+
+function isRegistrationEventCurrentOrFuture(eventId, now = Date.now()) {
+  const event = registrationEvents[eventId];
+  if (!event) return false;
+
+  const dateParts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+  }).formatToParts(new Date(now)).reduce((parts, part) => {
+    if (part.type !== "literal") parts[part.type] = part.value;
+    return parts;
+  }, {});
+  const currentDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+
+  return currentDate <= (event.endsOn || event.date);
+}
+
+function getRegistrationAgeAtDate(birthDate, referenceDate) {
+  if (
+    typeof birthDate !== "string"
+    || typeof referenceDate !== "string"
+    || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)
+  ) {
+    return null;
+  }
+
+  const born = new Date(`${birthDate}T00:00:00Z`);
+  const eventDate = new Date(`${referenceDate}T00:00:00Z`);
+  if (
+    !Number.isFinite(born.getTime())
+    || !Number.isFinite(eventDate.getTime())
+    || born.toISOString().slice(0, 10) !== birthDate
+    || eventDate.toISOString().slice(0, 10) !== referenceDate
+    || born > eventDate
+  ) {
+    return null;
+  }
+
+  const [birthYear, birthMonth, birthDay] = birthDate.split("-").map(Number);
+  const [eventYear, eventMonth, eventDay] = referenceDate.split("-").map(Number);
+  const hasNotHadBirthday = eventMonth < birthMonth || (eventMonth === birthMonth && eventDay < birthDay);
+  const age = eventYear - birthYear - Number(hasNotHadBirthday);
+
+  return age >= 0 && age <= 120 ? age : null;
+}
+
+function getRegistrationDivisionFromAge(age) {
+  if (age <= 6) return "baby";
+  if (age <= 10) return "petite";
+  if (age <= 13) return "junior";
+  if (age <= 17) return "teen";
+  if (age >= 40) return "legacy";
+  return "senior";
+}
+
+function getRegistrationParticipantEventClassification(participant, eventId) {
+  const event = registrationEvents[eventId];
+  const birthDate = participant?.birth_date || participant?.birthDate;
+  const age = event ? getRegistrationAgeAtDate(birthDate, event.date) : null;
+
+  return age == null ? null : { age, division: getRegistrationDivisionFromAge(age) };
+}
+
+function classifyRegistrationParticipantForEvent(participant, eventId) {
+  const classification = getRegistrationParticipantEventClassification(participant, eventId);
+  return classification ? { ...participant, ...classification } : participant;
 }
 
 function requireRegistrationChoice(value, fieldName, allowedValues) {

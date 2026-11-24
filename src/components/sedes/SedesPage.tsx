@@ -37,10 +37,13 @@ type SedeContent = {
   venueName: string;
   heroImage: string;
   location: string;
-  mapsUrl: string;
+  mapsUrl?: string;
   date: string;
   metaLabel: string;
   metaValue: string;
+  registrationVenueKey?: string;
+  acquisitionClosedLabel?: string;
+  acquisitionClosedMessage?: string;
   motionGenres: string[];
   aerialGenres: string[];
   competitionBlocks?: CompetitionBlockDay[];
@@ -72,7 +75,7 @@ function downloadHotelDocuments() {
   });
 }
 
-const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
+const sedesContent: Record<"edomex" | "veracruz" | "cdmx", SedeContent> = {
   edomex: {
     heroTitle: "Estado de México",
     eventName: "Teatro Gran Recinto",
@@ -83,6 +86,8 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
     date: "13 · 14 · 15\nnoviembre 2026",
     metaLabel: "Status",
     metaValue: "Inscripciones abiertas",
+    acquisitionClosedLabel: "Finalizada",
+    acquisitionClosedMessage: "¡Gracias por ser parte de Levitate! Nos vemos en tu sede favorita de Primavera 2027.",
     motionGenres: defaultMotionGenres,
     aerialGenres: defaultAerialGenres,
     competitionBlocks: [
@@ -129,6 +134,19 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
     date: "27 y 28 de\nfebrero 2027",
     metaLabel: "Status",
     metaValue: "Inscripciones abiertas",
+    motionGenres: defaultMotionGenres,
+    aerialGenres: defaultAerialGenres,
+  },
+  cdmx: {
+    heroTitle: "CDMX",
+    eventName: "Lugar por definir",
+    venueName: "Lugar por definir",
+    heroImage: "/assets/sedes-cdmx-angel-independencia.jpg",
+    location: "Por definir",
+    date: "16, 17 y 18 de\nabril 2027",
+    metaLabel: "Status",
+    metaValue: "Inscripciones abiertas",
+    registrationVenueKey: "cdmx-2027",
     motionGenres: defaultMotionGenres,
     aerialGenres: defaultAerialGenres,
   },
@@ -187,14 +205,15 @@ type SedesPageProps = {
 
 export function SedesPage({ venueKey = "veracruz" }: SedesPageProps) {
   const { policy, isVenueAcquisitionClosed, isVenuePaused } = useRegistrationPolicy();
-  const isTemporarilyOpen = policy.temporaryOpeningActive && policy.temporaryOpening?.venue === venueKey;
-  const isRegistrationPaused = isVenuePaused(venueKey);
-  const isAcquisitionClosed = isVenueAcquisitionClosed(venueKey);
+  const venue = sedesContent[venueKey] ?? sedesContent.edomex;
+  const registrationVenueKey = venue.registrationVenueKey ?? venueKey;
+  const isTemporarilyOpen = policy.temporaryOpeningActive && policy.temporaryOpening?.venue === registrationVenueKey;
+  const isRegistrationPaused = isVenuePaused(registrationVenueKey);
+  const isAcquisitionClosed = isVenueAcquisitionClosed(registrationVenueKey);
   const registrationHref = isAcquisitionClosed ? "/tienda/foto-video" : "/inscripciones";
   const registrationAction = isAcquisitionClosed ? "Adquirir Foto y Video" : "Inscribirme";
-  const venue = sedesContent[venueKey] ?? sedesContent.edomex;
   const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
-  const hasRegistrationAction = venueKey === "edomex" || venueKey === "veracruz";
+  const hasRegistrationAction = venueKey === "edomex" || venueKey === "veracruz" || venueKey === "cdmx";
   const juryLineup = venue.jury?.length ? buildJuryLineup(venue.jury) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
@@ -328,9 +347,11 @@ export function SedesPage({ venueKey = "veracruz" }: SedesPageProps) {
               <MapPin aria-hidden="true" size={24} />
               <span>Lugar</span>
               <p>{venue.location}</p>
-              <a href={venue.mapsUrl} target="_blank" rel="noreferrer">
-                Ver en Google Maps <ArrowUpRight aria-hidden="true" size={15} />
-              </a>
+              {venue.mapsUrl ? (
+                <a href={venue.mapsUrl} target="_blank" rel="noreferrer">
+                  Ver en Google Maps <ArrowUpRight aria-hidden="true" size={15} />
+                </a>
+              ) : null}
             </article>
             <article>
               <CalendarDays aria-hidden="true" size={24} />
@@ -340,9 +361,9 @@ export function SedesPage({ venueKey = "veracruz" }: SedesPageProps) {
             <article>
               <CheckCircle2 aria-hidden="true" size={24} />
               <span>{venue.metaLabel}</span>
-              <p>{isAcquisitionClosed ? "Edición concluida" : isRegistrationPaused ? "Registro de coreografías cerrado" : isTemporarilyOpen ? "Coreografías abiertas hoy" : venue.metaValue}</p>
+              <p>{isAcquisitionClosed ? venue.acquisitionClosedLabel ?? "Edición concluida" : isRegistrationPaused ? "Registro de coreografías cerrado" : isTemporarilyOpen ? "Coreografías abiertas hoy" : venue.metaValue}</p>
               {isAcquisitionClosed ? (
-                <small role="status">{policy.acquisitionsMessage}</small>
+                <small role="status">{venue.acquisitionClosedMessage ?? policy.acquisitionsMessage}</small>
               ) : isRegistrationPaused || isTemporarilyOpen ? (
                 <small role="status">{policy.message}</small>
               ) : null}

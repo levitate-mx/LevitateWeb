@@ -328,6 +328,7 @@ type RegistrationDance = {
   category: string;
   level: string | null;
   venue: string;
+  eventId: string;
   createdAt: string;
   choreographers: RegistrationDanceRelation[];
   participants: RegistrationDanceRelation[];
@@ -850,6 +851,7 @@ const releveDefaultAerialLevel = "nudo";
 const venueOptions: FieldOption[] = [
   { value: "edomex", label: "Otoño 2026 - Estado de México" },
   { value: "veracruz", label: "Orizaba - 27 y 28 de febrero 2027" },
+  { value: "cdmx-2027", label: "CDMX - 16, 17 y 18 de abril 2027" },
 ];
 
 const venueLabelOptions: FieldOption[] = [
@@ -861,7 +863,18 @@ const venueLabelOptions: FieldOption[] = [
 const venueEventDates: Record<string, string> = {
   edomex: "2026-11-13",
   veracruz: "2027-02-27",
+  cdmx: "2026-05-29",
+  "cdmx-2027": "2027-04-16",
 };
+
+const registrationEventIdsByVenue: Record<string, string> = {
+  edomex: "edomex-2026-otono",
+  veracruz: "orizaba-2027",
+  cdmx: "cdmx-2026",
+  "cdmx-2027": "cdmx-2027",
+};
+
+const defaultParticipantRegistrationEventId = "orizaba-2027";
 
 const registrationDashboardDateRangeOptions: Array<{ label: string; value: RegistrationDashboardDateRangeId }> = [
   { value: "season", label: "Toda la temporada" },
@@ -883,6 +896,8 @@ const registrationDashboardVenueMetricOptions: Array<{ label: string; value: Reg
 const registrationDashboardEventStatusByVenue: Record<string, string> = {
   edomex: "Registro abierto",
   veracruz: "Inscripciones abiertas",
+  cdmx: "Finalizada",
+  "cdmx-2027": "Inscripciones abiertas",
 };
 
 const registrationAcademyStatusOptions: FieldOption[] = [
@@ -1314,6 +1329,23 @@ function getDivisionFromAge(age: number) {
   }
 
   return "senior";
+}
+
+function getParticipantClassificationForVenue(participant: RegistrationParticipant, venue: string) {
+  const eventDate = venueEventDates[venue];
+  const age = participant.birthDate && eventDate
+    ? calculateAgeAtDate(participant.birthDate, eventDate)
+    : null;
+
+  if (age == null) {
+    return participant;
+  }
+
+  return {
+    ...participant,
+    age,
+    division: getDivisionFromAge(age),
+  };
 }
 
 function getBirthDateFromCurp(curp: string, referenceDate: string) {
@@ -6437,7 +6469,7 @@ function AdminSidebar({
   onScreenChange: (screen: AdminScreenId) => void;
   onLogout: () => void;
 }) {
-  const visibleMenuItems = adminMenuItems;
+  const visibleMenuItems = adminMenuItems.filter((item) => item.screen !== "releve");
 
   return (
     <aside className="levitate-admin-sidebar" aria-label="Menú administrativo">
@@ -8446,7 +8478,7 @@ function ParticipantRegistrationPanel({
   isAcademyInternational: boolean;
   onParticipantCreated: (participant: RegistrationParticipant) => void;
 }) {
-  const eventDate = venueEventDates.edomex;
+  const eventDate = venueEventDates.veracruz;
   const isInternational = isAcademyInternational;
   const [curp, setCurp] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -8537,6 +8569,7 @@ function ParticipantRegistrationPanel({
           birthDate: getFormValue(formData, "birthDate"),
           age: getFormValue(formData, "age"),
           division: getFormValue(formData, "division"),
+          eventId: defaultParticipantRegistrationEventId,
           shirtSize: getFormValue(formData, "shirtSize"),
           isInternational,
         }),
@@ -8782,7 +8815,8 @@ function ReleveRegistrationPanel({
           subgenreDetail: shouldShowOpenOtherApparatus ? getFormValue(formData, "subgenreDetail") : "",
           category: releveDefaultCategory,
           level: selectedGenre === "aereo" ? releveDefaultAerialLevel : null,
-          venue: getFormValue(formData, "venue"),
+          venue,
+          eventId: registrationEventIdsByVenue[venue],
           choreographerIds: selectedChoreographerIds,
           participantIds: [],
           isReleve: true,
@@ -9087,7 +9121,9 @@ function DanceRegistrationPanel({
   const [isSaving, setIsSaving] = useState(false);
   const subgenreOptions = selectedGenre ? (danceSubgenresByGenre[selectedGenre] ?? []) : [];
   const categoryOptions = selectedGenre ? (danceCategoriesByGenre[selectedGenre] ?? []) : [];
-  const selectedParticipants = participants.filter((participant) => selectedParticipantIds.includes(participant.id));
+  const selectedParticipants = participants
+    .filter((participant) => selectedParticipantIds.includes(participant.id))
+    .map((participant) => getParticipantClassificationForVenue(participant, selectedVenue));
   const selectedDivision = getProgramDivisionFromParticipants(selectedParticipants, selectedCategory);
   const shouldShowLevel = selectedGenre === "aereo" && selectedDivision !== "baby";
   const shouldShowOpenOtherApparatus = selectedGenre === "aereo" && selectedSubgenre === "open_otro";
@@ -9169,7 +9205,8 @@ function DanceRegistrationPanel({
           subgenreDetail: shouldShowOpenOtherApparatus ? getFormValue(formData, "subgenreDetail") : "",
           category: getFormValue(formData, "category"),
           level: shouldShowLevel ? getFormValue(formData, "level") : null,
-          venue: getFormValue(formData, "venue"),
+          venue,
+          eventId: registrationEventIdsByVenue[venue],
           choreographerIds: selectedChoreographerIds,
           participantIds: selectedParticipantIds,
         }),
@@ -11674,7 +11711,7 @@ function RegistrationAdminPaymentsWorkspace({
                 <span>Evento</span>
                 <select onChange={(event) => setTicketVenueFilter(event.target.value)} value={ticketVenueFilter}>
                   <option value="all">Todos</option>
-                  {venueOptions.map((option) => (
+                  {venueLabelOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -11833,7 +11870,7 @@ function RegistrationAdminPaymentsWorkspace({
                 <span>Evento</span>
                 <select onChange={(event) => setMediaVenueFilter(event.target.value)} value={mediaVenueFilter}>
                   <option value="all">Todos</option>
-                  {venueOptions.map((option) => (
+                  {venueLabelOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -11971,7 +12008,7 @@ function RegistrationAdminPaymentsWorkspace({
                 <span>Evento</span>
                 <select onChange={(event) => setVenueFilter(event.target.value)} value={venueFilter}>
                   <option value="all">Todos</option>
-                  {venueOptions.map((option) => (
+                  {venueLabelOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

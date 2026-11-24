@@ -172,7 +172,7 @@ async function readApprovedParticipantPhotos(db, participantId, eventId, adminPr
     JOIN participant_portal_memberships m ON m.dance_id=d.id
     JOIN participant_portal_people p ON p.id=m.participant_id
     WHERE a.event_id=? AND m.participant_id=? AND a.kind='photo'
-      AND d.academy_id=p.academy_id AND d.venue=e.venue
+      AND d.academy_id=p.academy_id AND d.event_id=e.id
       AND (p.portal_event_id IS NULL OR p.portal_event_id=e.id)
       ${adminPreview ? '' : `AND e.published=1 AND a.published=1 AND r.photos_published=1 AND coalesce(r.publication_blocked,0)=0
         AND NOT EXISTS(SELECT 1 FROM participant_portal_drive_album_settings settings
@@ -194,8 +194,8 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
   const publication = adminPreview ? null : await createBlockPublicationGate({ db, eventId: event.id });
   const automaticCompletion = publication?.mode === "block_complete";
   const routineVisibility = automaticCompletion ? "coalesce(r.publication_blocked,0)=0" : "r.status='published'";
-  // Registration has a venue but no edition field. Never infer that a future
-  // edition at the same venue should inherit the current registration roster.
+  // Registration membership is scoped to the exact edition. A future edition
+  // at the same venue must never inherit the current registration roster.
   const registrationEvents = typeof env.PARTICIPANT_REGISTRATION_EVENT_IDS === "string"
     ? env.PARTICIPANT_REGISTRATION_EVENT_IDS.split(",").map((value) => value.trim()).filter(Boolean) : [];
   const registrationFallback = registrationEvents.includes(event.id);
@@ -208,8 +208,8 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
     FROM participant_portal_memberships dp JOIN registration_dances d ON d.id = dp.dance_id
     JOIN participant_portal_people p ON p.id = dp.participant_id
     LEFT JOIN participant_portal_routines r ON r.dance_id = d.id AND r.event_id = ?
-    WHERE dp.participant_id = ? AND (r.id IS NOT NULL OR (? = 1 AND d.venue = ?))
-    ORDER BY d.title, d.id`, event.id, participant.id, registrationFallback ? 1 : 0, event.venue);
+    WHERE dp.participant_id = ? AND (r.id IS NOT NULL OR (? = 1 AND d.event_id = ?))
+    ORDER BY d.title, d.id`, event.id, participant.id, registrationFallback ? 1 : 0, event.id);
   const assets = adminPreview || event.published ? await all(db, `SELECT a.*,r.dance_id AS danceId FROM participant_portal_assets a
     JOIN participant_portal_routines r ON r.id = a.routine_id AND r.event_id = a.event_id
     JOIN participant_portal_memberships dp ON dp.dance_id = r.dance_id
@@ -392,7 +392,7 @@ async function participantData(db, env, participantId, eventId, adminPreview = f
       FROM json_each(?) c JOIN participant_portal_memberships m ON m.dance_id=json_extract(c.value,'$.danceId')
       JOIN participant_portal_people p ON p.id=m.participant_id
       JOIN registration_dances d ON d.id=m.dance_id AND d.academy_id=p.academy_id
-      JOIN participant_portal_events e ON e.id=? AND e.published=1 AND e.venue=d.venue
+      JOIN participant_portal_events e ON e.id=? AND e.published=1 AND e.id=d.event_id
       LEFT JOIN participant_portal_routines r ON r.event_id=e.id AND r.dance_id=d.id
       JOIN participant_portal_judging_sources s ON s.event_id=e.id AND s.enabled=1
         AND s.source_event_id=json_extract(c.value,'$.sourceEventId')
@@ -531,7 +531,7 @@ async function adminList(db, request) {
   const routines = selected ? await all(db, `SELECT r.*, d.id AS registration_dance_id, d.title, d.category, d.level, d.genre, d.subgenre,
     (SELECT p.division FROM registration_dance_participants dp JOIN registration_participants p ON p.id = dp.participant_id WHERE dp.dance_id = d.id ORDER BY p.id LIMIT 1) AS division
     FROM registration_dances d LEFT JOIN participant_portal_routines r ON r.dance_id = d.id AND r.event_id = ?
-    WHERE d.venue = ? AND (? = '' OR d.id = ?) AND d.title LIKE ? ORDER BY d.title, d.id LIMIT 201 OFFSET ?`, selected.id, selected.venue, danceId, danceId, `%${routineQ}%`, routineOffset) : [];
+    WHERE d.event_id = ? AND (? = '' OR d.id = ?) AND d.title LIKE ? ORDER BY d.title, d.id LIMIT 201 OFFSET ?`, selected.id, selected.id, danceId, danceId, `%${routineQ}%`, routineOffset) : [];
   const assetOffset = Math.max(0, Math.min(1000000, Number.parseInt(params.get("assetOffset") || "0", 10) || 0));
   const routineId = (params.get("routineId") || "").slice(0,100);
   const assets = selected && (routineId || participantId) ? await all(db, `SELECT id,event_id,routine_id,participant_id,kind,file_name,content_type,byte_size,width,height,caption,allow_download,published
@@ -631,7 +631,7 @@ async function linkJudgingProgram(db, input, actorId, getJudgingSnapshot) {
   const snapshot = await getJudgingSnapshot(sourceEventId);
   if (snapshot?.event?.id !== sourceEventId || !Array.isArray(snapshot.rows)) fault("portal_invalid_judging_links", "No se pudo comprobar el programa de jueceo.");
   const dances = await all(db, `SELECT d.id,d.title,a.name AS academy FROM registration_dances d
-    JOIN registration_academies a ON a.id=d.academy_id WHERE d.venue=?`, event.venue);
+    JOIN registration_academies a ON a.id=d.academy_id WHERE d.event_id=?`, event.id);
   const existing = await all(db, "SELECT * FROM participant_portal_routines WHERE event_id=?", event.id);
   const source = await first(db, "SELECT source_event_id FROM participant_portal_judging_sources WHERE event_id=?", event.id);
   if (source && source.source_event_id !== sourceEventId && existing.some(row => row.source_event_id)) fault("portal_judging_link_conflict", "Esta edición ya está vinculada a otro programa. Revisa la conexión antes de reemplazarla.", 409);
@@ -670,7 +670,7 @@ async function photoTrialContext(db, input) {
   const participant = await participantById(db, str(input.participantId, "el participante", 100));
   const dances = await all(db, `SELECT d.id,d.title FROM registration_dances d
     JOIN registration_dance_participants dp ON dp.dance_id=d.id
-    WHERE dp.participant_id=? AND d.academy_id=? AND d.venue=? ORDER BY d.title,d.id`, participant.id, participant.academy_id, event.venue);
+    WHERE dp.participant_id=? AND d.academy_id=? AND d.event_id=? ORDER BY d.title,d.id`, participant.id, participant.academy_id, event.id);
   return { event, participant, dances };
 }
 
@@ -865,8 +865,8 @@ async function adminAction(db, env, input, actorId, getMediaStore, getJudgingEve
     }
     case "routine.save": {
       const event = await eventById(db,str(input.eventId,"la edición",100));
-      const dance = await first(db,"SELECT id,venue FROM registration_dances WHERE id=?",str(input.danceId,"la coreografía",100));
-      if (!dance || dance.venue !== event.venue) fault("portal_invalid_routine","La coreografía no corresponde a esta sede.");
+      const dance = await first(db,"SELECT id,event_id FROM registration_dances WHERE id=?",str(input.danceId,"la coreografía",100));
+      if (!dance || dance.event_id !== event.id) fault("portal_invalid_routine","La coreografía no corresponde a esta edición.");
       const result = normalizePortalResult(input.result), judging = normalizePortalJudging(input.judging);
       const previous = await first(db,"SELECT id,revision,source_event_id,source_routine_id,publication_blocked FROM participant_portal_routines WHERE event_id=? AND dance_id=?",event.id,dance.id);
       const hasSourceEvent = Object.hasOwn(input,"sourceEventId"), hasSourceRoutine = Object.hasOwn(input,"sourceRoutineId");

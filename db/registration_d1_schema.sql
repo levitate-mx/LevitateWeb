@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS registration_inscription_orders (
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
+  event_id TEXT,
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
   access_token TEXT UNIQUE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
@@ -180,6 +181,7 @@ CREATE TABLE IF NOT EXISTS registration_shop_orders (
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
+  event_id TEXT,
   reference TEXT NOT NULL UNIQUE COLLATE NOCASE,
   access_token TEXT UNIQUE,
   amount INTEGER NOT NULL DEFAULT 0 CHECK (amount >= 0),
@@ -375,6 +377,7 @@ CREATE TABLE IF NOT EXISTS registration_dances (
     OR (genre = 'aereo' AND level IN ('nudo', 'principiante', 'intermedio', 'avanzado', 'elite'))
   ),
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
+  event_id TEXT,
   created_by_user_id TEXT REFERENCES registration_users(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -420,6 +423,7 @@ CREATE TABLE IF NOT EXISTS registration_recognition_documents (
   academy_id TEXT REFERENCES registration_academies(id) ON DELETE SET NULL,
   academy_name TEXT NOT NULL,
   venue TEXT NOT NULL CHECK (venue IN ('cdmx', 'puebla', 'edomex', 'veracruz')),
+  event_id TEXT,
   recipient_type TEXT NOT NULL CHECK (recipient_type IN ('academy', 'participant', 'choreographer')),
   recipient_id TEXT,
   recipient_name TEXT NOT NULL,
@@ -455,10 +459,12 @@ CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_curp ON registrat
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_releve_order_dance ON registration_inscription_orders(curp) WHERE curp LIKE 'RELEVE:%';
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_academy_id ON registration_inscription_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_status ON registration_inscription_orders(status);
+CREATE INDEX IF NOT EXISTS idx_registration_inscription_orders_event_recent ON registration_inscription_orders(event_id, updated_at DESC, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_registration_inscription_payment_proofs_order_id ON registration_inscription_payment_proofs(order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_curp ON registration_shop_orders(curp);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_academy_id ON registration_shop_orders(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_status ON registration_shop_orders(status);
+CREATE INDEX IF NOT EXISTS idx_registration_shop_orders_event_recent ON registration_shop_orders(event_id, updated_at DESC, created_at DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_shop_orders_access_token ON registration_shop_orders(access_token) WHERE access_token IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_registration_shop_payment_proofs_order_id ON registration_shop_payment_proofs(order_id);
 CREATE INDEX IF NOT EXISTS idx_registration_event_tickets_source_order ON registration_event_tickets(source_order_type, source_order_id);
@@ -473,12 +479,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_choreographers_academy_email
   WHERE email IS NOT NULL AND email <> '';
 CREATE INDEX IF NOT EXISTS idx_registration_dances_academy_id ON registration_dances(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_dances_venue ON registration_dances(venue);
+CREATE INDEX IF NOT EXISTS idx_registration_dances_event_id ON registration_dances(event_id);
 CREATE INDEX IF NOT EXISTS idx_registration_dance_participants_participant_dance ON registration_dance_participants(participant_id, dance_id);
 CREATE INDEX IF NOT EXISTS idx_registration_dance_choreographers_choreographer_dance ON registration_dance_choreographers(choreographer_id, dance_id);
 CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_academy_id ON registration_music_uploads(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_music_uploads_dance_id ON registration_music_uploads(dance_id);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_academy_id ON registration_recognition_documents(academy_id);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_venue ON registration_recognition_documents(venue);
+CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_event_id ON registration_recognition_documents(event_id);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_status ON registration_recognition_documents(status);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_document_type ON registration_recognition_documents(document_type);
 CREATE INDEX IF NOT EXISTS idx_registration_recognition_documents_participant_id ON registration_recognition_documents(participant_id);

@@ -103,6 +103,10 @@ async function seedStudent(db, curp) {
 }
 
 async function fixture(t, { filename } = {}) {
+  // These cases exercise the Estado de México 2026 workshop campaign. Keep
+  // its registration checkout open regardless of the wall clock running the
+  // regression suite; final closure is asserted explicitly per request.
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-20T12:00:00Z'));
   const db = new WorkshopD1(filename);
   t.after(() => db.close());
   db.sqlite.exec(await readFile(new URL('../db/registration_d1_schema.sql', import.meta.url), 'utf8'));
@@ -129,8 +133,14 @@ async function fixture(t, { filename } = {}) {
       db.sqlite.prepare(`INSERT INTO registration_participants(id,academy_id,full_name,curp,birth_date,age,division,shirt_size)
         VALUES (?, ?, ?, ?, ?, 99, 'teen', 'm')`).run(id, owner.id, `Participante ${index}`, curp, birthDate);
       if (dance) {
-        db.sqlite.prepare(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,venue)
-          VALUES (?, ?, 'Coreografía local', 'motion', 'jazz', 'solo', ?)`).run(`dance-${id}`, owner.id, venue);
+        const eventId = {
+          cdmx: 'cdmx-2026',
+          edomex: 'edomex-2026-otono',
+          puebla: 'puebla-2026',
+          veracruz: 'orizaba-2027',
+        }[venue];
+        db.sqlite.prepare(`INSERT INTO registration_dances(id,academy_id,title,genre,subgenre,category,venue,event_id)
+          VALUES (?, ?, 'Coreografía local', 'motion', 'jazz', 'solo', ?, ?)`).run(`dance-${id}`, owner.id, venue, eventId);
         db.sqlite.prepare(`INSERT INTO registration_dance_participants(dance_id,participant_id) VALUES (?, ?)`)
           .run(`dance-${id}`, id);
       }
@@ -140,7 +150,7 @@ async function fixture(t, { filename } = {}) {
       if (dance) {
         order = (await request('/inscription/order', { cookie: owner.cookie, status: 201,
           body: { curp, buyerPhoneCountryCode: '+52', buyerPhoneNumber: '5555555555' } })).json.order;
-        if (paid) {
+        if (paid && order) {
           await request('/inscription/order/proof', { cookie: owner.cookie, status: 201,
             body: { orderId: order.id, curp, fileName: 'local.png', contentType: 'image/png', fileSize: 3, dataUrl: 'data:image/png;base64,AQID' } });
           await request('/admin/inscription-order/status', { cookie: admin.cookie,
