@@ -93,8 +93,10 @@ test("Orizaba hides only the Relevé academy tab and advertises the correct gene
   assert.match(admin, /if \(screen === "releve"\)/, "the historical Relevé screen remains available outside the menu");
   assert.match(inscription, /10 de enero de 2027/);
   assert.match(inscription, /11 de enero de 2027/);
+  assert.doesNotMatch(inscription, /25 de octubre de 2026/);
+  assert.doesNotMatch(inscription, /Relevé: preventa/);
   assert.match(inscription, /Precio vigente aplicado/);
   assert.doesNotMatch(inscription, /Precio preventa respetado/);
   assert.match(worker, /registrationOrizabaInscriptionPresaleEndsAt = Date\.parse\("2027-01-11T06:00:00\.000Z"\)/);
-  assert.match(worker, /dance\?\.venue === "veracruz"/);
+  assert.match(worker, /eventId === "orizaba-2027"/);
 });

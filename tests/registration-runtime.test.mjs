@@ -780,6 +780,92 @@ test('Orizaba ordinary registration prices switch at midnight after January 10 i
   }
 });
 
+test('CDMX 2027 registration prices switch at midnight after March 10 in Mexico City', async t => {
+  const f = await fixture(t);
+  const categories = [
+    ['solo', 1], ['dupla_1_aparato', 2], ['duo_2_aparatos', 2], ['terna_1_aparato', 3], ['trio_3_aparatos', 3],
+  ];
+  const domesticAcademy = await seedAcademy(f, 'cdmx-2027-prices');
+  await createAerialPricingDances(f, domesticAcademy, categories, 'cdmx-2027');
+  const internationalAcademy = await seedAcademy(f, 'cdmx-2027-international-prices', { originType: 'international' });
+  await createAerialPricingDances(f, internationalAcademy, categories, 'cdmx-2027');
+  const orderAcademy = await seedAcademy(f, 'cdmx-2027-order-cutoff');
+  const orderRecord = await createDance(f, orderAcademy, curpA, 'cdmx-2027');
+  const releveAcademy = await seedAcademy(f, 'cdmx-2027-releve-cutoff');
+  const releveRecord = await createDance(f, releveAcademy, curpA, 'cdmx-2027');
+  f.db.sqlite.prepare('UPDATE registration_dances SET is_releve = 1 WHERE id = ?').run(releveRecord.dance.id);
+  // The explicit edition remains authoritative even if a legacy row stores the physical city key.
+  f.db.sqlite.prepare("UPDATE registration_dances SET venue = 'cdmx' WHERE id = ?").run(orderRecord.dance.id);
+
+  let now = Date.parse('2027-03-11T05:59:59.999Z');
+  t.mock.method(Date, 'now', () => now);
+
+  const { json: domesticPresale } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: domesticAcademy.cookie, body: { curp: curpA },
+  });
+  assert.equal(domesticPresale.currency, 'MXN');
+  assert.deepEqual(domesticPresale.lines.map(line => line.baseAmount), [1500, 1500, 1300, 1300, 950, 950]);
+  assert.deepEqual(domesticPresale.lines.map(line => line.discountRate), [0, 0.5, 0, 0.5, 0, 0.5]);
+
+  const { json: internationalPresale } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: internationalAcademy.cookie, body: { curp: curpA },
+  });
+  assert.equal(internationalPresale.currency, 'USD');
+  assert.deepEqual(internationalPresale.lines.map(line => line.baseAmount), [55, 55, 70, 70, 85, 85]);
+
+  const { json: relevePresale } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: releveAcademy.cookie, body: { curp: curpA },
+  });
+  assert.equal(relevePresale.lines[0].baseAmount, 1000);
+  const { json: releveOrdersPresale } = await f.request('/releve/orders', {
+    method: 'POST', cookie: releveAcademy.cookie,
+  });
+  const releveOrderPresale = releveOrdersPresale.orders.find(order => order.danceId === releveRecord.dance.id);
+  assert.equal(releveOrderPresale.amount, 1000);
+
+  const { json: { order: presaleOrder } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: orderAcademy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(presaleOrder.eventId, 'cdmx-2027');
+  assert.equal(presaleOrder.amount, 1500);
+
+  now = Date.parse('2027-03-11T06:00:00.000Z');
+  const { json: domesticNormal } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: domesticAcademy.cookie, body: { curp: curpA },
+  });
+  assert.deepEqual(domesticNormal.lines.map(line => line.baseAmount), [1750, 1750, 1400, 1400, 1200, 1200]);
+
+  const { json: internationalNormal } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: internationalAcademy.cookie, body: { curp: curpA },
+  });
+  assert.deepEqual(internationalNormal.lines.map(line => line.baseAmount), [70, 70, 80, 80, 100, 100]);
+
+  const { json: releveNormal } = await f.request('/inscription/lookup', {
+    method: 'POST', cookie: releveAcademy.cookie, body: { curp: curpA },
+  });
+  assert.equal(releveNormal.lines[0].baseAmount, 1500);
+  const { json: releveOrdersNormal } = await f.request('/releve/orders', {
+    method: 'POST', cookie: releveAcademy.cookie,
+  });
+  const releveOrderNormal = releveOrdersNormal.orders.find(order => order.danceId === releveRecord.dance.id);
+  assert.equal(releveOrderNormal.id, releveOrderPresale.id);
+  assert.equal(releveOrderNormal.amount, 1500);
+  assert.equal(releveOrderNormal.lineItems[0].amount, 1500);
+
+  const { json: lateProof } = await f.request('/inscription/order/proof', {
+    method: 'POST', cookie: orderAcademy.cookie,
+    body: { orderId: presaleOrder.id, curp: curpA, ...proof }, status: 201,
+  });
+  assert.equal(lateProof.order.amount, 1750);
+  assert.equal(lateProof.order.status, 'payment_reported');
+
+  const { json: { order: normalOrder } } = await f.request('/inscription/order', {
+    method: 'POST', cookie: orderAcademy.cookie, body: { curp: curpA, ...phone }, status: 201,
+  });
+  assert.equal(normalOrder.id, presaleOrder.id);
+  assert.equal(normalOrder.amount, 1750);
+});
+
 test('a pending Orizaba order is repriced when regenerated after the presale cutoff', async t => {
   const f = await fixture(t);
   const academy = await seedAcademy(f, 'orizaba-order-cutoff');

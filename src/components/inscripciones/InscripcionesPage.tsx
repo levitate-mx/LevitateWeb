@@ -507,9 +507,8 @@ export function InscripcionesPage() {
                 (hora de CDMX). A partir del <strong>11 de enero de 2027</strong> se aplica el precio normal.
               </span>
               <span>
-                <strong>Relevé: preventa de {relevePresalePrice} hasta el 25 de octubre de 2026</strong>, inclusive
-                (hora de CDMX). A partir del 26 de octubre, el precio es de <strong>$1,500 MXN</strong>.
-                Envía tu comprobante antes del cierre para conservar la tarifa de preventa.
+                Para CDMX, la preventa general es aplicable hasta el <strong>10 de marzo de 2027</strong>, inclusive
+                (hora de CDMX). A partir del <strong>11 de marzo de 2027</strong> se aplica el precio normal.
               </span>
             </span>
           </p>

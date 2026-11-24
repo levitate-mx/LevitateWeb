@@ -190,6 +190,8 @@ const registrationInscriptionPresaleEndsAt = Date.parse("2026-10-13T06:00:00.000
 // Orizaba uses the legacy `veracruz` storage key. Its presale is valid through
 // January 10, 23:59:59.999 in Mexico City.
 const registrationOrizabaInscriptionPresaleEndsAt = Date.parse("2027-01-11T06:00:00.000Z");
+// CDMX 2027 presale is valid through March 10, 23:59:59.999 in Mexico City.
+const registrationCdmx2027InscriptionPresaleEndsAt = Date.parse("2027-03-11T06:00:00.000Z");
 // Relevé's regular presale extends through October 25, 23:59:59 in Mexico City.
 const registrationRelevePresaleEndsAt = Date.parse("2026-10-26T06:00:00.000Z");
 // Hot Presale runs in Mexico City (UTC-6 in October 2026): Oct 6 at 00:00 through Oct 8 at 10:00.
@@ -2201,7 +2203,9 @@ async function refreshRegistrationRelevePrices(db, { academyId, orderId } = {}) 
   if (orderId) { scope.push("o.id = ?"); bindings.push(orderId); }
   await db.prepare(`
     WITH candidates AS (
-      SELECT o.id, json_extract(o.line_items_json, '$[0].currency') = 'USD' AS international,
+      SELECT o.id,
+        COALESCE(NULLIF(o.event_id, ''), json_extract(o.line_items_json, '$[0].eventId'), '') AS event_id,
+        json_extract(o.line_items_json, '$[0].currency') = 'USD' AS international,
         COALESCE(CASE WHEN o.status = 'payment_reported' THEN (
           SELECT CASE WHEN p.status != 'rejected'
             THEN MIN(COALESCE(unixepoch(p.uploaded_at) * 1000, ?), ?) END
@@ -2214,7 +2218,8 @@ async function refreshRegistrationRelevePrices(db, { academyId, orderId } = {}) 
     ), prices AS (
       SELECT id, CASE
         WHEN price_at >= ? AND price_at < ? THEN CASE WHEN international THEN ? ELSE ? END
-        WHEN price_at < ? THEN CASE WHEN international THEN ? ELSE ? END
+        WHEN event_id = 'cdmx-2027' AND price_at < ? THEN CASE WHEN international THEN ? ELSE ? END
+        WHEN event_id != 'cdmx-2027' AND price_at < ? THEN CASE WHEN international THEN ? ELSE ? END
         ELSE CASE WHEN international THEN ? ELSE ? END
       END AS amount FROM candidates
     )
@@ -2227,6 +2232,8 @@ async function refreshRegistrationRelevePrices(db, { academyId, orderId } = {}) 
   `).bind(...bindings,
     registrationReleveHotPresaleStartsAt, registrationReleveHotPresaleEndsAt,
     getRegistrationReleveHotPresaleAmount(true), getRegistrationReleveHotPresaleAmount(),
+    registrationCdmx2027InscriptionPresaleEndsAt,
+    registrationInternationalInscriptionPrices.presale.releve, registrationInscriptionPrices.presale.releve,
     registrationRelevePresaleEndsAt,
     registrationInternationalInscriptionPrices.presale.releve, registrationInscriptionPrices.presale.releve,
     registrationInternationalInscriptionPrices.normal.releve, registrationInscriptionPrices.normal.releve,
@@ -2246,7 +2253,8 @@ async function refreshRegistrationOrdinaryInscriptionPrice(db, order, priceAt = 
   }
 
   const lines = parseRegistrationOrderLineItems(order.line_items_json);
-  if (!lines.some((line) => line.venue === "veracruz")) {
+  const repricedEventIds = new Set(["orizaba-2027", "cdmx-2027"]);
+  if (!lines.some((line) => repricedEventIds.has(getRegistrationDanceEventId(line)))) {
     return order;
   }
   const isInternational = getRegistrationOrderCurrency(lines) === registrationInscriptionCurrencies.international;
@@ -7533,13 +7541,18 @@ function getRegistrationInscriptionAmount(dance, { isInternational = false, pric
 }
 
 function getRegistrationInscriptionPresaleEndsAt(dance, priceKey) {
+  const eventId = getRegistrationDanceEventId(dance);
+  if (eventId === "cdmx-2027") {
+    return registrationCdmx2027InscriptionPresaleEndsAt;
+  }
   if (priceKey === "releve") {
     return registrationRelevePresaleEndsAt;
   }
+  if (eventId === "orizaba-2027") {
+    return registrationOrizabaInscriptionPresaleEndsAt;
+  }
 
-  return dance?.venue === "veracruz"
-    ? registrationOrizabaInscriptionPresaleEndsAt
-    : registrationInscriptionPresaleEndsAt;
+  return registrationInscriptionPresaleEndsAt;
 }
 
 function isRegistrationReleveHotPresaleActive(now = Date.now()) {

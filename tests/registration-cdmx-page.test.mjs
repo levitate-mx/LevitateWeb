@@ -64,5 +64,9 @@ test("CDMX 2027 is a separate registration edition without relabeling CDMX 2026 
   assert.match(participantAdmin, /\{ value: "cdmx", label: "CDMX" \}/);
   assert.doesNotMatch(participantAdmin, /\{ value: "cdmx-2027"/);
   assert.match(inscription, /Para Orizaba, la preventa general es aplicable/);
+  assert.match(inscription, /Para CDMX, la preventa general es aplicable hasta el <strong>10 de marzo de 2027<\/strong>/);
+  assert.match(inscription, /A partir del <strong>11 de marzo de 2027<\/strong> se aplica el precio normal/);
+  assert.match(worker, /registrationCdmx2027InscriptionPresaleEndsAt = Date\.parse\("2027-03-11T06:00:00\.000Z"\)/);
+  assert.match(worker, /eventId === "cdmx-2027"/);
   assert.match(worker, /cdmx-2027/);
 });
