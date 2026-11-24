@@ -1,5 +1,6 @@
 import { ArrowUpRight, CalendarDays, MapPin } from "lucide-react";
 import { useId, useState } from "react";
+import { useRegistrationPolicy } from "../../data/registrationPolicy";
 import { edoMexWorkshops, formatWorkshopTime } from "../../data/workshopsContent";
 import { WorkshopRegistration } from "./WorkshopRegistration";
 
@@ -14,6 +15,8 @@ function WorkshopTimeRange({ start, end }: { start: string; end: string }) {
 }
 
 export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
+  const { isVenueAcquisitionClosed } = useRegistrationPolicy();
+  const isRegistrationClosed = isVenueAcquisitionClosed("edomex");
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
   const registrationId = `workshop-registration-${useId()}`;
   return (
@@ -53,10 +56,17 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
           </div>
           <p className="workshop-schedule__notice">Aerial y Motion se realizan en sedes distintas.</p>
           <p className="workshop-schedule__footnote">{edoMexWorkshops.footnote}</p>
-          <button className="workshop-registration-toggle" type="button" aria-expanded={isRegistrationOpen}
-            aria-controls={registrationId} onClick={() => setIsRegistrationOpen((current) => !current)}>
-            {isRegistrationOpen ? "Ocultar inscripción" : "Inscribirme a workshops"}<ArrowUpRight size={17} aria-hidden="true" />
-          </button>
+          {isRegistrationClosed ? (
+            <div className="workshop-schedule__registration-closed" role="status">
+              <strong>Inscripciones a workshops cerradas</strong>
+              <span>El periodo de inscripción y pago para Estado de México ha concluido.</span>
+            </div>
+          ) : (
+            <button className="workshop-registration-toggle" type="button" aria-expanded={isRegistrationOpen}
+              aria-controls={registrationId} onClick={() => setIsRegistrationOpen((current) => !current)}>
+              {isRegistrationOpen ? "Ocultar inscripción" : "Inscribirme a workshops"}<ArrowUpRight size={17} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         <div className="workshop-schedule__agenda">
@@ -109,7 +119,7 @@ export function WorkshopSchedule({ title = "Workshops" }: { title?: string }) {
             </section>
           ))}
         </div>
-        <WorkshopRegistration id={registrationId} isOpen={isRegistrationOpen} />
+        {!isRegistrationClosed ? <WorkshopRegistration id={registrationId} isOpen={isRegistrationOpen} /> : null}
       </div>
     </section>
   );

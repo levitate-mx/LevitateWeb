@@ -377,7 +377,7 @@ const mediaVenueLabels: Record<string, string> = {
   cdmx: "CDMX - 29 /31 mayo 2026",
   edomex: "Otoño 2026 - Estado de México",
   puebla: "Puebla",
-  veracruz: "Primavera 2027 - Veracruz",
+  veracruz: "Orizaba - 27 y 28 de febrero 2027",
 };
 
 const ticketCartCookieName = "levitate_ticket_cart";
@@ -1058,13 +1058,11 @@ function getMediaVenueLabel(venue?: string | null) {
 
 function getShopModeFromHash() {
   if (typeof window === "undefined") {
-    return "tickets";
+    return "media";
   }
 
   const normalizedHash = window.location.hash.toLowerCase();
-  return normalizedHash === "#foto-video" || normalizedHash === "#fotografia-video" || normalizedHash === "#fotografia-y-video"
-    ? "media"
-    : "tickets";
+  return normalizedHash === "#boletos" || normalizedHash === "#taquilla" ? "tickets" : "media";
 }
 
 function useShopMode(initialMode?: ShopMode) {
@@ -1101,30 +1099,11 @@ export function ShopPage({ initialMode }: { initialMode?: ShopMode }) {
   const storedOrder = readCheckoutCookie(ticketCheckoutCookieName)?.order;
   const canAccessExistingOrder = Boolean(linkedOrder || storedOrder?.accessToken);
 
-  if (ticketSalesClosed && !canAccessExistingOrder) {
-    return <TicketSalesClosedPage />;
-  }
-
-  return <TicketShopPage salesClosed={ticketSalesClosed} />;
-}
-
-function TicketSalesClosedPage() {
   return (
-    <main className="ticket-shop-page ticket-shop-page--paused levitate-home-redesign">
-      <section className="ticket-shop-pause" id="boletos" aria-labelledby="ticket-shop-pause-title">
-        <LevitateHeader activeLabel="Tienda" useRootLinks variant="pill" />
-
-        <div className="ticket-shop-pause__content">
-          <h1 id="ticket-shop-pause-title">
-            <span className="ticket-shop-pause__title-main">¡Gracias por ser parte</span>
-            <strong>de esta edición!</strong>
-          </h1>
-          <p className="ticket-shop-pause__lead">La venta de boletos digitales ha concluido.</p>
-        </div>
-      </section>
-
-      <LevitateFooter useRootLinks />
-    </main>
+    <TicketShopPage
+      existingOrderOnly={ticketSalesClosed && canAccessExistingOrder}
+      salesClosed={ticketSalesClosed}
+    />
   );
 }
 
@@ -1167,10 +1146,17 @@ function ShopTicketQrCard({ ticket }: { ticket: ShopEventTicket }) {
   );
 }
 
-function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
+function TicketShopPage({
+  existingOrderOnly = false,
+  salesClosed = false,
+}: {
+  existingOrderOnly?: boolean;
+  salesClosed?: boolean;
+}) {
   const isSinglePassPresale = useSinglePassPresale();
   const ticketProducts = useMemo(() => getTicketProducts(isSinglePassPresale), [isSinglePassPresale]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isSalesClosedNoticeOpen, setIsSalesClosedNoticeOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
     block: blockOptions[0]?.id ?? "",
     day: dayOptions[0]?.id ?? "",
@@ -1346,14 +1332,18 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
   }, [cartItems]);
 
   useEffect(() => {
-    if (!isCartOpen) {
+    if (!isCartOpen && !isSalesClosedNoticeOpen) {
       return undefined;
     }
 
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsCartOpen(false);
+        if (isSalesClosedNoticeOpen) {
+          setIsSalesClosedNoticeOpen(false);
+        } else {
+          setIsCartOpen(false);
+        }
       }
     };
 
@@ -1364,7 +1354,7 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isCartOpen]);
+  }, [isCartOpen, isSalesClosedNoticeOpen]);
 
   const clearPaymentProof = () => {
     setProofError("");
@@ -1403,6 +1393,11 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
   };
 
   const addTicket = (product: TicketProduct) => {
+    if (salesClosed) {
+      setIsSalesClosedNoticeOpen(true);
+      return;
+    }
+
     const optionId = product.options?.length ? selectedOptions[product.id] : undefined;
     const quantity = draftQuantities[product.id] ?? 1;
     const itemId = getCartItemId(product.id, optionId);
@@ -1421,6 +1416,11 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
   };
 
   const changeCartQuantity = (itemId: string, step: number) => {
+    if (salesClosed && step > 0) {
+      setIsSalesClosedNoticeOpen(true);
+      return;
+    }
+
     setCartItems(
       cartItems
         .map((item) => (item.id === itemId ? { ...item, quantity: item.quantity + step } : item))
@@ -1449,6 +1449,11 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
 
   const handleBuyerSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (salesClosed) {
+      setIsSalesClosedNoticeOpen(true);
+      return;
+    }
 
     if (ticketCount === 0) {
       setBuyerError("Agrega al menos un boleto al carrito.");
@@ -1643,29 +1648,32 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
   const renderBoxOfficeIntro = () => (
     <section className="ticket-shop-how ticket-shop-how--intro" aria-labelledby="ticket-shop-title">
       <div>
+        {salesClosed ? <p>Venta de boletos cerrada</p> : null}
         <h1 id="ticket-shop-title">Taquilla Oficial.</h1>
       </div>
-      <div className="ticket-shop-how__grid">
-        {boxOfficeSteps.map((step) => {
-          const StepIcon = step.icon;
+      {salesClosed ? null : (
+        <div className="ticket-shop-how__grid">
+          {boxOfficeSteps.map((step) => {
+            const StepIcon = step.icon;
 
-          return (
-            <article key={step.title}>
-              <StepIcon aria-hidden="true" size={24} />
-              <strong>{step.title}</strong>
-              {step.bullets ? (
-                <ul>
-                  {step.bullets.map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
-              ) : (
-                <span>{step.text}</span>
-              )}
-            </article>
-          );
-        })}
-      </div>
+            return (
+              <article key={step.title}>
+                <StepIcon aria-hidden="true" size={24} />
+                <strong>{step.title}</strong>
+                {step.bullets ? (
+                  <ul>
+                    {step.bullets.map((bullet) => (
+                      <li key={bullet}>{bullet}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span>{step.text}</span>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 
@@ -1702,6 +1710,14 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
           </div>
           {proofError ? <p className="ticket-shop-proof__error" role="alert">{proofError}</p> : null}
         </section>
+      ) : salesClosed ? (
+        <div className="ticket-shop-proof ticket-shop-proof--closed" role="status">
+          <strong>La taquilla de esta edición está cerrada.</strong>
+          <p>Esta orden se conserva para consulta, pero ya no acepta pagos ni comprobantes.</p>
+          <a className="ticket-shop-add ticket-shop-proof__media-link" href="/tienda/foto-video">
+            Adquirir Foto y Video <ArrowRight aria-hidden="true" size={18} />
+          </a>
+        </div>
       ) : (
         <>
           <dl className="ticket-shop-payment__details">
@@ -1772,13 +1788,15 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
         <span>
           {shopOrder?.status === "paid"
             ? "Cada QR es individual y sólo puede utilizarse una vez."
-            : "Al confirmarse el pago, se enviará el QR con sus accesos por WhatsApp o correo. Puede tardar hasta 2 días hábiles."}
+            : salesClosed
+              ? "Foto y Video continúa disponible en la Tienda Oficial."
+              : "Al confirmarse el pago, se enviará el QR con sus accesos por WhatsApp o correo. Puede tardar hasta 2 días hábiles."}
         </span>
       </div>
     </section>
   );
 
-  if (salesClosed) {
+  if (existingOrderOnly) {
     return (
       <main className="ticket-shop-page levitate-home-redesign">
         <LevitateHeader activeLabel="Tienda" tone="light" useRootLinks variant="pill" />
@@ -1796,6 +1814,54 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
     );
   }
 
+  const renderSalesClosedNotice = () => (
+    isSalesClosedNoticeOpen ? (
+      <div
+        className="ticket-shop-closed-notice"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            setIsSalesClosedNoticeOpen(false);
+          }
+        }}
+        role="presentation"
+      >
+        <section
+          aria-describedby="ticket-shop-closed-description"
+          aria-labelledby="ticket-shop-closed-title"
+          aria-modal="true"
+          className="ticket-shop-closed-notice__dialog"
+          role="dialog"
+        >
+          <button
+            aria-label="Cerrar aviso"
+            autoFocus
+            className="ticket-shop-closed-notice__close"
+            onClick={() => setIsSalesClosedNoticeOpen(false)}
+            type="button"
+          >
+            <X aria-hidden="true" size={22} />
+          </button>
+          <span className="ticket-shop-closed-notice__icon">
+            <Ticket aria-hidden="true" size={28} />
+          </span>
+          <p>Taquilla digital</p>
+          <h2 id="ticket-shop-closed-title">
+            <span>¡Gracias por ser parte</span>
+            <strong>de esta edición!</strong>
+          </h2>
+          <p id="ticket-shop-closed-description">La venta de boletos digitales ha concluido.</p>
+          <button
+            className="ticket-shop-closed-notice__action"
+            onClick={() => setIsSalesClosedNoticeOpen(false)}
+            type="button"
+          >
+            Entendido
+          </button>
+        </section>
+      </div>
+    ) : null
+  );
+
   return (
     <main className="ticket-shop-page levitate-home-redesign">
       <LevitateHeader activeLabel="Tienda" tone="light" useRootLinks variant="pill" />
@@ -1805,23 +1871,35 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
 
         <div className="ticket-shop__layout">
           <div className="ticket-shop__main">
-            <section className="ticket-shop-deadline ticket-shop-deadline--inline" aria-label="Fecha límite de compra">
-              <CalendarDays aria-hidden="true" size={22} />
+            <section className="ticket-shop-deadline ticket-shop-deadline--inline" aria-label="Información de compra">
+              {salesClosed ? <Ticket aria-hidden="true" size={22} /> : <CalendarDays aria-hidden="true" size={22} />}
               <span className="ticket-shop-deadline__copy">
-                <span>Venta digital hasta hoy, <strong>4:00 p. m. (CDMX).</strong></span>
-                <TicketSalesCountdown />
+                {salesClosed ? (
+                  <span><strong>Venta cerrada.</strong> El catálogo se muestra solo como referencia.</span>
+                ) : (
+                  <>
+                    <span>Venta digital hasta hoy, <strong>4:00 p. m. (CDMX).</strong></span>
+                    <TicketSalesCountdown />
+                  </>
+                )}
               </span>
-              <button
-                aria-controls="ticket-shop-checkout"
-                aria-expanded={isCartOpen}
-                className={`ticket-shop-cart-trigger ticket-shop-cart-trigger--inline${isCartOpen ? " is-hidden" : ""}`}
-                onClick={() => setIsCartOpen(true)}
-                type="button"
-              >
-                <ShoppingCart aria-hidden="true" size={19} />
-                <span>Carrito</span>
-                <strong>{ticketCount}</strong>
-              </button>
+              {salesClosed ? (
+                <a className="ticket-shop-add ticket-shop-media-cta" href="/tienda/foto-video">
+                  Foto y Video <ArrowRight aria-hidden="true" size={18} />
+                </a>
+              ) : (
+                <button
+                  aria-controls="ticket-shop-checkout"
+                  aria-expanded={isCartOpen}
+                  className={`ticket-shop-cart-trigger ticket-shop-cart-trigger--inline${isCartOpen ? " is-hidden" : ""}`}
+                  onClick={() => setIsCartOpen(true)}
+                  type="button"
+                >
+                  <ShoppingCart aria-hidden="true" size={19} />
+                  <span>Carrito</span>
+                  <strong>{ticketCount}</strong>
+                </button>
+              )}
             </section>
 
             <section className="ticket-shop-products" aria-label="Tipos de boleto">
@@ -1842,6 +1920,7 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
                       <label>
                         <span>{product.selectionLabel}</span>
                         <select
+                          disabled={salesClosed}
                           onChange={(event) => setSelectedOptions((current) => ({ ...current, [product.id]: event.target.value }))}
                           value={selectedOptions[product.id]}
                         >
@@ -1860,17 +1939,18 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
                     )}
 
                     <div className="ticket-shop-stepper" aria-label={`Cantidad de ${product.name}`}>
-                      <button onClick={() => updateDraftQuantity(product.id, -1)} type="button">
+                      <button disabled={salesClosed} onClick={() => updateDraftQuantity(product.id, -1)} type="button">
                         <Minus aria-hidden="true" size={16} />
                       </button>
                       <strong>{draftQuantities[product.id] ?? 1}</strong>
-                      <button onClick={() => updateDraftQuantity(product.id, 1)} type="button">
+                      <button disabled={salesClosed} onClick={() => updateDraftQuantity(product.id, 1)} type="button">
                         <Plus aria-hidden="true" size={16} />
                       </button>
                     </div>
 
-                    <button className="ticket-shop-add" onClick={() => addTicket(product)} type="button">
-                      Agregar <ShoppingCart aria-hidden="true" size={18} />
+                    <button className="ticket-shop-add" disabled={salesClosed} onClick={() => addTicket(product)} type="button">
+                      {salesClosed ? "Venta cerrada" : "Agregar"}
+                      {salesClosed ? <Ticket aria-hidden="true" size={18} /> : <ShoppingCart aria-hidden="true" size={18} />}
                     </button>
                   </div>
                 </article>
@@ -2004,6 +2084,7 @@ function TicketShopPage({ salesClosed = false }: { salesClosed?: boolean }) {
       </section>
 
       <LevitateFooter useRootLinks />
+      {renderSalesClosedNotice()}
     </main>
   );
 }

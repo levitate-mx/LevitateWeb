@@ -103,7 +103,9 @@ async function fixture(t, { includeStudentSchema = false, workerUnderTest = work
     async read(statements) { return statements.map(sql => db.sqlite.prepare(sql).all().map(row => ({ ...row }))); },
     async write(statements) { for (const sql of statements) db.sqlite.exec(sql); },
   }, { apply: true });
-  const env = { DB: db };
+  // Most runtime cases exercise historical/open fixtures. The production
+  // fallback is covered separately in registration-pause.test.mjs.
+  const env = { DB: db, REGISTRATION_ACQUISITIONS_CLOSED_VENUES: '' };
   return {
     db,
     env,
@@ -995,7 +997,7 @@ async function singlePassAdmin(f, suffix = 'presale-admin') {
   return admin;
 }
 
-test('ticket sales close at exactly 4 pm CDMX while earlier unpaid orders keep lookup and proof access', async t => {
+test('ticket sales close at exactly 4 pm CDMX while earlier unpaid orders remain lookup-only', async t => {
   const f = await fixture(t);
   assert.equal(ticketEvent.salesEndsAt, '2026-11-13T16:00:00-06:00');
   let now = ticketSalesCutoff - 1;
@@ -1023,10 +1025,38 @@ test('ticket sales close at exactly 4 pm CDMX while earlier unpaid orders keep l
     method: 'POST', body: { orderId: order.id, accessToken: order.accessToken },
   });
   assert.equal(lookup.order.id, order.id);
-  const { json: uploaded } = await f.request('/shop/order/proof', {
-    method: 'POST', status: 201, body: { orderId: order.id, accessToken: order.accessToken, ...proof },
+  assert.deepEqual(f.db.sqlite.prepare(
+    'SELECT amount, line_items_json, access_token FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id), savedBeforeClosure, 'a closed historical lookup must remain read-only');
+  const { json: proofBlocked } = await f.request('/shop/order/proof', {
+    method: 'POST', status: 403, body: { orderId: order.id, accessToken: order.accessToken, ...proof },
   });
-  assert.equal(uploaded.order.status, 'payment_reported');
+  assert.equal(proofBlocked.error.code, 'ticket_sales_closed');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_shop_payment_proofs WHERE order_id = ?')
+    .get(order.id).total, 0);
+});
+
+test('a paused historical ticket lookup never reprices its saved checkout snapshot', async t => {
+  const f = await fixture(t);
+  let now = singlePassCutoff - 1;
+  t.mock.method(Date, 'now', () => now);
+  const { json: { order } } = await f.request('/shop/order', {
+    method: 'POST', status: 201, body: singlePassBuyer(curpA, 1, 'block'),
+  });
+  const savedBeforeClosure = f.db.sqlite.prepare(
+    'SELECT amount, line_items_json, access_token, updated_at FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id);
+
+  now = singlePassCutoff;
+  f.env.TICKET_SALES_PAUSED = 'true';
+  const { json: lookup } = await f.request('/shop/order/lookup', {
+    method: 'POST', body: { orderId: order.id, accessToken: order.accessToken },
+  });
+
+  assert.equal(lookup.order.amount, savedBeforeClosure.amount);
+  assert.deepEqual(f.db.sqlite.prepare(
+    'SELECT amount, line_items_json, access_token, updated_at FROM registration_shop_orders WHERE id = ?',
+  ).get(order.id), savedBeforeClosure);
 });
 
 test('a ticket request crossing the 4 pm boundary cannot commit a new order or cart update', async t => {

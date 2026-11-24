@@ -133,7 +133,8 @@ export async function syncParticipantDrivePhotos({ db, env, participantId, event
     const discovery = await getDiscovery();
     if (typeof discovery?.discover !== 'function') throw unavailable();
     // Legacy albums contain an individual participant name. The new hierarchy
-    // binds academy + choreography IDs; membership came from the database above.
+    // binds presentation-number folders to choreography IDs; membership came
+    // from the database above.
     if (initial.ambiguousName && discovery.identityScope !== 'dance'
       && initial.dances.some(dance => !identifier(knownBindings[dance.id]?.folderId))) {
       await release({ error: 'ambiguous_participant' });

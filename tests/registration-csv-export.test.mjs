@@ -91,10 +91,10 @@ test("photo and video orders label the unique programme blocks for their choreog
     ],
   };
   const dances = [
-    { id: "dance-rose", program: { blockTitle: "  BLOQUE 3 · AÉREO  " } },
-    { id: "dance-sky", program: { blockTitle: "BLOQUE 3 · AÉREO" } },
-    { id: "dance-moon", program: { blockTitle: "BLOQUE 5 · JUNIOR" } },
-    { id: "dance-ticket", program: { blockTitle: "NO DEBE APARECER" } },
+    { id: "dance-rose", program: { blockId: "3", blockTitle: "  BLOQUE 3 · AÉREO  " } },
+    { id: "dance-sky", program: { blockId: "3", blockTitle: "BLOQUE 3 · AÉREO" } },
+    { id: "dance-moon", program: { blockId: "5", blockTitle: "BLOQUE 5 · JUNIOR" } },
+    { id: "dance-ticket", program: { blockId: "9", blockTitle: "NO DEBE APARECER" } },
   ];
 
   assert.equal(helper(order, dances), "BLOQUE 3 · AÉREO, BLOQUE 5 · JUNIOR");
@@ -152,7 +152,7 @@ test("photo and video CSV includes the choreography column produced by the share
       },
     },
   );
-  const dances = [{ id: "dance-rose", program: { blockTitle: "BLOQUE 3 · AÉREO" } }];
+  const dances = [{ id: "dance-rose", program: { blockId: "3", blockTitle: "BLOQUE 3 · AÉREO" } }];
 
   csv.downloadMediaOrdersCsv([{
     academyName: "Academia prueba",

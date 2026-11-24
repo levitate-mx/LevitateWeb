@@ -6,7 +6,7 @@ const eventId = "f3c2e100-1234-4567-8abc-123456789abc";
 const foreignId = "f3c2e100-1234-4567-8abc-987654321abc";
 const env = { JUDGING_SUPABASE_URL: "https://judgingfixture.supabase.co", JUDGING_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic_test_key", JUDGING_LEVITATE_EVENT_IDS: eventId };
 const event = (overrides = {}) => ({ id: eventId, name: "Levitate Noviembre", event_type: "event", ...overrides });
-const routine = (id = "routine-1", overrides = {}) => ({ event_id: eventId, routine_id: id, name: "Vuelo", academy: "Academia Uno", ...overrides });
+const routine = (id = "routine-1", overrides = {}) => ({ event_id: eventId, routine_id: id, program_number: null, name: "Vuelo", academy: "Academia Uno", ...overrides });
 function upstream({ events = [event()], routines = [routine()], cap = 1000 } = {}) {
   const calls = [];
   return { calls, fetcher: async (input, options) => {
@@ -108,6 +108,8 @@ test("directory preserves real programme numbers separately from internal routin
     { id: "internal-1", programNumber: "194 a" }, { id: "237", programNumber: null },
     { id: "internal-3", programNumber: null }, { id: "internal-4", programNumber: null },
   ]);
+  const invalid = upstream({ routines: [routine("1", { program_number: "194;DROP" })] });
+  await assert.rejects(() => getJudgingRoutineDirectory(env, eventId, invalid), error => error.code === "judging_invalid_response" && error.statusCode === 502);
 });
 
 test("upstream failures remain sanitized and never return a partially read programme", async () => {

@@ -101,7 +101,7 @@ export function ParticipantDriveDemoTrial({ eventId, participantId, disabled = f
 
   return <div className="pp-admin-drive-demo-trial">
     <h3>Probar fotos desde Drive</h3>
-    <p>Prepara una carpeta con el nombre de su coreografía y participante, y comprueba la llegada de dos fotos demo a su pasaporte. Son imágenes de ejemplo; no corresponden a esta persona.</p>
+    <p>Comprueba la llegada de dos fotos demo a su pasaporte. Esta prueba usa una carpeta temporal; las fotos reales se reciben en carpetas identificadas únicamente por número de presentación. Son imágenes de ejemplo y no corresponden a esta persona.</p>
     {loading ? <p role="status">Consultando sus coreografías…</p> : routines.length ? <label>Coreografía para la prueba<select value={danceId} disabled={disabled || busy}
       onChange={change => { setDanceId(change.target.value); setResult(null); setError(''); }}>
       <option value="">Seleccionar coreografía</option>{routines.map(routine => <option key={routine.danceId} value={routine.danceId}>{routine.title}</option>)}

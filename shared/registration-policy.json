@@ -1,6 +1,8 @@
 {
   "pausedVenues": ["edomex"],
-  "message": "¡Gracias por ser parte de Levitate! El registro de nuevas coreografías para Estado de México está cerrado. Puedes seguir agregando participantes y academias, consultar tus registros, realizar pagos y enviar comprobantes.",
+  "message": "La edición de Estado de México ha concluido. El registro de nuevas coreografías está cerrado.",
+  "acquisitionsClosedVenues": ["edomex"],
+  "acquisitionsMessage": "La edición de Estado de México ha concluido. Ya no aceptamos inscripciones, pagos, comprobantes, boletos ni registros a workshops. Los paquetes de Foto y Video continúan disponibles.",
   "temporaryOpening": {
     "venue": "edomex",
     "startsAt": "2026-11-02T00:00:00-06:00",

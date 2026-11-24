@@ -799,36 +799,30 @@ export function ParticipantPage({ internalPreview = false }: { internalPreview?:
                 internalPreview={isInternalPreview}
               />
               <div className="participant-diploma-copy" data-participant-reveal>
-                <p className="participant-document-status">
-                  {diplomaAvailable ? (
-                    <>
-                      <Check size={15} aria-hidden="true" />
-                      Reconocimiento autenticado y listo
-                    </>
-                  ) : (
-                    "Tu reconocimiento está en preparación"
-                  )}
-                </p>
+                {diplomaAvailable && (
+                  <p className="participant-document-status">
+                    <Check size={15} aria-hidden="true" />
+                    Reconocimiento autenticado y listo
+                  </p>
+                )}
                 <h3>
                   Tu participación, <br />
                   verificada en <br />
                   <em>esta edición.</em>
                 </h3>
-                <div className="participant-diploma-action">
-                  <button
-                    type="button"
-                    className="participant-button"
-                    disabled={!diplomaAvailable || Boolean(downloadBusy) || changingEvent}
-                    onClick={() => diploma ? void download(diploma, "diploma") : void downloadGeneratedDiploma()}
-                  >
-                    {downloadBusy === "diploma"
-                      ? "Preparando reconocimiento…"
-                      : diplomaAvailable
-                        ? "Descargar reconocimiento"
-                        : "Reconocimiento en preparación"}
-                    <ArrowDownToLine size={19} aria-hidden="true" />
-                  </button>
-                </div>
+                {diplomaAvailable && (
+                  <div className="participant-diploma-action">
+                    <button
+                      type="button"
+                      className="participant-button"
+                      disabled={Boolean(downloadBusy) || changingEvent}
+                      onClick={() => diploma ? void download(diploma, "diploma") : void downloadGeneratedDiploma()}
+                    >
+                      {downloadBusy === "diploma" ? "Preparando reconocimiento…" : "Descargar reconocimiento"}
+                      <ArrowDownToLine size={19} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
                 <p className="participant-download-message" role="status">
                   {downloadMessage}
                 </p>

@@ -119,6 +119,13 @@ test("the portal moves directly from its hero to the three detail chapters", () 
   assert.match(source, /id="tus-fotos"/);
 });
 
+test("an unpublished recognition stays out of the participant interface", () => {
+  assert.doesNotMatch(source, /Tu reconocimiento está en preparación|Reconocimiento en preparación/);
+  assert.doesNotMatch(source, /PDF autenticado · Tamaño carta · Personalizado para ti/);
+  assert.match(source, /\{diplomaAvailable && \(/);
+  assert.match(source, /Descargar reconocimiento/);
+});
+
 test("the photo chapter sells the media package with exactly two cross-routine previews", () => {
   const galleryStart = source.indexOf('className="participant-chapter participant-gallery"');
   const galleryEnd = source.indexOf('className="participant-community"', galleryStart);

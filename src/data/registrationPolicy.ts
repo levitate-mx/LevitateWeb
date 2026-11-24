@@ -5,12 +5,18 @@ import { resolveRegistrationPolicy } from "../../shared/registration-policy.js";
 type RegistrationPolicy = ReturnType<typeof resolveRegistrationPolicy>;
 
 export function useRegistrationPolicy() {
-  const [policy, setPolicy] = useState(() => resolveRegistrationPolicy(initialRegistrationPolicy.pausedVenues));
+  const [policy, setPolicy] = useState(() => resolveRegistrationPolicy(
+    initialRegistrationPolicy.pausedVenues,
+    undefined,
+    initialRegistrationPolicy.temporaryOpening,
+    initialRegistrationPolicy.acquisitionsClosedVenues,
+  ));
 
   useEffect(() => {
     let isCancelled = false;
     let isLoading = false;
     let basePausedVenues: string[] = initialRegistrationPolicy.pausedVenues;
+    let acquisitionsClosedVenues: string[] = initialRegistrationPolicy.acquisitionsClosedVenues;
     let temporaryOpening: Parameters<typeof resolveRegistrationPolicy>[2] = initialRegistrationPolicy.temporaryOpening;
     let serverClock: { timestamp: number; receivedAt: number } | null = null;
     let transitionTimeout: number | undefined;
@@ -21,7 +27,7 @@ export function useRegistrationPolicy() {
       if (isCancelled) return;
       window.clearTimeout(transitionTimeout);
       const now = currentTime();
-      const nextPolicy = resolveRegistrationPolicy(basePausedVenues, now, temporaryOpening);
+      const nextPolicy = resolveRegistrationPolicy(basePausedVenues, now, temporaryOpening, acquisitionsClosedVenues);
       setPolicy(nextPolicy);
       const nextChangeAt = nextPolicy.nextChangeAt ? Date.parse(nextPolicy.nextChangeAt) : NaN;
       if (Number.isFinite(nextChangeAt) && nextChangeAt > now) {
@@ -40,6 +46,8 @@ export function useRegistrationPolicy() {
         const serverTime = nextPolicy?.serverTime ? Date.parse(nextPolicy.serverTime) : NaN;
         if (!isCancelled && nextPolicy && Array.isArray(nextPolicy.basePausedVenues)
           && nextPolicy.basePausedVenues.every((venue) => typeof venue === "string")
+          && Array.isArray(nextPolicy.acquisitionsClosedVenues)
+          && nextPolicy.acquisitionsClosedVenues.every((venue) => typeof venue === "string")
           && Number.isFinite(serverTime)) {
           const receivedAt = performance.now();
           const timestamp = serverTime + receivedAt - requestedAt;
@@ -48,6 +56,7 @@ export function useRegistrationPolicy() {
             receivedAt,
           };
           basePausedVenues = nextPolicy.basePausedVenues;
+          acquisitionsClosedVenues = nextPolicy.acquisitionsClosedVenues;
           temporaryOpening = nextPolicy.temporaryOpening;
           updatePolicy();
         }
@@ -82,5 +91,8 @@ export function useRegistrationPolicy() {
   return {
     policy,
     isVenuePaused: (venue?: string | null) => Boolean(venue && policy.pausedVenues.includes(venue)),
+    isVenueAcquisitionClosed: (venue?: string | null) => Boolean(
+      venue && policy.acquisitionsClosedVenues.includes(venue),
+    ),
   };
 }

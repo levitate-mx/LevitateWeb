@@ -9,6 +9,8 @@ export type RegistrationPolicy = {
   basePausedVenues: string[];
   pausedVenues: string[];
   message: string;
+  acquisitionsClosedVenues: string[];
+  acquisitionsMessage: string;
   temporaryOpening: TemporaryRegistrationOpening | null;
   temporaryOpeningActive: boolean;
   nextChangeAt: string | null;
@@ -19,4 +21,5 @@ export function resolveRegistrationPolicy(
   basePausedVenues: string[],
   now?: number,
   opening?: TemporaryRegistrationOpening | null,
+  acquisitionsClosedVenues?: string[],
 ): RegistrationPolicy;

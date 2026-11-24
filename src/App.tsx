@@ -218,7 +218,7 @@ export default function App() {
       return <SedesPage venueKey="edomex" />;
     }
 
-    if (venueSlug === "veracruz") {
+    if (venueSlug === "orizaba" || venueSlug === "veracruz") {
       return <SedesPage venueKey="veracruz" />;
     }
 

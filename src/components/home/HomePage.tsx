@@ -23,11 +23,11 @@ const venues = [
     href: "/sedes/estado-de-mexico",
   },
   {
-    title: "Veracruz",
-    city: "Veracruz",
-    date: "Primavera 2027",
-    image: "/assets/sedes-veracruz-primavera-2027.png",
-    href: "/sedes/veracruz",
+    title: "Teatro Ignacio de la Llave",
+    city: "Orizaba, Veracruz",
+    date: "27 y 28 de febrero 2027",
+    image: "/assets/sedes-orizaba-teatro-ignacio-de-la-llave.webp",
+    href: "/sedes/orizaba",
   },
 ];
 
@@ -164,7 +164,7 @@ export function HomePage() {
             <p className="levitate-home-eyebrow">Competencia Nacional de Danza</p>
             <h1>Competir se siente distinto.</h1>
             <div className="levitate-home-hero__actions">
-              <a className="levitate-home-button levitate-home-button--dark" href="/sedes/estado-de-mexico">
+              <a className="levitate-home-button levitate-home-button--dark" href="/sedes/orizaba">
                 Ver próxima sede <ArrowRight aria-hidden="true" size={18} />
               </a>
               <a className="levitate-home-button levitate-home-button--light" href="/inscripciones">

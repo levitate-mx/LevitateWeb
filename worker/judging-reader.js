@@ -167,12 +167,14 @@ export async function getJudgingRoutineDirectory(env, eventId, { fetcher = fetch
   const ids = new Set();
   const rows = routines.map(row => {
     const id = typeof row.routine_id === "string" ? row.routine_id.trim() : "";
-    if (row.event_id !== eventId || !id || ids.has(id)) {
+    const programNumber = typeof row.program_number === "string" ? row.program_number.trim() : "";
+    if (row.event_id !== eventId || !id || ids.has(id)
+      || (programNumber && !/^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,31}$/.test(programNumber))) {
       fail("judging_invalid_response", "No pudimos comprobar las identidades del programa de JueceoCore.", 502);
     }
     ids.add(id);
-    return { id, programNumber: typeof row.program_number === "string" ? row.program_number.trim() || null : null,
-      name: typeof row.name === "string" ? row.name.trim() : "", academy: typeof row.academy === "string" ? row.academy.trim() : "" };
+    return { id, programNumber: programNumber || null, name: typeof row.name === "string" ? row.name.trim() : "",
+      academy: typeof row.academy === "string" ? row.academy.trim() : "" };
   });
   return { event: { id: eventId, name: typeof event.name === "string" ? event.name.trim() : "" }, rows };
 }

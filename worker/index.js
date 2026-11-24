@@ -25,7 +25,7 @@ import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, si
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
   getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
 import { getRegistrationEventTicketSpecs, getRegistrationTicketPassType, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
-import { getWorkshopLookup, saveWorkshopEnrollment, getAdminWorkshops, saveWorkshopCapacity, saveWorkshopPayment,
+import { getWorkshopLookup, saveWorkshopEnrollment, getAdminWorkshops, saveWorkshopCapacity, saveWorkshopPayment, workshopEvent,
   submitWorkshopPaymentProof, getWorkshopPaymentProof, reviewWorkshopPaymentProof } from "./workshops.js";
 
 const passportSessionCookieName = "levitate_passport_session";
@@ -1351,7 +1351,29 @@ function getRegistrationPolicy(env) {
   // This public availability policy contains no participant or payment data.
   const pausedVenues = [...new Set(String(env.REGISTRATION_PAUSED_VENUES || "")
     .split(",").map((venue) => venue.trim().toLowerCase()).filter((venue) => registrationVenues.has(venue)))];
-  return resolveRegistrationPolicy(pausedVenues);
+  const acquisitionClosureSource = env.REGISTRATION_ACQUISITIONS_CLOSED_VENUES
+    ?? registrationPolicyDefaults.acquisitionsClosedVenues;
+  const acquisitionsClosedVenues = [...new Set(String(acquisitionClosureSource || "")
+    .split(",").map((venue) => venue.trim().toLowerCase()).filter((venue) => registrationVenues.has(venue)))];
+  return resolveRegistrationPolicy(pausedVenues, Date.now(), undefined, acquisitionsClosedVenues);
+}
+
+function assertRegistrationAcquisitionOpen(venue, acquisitionsClosedVenues) {
+  if (acquisitionsClosedVenues.includes(venue)) {
+    throwHttpError("registration_acquisitions_closed", registrationPolicyDefaults.acquisitionsMessage, 403);
+  }
+}
+
+function getRegistrationLineVenues(lineItems, fallbackVenue = "") {
+  const venues = (lineItems || []).map((lineItem) => optionalString(lineItem?.venue).toLowerCase()).filter(Boolean);
+  if (venues.length === 0 && fallbackVenue) venues.push(optionalString(fallbackVenue).toLowerCase());
+  return [...new Set(venues)];
+}
+
+function assertRegistrationLineAcquisitionsOpen(lineItems, fallbackVenue, acquisitionsClosedVenues) {
+  const closedVenue = getRegistrationLineVenues(lineItems, fallbackVenue)
+    .find((venue) => acquisitionsClosedVenues.includes(venue));
+  if (closedVenue) assertRegistrationAcquisitionOpen(closedVenue, acquisitionsClosedVenues);
 }
 
 function getChoreographyCreationWriteGuard(env, venues) {
@@ -1547,6 +1569,9 @@ async function handleRegistrationWorkshops(request, env, action) {
     if (curp.length !== 18) throwHttpError("invalid_curp", "La CURP debe tener 18 caracteres", 400);
     const access = await requireRegistrationInscriptionLookupAccess({ db, request, curp });
     const options = { academyId: access.scope === "academy" ? access.session.academy.id : null };
+    if (action !== "lookup") {
+      assertRegistrationAcquisitionOpen(workshopEvent.venue, getRegistrationPolicy(env).acquisitionsClosedVenues);
+    }
     const workshops = action === "enrollment"
       ? await saveWorkshopEnrollment(db, curp, body, options)
       : action === "proof"
@@ -1600,6 +1625,7 @@ async function handleRegistrationInscriptionLookup(request, env) {
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
       orderId: optionalString(body.orderId),
+      acquisitionsClosedVenues: getRegistrationPolicy(env).acquisitionsClosedVenues,
     });
     return sendJson(serializePublicRegistrationInscriptionLookup(lookup));
   } catch (error) {
@@ -1623,6 +1649,7 @@ async function handleRegistrationInscriptionPaymentLookup(request, env) {
     const lookup = await getRegistrationInscriptionLookup(db, curp, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
       orderId: optionalString(body.orderId),
+      acquisitionsClosedVenues: getRegistrationPolicy(env).acquisitionsClosedVenues,
     });
     return sendJson(serializePublicRegistrationInscriptionPaymentLookup(lookup));
   } catch (error) {
@@ -1648,6 +1675,7 @@ async function handleRegistrationInscriptionOrder(request, env) {
         : getRegistrationBuyerPhoneContact(body);
     const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
+      acquisitionsClosedVenues: getRegistrationPolicy(env).acquisitionsClosedVenues,
     });
     return sendJson(
       {
@@ -1677,6 +1705,7 @@ async function handleRegistrationInscriptionPaymentOrder(request, env) {
     const buyerPhoneContact = getRegistrationBuyerPhoneContact(body);
     const lookup = await createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact, {
       academyId: access.scope === "academy" ? access.session.academy.id : null,
+      acquisitionsClosedVenues: getRegistrationPolicy(env).acquisitionsClosedVenues,
     });
 
     return sendJson(
@@ -1708,6 +1737,11 @@ async function handleRegistrationInscriptionOrderProof(request, env) {
     if (access.scope === "academy" && order.academy_id !== access.session.academy.id) {
       throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
     }
+    assertRegistrationLineAcquisitionsOpen(
+      parseRegistrationOrderLineItems(order.line_items_json),
+      order.venue,
+      getRegistrationPolicy(env).acquisitionsClosedVenues,
+    );
     const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
 
     return sendJson({ order: serializePublicRegistrationInscriptionOrder(serializedOrder) }, 201);
@@ -1723,8 +1757,7 @@ async function handleRegistrationShopOrder(request, env) {
     const db = getDb(env);
     const body = await readJsonBody(request);
 
-    if (hasRegistrationTicketItems(body.items)
-      && (env.TICKET_SALES_PAUSED === "true" || Date.now() >= ticketSalesEndsAt)) {
+    if (hasRegistrationTicketItems(body.items) && registrationTicketSalesAreClosed(env)) {
       throwTicketSalesClosed();
     }
 
@@ -1761,6 +1794,10 @@ function throwTicketSalesClosed() {
   throwHttpError("ticket_sales_closed", "La venta de boletos digitales ha concluido.", 403);
 }
 
+function registrationTicketSalesAreClosed(env) {
+  return env.TICKET_SALES_PAUSED === "true" || Date.now() >= ticketSalesEndsAt;
+}
+
 async function handleRegistrationShopOrderLookup(request, env) {
   try {
     assertMethod(request, ["POST"]);
@@ -1770,7 +1807,12 @@ async function handleRegistrationShopOrderLookup(request, env) {
     const orderId = requireString(body.orderId, "orderId");
     const accessToken = requireString(body.accessToken, "accessToken");
 
-    const order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken);
+    let order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken, { refreshPrices: false });
+    const hasTicketLineItems = parseRegistrationOrderLineItems(order.line_items_json)
+      .some(isRegistrationShopTicketPaymentLineItem);
+    if (!hasTicketLineItems || !registrationTicketSalesAreClosed(env)) {
+      order = await refreshSinglePassPrices(db, { order });
+    }
     return sendJson({ order: await serializePublicRegistrationShopOrderWithProof(db, order) });
   } catch (error) {
     return sendRegistrationError(error);
@@ -1786,7 +1828,13 @@ async function handleRegistrationShopOrderProof(request, env) {
     const body = await readJsonBody(request);
     const orderId = requireString(body.orderId, "orderId");
     const accessToken = requireString(body.accessToken, "accessToken");
-    const order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken);
+    let order = await getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken, { refreshPrices: false });
+    const hasTicketLineItems = parseRegistrationOrderLineItems(order.line_items_json)
+      .some(isRegistrationShopTicketPaymentLineItem);
+    if (hasTicketLineItems && registrationTicketSalesAreClosed(env)) {
+      throwTicketSalesClosed();
+    }
+    order = await refreshSinglePassPrices(db, { order });
     const existingProof = await getLatestShopProofMetadata(db, order.id);
 
     if (existingProof && order.status !== "rejected") {
@@ -1872,6 +1920,11 @@ async function handleRegistrationInscriptionPaymentProof(request, env) {
     if (access.scope === "academy" && order.academy_id !== access.session.academy.id) {
       throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
     }
+    assertRegistrationLineAcquisitionsOpen(
+      parseRegistrationOrderLineItems(order.line_items_json),
+      order.venue,
+      getRegistrationPolicy(env).acquisitionsClosedVenues,
+    );
     const serializedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
 
     return sendJson({ order: serializePublicRegistrationInscriptionPaymentOrder(serializedOrder) }, 201);
@@ -1987,8 +2040,12 @@ async function handleRegistrationReleveOrders(request, env) {
       .all();
 
     const orders = [];
+    const acquisitionsClosedVenues = getRegistrationPolicy(env).acquisitionsClosedVenues;
     for (const dance of dances) {
-      const order = await ensureRegistrationReleveOrder(db, dance, session.academy);
+      const order = await ensureRegistrationReleveOrder(db, dance, session.academy, {
+        allowCreate: !acquisitionsClosedVenues.includes(dance.venue),
+      });
+      if (!order) continue;
       orders.push({
         ...await serializeRegistrationInscriptionOrderWithProof(db, order),
         danceId: dance.id,
@@ -2016,6 +2073,11 @@ async function handleRegistrationReleveOrderProof(request, env) {
     }
     const danceId = order.curp.slice("RELEVE:".length);
     await assertRegistrationDanceBelongsToAcademy(db, session.academy.id, danceId);
+    assertRegistrationLineAcquisitionsOpen(
+      parseRegistrationOrderLineItems(order.line_items_json),
+      order.venue,
+      getRegistrationPolicy(env).acquisitionsClosedVenues,
+    );
     const updatedOrder = await saveRegistrationInscriptionPaymentProof(db, order, body);
     return sendJson({ order: { ...updatedOrder, danceId } }, 201);
   } catch (error) {
@@ -2023,7 +2085,7 @@ async function handleRegistrationReleveOrderProof(request, env) {
   }
 }
 
-async function ensureRegistrationReleveOrder(db, dance, academy) {
+async function ensureRegistrationReleveOrder(db, dance, academy, { allowCreate = true } = {}) {
   // Relevé has no participant CURP; this stable key links one payment order to one dance.
   const curp = `RELEVE:${dance.id}`;
   const existing = await db
@@ -2033,6 +2095,8 @@ async function ensureRegistrationReleveOrder(db, dance, academy) {
   if (existing) {
     return getRegistrationInscriptionOrderRecordById(db, existing.id);
   }
+
+  if (!allowCreate) return null;
 
   const amount = getRegistrationInscriptionAmount(dance);
   const lineItems = JSON.stringify([{
@@ -2983,6 +3047,8 @@ async function handleRegistrationDances(request, env) {
 
     if (request.method === "DELETE") {
       const danceId = await getRegistrationDeleteRecordId(request);
+      const dance = await getRegistrationDanceById(db, academyId, danceId);
+      assertRegistrationAcquisitionOpen(dance.venue, getRegistrationPolicy(env).acquisitionsClosedVenues);
       await deleteRegistrationDance(db, academyId, danceId);
       return sendJson({ dances: await getRegistrationDances(db, academyId) });
     }
@@ -2994,6 +3060,7 @@ async function handleRegistrationDances(request, env) {
     const subgenreDetail = normalizeRegistrationSubgenreDetail(subgenre, body.subgenreDetail);
     const category = requireRegistrationCategory(genre, body.category);
     const venue = requireRegistrationChoice(body.venue, "venue", registrationVenues);
+    assertRegistrationAcquisitionOpen(venue, getRegistrationPolicy(env).acquisitionsClosedVenues);
     assertChoreographyCreationOpen(venue, getRegistrationPolicy(env).pausedVenues);
     const isReleve = optionalBoolean(body.isReleve);
     const choreographerIds = requireStringArray(body.choreographerIds, "choreographerIds");
@@ -3124,6 +3191,8 @@ async function handleRegistrationMusic(request, env) {
     const academyId = session.academy.id;
     const body = await readJsonBody(request);
     const danceId = requireString(body.danceId, "danceId");
+    const dance = await getRegistrationDanceById(db, academyId, danceId);
+    assertRegistrationAcquisitionOpen(dance.venue, getRegistrationPolicy(env).acquisitionsClosedVenues);
 
     if (request.method === "DELETE") {
       await deleteRegistrationAdminMusicUpload(db, { academyId, danceId });
@@ -3137,7 +3206,6 @@ async function handleRegistrationMusic(request, env) {
 
     await assertRegistrationDanceBelongsToAcademy(db, academyId, danceId);
 
-    const dance = await getRegistrationDanceById(db, academyId, danceId);
     assertRegistrationMusicDurationAllowed(dance, musicUpload.durationSeconds);
     const storedMusicUpload = await storeRegistrationMusicUpload({ dance, env, musicUpload, session });
 
@@ -3576,7 +3644,7 @@ function getRegistrationVenueLabel(venue) {
     cdmx: "CDMX - 29 /31 mayo 2026",
     puebla: "Puebla - 7 junio 2026",
     edomex: "Otoño 2026 - Estado de México",
-    veracruz: "Primavera 2027 - Veracruz",
+    veracruz: "Orizaba - 27 y 28 de febrero 2027",
   };
 
   return labels[venue] || venue;
@@ -4133,7 +4201,11 @@ async function getRegistrationStudentState(db, user) {
   };
 }
 
-async function getRegistrationInscriptionLookup(db, curp, { academyId = null, orderId = "" } = {}) {
+async function getRegistrationInscriptionLookup(
+  db,
+  curp,
+  { academyId = null, orderId = "", acquisitionsClosedVenues = [] } = {},
+) {
   const academyFilter = academyId ? "AND registration_participants.academy_id = ?" : "";
   const lookupBindings = academyId ? [curp, academyId] : [curp];
   const { results: registrationRows = [] } = await db
@@ -4221,6 +4293,8 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, or
       throwHttpError("registration_inscription_lookup_forbidden", "No tienes acceso a esa inscripción", 403);
     }
     const selectedLines = parseRegistrationOrderLineItems(selectedOrder.line_items_json);
+    const acquisitionClosed = getRegistrationLineVenues(selectedLines, selectedOrder.venue)
+      .some((venue) => acquisitionsClosedVenues.includes(venue));
     const currency = getRegistrationOrderCurrency(selectedLines);
     return {
       curp,
@@ -4243,18 +4317,26 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, or
       mediaLines: allLines,
       subtotal: Number(selectedOrder.amount || 0),
       orderSnapshotOnly: true,
+      acquisitionClosed,
       order: await serializeRegistrationInscriptionOrderWithProof(db, selectedOrder),
     };
   }
   const primaryRegistration = registrationRows[0];
   const orders = await getRegistrationInscriptionOrdersByParticipant(db, curp, primaryRegistration.academy_id);
-  const latestOrder = orders[0] || null;
-  const openOrder = latestOrder?.status !== "paid" ? latestOrder : null;
+  const orderHasClosedAcquisition = (candidate) => getRegistrationLineVenues(
+    parseRegistrationOrderLineItems(candidate.line_items_json),
+    candidate.venue,
+  ).some((venue) => acquisitionsClosedVenues.includes(venue));
+  const openOrder = orders.find((candidate) => candidate.status !== "paid" && !orderHasClosedAcquisition(candidate)) || null;
+  const closedOpenOrder = orders.find((candidate) => candidate.status !== "paid" && orderHasClosedAcquisition(candidate)) || null;
   const paidOrder = orders.find((order) => order.status === "paid") || null;
   const paidLineIds = getRegistrationInscriptionOrderLineIds(orders.filter((order) => order.status === "paid"));
-  const unpaidLines = allLines.filter((line) => !paidLineIds.has(line.id));
+  const allUnpaidLines = allLines.filter((line) => !paidLineIds.has(line.id));
+  const unpaidLines = allUnpaidLines.filter((line) => !acquisitionsClosedVenues.includes(line.venue));
+  const closedUnpaidLines = allUnpaidLines.filter((line) => acquisitionsClosedVenues.includes(line.venue));
   const primaryVenue =
-    openOrder?.venue || unpaidLines[0]?.venue || paidOrder?.venue || allLines[0]?.venue || danceRows[0]?.venue || defaultRegistrationEventVenue;
+    openOrder?.venue || unpaidLines[0]?.venue || closedOpenOrder?.venue || paidOrder?.venue
+    || allLines[0]?.venue || danceRows[0]?.venue || defaultRegistrationEventVenue;
   const baseReference = buildRegistrationInscriptionReference(curp, primaryVenue, {
     academyId: primaryRegistration.academy_id,
     isInternational,
@@ -4262,13 +4344,22 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, or
   let lines = unpaidLines;
   let order = openOrder;
   let reference = openOrder?.reference || getNextRegistrationInscriptionReference(baseReference, orders);
+  let acquisitionClosed = false;
 
   if (openOrder?.status === "payment_reported") {
     lines = parseRegistrationOrderLineItems(openOrder.line_items_json);
+  } else if (!openOrder && unpaidLines.length === 0 && closedOpenOrder) {
+    order = closedOpenOrder;
+    reference = closedOpenOrder.reference;
+    lines = parseRegistrationOrderLineItems(closedOpenOrder.line_items_json);
+    acquisitionClosed = true;
   } else if (!openOrder && unpaidLines.length === 0 && paidOrder) {
     order = paidOrder;
     reference = paidOrder.reference;
     lines = parseRegistrationOrderLineItems(paidOrder.line_items_json);
+    acquisitionClosed = orderHasClosedAcquisition(paidOrder);
+  } else if (!openOrder && unpaidLines.length === 0 && closedUnpaidLines.length > 0) {
+    acquisitionClosed = true;
   }
 
   const subtotal = order?.status === "payment_reported" || order?.status === "paid"
@@ -4296,12 +4387,24 @@ async function getRegistrationInscriptionLookup(db, curp, { academyId = null, or
     // Media purchases use every owned dance, independently of payment order coverage.
     mediaLines: allLines,
     subtotal,
+    acquisitionClosed,
     order: serializedOrder,
   };
 }
 
-async function createOrUpdateRegistrationInscriptionOrder(db, curp, buyerPhoneContact = null, { academyId = null, skipEmpty = false } = {}) {
-  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId });
+async function createOrUpdateRegistrationInscriptionOrder(
+  db,
+  curp,
+  buyerPhoneContact = null,
+  { academyId = null, skipEmpty = false, acquisitionsClosedVenues = [] } = {},
+) {
+  const lookup = await getRegistrationInscriptionLookup(db, curp, { academyId, acquisitionsClosedVenues });
+
+  if (lookup.acquisitionClosed) {
+    const closedVenue = getRegistrationLineVenues(lookup.lines, lookup.venue)
+      .find((venue) => acquisitionsClosedVenues.includes(venue)) || acquisitionsClosedVenues[0];
+    assertRegistrationAcquisitionOpen(closedVenue, acquisitionsClosedVenues);
+  }
 
   if (skipEmpty && lookup.lines.length === 0) {
     return {
@@ -4455,7 +4558,11 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
 
   normalizedCart.lineItems = await validateRegistrationShopMediaLineItems(db, curp, normalizedCart.lineItems);
   Object.assign(normalizedCart, getRegistrationShopCartTotals(normalizedCart.lineItems, discountCode));
-  const reusableOrder = await getReusableRegistrationShopOrderWithoutProof(db, curp);
+  const reusableCandidate = await getReusableRegistrationShopOrderWithoutProof(db, curp);
+  const reusableOrder = reusableCandidate && !(
+    hasMediaLineItems
+    && parseRegistrationOrderLineItems(reusableCandidate.line_items_json).some(isRegistrationShopTicketPaymentLineItem)
+  ) ? reusableCandidate : null;
 
   if (reusableOrder) {
     const result = await db
@@ -5288,7 +5395,7 @@ async function getRegistrationInscriptionOrderRecordById(db, orderId) {
   return order;
 }
 
-async function getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken) {
+async function getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, accessToken, { refreshPrices = true } = {}) {
   const order = await db
     .prepare(
       `
@@ -5306,7 +5413,7 @@ async function getRegistrationShopOrderRecordByIdAndAccessToken(db, orderId, acc
     throwHttpError("registration_shop_order_not_found", "No pudimos abrir esa orden de tienda", 404);
   }
 
-  return refreshSinglePassPrices(db, { order });
+  return refreshPrices ? refreshSinglePassPrices(db, { order }) : order;
 }
 
 async function getRegistrationInscriptionOrderRecordByIdAndCurp(db, orderId, curp) {
@@ -7585,6 +7692,7 @@ function serializePublicRegistrationInscriptionPaymentLookup(lookup) {
     })),
     mediaLines: lookup.mediaLines || lookup.lines,
     orderSnapshotOnly: Boolean(lookup.orderSnapshotOnly),
+    acquisitionClosed: Boolean(lookup.acquisitionClosed),
     subtotal: lookup.subtotal,
     order: lookup.order ? serializePublicRegistrationInscriptionPaymentOrder(lookup.order) : null,
   };

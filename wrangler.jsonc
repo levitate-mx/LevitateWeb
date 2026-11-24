@@ -64,8 +64,9 @@
     "not_found_handling": "single-page-application"
   },
   "vars": {
-    "TICKET_SALES_PAUSED": "false",
+    "TICKET_SALES_PAUSED": "true",
     "REGISTRATION_PAUSED_VENUES": "edomex",
+    "REGISTRATION_ACQUISITIONS_CLOSED_VENUES": "edomex",
     "PARTICIPANT_REGISTRATION_EVENT_IDS": "edomex-2026-otono",
     "PARTICIPANT_MEDIA_DRIVE_ACCOUNT_EMAIL": "musica.levitate@gmail.com",
     "JUDGING_SUPABASE_URL": "https://twazfaytgmgeyqeopgut.supabase.co",

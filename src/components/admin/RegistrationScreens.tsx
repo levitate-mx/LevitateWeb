@@ -461,6 +461,7 @@ type RegistrationInscriptionOrder = {
 type RegistrationReleveOrder = RegistrationInscriptionOrder & { danceId: string };
 
 type RegistrationInscriptionLookup = {
+  acquisitionClosed?: boolean;
   curp: string;
   participantName: string;
   academyName: string;
@@ -848,7 +849,7 @@ const releveDefaultAerialLevel = "nudo";
 
 const venueOptions: FieldOption[] = [
   { value: "edomex", label: "Otoño 2026 - Estado de México" },
-  { value: "veracruz", label: "Primavera 2027 - Veracruz" },
+  { value: "veracruz", label: "Orizaba - 27 y 28 de febrero 2027" },
 ];
 
 const venueLabelOptions: FieldOption[] = [
@@ -859,7 +860,7 @@ const venueLabelOptions: FieldOption[] = [
 
 const venueEventDates: Record<string, string> = {
   edomex: "2026-11-13",
-  veracruz: "2027-03-21",
+  veracruz: "2027-02-27",
 };
 
 const registrationDashboardDateRangeOptions: Array<{ label: string; value: RegistrationDashboardDateRangeId }> = [
@@ -881,7 +882,7 @@ const registrationDashboardVenueMetricOptions: Array<{ label: string; value: Reg
 
 const registrationDashboardEventStatusByVenue: Record<string, string> = {
   edomex: "Registro abierto",
-  veracruz: "En preparación",
+  veracruz: "Inscripciones abiertas",
 };
 
 const registrationAcademyStatusOptions: FieldOption[] = [
@@ -980,9 +981,9 @@ const studentPortalModules = [
   },
   {
     title: "Tienda Levitate",
-    text: "Compra boletos y paquetes de fotografía o video por separado.",
-    action: "Ir a tienda",
-    href: "/tienda/taquilla",
+    text: "Adquiere tu paquete oficial de fotografía y video.",
+    action: "Ir a Foto y Video",
+    href: "/tienda/foto-video",
     icon: ShoppingBag,
   },
   {
@@ -8689,13 +8690,22 @@ function ReleveRegistrationPanel({
   dances: RegistrationDance[];
   onDanceCreated: (dance: RegistrationDance) => void;
 }) {
-  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const { policy, isVenueAcquisitionClosed, isVenuePaused } = useRegistrationPolicy();
   const [selectedVenue, setSelectedVenue] = useState("");
-  const registrationVenueOptions = venueOptions.map((option) => ({
-    ...option,
-    disabled: isVenuePaused(option.value),
-    label: isVenuePaused(option.value) ? `${option.label} · Nuevas coreografías cerradas` : option.label,
-  }));
+  const registrationVenueOptions = venueOptions.map((option) => {
+    const acquisitionClosed = isVenueAcquisitionClosed(option.value);
+    const registrationPaused = isVenuePaused(option.value);
+
+    return {
+      ...option,
+      disabled: acquisitionClosed || registrationPaused,
+      label: acquisitionClosed
+        ? `${option.label} · Inscripciones cerradas`
+        : registrationPaused
+          ? `${option.label} · Nuevas coreografías cerradas`
+          : option.label,
+    };
+  });
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
   const [selectedSubgenre, setSelectedSubgenre] = useState("");
@@ -8714,7 +8724,14 @@ function ReleveRegistrationPanel({
     choreographers.length > 0 && selectedChoreographerIds.length !== 1
       ? "Selecciona un solo maestro para la coreografía Relevé."
       : "";
-  const cannotSave = isSaving || choreographers.length === 0 || isVenuePaused(selectedVenue);
+  const cannotSave =
+    isSaving ||
+    choreographers.length === 0 ||
+    isVenueAcquisitionClosed(selectedVenue) ||
+    isVenuePaused(selectedVenue);
+  const registrationClosureMessage = policy.acquisitionsClosedVenues.length > 0
+    ? policy.acquisitionsMessage
+    : (policy.pausedVenues.length > 0 || policy.temporaryOpeningActive ? policy.message : "");
 
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
@@ -8733,7 +8750,14 @@ function ReleveRegistrationPanel({
     setStatusMessage("");
     setErrorMessage("");
 
-    if (isVenuePaused(getFormValue(formData, "venue"))) {
+    const venue = getFormValue(formData, "venue");
+
+    if (isVenueAcquisitionClosed(venue)) {
+      setErrorMessage(policy.acquisitionsMessage);
+      return;
+    }
+
+    if (isVenuePaused(venue)) {
       setErrorMessage(policy.message);
       return;
     }
@@ -8785,7 +8809,7 @@ function ReleveRegistrationPanel({
   return (
     <div className="levitate-admin-releve-page">
       <AdminPanel className="levitate-admin-panel--releve" title="Inscripción Relevé" eyebrow="Premio Relevé">
-        <AdminStatusMessage message={policy.pausedVenues.length || policy.temporaryOpeningActive ? policy.message : ""} />
+        <AdminStatusMessage message={registrationClosureMessage} />
         <form className="levitate-admin-form levitate-admin-form--releve" onSubmit={handleSubmit}>
           <div className="levitate-admin-releve-intro">
             <article>
@@ -8939,12 +8963,14 @@ function RelevePaymentCard({ order, onOrderUpdated }: {
   order: RegistrationReleveOrder;
   onOrderUpdated: (order: RegistrationReleveOrder) => void;
 }) {
+  const { isVenueAcquisitionClosed, policy } = useRegistrationPolicy();
+  const isAcquisitionClosed = isVenueAcquisitionClosed(order.venue);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const banamex = registrationPaymentMethodSections.find((method) => method.id === "banamex");
-  const canUpload = !order.proof || order.status === "rejected";
+  const canUpload = !isAcquisitionClosed && (!order.proof || order.status === "rejected");
 
   const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -8985,13 +9011,17 @@ function RelevePaymentCard({ order, onOrderUpdated }: {
         <div><span>Concepto de transferencia</span><strong>{order.reference}</strong></div>
         <div><span>Estado</span><strong>{getInscriptionOrderStatusLabel(order.status)}</strong></div>
       </div>
-      {banamex ? (
+      {isAcquisitionClosed ? (
+        <AdminStatusMessage message={policy.acquisitionsMessage} tone="warning" />
+      ) : banamex ? (
         <section className="levitate-admin-releve-payment-card__bank" aria-label="Datos bancarios Banamex">
           <h4>{banamex.title}</h4>
           <dl>{banamex.rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
         </section>
       ) : null}
-      <p className="levitate-admin-releve-payment-card__note">Usa exactamente <strong>{order.reference}</strong> como concepto para identificar tu pago.</p>
+      {!isAcquisitionClosed ? (
+        <p className="levitate-admin-releve-payment-card__note">Usa exactamente <strong>{order.reference}</strong> como concepto para identificar tu pago.</p>
+      ) : null}
       {order.proof ? (
         <div className="levitate-admin-releve-payment-card__proof">
           <span>{order.status === "rejected" ? "Comprobante anterior" : "Comprobante recibido"}: {order.proof.fileName}</span>
@@ -9029,13 +9059,22 @@ function DanceRegistrationPanel({
   participants: RegistrationParticipant[];
   onDanceCreated: (dance: RegistrationDance) => void;
 }) {
-  const { policy, isVenuePaused } = useRegistrationPolicy();
+  const { policy, isVenueAcquisitionClosed, isVenuePaused } = useRegistrationPolicy();
   const [selectedVenue, setSelectedVenue] = useState("");
-  const registrationVenueOptions = venueOptions.map((option) => ({
-    ...option,
-    disabled: isVenuePaused(option.value),
-    label: isVenuePaused(option.value) ? `${option.label} · Nuevas coreografías cerradas` : option.label,
-  }));
+  const registrationVenueOptions = venueOptions.map((option) => {
+    const acquisitionClosed = isVenueAcquisitionClosed(option.value);
+    const registrationPaused = isVenuePaused(option.value);
+
+    return {
+      ...option,
+      disabled: acquisitionClosed || registrationPaused,
+      label: acquisitionClosed
+        ? `${option.label} · Inscripciones cerradas`
+        : registrationPaused
+          ? `${option.label} · Nuevas coreografías cerradas`
+          : option.label,
+    };
+  });
   const [selectedChoreographerIds, setSelectedChoreographerIds] = useState<string[]>([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [selectedGenre, setSelectedGenre] = useState("");
@@ -9072,9 +9111,13 @@ function DanceRegistrationPanel({
     (participants.length > 0 && selectedParticipantIds.length === 0 ? "Selecciona al menos un participante." : "");
   const cannotSave =
     isSaving ||
+    isVenueAcquisitionClosed(selectedVenue) ||
     isVenuePaused(selectedVenue) ||
     choreographers.length === 0 ||
     participants.length === 0;
+  const registrationClosureMessage = policy.acquisitionsClosedVenues.length > 0
+    ? policy.acquisitionsMessage
+    : (policy.pausedVenues.length > 0 || policy.temporaryOpeningActive ? policy.message : "");
 
   const handleGenreChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextGenre = event.target.value;
@@ -9094,7 +9137,14 @@ function DanceRegistrationPanel({
     setStatusMessage("");
     setErrorMessage("");
 
-    if (isVenuePaused(getFormValue(formData, "venue"))) {
+    const venue = getFormValue(formData, "venue");
+
+    if (isVenueAcquisitionClosed(venue)) {
+      setErrorMessage(policy.acquisitionsMessage);
+      return;
+    }
+
+    if (isVenuePaused(venue)) {
       setErrorMessage(policy.message);
       return;
     }
@@ -9146,7 +9196,7 @@ function DanceRegistrationPanel({
 
   return (
     <AdminPanel className="levitate-admin-panel--dance" title="Registro de nueva coreografía" eyebrow="Competencia">
-      <AdminStatusMessage message={policy.pausedVenues.length || policy.temporaryOpeningActive ? policy.message : ""} />
+      <AdminStatusMessage message={registrationClosureMessage} />
       <form className="levitate-admin-form levitate-admin-form--dance" onSubmit={handleSubmit}>
         <AdminField className="levitate-admin-field--wide" icon={Music2} label="Nombre de la coreografía">
           <input name="title" required type="text" />
@@ -9433,6 +9483,7 @@ function MusicUploadPanel({
   dances: RegistrationDance[];
   onDanceUpdated: (dance: RegistrationDance) => void;
 }) {
+  const { isVenueAcquisitionClosed, policy } = useRegistrationPolicy();
   const [selectedDanceId, setSelectedDanceId] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedMusicDurationCheck, setSelectedMusicDurationCheck] = useState<ReturnType<typeof getMusicDurationCheck> | null>(null);
@@ -9446,6 +9497,7 @@ function MusicUploadPanel({
   const selectedDanceValue = selectedDance?.id ?? "";
   const currentMusicUpload = selectedDance?.musicUpload ?? null;
   const selectedDanceIsReleve = selectedDance ? isReleveDance(selectedDance) : false;
+  const isSelectedVenueClosed = isVenueAcquisitionClosed(selectedDance?.venue);
   const selectedCategoryOptions = selectedDance ? danceCategoriesByGenre[selectedDance.genre] ?? danceCategories : danceCategories;
   const selectedDivision = selectedDance ? getDanceProgramDivision(selectedDance) : "";
   const selectedDivisionLabel = selectedDivision ? getProgramDivisionLabel(selectedDivision).split(":")[0] : "";
@@ -9521,6 +9573,11 @@ function MusicUploadPanel({
       return;
     }
 
+    if (isSelectedVenueClosed) {
+      setUploadError(policy.acquisitionsMessage);
+      return;
+    }
+
     if (!selectedFile) {
       setUploadError("Selecciona un archivo MP3.");
       return;
@@ -9564,6 +9621,11 @@ function MusicUploadPanel({
 
   const handleDeleteMusic = async () => {
     if (!selectedDance || !currentMusicUpload) {
+      return;
+    }
+
+    if (isSelectedVenueClosed) {
+      setUploadError(policy.acquisitionsMessage);
       return;
     }
 
@@ -9649,7 +9711,7 @@ function MusicUploadPanel({
           <input
             key={fileInputVersion}
             accept=".mp3,audio/mpeg"
-            disabled={!selectedDance || isUploading || isCheckingMusicDuration || isDeletingMusic}
+            disabled={!selectedDance || isSelectedVenueClosed || isUploading || isCheckingMusicDuration || isDeletingMusic}
             onChange={handleFileChange}
             type="file"
           />
@@ -9658,14 +9720,14 @@ function MusicUploadPanel({
         <div className="levitate-admin-music-actions">
           <button
             className="levitate-admin-save"
-            disabled={!selectedDance || !selectedFile || isUploading || isCheckingMusicDuration || isDeletingMusic || selectedMusicDurationCheck?.status === "blocked"}
+            disabled={!selectedDance || isSelectedVenueClosed || !selectedFile || isUploading || isCheckingMusicDuration || isDeletingMusic || selectedMusicDurationCheck?.status === "blocked"}
             type="submit"
           >
             <Upload aria-hidden="true" size={18} />
             {isUploading ? "Subiendo música..." : "Subir música"}
           </button>
           {currentMusicUpload ? (
-            <button className="levitate-admin-delete-text-action" disabled={isDeletingMusic || isUploading} onClick={handleDeleteMusic} type="button">
+            <button className="levitate-admin-delete-text-action" disabled={isSelectedVenueClosed || isDeletingMusic || isUploading} onClick={handleDeleteMusic} type="button">
               <Trash2 aria-hidden="true" size={17} />
               {isDeletingMusic ? "Eliminando..." : "Eliminar música"}
             </button>
@@ -9678,6 +9740,7 @@ function MusicUploadPanel({
             tone={selectedMusicDurationCheck.status === "warning" ? "warning" : "success"}
           />
         ) : null}
+        {isSelectedVenueClosed ? <AdminStatusMessage message={policy.acquisitionsMessage} tone="warning" /> : null}
         <AdminStatusMessage message={uploadMessage} />
         <AdminStatusMessage message={uploadError} tone="error" />
         {dances.length === 0 ? <p className="levitate-admin-empty-state">Registra una coreografía para poder subir su música.</p> : null}
@@ -9872,6 +9935,7 @@ function AcademyMexicoPaymentSummaryCard({
 }: {
   lookup: RegistrationInscriptionLookup;
 }) {
+  const { policy } = useRegistrationPolicy();
   const currency = lookup.currency || lookup.lines.find((lineItem) => lineItem.currency)?.currency || "MXN";
   const paymentReference = lookup.paymentReference || lookup.reference;
   const orderStatus = lookup.order ? getInscriptionOrderStatusLabel(lookup.order.status) : "Sin orden generada";
@@ -9879,6 +9943,7 @@ function AcademyMexicoPaymentSummaryCard({
 
   return (
     <article className="levitate-admin-payment-card levitate-admin-payment-card--academy">
+      {lookup.acquisitionClosed ? <AdminStatusMessage message={policy.acquisitionsMessage} tone="warning" /> : null}
       <header>
         <div>
           <span>{paymentReference}</span>
@@ -9995,6 +10060,17 @@ function AcademyInternationalPaymentsPanel({
     setErrorMessage("");
 
     try {
+      const lookup = await requestRegistrationApi<RegistrationInscriptionLookup>(
+        "/api/registration/inscription/lookup",
+        {
+          body: JSON.stringify({ curp: selectedParticipant.curp }),
+          method: "POST",
+        },
+      );
+      if (lookup.acquisitionClosed) {
+        setStatusMessage("La edición de Estado de México concluyó. La orden permanece disponible solo para consulta.");
+        return;
+      }
       const response = await requestRegistrationApi<{ order: RegistrationInscriptionOrder | null }>(
         "/api/registration/inscription/order",
         {
@@ -12645,6 +12721,7 @@ function AdminLookupPanel({
   isInternationalAcademy: boolean;
   onDeleteRecord: (recordType: AdminLookupTab, recordId: string) => Promise<void>;
 }) {
+  const { isVenueAcquisitionClosed } = useRegistrationPolicy();
   const [activeLookupTab, setActiveLookupTab] = useState<AdminLookupTab>("participants");
   const [deletingRecordKey, setDeletingRecordKey] = useState("");
   const [deleteMessage, setDeleteMessage] = useState("");
@@ -12898,6 +12975,7 @@ function AdminLookupPanel({
               const compactDivisionLabel = divisionLabel.split(":")[0] || "Sin división";
               const participantNames = dance.participants.map((participant) => participant.fullName).join(", ");
               const recordKey = `dances:${dance.id}`;
+              const isDanceClosed = isVenueAcquisitionClosed(dance.venue);
 
               return (
                 <div className="levitate-admin-lookup-table__row" role="row" key={dance.id}>
@@ -12911,9 +12989,9 @@ function AdminLookupPanel({
                     <button
                       aria-label={`Eliminar coreografía ${dance.title}`}
                       className="levitate-admin-lookup-delete-button"
-                      disabled={deletingRecordKey === recordKey}
+                      disabled={isDanceClosed || deletingRecordKey === recordKey}
                       onClick={() => openDeleteConfirmation("dances", dance.id, dance.title)}
-                      title="Eliminar coreografía"
+                      title={isDanceClosed ? "La edición de esta sede concluyó" : "Eliminar coreografía"}
                       type="button"
                     >
                       <Trash2 aria-hidden="true" size={17} />

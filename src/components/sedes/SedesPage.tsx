@@ -52,7 +52,6 @@ type SedeContent = {
 
 const defaultMotionGenres = ["Acrojazz", "Ballet", "Belly Dance", "Contemporáneo", "Folklore", "Urbanos", "Jazz", "Lírico", "Open"];
 const defaultAerialGenres = ["Tela", "Aro", "Open"];
-const convocatoriaPdfHref = "/assets/convocatoria-nacional-otono-2026.pdf?v=20260917";
 const hotelDocumentDownloads = [
   {
     fileName: "Hotel_Levitate2026.pdf",
@@ -121,15 +120,15 @@ const sedesContent: Record<"edomex" | "veracruz", SedeContent> = {
     ],
   },
   veracruz: {
-    heroTitle: "Veracruz",
-    eventName: "Primavera 2027",
-    venueName: "Sede por confirmar",
-    heroImage: "/assets/sedes-veracruz-primavera-2027.png",
-    location: "Veracruz",
-    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Veracruz%20Mexico",
-    date: "Primavera\n2027",
+    heroTitle: "Orizaba",
+    eventName: "Teatro Ignacio de la Llave",
+    venueName: "Teatro Ignacio de la Llave",
+    heroImage: "/assets/sedes-orizaba-teatro-ignacio-de-la-llave.webp",
+    location: "Teatro Ignacio de la Llave",
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=Teatro%20Ignacio%20de%20la%20Llave%20Orizaba%20Veracruz",
+    date: "27 y 28 de\nfebrero 2027",
     metaLabel: "Status",
-    metaValue: "Próximamente",
+    metaValue: "Inscripciones abiertas",
     motionGenres: defaultMotionGenres,
     aerialGenres: defaultAerialGenres,
   },
@@ -186,15 +185,16 @@ type SedesPageProps = {
   venueKey?: keyof typeof sedesContent;
 };
 
-export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
-  const { policy, isVenuePaused } = useRegistrationPolicy();
+export function SedesPage({ venueKey = "veracruz" }: SedesPageProps) {
+  const { policy, isVenueAcquisitionClosed, isVenuePaused } = useRegistrationPolicy();
   const isTemporarilyOpen = policy.temporaryOpeningActive && policy.temporaryOpening?.venue === venueKey;
   const isRegistrationPaused = isVenuePaused(venueKey);
-  const registrationHref = "/inscripciones";
-  const registrationAction = isRegistrationPaused ? "Participantes y pagos" : "Inscribirme";
+  const isAcquisitionClosed = isVenueAcquisitionClosed(venueKey);
+  const registrationHref = isAcquisitionClosed ? "/tienda/foto-video" : "/inscripciones";
+  const registrationAction = isAcquisitionClosed ? "Adquirir Foto y Video" : "Inscribirme";
   const venue = sedesContent[venueKey] ?? sedesContent.edomex;
   const hasCompetitionBlocks = Boolean(venue.competitionBlocks?.length);
-  const hasPublishedConvocation = venueKey === "edomex";
+  const hasRegistrationAction = venueKey === "edomex" || venueKey === "veracruz";
   const juryLineup = venue.jury?.length ? buildJuryLineup(venue.jury) : [];
   const [activeJudgeIndex, setActiveJudgeIndex] = useState(0);
   const juryScrollRegionRef = useRef<HTMLDivElement | null>(null);
@@ -311,19 +311,10 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <h1>{venue.heroTitle}</h1>
             <strong>{venue.eventName}</strong>
             <div className="sedes-hero__actions">
-              {hasPublishedConvocation ? (
-                <>
-                  <a className="sedes-button sedes-button--primary" href={registrationHref}>
-                    {registrationAction} <ArrowRight aria-hidden="true" size={18} />
-                  </a>
-                  <a
-                    className="sedes-button sedes-button--ghost"
-                    download="Convocatoria_Nacional_Otono_2026.pdf"
-                    href={convocatoriaPdfHref}
-                  >
-                    Descargar convocatoria <ArrowRight aria-hidden="true" size={18} />
-                  </a>
-                </>
+              {hasRegistrationAction ? (
+                <a className="sedes-button sedes-button--primary" href={registrationHref}>
+                  {registrationAction} <ArrowRight aria-hidden="true" size={18} />
+                </a>
               ) : (
                 <span className="sedes-button sedes-button--primary sedes-button--disabled">
                   Próximamente
@@ -349,8 +340,12 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             <article>
               <CheckCircle2 aria-hidden="true" size={24} />
               <span>{venue.metaLabel}</span>
-              <p>{isRegistrationPaused ? "Registro de coreografías cerrado" : isTemporarilyOpen ? "Coreografías abiertas hoy" : venue.metaValue}</p>
-              {isRegistrationPaused || isTemporarilyOpen ? <small role="status">{policy.message}</small> : null}
+              <p>{isAcquisitionClosed ? "Edición concluida" : isRegistrationPaused ? "Registro de coreografías cerrado" : isTemporarilyOpen ? "Coreografías abiertas hoy" : venue.metaValue}</p>
+              {isAcquisitionClosed ? (
+                <small role="status">{policy.acquisitionsMessage}</small>
+              ) : isRegistrationPaused || isTemporarilyOpen ? (
+                <small role="status">{policy.message}</small>
+              ) : null}
             </article>
           </div>
         </div>
@@ -486,9 +481,9 @@ export function SedesPage({ venueKey = "edomex" }: SedesPageProps) {
             aria-hidden="true"
           />
           <div className="sedes-final-cta__content">
-            <p>{hasPublishedConvocation ? "Siguiente paso" : "Próxima sede"}</p>
-            <h2>{hasPublishedConvocation ? isRegistrationPaused ? "Participantes y pagos disponibles." : "Asegura tu lugar." : "Veracruz está en camino."}</h2>
-            {hasPublishedConvocation ? (
+            <p>{hasRegistrationAction ? isAcquisitionClosed ? "Estado de México" : "Siguiente paso" : "Próxima sede"}</p>
+            <h2>{hasRegistrationAction ? isAcquisitionClosed ? "Inscripciones cerradas. Foto y Video sigue disponible." : "Asegura tu lugar." : "La próxima sede está en camino."}</h2>
+            {hasRegistrationAction ? (
               <a href={registrationHref}>
                 {registrationAction} <ArrowRight aria-hidden="true" size={18} />
               </a>

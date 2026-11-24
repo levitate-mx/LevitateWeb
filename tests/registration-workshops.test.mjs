@@ -68,12 +68,12 @@ class WorkshopD1 {
 }
 
 function requester(db) {
-  return async (path, { method = 'POST', cookie, body, status = 200, rawBody } = {}) => {
+  return async (path, { method = 'POST', cookie, body, status = 200, rawBody, envOverrides = {} } = {}) => {
     const response = await worker.fetch(new Request(`https://example.test/api/registration${path}`, {
       method,
       headers: { ...(cookie ? { cookie } : {}), ...(body !== undefined || rawBody !== undefined ? { 'content-type': 'application/json' } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : rawBody !== undefined ? { body: rawBody } : {}),
-    }), { DB: db });
+    }), { DB: db, REGISTRATION_ACQUISITIONS_CLOSED_VENUES: "", ...envOverrides });
     const json = await response.json();
     if (status !== null) assert.equal(response.status, status, `${method} ${path}: ${JSON.stringify(json)}`);
     return { status: response.status, json, headers: response.headers };
@@ -207,6 +207,55 @@ test('workshop participant access requires a current session and the exact autho
   await f.lookup(person, { cookie: studentCookie, status: 401 });
   f.db.sqlite.prepare("UPDATE registration_sessions SET expires_at=datetime('now','-1 day') WHERE user_id=?").run(f.academy.id);
   await f.lookup(person, { status: 401 });
+});
+
+test('final Edomex closure keeps workshop lookup and admin history but rejects public enrollment and proof writes', async t => {
+  const f = await fixture(t);
+  const person = await f.participant();
+  await f.openAll();
+  const available = ids(await f.lookup(person));
+  const saved = (await f.enroll(person, available.slice(0, 4))).json.workshops;
+  assert.ok(saved.enrollment.amountDue > 0);
+  const before = storedWorkshops(f.db);
+  const closedEnv = { REGISTRATION_ACQUISITIONS_CLOSED_VENUES: 'edomex' };
+
+  await f.request('/workshops/lookup', {
+    cookie: person.cookie,
+    body: { curp: person.curp },
+    envOverrides: closedEnv,
+  });
+  await f.request('/workshops/enrollment', {
+    cookie: undefined,
+    body: { curp: person.curp, sessionIds: saved.enrollment.sessionIds, revision: saved.enrollment.revision },
+    envOverrides: closedEnv,
+    status: 401,
+  });
+  await f.request('/workshops/enrollment', {
+    cookie: f.other.cookie,
+    body: { curp: person.curp, sessionIds: saved.enrollment.sessionIds, revision: saved.enrollment.revision },
+    envOverrides: closedEnv,
+    status: 403,
+  });
+  const enrollmentBlocked = await f.request('/workshops/enrollment', {
+    cookie: person.cookie,
+    body: { curp: person.curp, sessionIds: saved.enrollment.sessionIds, revision: saved.enrollment.revision },
+    envOverrides: closedEnv,
+    status: 403,
+  });
+  assert.equal(enrollmentBlocked.json.error.code, 'registration_acquisitions_closed');
+  const proofBlocked = await f.request('/workshops/payment-proof', {
+    cookie: person.cookie,
+    body: { curp: person.curp, revision: saved.enrollment.revision, ...localProof },
+    envOverrides: closedEnv,
+    status: 403,
+  });
+  assert.equal(proofBlocked.json.error.code, 'registration_acquisitions_closed');
+
+  const adminHistory = await f.request('/admin/workshops', {
+    method: 'GET', cookie: f.admin.cookie, envOverrides: closedEnv,
+  });
+  assert.ok(adminHistory.json.workshops.enrollments.some(enrollment => enrollment.curp === person.curp));
+  assert.deepEqual(storedWorkshops(f.db), before);
 });
 
 test('legacy deployment missing student portal tables can migrate then use the public workshop CURP flow', async t => {

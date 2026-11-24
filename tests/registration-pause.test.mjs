@@ -80,7 +80,7 @@ async function seedStudent(db, curp) {
   return `levitate_registration_student_session=${token}`;
 }
 
-async function fixture(t, { pausedVenues = 'edomex' } = {}) {
+async function fixture(t, { pausedVenues = 'edomex', acquisitionsClosedVenues = '' } = {}) {
   t.mock.method(Date, 'now', () => Date.parse('2026-11-04T12:00:00-06:00'));
   const db = new PauseD1();
   t.after(() => db.sqlite.close());
@@ -92,7 +92,13 @@ async function fixture(t, { pausedVenues = 'edomex' } = {}) {
     db.sqlite.prepare('INSERT INTO registration_choreographers(id,academy_id,full_name) VALUES (?, ?, ?)')
       .run(`teacher-${actor.id}`, actor.id, `Maestra ${actor.id}`);
   }
-  const env = { DB: db, ...(pausedVenues == null ? {} : { REGISTRATION_PAUSED_VENUES: pausedVenues }) };
+  const env = {
+    DB: db,
+    ...(pausedVenues == null ? {} : { REGISTRATION_PAUSED_VENUES: pausedVenues }),
+    ...(acquisitionsClosedVenues == null ? {} : {
+      REGISTRATION_ACQUISITIONS_CLOSED_VENUES: acquisitionsClosedVenues,
+    }),
+  };
   let sequence = 0;
   const f = {
     db, env, academy, other, admin,
@@ -149,7 +155,7 @@ const danceBody = (f, person, venue = 'edomex', isReleve = false) => ({
 
 async function createExistingOrder(f, person, { status = 'pending_payment' } = {}) {
   const { json: { order } } = await f.request('/inscription/order', { body: { curp: person.curp, ...phone }, status: 201,
-    envOverrides: { REGISTRATION_PAUSED_VENUES: '' } });
+    envOverrides: { REGISTRATION_PAUSED_VENUES: '', REGISTRATION_ACQUISITIONS_CLOSED_VENUES: '' } });
   const lineItems = JSON.parse(orderRow(f, order.id).line_items_json).map(line => ({ ...line, amount: 777 }));
   f.db.sqlite.prepare(`UPDATE registration_inscription_orders SET amount = 777, status = ?, line_items_json = ?,
     buyer_phone_country_code = '+52', buyer_phone_number = '5555555555', buyer_phone = '+525555555555',
@@ -374,6 +380,130 @@ test('Relevé payments for existing dances stay available after closure, includi
   assertNoDeletes(f);
 });
 
+test('the final Edomex acquisition closure keeps lookups read-only and blocks orders and proofs after ownership checks', async t => {
+  const f = await fixture(t, { acquisitionsClosedVenues: 'edomex' });
+  const person = f.person();
+  f.dance({ person, venue: 'edomex' });
+  const existing = await createExistingOrder(f, person);
+  const before = businessSnapshot(f);
+  const studentCookie = await seedStudent(f.db, person.curp);
+
+  for (const path of lookupPaths) {
+    const { json } = await f.request(path, { cookie: studentCookie, body: { curp: person.curp } });
+    assert.equal(json.order.id, existing.id);
+    assert.equal(json.acquisitionClosed, true);
+    assert.ok(json.lines.every(line => line.venue === 'edomex'));
+  }
+
+  for (const path of orderPaths) {
+    await f.request(path, { cookie: '', body: { curp: person.curp, ...phone }, status: 401 });
+    await f.request(path, { cookie: f.other.cookie, body: { curp: person.curp, ...phone }, status: 403 });
+    const result = await f.request(path, { cookie: studentCookie, body: { curp: person.curp, ...phone }, status: 403 });
+    assert.equal(result.json.error.code, 'registration_acquisitions_closed');
+  }
+
+  for (const path of proofPaths) {
+    await f.request(path, { cookie: '', body: { curp: person.curp, orderId: existing.id, ...proof }, status: 401 });
+    await f.request(path, { cookie: f.other.cookie, body: { curp: person.curp, orderId: existing.id, ...proof }, status: 403 });
+    const result = await f.request(path, { cookie: studentCookie,
+      body: { curp: person.curp, orderId: existing.id, ...proof }, status: 403 });
+    assert.equal(result.json.error.code, 'registration_acquisitions_closed');
+  }
+
+  assert.deepEqual(businessSnapshot(f), before);
+  assertNoDeletes(f);
+});
+
+test('mixed-venue lookup excludes closed Edomex charges while Orizaba remains payable and media keeps every dance', async t => {
+  const f = await fixture(t, { acquisitionsClosedVenues: 'edomex' });
+  const person = f.person();
+  f.dance({ person, venue: 'edomex', title: 'EdoMex histórico' });
+  f.dance({ person, venue: 'veracruz', title: 'Orizaba abierta' });
+  const { json: lookup } = await f.request('/inscription/payment-lookup', { body: { curp: person.curp } });
+
+  assert.equal(lookup.acquisitionClosed, false);
+  assert.deepEqual(lookup.lines.map(line => line.id), ['concepto-1']);
+  assert.deepEqual(lookup.lines.map(line => line.venue), ['veracruz']);
+  assert.deepEqual(new Set(lookup.mediaLines.map(line => line.title)), new Set(['EdoMex histórico', 'Orizaba abierta']));
+
+  const created = await f.request('/inscription/payment-order', { body: { curp: person.curp, ...phone }, status: 201 });
+  assert.equal(created.json.order.venue, 'veracruz');
+  assert.deepEqual(created.json.order.lineItems.map(line => line.title), ['Orizaba abierta']);
+  assert.ok(!created.json.order.lineItems.some(line => line.title === 'EdoMex histórico'));
+  assertNoDeletes(f);
+});
+
+test('ticket closure is final while Edomex photo and video orders and proofs remain available', async t => {
+  const f = await fixture(t, { acquisitionsClosedVenues: 'edomex' });
+  const person = f.person();
+  const dance = f.dance({ person, venue: 'edomex', title: 'Coreografía para Foto y Video' });
+  const buyer = {
+    curp: person.curp,
+    buyerName: 'Compradora local',
+    buyerEmail: 'compradora@example.test',
+    ...phone,
+  };
+  const { json: { order: ticketOrder } } = await f.request('/shop/order', {
+    status: 201,
+    envOverrides: { TICKET_SALES_PAUSED: 'false' },
+    body: { ...buyer, items: [{ productId: 'full', quantity: 1 }] },
+  });
+
+  const invalidToken = await f.request('/shop/order/proof', {
+    status: 404,
+    envOverrides: { TICKET_SALES_PAUSED: 'true' },
+    body: { orderId: ticketOrder.id, accessToken: 'incorrecto', ...proof },
+  });
+  assert.equal(invalidToken.json.error.code, 'registration_shop_order_not_found');
+  const ticketBlocked = await f.request('/shop/order/proof', {
+    status: 403,
+    envOverrides: { TICKET_SALES_PAUSED: 'true' },
+    body: { orderId: ticketOrder.id, accessToken: ticketOrder.accessToken, ...proof },
+  });
+  assert.equal(ticketBlocked.json.error.code, 'ticket_sales_closed');
+  const ticketLookup = await f.request('/shop/order/lookup', {
+    envOverrides: { TICKET_SALES_PAUSED: 'true' },
+    body: { orderId: ticketOrder.id, accessToken: ticketOrder.accessToken },
+  });
+  assert.equal(ticketLookup.json.order.id, ticketOrder.id);
+
+  const mediaCreated = await f.request('/shop/order', {
+    status: 201,
+    envOverrides: { TICKET_SALES_PAUSED: 'true' },
+    body: { ...buyer, items: [{ productId: 'photo-solos', quantity: 1, danceId: dance.id }] },
+  });
+  assert.notEqual(mediaCreated.json.order.id, ticketOrder.id, 'media must not overwrite a closed ticket checkout');
+  assert.ok(mediaCreated.json.order.lineItems.every(line => line.itemType === 'media'));
+  const mediaProof = await f.request('/shop/order/proof', {
+    status: 201,
+    envOverrides: { TICKET_SALES_PAUSED: 'true' },
+    body: { orderId: mediaCreated.json.order.id, accessToken: mediaCreated.json.order.accessToken, ...proof },
+  });
+  assert.equal(mediaProof.json.order.status, 'payment_reported');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_shop_orders').get().n, 2);
+});
+
+test('final closure returns existing Relevé history, skips new Edomex orders, and keeps Orizaba Relevé open', async t => {
+  const f = await fixture(t, { acquisitionsClosedVenues: 'edomex' });
+  const existingDance = f.dance({ venue: 'edomex', isReleve: true });
+  const missingDance = f.dance({ venue: 'edomex', isReleve: true });
+  const orizabaDance = f.dance({ venue: 'veracruz', isReleve: true });
+  const existingId = seedReleveOrder(f, existingDance);
+
+  const { json } = await f.request('/releve/orders', { body: {} });
+  assert.deepEqual(new Set(json.orders.map(order => order.danceId)), new Set([existingDance.id, orizabaDance.id]));
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_orders WHERE curp = ?')
+    .get(`RELEVE:${missingDance.id}`).n, 0);
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS n FROM registration_inscription_orders WHERE curp = ?')
+    .get(`RELEVE:${orizabaDance.id}`).n, 1);
+
+  const before = businessSnapshot(f);
+  const blocked = await f.request('/releve/order/proof', { body: { orderId: existingId, ...proof }, status: 403 });
+  assert.equal(blocked.json.error.code, 'registration_acquisitions_closed');
+  assert.deepEqual(businessSnapshot(f), before);
+  assertNoDeletes(f);
+});
+
 
 const reopeningStart = Date.parse('2026-11-02T00:00:00-06:00');
 const reopeningEnd = Date.parse('2026-11-03T00:00:00-06:00');
@@ -595,12 +725,18 @@ test('production policy leaves November 2 open and closes new Edomex dances at e
   const defaults = JSON.parse(await readFile(new URL('../shared/registration-policy.json', import.meta.url), 'utf8'));
   const deployment = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
   assert.deepEqual(defaults.pausedVenues, ['edomex']);
+  assert.deepEqual(defaults.acquisitionsClosedVenues, ['edomex']);
   assert.equal(deployment.vars.REGISTRATION_PAUSED_VENUES, 'edomex');
-  assert.equal(deployment.vars.TICKET_SALES_PAUSED, 'false');
+  assert.equal(deployment.vars.REGISTRATION_ACQUISITIONS_CLOSED_VENUES, 'edomex');
+  assert.equal(deployment.vars.TICKET_SALES_PAUSED, 'true');
   assert.match(defaults.message, /nuevas coreografías/i);
-  assert.match(defaults.message, /pagos.*comprobantes/i);
+  assert.match(defaults.acquisitionsMessage, /inscripciones.*pagos.*comprobantes.*boletos.*workshops/i);
+  assert.match(defaults.acquisitionsMessage, /foto y video.*disponibles/i);
   const { resolveRegistrationPolicy } = await import('../shared/registration-policy.js');
-  const f = await fixture(t, { pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES });
+  const f = await fixture(t, {
+    pausedVenues: deployment.vars.REGISTRATION_PAUSED_VENUES,
+    acquisitionsClosedVenues: deployment.vars.REGISTRATION_ACQUISITIONS_CLOSED_VENUES,
+  });
   let now;
   t.mock.method(Date, 'now', () => now);
   for (const [date, active] of productionClosureDates) {
@@ -610,6 +746,7 @@ test('production policy leaves November 2 open and closes new Edomex dances at e
     for (const policy of [fallback, json.registrationPolicy]) {
       assert.deepEqual(policy.basePausedVenues, ['edomex'], date);
       assert.deepEqual(policy.pausedVenues, active ? [] : ['edomex'], date);
+      assert.deepEqual(policy.acquisitionsClosedVenues, ['edomex'], date);
       assert.equal(policy.temporaryOpeningActive, active, date);
       assert.equal(Date.parse(policy.temporaryOpening.startsAt), reopeningStart);
       assert.equal(Date.parse(policy.temporaryOpening.endsAt), reopeningEnd);
@@ -621,7 +758,19 @@ test('production policy leaves November 2 open and closes new Edomex dances at e
   assertNoDeletes(f);
 });
 
-test('production closes only new ordinary and Relevé dances while prior registrations retain payment, lookup and proof access', async t => {
+test('the server falls back to the shared final closure only when the acquisition env variable is absent', async t => {
+  const f = await fixture(t, { acquisitionsClosedVenues: null });
+  const missingEnv = await f.request('/status', { method: 'GET', cookie: '' });
+  assert.deepEqual(missingEnv.json.registrationPolicy.acquisitionsClosedVenues, ['edomex']);
+
+  const explicitOpen = await f.request('/status', {
+    method: 'GET', cookie: '', envOverrides: { REGISTRATION_ACQUISITIONS_CLOSED_VENUES: '' },
+  });
+  assert.deepEqual(explicitOpen.json.registrationPolicy.acquisitionsClosedVenues, []);
+  assertNoDeletes(f);
+});
+
+test('the historical choreography pause remains independently testable without the final acquisition flag', async t => {
   const deployment = JSON.parse(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
   for (const [date, active] of productionClosureDates) {
     await t.test(date, async t => {

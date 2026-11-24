@@ -31,10 +31,10 @@ const navItems: NavItem[] = [
   { label: "Inicio", href: "#inicio" },
   {
     label: "Convocatoria",
-    href: "/sedes/estado-de-mexico",
+    href: "/sedes/orizaba",
     children: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-      { label: "Veracruz", href: "/sedes/veracruz" },
+      { label: "Orizaba", href: "/sedes/orizaba" },
     ],
   },
   {
@@ -109,7 +109,7 @@ const capsuleNavItems: PillMenuSection[] = [
   },
   {
     title: "Convocatoria",
-    href: "/sedes/estado-de-mexico",
+    href: "/sedes/orizaba",
   },
   {
     title: "Inscripciones",
@@ -122,7 +122,7 @@ const pillMenuSections: PillMenuSection[] = [
     title: "Sedes",
     links: [
       { label: "Estado de México", href: "/sedes/estado-de-mexico" },
-      { label: "Veracruz", href: "/sedes/veracruz" },
+      { label: "Orizaba", href: "/sedes/orizaba" },
     ],
   },
   {
@@ -148,7 +148,7 @@ const pillMenuSections: PillMenuSection[] = [
   {
     title: "Tienda Oficial",
     links: [
-      { label: "Taquilla", href: "/tienda/taquilla" },
+      { label: "Taquilla · cerrada", disabled: true },
       { label: "Fotografía y video", href: "/tienda/foto-video" },
     ],
   },

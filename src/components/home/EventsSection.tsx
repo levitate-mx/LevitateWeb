@@ -78,7 +78,7 @@ export function EventsSection() {
 
         <div ref={trackRef} className="event-track" aria-label="Próximos eventos">
           {events.map((event, index) => {
-            const isUpcoming = event.slug === "veracruz";
+            const isUpcoming = Boolean(event.isUpcoming);
             const dateParts = event.date.split(" ");
             const cardContent = (
               <>

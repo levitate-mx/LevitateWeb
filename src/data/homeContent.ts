@@ -41,7 +41,7 @@ export const megaMenuItems = [
   },
   {
     label: "Convocatoria",
-    href: "/sedes/estado-de-mexico",
+    href: "/sedes/orizaba",
     image: assets.hero,
     description: "Inscripción y próximos pasos para academias y participantes.",
   },
@@ -88,12 +88,13 @@ export const events = [
     image: assets.venue,
   },
   {
-    slug: "veracruz",
-    date: "Próximamente",
+    slug: "orizaba",
+    date: "27 FEB",
     name: "Levitate MX",
-    venue: "Veracruz",
-    location: "Veracruz",
-    image: "/assets/sedes-veracruz-primavera-2027.png",
+    venue: "Teatro Ignacio de la Llave",
+    location: "Orizaba, Veracruz",
+    image: "/assets/sedes-orizaba-teatro-ignacio-de-la-llave.webp",
+    isUpcoming: false,
   },
 ];
 

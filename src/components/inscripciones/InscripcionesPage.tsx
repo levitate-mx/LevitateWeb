@@ -126,6 +126,7 @@ type InscriptionLookup = {
   pricingMode?: "mexico" | "international";
   order?: InscriptionOrder | null;
   orderSnapshotOnly?: boolean;
+  acquisitionClosed?: boolean;
 };
 
 type ApiErrorResponse = {
@@ -250,7 +251,7 @@ const venueLabels: Record<string, string> = {
   cdmx: "CDMX - 29 /31 mayo 2026",
   edomex: "Otoño 2026 - Estado de México",
   puebla: "Puebla",
-  veracruz: "Primavera 2027 - Veracruz",
+  veracruz: "Orizaba - 27 y 28 de febrero 2027",
 };
 
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
@@ -402,6 +403,9 @@ function resetLookupScroll() {
 
 export function InscripcionesPage() {
   const { policy } = useRegistrationPolicy();
+  const availabilityMessage = policy.acquisitionsClosedVenues.length > 0
+    ? policy.acquisitionsMessage
+    : policy.message;
   return (
     <main className="levitate-home-redesign inscripciones-page">
       <section className="inscripciones-hero" id="inicio">
@@ -428,9 +432,9 @@ export function InscripcionesPage() {
         </div>
       </section>
 
-      {policy.pausedVenues.length > 0 || policy.temporaryOpeningActive ? (
+      {policy.pausedVenues.length > 0 || policy.acquisitionsClosedVenues.length > 0 || policy.temporaryOpeningActive ? (
         <aside className="inscripciones-presale-note" aria-label="Estado de inscripciones" role="status">
-          <p><CircleAlert aria-hidden="true" size={20} /><span>{policy.message}</span></p>
+          <p><CircleAlert aria-hidden="true" size={20} /><span>{availabilityMessage}</span></p>
         </aside>
       ) : null}
 
@@ -549,7 +553,7 @@ export function InscripcionesConsultaPage() {
 }
 
 function InscriptionLookupPanel() {
-  const { policy } = useRegistrationPolicy();
+  const { policy, isVenueAcquisitionClosed } = useRegistrationPolicy();
   const [curp, setCurp] = useState("");
   const [lookup, setLookup] = useState<InscriptionLookup | null>(null);
   const [lookupError, setLookupError] = useState("");
@@ -583,7 +587,10 @@ function InscriptionLookupPanel() {
     : visibleSubtotal;
   const visibleDiscount = Math.max(0, visibleOriginalSubtotal - visibleSubtotal);
   const hasUploadedPaymentProof = Boolean(lookup?.order?.proof);
-  const canUploadPaymentProof = canSubmitPaymentProof(lookup?.order);
+  const isLookupAcquisitionClosed = Boolean(
+    lookup && (lookup.acquisitionClosed || isVenueAcquisitionClosed(lookup.venue)),
+  );
+  const canUploadPaymentProof = !isLookupAcquisitionClosed && canSubmitPaymentProof(lookup?.order);
   const isRejectedPaymentOrder = lookup?.order?.status === "rejected";
 
   useEffect(() => {
@@ -703,9 +710,10 @@ function InscriptionLookupPanel() {
       setLookup(payload);
       setPhoneCountryCode(payload.order?.buyerPhoneCountryCode ?? defaultPhoneCountryCode);
       setPhoneNumber(payload.order?.buyerPhoneNumber ?? "");
-      shouldScrollToProofRef.current = Boolean(options.autoOpenPayment && payload.order);
-      setIsTransferVisible(Boolean(options.autoOpenPayment && payload.order));
-      setSelectedPaymentMethodId(options.autoOpenPayment && payload.order ? paymentMethodSections[0]?.id ?? "" : "");
+      const paymentClosed = Boolean(payload.acquisitionClosed || isVenueAcquisitionClosed(payload.venue));
+      shouldScrollToProofRef.current = Boolean(options.autoOpenPayment && payload.order && !paymentClosed);
+      setIsTransferVisible(Boolean(options.autoOpenPayment && payload.order && !paymentClosed));
+      setSelectedPaymentMethodId(options.autoOpenPayment && payload.order && !paymentClosed ? paymentMethodSections[0]?.id ?? "" : "");
 
       if (options.expectedOrderId && payload.order?.id && payload.order.id !== options.expectedOrderId) {
         setProofMessage("Te mostramos la orden vigente asociada a esta CURP.");
@@ -773,7 +781,7 @@ function InscriptionLookupPanel() {
       return;
     }
 
-    if (!canSubmitPaymentProof(lookup.order)) {
+    if (!canUploadPaymentProof) {
       setSelectedProofFile(null);
       setProofError("");
       setProofMessage("");
@@ -832,7 +840,7 @@ function InscriptionLookupPanel() {
     setProofError("");
     setProofMessage("");
 
-    if (!canSubmitPaymentProof(lookup?.order)) {
+    if (!canUploadPaymentProof) {
       setSelectedProofFile(null);
       input.value = "";
       return;
@@ -862,7 +870,7 @@ function InscriptionLookupPanel() {
   };
 
   const handleProofSubmit = () => {
-    if (!canSubmitPaymentProof(lookup?.order)) {
+    if (!canUploadPaymentProof) {
       setSelectedProofFile(null);
       return;
     }
@@ -1459,6 +1467,10 @@ function InscriptionLookupPanel() {
     if (!lookup) {
       return;
     }
+    if (isLookupAcquisitionClosed) {
+      setOrderError(policy.acquisitionsMessage);
+      return;
+    }
     if (lookup.order && (
       lookup.order.status === "paid"
       || lookup.order.status === "payment_reported"
@@ -1537,8 +1549,10 @@ function InscriptionLookupPanel() {
       >
         <section className="inscripciones-payment-main">
           <section className="inscripciones-lookup-search" aria-label="Consulta de inscripción por CURP">
-            {policy.pausedVenues.length > 0 || policy.temporaryOpeningActive ? (
-              <p className="inscripciones-query-message inscripciones-registration-pause" role="status">{policy.message}</p>
+            {policy.pausedVenues.length > 0 || policy.acquisitionsClosedVenues.length > 0 || policy.temporaryOpeningActive ? (
+              <p className="inscripciones-query-message inscripciones-registration-pause" role="status">
+                {policy.acquisitionsClosedVenues.length > 0 ? policy.acquisitionsMessage : policy.message}
+              </p>
             ) : null}
             <form onSubmit={handleLookupSubmit}>
               <div className="inscripciones-lookup-search__field">
@@ -1644,6 +1658,13 @@ function InscriptionLookupPanel() {
                   </dl>
                 </div>
               ) : null}
+              {isLookupAcquisitionClosed ? (
+                <div className="inscripciones-acquisition-closed" role="status">
+                  <strong>Esta edición ya concluyó.</strong>
+                  <p>La consulta permanece disponible, pero ya no se reciben pagos ni comprobantes de Estado de México.</p>
+                  <a href="/tienda/foto-video">Adquirir Foto y Video <ArrowRight aria-hidden="true" size={17} /></a>
+                </div>
+              ) : null}
             </section>
           ) : (
             <section className="inscripciones-lookup-preview" aria-label="Estado de consulta">
@@ -1666,7 +1687,7 @@ function InscriptionLookupPanel() {
         >
           <img alt="" src="/assets/inscripciones-payment-moment.jpg" />
 
-          {lookup && (visibleLines.length > 0 || hasExistingOrder) && !isTransferVisible ? (
+          {lookup && !isLookupAcquisitionClosed && (visibleLines.length > 0 || hasExistingOrder) && !isTransferVisible ? (
             <form
               className="inscripciones-photo-payment-actions"
               onSubmit={(event) => {
@@ -1706,7 +1727,7 @@ function InscriptionLookupPanel() {
             </form>
           ) : null}
 
-          {isTransferVisible && lookup ? (
+          {isTransferVisible && lookup && !isLookupAcquisitionClosed ? (
             <section className="inscripciones-payment-sidepanel" aria-labelledby="payment-panel-title" ref={paymentPanelRef}>
               <header className="inscripciones-payment-sidepanel__header">
                 <div>

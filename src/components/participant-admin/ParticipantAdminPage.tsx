@@ -179,7 +179,12 @@ export function ParticipantAdminPage() {
           <label>Identificador de edición<input value={eventDraft.id} onChange={e => setEventDraft({ ...eventDraft, id: e.target.value })} placeholder="otono-2026-edomex" /></label>
           <label>Título<input value={eventDraft.title} onChange={e => setEventDraft({ ...eventDraft, title: e.target.value })} placeholder="Levitate MX · Otoño 2026" /></label>
           <label>Temporada<input value={eventDraft.season} onChange={e => setEventDraft({ ...eventDraft, season: e.target.value })} placeholder="Otoño 2026" /></label>
-          <label>Sede<select value={eventDraft.venue} onChange={e => setEventDraft({ ...eventDraft, venue: e.target.value })}>{['edomex', 'cdmx', 'puebla', 'veracruz'].map(v => <option key={v}>{v}</option>)}</select></label>
+          <label>Sede<select value={eventDraft.venue} onChange={e => setEventDraft({ ...eventDraft, venue: e.target.value })}>{[
+            { value: "edomex", label: "Estado de México" },
+            { value: "cdmx", label: "CDMX" },
+            { value: "puebla", label: "Puebla" },
+            { value: "veracruz", label: "Orizaba" },
+          ].map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>Inicio<input type="date" value={eventDraft.startsAt?.slice(0, 10) || ''} onChange={e => setEventDraft({ ...eventDraft, startsAt: e.target.value })} /></label>
           <label className="pp-admin-check"><input type="checkbox" checked={Boolean(eventDraft.published)} onChange={e => setEventDraft({ ...eventDraft, published: e.target.checked })} />Edición visible para sus participantes</label>
         </div><button onClick={() => perform(async () => { await api('', { action: 'event.upsert', event: eventDraft }); setEventId(eventDraft.id); }, 'Edición guardada.')}>Guardar edición</button></details>
