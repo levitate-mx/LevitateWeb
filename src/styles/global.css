@@ -22662,6 +22662,10 @@ button {
   min-width: 820px;
 }
 
+.registration-admin-media-table {
+  min-width: 1240px;
+}
+
 .registration-admin-payments-table .registration-admin-table__head,
 .registration-admin-payments-table .registration-admin-table__row,
 .registration-admin-media-table .registration-admin-table__head,
@@ -22669,9 +22673,18 @@ button {
   grid-template-columns: minmax(124px, 0.9fr) minmax(160px, 1.15fr) minmax(180px, 1.35fr) minmax(108px, 0.72fr) minmax(118px, 0.76fr) 52px;
 }
 
+.registration-admin-media-table .registration-admin-table__row .registration-admin-media-choreography,
+.registration-admin-media-table .registration-admin-table__row .registration-admin-media-block {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  padding: 8px 0;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .registration-admin-media-table .registration-admin-table__head,
 .registration-admin-media-table .registration-admin-table__row {
-  grid-template-columns: minmax(124px, 0.9fr) minmax(160px, 1.15fr) minmax(180px, 1.35fr) minmax(108px, 0.72fr) minmax(118px, 0.76fr) 52px;
+  grid-template-columns: minmax(124px, 0.9fr) minmax(160px, 1.1fr) minmax(180px, 1.2fr) minmax(180px, 1.25fr) minmax(200px, 1.35fr) minmax(108px, 0.72fr) minmax(118px, 0.76fr) 52px;
 }
 
 .registration-admin-participants-card {

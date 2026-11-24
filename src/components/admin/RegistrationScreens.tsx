@@ -389,6 +389,10 @@ type RegistrationInscriptionLineItem = {
   baseAmount?: number;
   count?: number;
   currency?: string;
+  danceCategory?: string;
+  danceDivision?: string | null;
+  danceId?: string;
+  danceTitle?: string;
   discountAmount?: number;
   discountRate?: number;
   id: string;
@@ -403,6 +407,7 @@ type RegistrationInscriptionLineItem = {
   productCategory?: string;
   productId?: string;
   productName?: string;
+  participantCount?: number;
   quantity?: number;
   qty?: number;
   level?: string | null;
@@ -2914,6 +2919,35 @@ function getOrderMediaConcept(order: RegistrationInscriptionOrder) {
     .join(", ");
 }
 
+function getOrderMediaChoreographyLabel(order: RegistrationInscriptionOrder) {
+  const choreographyTitles = getOrderMediaLineItems(order)
+    .map((lineItem) => lineItem.danceTitle?.trim())
+    .filter((danceTitle): danceTitle is string => Boolean(danceTitle));
+  const uniqueChoreographyTitles = Array.from(new Set(choreographyTitles));
+
+  return uniqueChoreographyTitles.length > 0
+    ? uniqueChoreographyTitles.join(", ")
+    : "Sin coreografía registrada";
+}
+
+function getOrderMediaBlockLabel(order: RegistrationInscriptionOrder, dances: RegistrationDance[]) {
+  const dancesById = new Map(dances.map((dance) => [dance.id, dance]));
+  const blockLabels = getOrderMediaLineItems(order)
+    .map((lineItem) => {
+      const program = lineItem.danceId ? dancesById.get(lineItem.danceId)?.program : null;
+      const blockTitle = program?.blockTitle?.trim();
+      const blockId = program?.blockId?.trim();
+
+      return blockTitle || (blockId ? `Bloque ${blockId.toUpperCase()}` : "");
+    })
+    .filter((blockLabel): blockLabel is string => Boolean(blockLabel));
+  const uniqueBlockLabels = Array.from(new Set(blockLabels));
+
+  return uniqueBlockLabels.length > 0
+    ? uniqueBlockLabels.join(", ")
+    : "Sin bloque asignado";
+}
+
 function getMediaDashboardTotals(orders: RegistrationInscriptionOrder[]) {
   return orders.reduce(
     (totals, order) => ({
@@ -5073,7 +5107,7 @@ function downloadTicketDashboardCsv(rows: TicketDashboardRow[]) {
   URL.revokeObjectURL(url);
 }
 
-function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
+function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[], dances: RegistrationDance[]) {
   const headers = [
     "Referencia",
     "Comprador",
@@ -5083,6 +5117,8 @@ function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     "Participante",
     "Academia",
     "Paquete",
+    "Coreografía",
+    "Bloque",
     "Cantidad",
     "Monto",
     "Pagado",
@@ -5099,6 +5135,8 @@ function downloadMediaOrdersCsv(orders: RegistrationInscriptionOrder[]) {
     order.participantName,
     order.academyName,
     getOrderMediaConcept(order),
+    getOrderMediaChoreographyLabel(order),
+    getOrderMediaBlockLabel(order, dances),
     getOrderMediaItemCount(order),
     order.amount,
     order.paidAmount,
@@ -10469,8 +10507,11 @@ function RegistrationAdminPaymentsWorkspace({
     if (adminSession?.user.role !== "admin" || activeSection === "payments" || activeSection === "workshops" || activeSection === "scores" || activeSection === "releveVoting") return;
     if (activeSection === "program") {
       void loadAdminProgram();
-    } else if (activeSection === "tickets" || activeSection === "media") {
+    } else if (activeSection === "tickets") {
       void loadAdminOrders();
+    } else if (activeSection === "media") {
+      void loadAdminOrders();
+      void loadAdminProgram();
     } else {
       void loadAdminOrders();
       void loadAdminParticipants();
@@ -10707,6 +10748,8 @@ function RegistrationAdminPaymentsWorkspace({
           order.buyerPhone ?? "",
           order.venue,
           getOrderMediaConcept(order),
+          getOrderMediaChoreographyLabel(order),
+          getOrderMediaBlockLabel(order, programDances),
         ]
           .join(" ")
           .toLowerCase()
@@ -10714,7 +10757,7 @@ function RegistrationAdminPaymentsWorkspace({
 
       return matchesVenue && matchesStatus && matchesQuery;
     });
-  }, [mediaOrders, mediaQuery, mediaStatusFilter, mediaVenueFilter]);
+  }, [mediaOrders, mediaQuery, mediaStatusFilter, mediaVenueFilter, programDances]);
   const mediaPagination = useAdminPagination(filteredMediaOrders, JSON.stringify([mediaQuery, mediaVenueFilter, mediaStatusFilter]));
   const visibleMediaOrders = mediaPagination.visibleItems;
   const mediaTotals = useMemo(() => getMediaDashboardTotals(filteredMediaOrders), [filteredMediaOrders]);
@@ -11144,8 +11187,11 @@ function RegistrationAdminPaymentsWorkspace({
     if (activeSection === "dashboard" || activeSection === "tickets") ticketSalesSummary.refresh();
     if (activeSection === "payments") paymentPage.refresh();
     else if (activeSection === "program") void loadAdminProgram(true);
-    else if (activeSection === "tickets" || activeSection === "media") void loadAdminOrders(true);
-    else {
+    else if (activeSection === "tickets") void loadAdminOrders(true);
+    else if (activeSection === "media") {
+      void loadAdminOrders(true);
+      void loadAdminProgram(true);
+    } else {
       void loadAdminOrders(true);
       void loadAdminParticipants(true);
       void loadAdminProgram(true);
@@ -11338,7 +11384,7 @@ function RegistrationAdminPaymentsWorkspace({
                           : isTicketSection
                             ? filteredTicketRows.length === 0
                             : isMediaSection
-                              ? filteredMediaOrders.length === 0
+                              ? filteredMediaOrders.length === 0 || isProgramLoading
                               : isRegistrationsSection
                                 ? filteredAdminParticipantRows.length === 0
                                 : paymentsPagination.totalItems === 0 || isExportingPayments || paymentPage.isLoading
@@ -11365,7 +11411,7 @@ function RegistrationAdminPaymentsWorkspace({
                     }
 
                     if (isMediaSection) {
-                      downloadMediaOrdersCsv(filteredMediaOrders);
+                      downloadMediaOrdersCsv(filteredMediaOrders, programDances);
                       return;
                     }
 
@@ -11740,6 +11786,8 @@ function RegistrationAdminPaymentsWorkspace({
                     <span role="columnheader">Orden</span>
                     <span role="columnheader">Contacto</span>
                     <span role="columnheader">Paquete</span>
+                    <span role="columnheader">Coreografía</span>
+                    <span role="columnheader">Bloque</span>
                     <span role="columnheader">Monto</span>
                     <span role="columnheader">Status</span>
                     <span role="columnheader">Acción</span>
@@ -11766,6 +11814,12 @@ function RegistrationAdminPaymentsWorkspace({
                           <small>
                             {order.participantName} · {order.academyName}
                           </small>
+                        </span>
+                        <span className="registration-admin-media-choreography" role="cell">
+                          {getOrderMediaChoreographyLabel(order)}
+                        </span>
+                        <span className="registration-admin-media-block" role="cell">
+                          {getOrderMediaBlockLabel(order, programDances)}
                         </span>
                         <span role="cell">{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</span>
                         <span role="cell">
@@ -11989,6 +12043,7 @@ function RegistrationAdminPaymentsWorkspace({
             <RegistrationAdminOrderDetail
               key={`${adminSession.user.id}:${getAdminOrderType(selectedOrder)}:${selectedOrder.id}`}
               adminUserId={adminSession.user.id}
+              dances={programDances}
               onClose={() => setSelectedOrderId("")}
               onOrderDeleted={handleAdminOrderDeleted}
               onOrderNotesUpdated={handleOrderNotesUpdated}
@@ -12004,6 +12059,7 @@ function RegistrationAdminPaymentsWorkspace({
 
 function RegistrationAdminOrderDetail({
   adminUserId,
+  dances,
   onClose,
   onOrderDeleted,
   onOrderNotesUpdated,
@@ -12011,6 +12067,7 @@ function RegistrationAdminOrderDetail({
   order,
 }: {
   adminUserId: string;
+  dances: RegistrationDance[];
   onClose: () => void;
   onOrderDeleted: (id: string) => void;
   onOrderNotesUpdated: (order: RegistrationInscriptionOrder) => void;
@@ -12315,6 +12372,7 @@ function RegistrationAdminOrderDetail({
         sourceOrderStatus: order.status,
       }));
   const participantTicketOrderCount = new Set(participantTickets.map((ticket) => `${ticket.sourceOrderType}:${ticket.sourceOrderId}`)).size;
+  const hasMediaLineItems = getOrderMediaLineItems(order).length > 0;
 
   return (
     <section className="registration-admin-detail" aria-label="Detalle de pago">
@@ -12471,6 +12529,18 @@ function RegistrationAdminOrderDetail({
           <dt>Concepto</dt>
           <dd>{getInscriptionOrderConcept(order)}</dd>
         </div>
+        {hasMediaLineItems ? (
+          <>
+            <div>
+              <dt>Coreografía</dt>
+              <dd>{getOrderMediaChoreographyLabel(order)}</dd>
+            </div>
+            <div>
+              <dt>Bloque</dt>
+              <dd>{getOrderMediaBlockLabel(order, dances)}</dd>
+            </div>
+          </>
+        ) : null}
         <div>
           <dt>Monto esperado</dt>
           <dd>{formatAdminCurrency(order.amount, getRegistrationOrderCurrency(order))}</dd>
