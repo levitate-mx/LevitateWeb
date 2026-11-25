@@ -1,10 +1,71 @@
 import ticketPricing from "../shared/ticket-pricing.json" with { type: "json" };
 import ticketEvent from "../shared/ticket-event.json" with { type: "json" };
 
-export const singlePassPresaleEndsAt = Date.parse(ticketPricing.singlePass.presaleEndsAt);
-const { presalePrice, regularPrice } = ticketPricing.singlePass;
+const legacyTicketEventId = ticketEvent.eventId;
 const auditPrefix = "[single-pass-price ";
-const campaignAuditPrefix = `${auditPrefix}${ticketPricing.singlePass.presaleEndsAt}]`;
+const singlePassPricingByEvent = Object.freeze(Object.fromEntries(
+  Object.entries(ticketPricing.singlePass).map(([eventId, pricing]) => {
+    const presaleEndsAt = Date.parse(pricing.presaleEndsAt);
+    if (!Number.isFinite(presaleEndsAt)
+      || !Number.isSafeInteger(pricing.presalePrice)
+      || !Number.isSafeInteger(pricing.regularPrice)
+      || pricing.presalePrice < 0
+      || pricing.regularPrice < pricing.presalePrice) {
+      throw new Error(`Invalid Single Pass pricing for ${eventId}`);
+    }
+    return [eventId, Object.freeze({
+      ...pricing,
+      eventId,
+      presaleEndsAtSource: pricing.presaleEndsAt,
+      presaleEndsAt,
+    })];
+  }),
+));
+
+export function getSinglePassPricing(eventId = legacyTicketEventId) {
+  return singlePassPricingByEvent[String(eventId || "").trim()] || null;
+}
+
+const legacySinglePassPricing = getSinglePassPricing();
+export const singlePassPresaleEndsAt = legacySinglePassPricing.presaleEndsAt;
+
+function getSinglePassProductId(line) {
+  return String(line?.productId || line?.id || "").trim().split(":")[0];
+}
+
+function isSinglePassLine(line) {
+  return Boolean(line && typeof line === "object" && !Array.isArray(line)
+    && ["block", "ticket-block"].includes(getSinglePassProductId(line)));
+}
+
+function parseSinglePassOrderLines(order) {
+  try {
+    const lines = JSON.parse(order?.line_items_json || "[]");
+    return Array.isArray(lines) ? lines : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getSinglePassPricingForOrder(order) {
+  const lines = parseSinglePassOrderLines(order).filter(isSinglePassLine);
+  if (!lines.length) return null;
+
+  const eventIds = new Set(lines.map((line) => String(line.eventId || "").trim() || legacyTicketEventId));
+  if (eventIds.size !== 1) return null;
+  const [eventId] = eventIds;
+  const orderEventId = String(order?.event_id || order?.eventId || "").trim();
+  if (orderEventId && orderEventId !== eventId) return null;
+  return getSinglePassPricing(eventId);
+}
+
+function getCampaignAuditPrefix(pricing) {
+  // Keep the exact historical prefix so previously adjusted Edo. Méx. orders
+  // remain restorable after introducing pricing for the 2027 editions.
+  return pricing.eventId === legacyTicketEventId
+    ? `${auditPrefix}${pricing.presaleEndsAtSource}]`
+    : `${auditPrefix}${pricing.eventId} ${pricing.presaleEndsAtSource}]`;
+}
 
 // D1 stores UTC timestamps without a timezone suffix. Never interpret them in
 // the execution host's local timezone or accept a date without its upload time.
@@ -21,45 +82,47 @@ export function parseSinglePassTimestamp(value) {
   return calendarDate.toISOString().slice(0, 10) === match[1] ? timestamp : NaN;
 }
 
-export function isSinglePassPresaleProof(proof) {
-  return Boolean(proof && ["submitted", "accepted"].includes(proof.status)
-    && parseSinglePassTimestamp(proof.uploaded_at) < singlePassPresaleEndsAt);
+export function isSinglePassPresaleProof(proof, eventId = legacyTicketEventId) {
+  const pricing = getSinglePassPricing(eventId);
+  return Boolean(pricing && proof && ["submitted", "accepted"].includes(proof.status)
+    && parseSinglePassTimestamp(proof.uploaded_at) < pricing.presaleEndsAt);
 }
 
-export function getSinglePassPrice(now = Date.now()) {
-  return now < singlePassPresaleEndsAt ? presalePrice : regularPrice;
+export function getSinglePassPrice(now = Date.now(), eventId = legacyTicketEventId) {
+  const pricing = getSinglePassPricing(eventId);
+  if (!pricing) return null;
+  return now < pricing.presaleEndsAt ? pricing.presalePrice : pricing.regularPrice;
 }
 
-function isSinglePassLineAtPrice(line, price) {
-  if (!line || typeof line !== "object" || Array.isArray(line)) return false;
-  const productId = String(line.productId || line.id || "").trim().split(":")[0];
-  return ["block", "ticket-block"].includes(productId)
-    && (!line.eventId || line.eventId === ticketEvent.eventId)
-    && Number(line.unitPrice) === price;
+function isSinglePassLineAtPrice(line, pricing, price) {
+  if (!isSinglePassLine(line)) return false;
+  const eventId = String(line.eventId || "").trim() || legacyTicketEventId;
+  return eventId === pricing.eventId && Number(line.unitPrice) === price;
 }
 
-function hasAutomaticIncreaseAudit(order) {
+function hasAutomaticIncreaseAudit(order, pricing) {
+  const campaignAuditPrefix = getCampaignAuditPrefix(pricing);
   return String(order.notes || "").split("\n").some((line) => line.startsWith(campaignAuditPrefix)
-    && line.includes(": fin de preventa;") && line.includes(`Single Pass de $${presalePrice} a $${regularPrice};`));
+    && line.includes(": fin de preventa;")
+    && line.includes(`Single Pass de $${pricing.presalePrice} a $${pricing.regularPrice};`));
 }
 
 export function repriceSinglePassOrder(order, now = Date.now(), proof = null) {
-  if (now < singlePassPresaleEndsAt) return null;
-  const protectedProof = isSinglePassPresaleProof(proof);
-  const restore = protectedProof && parseSinglePassTimestamp(order.created_at) < singlePassPresaleEndsAt
-    && hasAutomaticIncreaseAudit(order);
+  const pricing = getSinglePassPricingForOrder(order);
+  if (!pricing || now < pricing.presaleEndsAt) return null;
+  const protectedProof = isSinglePassPresaleProof(proof, pricing.eventId);
+  const restore = protectedProof && parseSinglePassTimestamp(order.created_at) < pricing.presaleEndsAt
+    && hasAutomaticIncreaseAudit(order, pricing);
   // Already-approved orders retain their original price. A prior automatic
   // increase can be repaired even if the administrator approved it afterwards.
   if (protectedProof && !restore || !protectedProof && order.status === "paid") return null;
-  const fromPrice = restore ? regularPrice : presalePrice;
-  const toPrice = restore ? presalePrice : regularPrice;
-  let lines;
-  try { lines = JSON.parse(order.line_items_json || "[]"); } catch { return null; }
-  if (!Array.isArray(lines)) return null;
+  const fromPrice = restore ? pricing.regularPrice : pricing.presalePrice;
+  const toPrice = restore ? pricing.presalePrice : pricing.regularPrice;
+  const lines = parseSinglePassOrderLines(order);
   let delta = 0;
   let ticketCount = 0;
   const lineItems = lines.map((line) => {
-    if (!isSinglePassLineAtPrice(line, fromPrice)) return line;
+    if (!isSinglePassLineAtPrice(line, pricing, fromPrice)) return line;
     const quantity = Number(line.quantity ?? line.qty ?? line.count ?? 1);
     if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100) return line;
     const originalAmount = Number(line.amount ?? fromPrice * quantity);
@@ -72,8 +135,15 @@ export function repriceSinglePassOrder(order, now = Date.now(), proof = null) {
   });
   const amount = Number(order.amount) + delta;
   if (!ticketCount || !Number.isSafeInteger(amount) || amount < 0) return null;
-  return { amount, lineItems, lineItemsJson: JSON.stringify(lineItems), ticketCount, delta,
-    direction: restore ? "restore" : "increase" };
+  return {
+    amount,
+    lineItems,
+    lineItemsJson: JSON.stringify(lineItems),
+    ticketCount,
+    delta,
+    direction: restore ? "restore" : "increase",
+    pricing,
+  };
 }
 
 // Keep the automatic audit even when payment review posts an older notes draft.
@@ -110,16 +180,23 @@ export function getSinglePassProofSnapshot(proof) {
 export const latestShopProofSnapshotSql = `(SELECT json_array(p.id, p.status, p.uploaded_at, p.created_at, p.rowid)
   FROM registration_shop_payment_proofs p WHERE p.order_id = registration_shop_orders.id
   ORDER BY p.uploaded_at DESC, p.created_at DESC, p.rowid DESC LIMIT 1)`;
-export const validEarlyShopProofSql = `EXISTS (
-  SELECT 1 FROM registration_shop_payment_proofs p
-  WHERE p.order_id = registration_shop_orders.id
-    AND p.id = (SELECT latest.id FROM registration_shop_payment_proofs latest
-      WHERE latest.order_id = registration_shop_orders.id
-      ORDER BY latest.uploaded_at DESC, latest.created_at DESC, latest.rowid DESC LIMIT 1)
-    AND p.status IN ('submitted', 'accepted')
-    AND p.uploaded_at GLOB '????-??-??[ T]??:??:??*'
-    AND unixepoch(p.uploaded_at) < ${singlePassPresaleEndsAt / 1000}
-)`;
+
+export function getValidEarlyShopProofSql(eventId = legacyTicketEventId) {
+  const pricing = getSinglePassPricing(eventId);
+  if (!pricing) return "0";
+  return `EXISTS (
+    SELECT 1 FROM registration_shop_payment_proofs p
+    WHERE p.order_id = registration_shop_orders.id
+      AND p.id = (SELECT latest.id FROM registration_shop_payment_proofs latest
+        WHERE latest.order_id = registration_shop_orders.id
+        ORDER BY latest.uploaded_at DESC, latest.created_at DESC, latest.rowid DESC LIMIT 1)
+      AND p.status IN ('submitted', 'accepted')
+      AND p.uploaded_at GLOB '????-??-??[ T]??:??:??*'
+      AND unixepoch(p.uploaded_at) < ${Math.floor(pricing.presaleEndsAt / 1000)}
+  )`;
+}
+
+export const validEarlyShopProofSql = getValidEarlyShopProofSql();
 
 const notCancelledOrderSql = `NOT (
   EXISTS (SELECT 1 FROM registration_event_tickets t
@@ -131,25 +208,24 @@ const notCancelledOrderSql = `NOT (
 // Call only after authenticating the administrator or the individual order token.
 // Candidate/proof reads contain metadata only, never a payment proof's file.
 export async function refreshSinglePassPrices(db, { orderId, order, academyId, now = Date.now() } = {}) {
-  if (now < singlePassPresaleEndsAt) return order;
+  if (!Object.values(singlePassPricingByEvent).some((pricing) => now >= pricing.presaleEndsAt)) return order;
   let candidates;
   if (order) candidates = [order];
   else {
     const filters = ["(status != 'paid' OR instr(COALESCE(notes, ''), ?) > 0)"];
-    const values = [campaignAuditPrefix];
+    const values = [auditPrefix];
     if (orderId) { filters.push("id = ?"); values.push(orderId); }
     if (academyId) { filters.push("academy_id = ?"); values.push(academyId); }
     filters.push(`EXISTS (
       SELECT 1 FROM json_each(CASE WHEN json_valid(line_items_json) THEN line_items_json ELSE '[]' END) line
-      WHERE CAST(json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.unitPrice') AS REAL) IN (?, ?)
-        AND (json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.productId') IN ('block', 'ticket-block')
-          OR json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.id') LIKE 'block:%'
-          OR json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.id') LIKE 'ticket-block:%'
-          OR json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.id') IN ('block', 'ticket-block'))
+      WHERE json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.productId') IN ('block', 'ticket-block')
+        OR json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.id') LIKE 'block:%'
+        OR json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.id') LIKE 'ticket-block:%'
+        OR json_extract(CASE WHEN line.type = 'object' THEN line.value ELSE '{}' END, '$.id') IN ('block', 'ticket-block')
     )`);
-    values.push(presalePrice, regularPrice);
     const { results = [] } = await db.prepare(`
-      SELECT id, status, amount, line_items_json, notes, created_at FROM registration_shop_orders WHERE ${filters.join(" AND ")}
+      SELECT id, event_id, status, amount, line_items_json, notes, created_at
+      FROM registration_shop_orders WHERE ${filters.join(" AND ")}
     `).bind(...values).all();
     candidates = results;
   }
@@ -159,6 +235,9 @@ export async function refreshSinglePassPrices(db, { orderId, order, academyId, n
       const proof = await getLatestShopProofMetadata(db, current.id);
       const update = repriceSinglePassOrder(current, now, proof);
       if (!update || await hasOnlyCancelledShopTickets(db, current.id)) break;
+      const { presalePrice, regularPrice } = update.pricing;
+      const campaignAuditPrefix = getCampaignAuditPrefix(update.pricing);
+      const validCampaignProofSql = getValidEarlyShopProofSql(update.pricing.eventId);
       const action = update.direction === "restore"
         ? `precio de preventa restaurado por comprobante ${proof.id} enviado antes del cierre; ${update.ticketCount} Single Pass de $${regularPrice} a $${presalePrice}`
         : `fin de preventa; ${update.ticketCount} Single Pass de $${presalePrice} a $${regularPrice}`;
@@ -170,7 +249,7 @@ export async function refreshSinglePassPrices(db, { orderId, order, academyId, n
         WHERE id = ? AND status = ? AND amount = ? AND line_items_json = ? AND notes IS ?
           AND ${latestShopProofSnapshotSql} IS ?
           AND (? = 'restore' OR status != 'paid')
-          AND (? != 'restore' OR ${validEarlyShopProofSql})
+          AND (? != 'restore' OR ${validCampaignProofSql})
           AND ${notCancelledOrderSql}
       `).bind(update.amount, update.lineItemsJson, audit, audit, current.id, current.status,
         current.amount, current.line_items_json, current.notes ?? null, getSinglePassProofSnapshot(proof),

@@ -189,7 +189,7 @@ const blockOptions: TicketOption[] = ticketEvent.blocks;
 const dayOptions: TicketOption[] = ticketEvent.days;
 const ticketSalesEndsAt = Date.parse(ticketEvent.salesEndsAt);
 
-const singlePassPricing = ticketPricing.singlePass;
+const singlePassPricing = ticketPricing.singlePass[ticketEvent.eventId as keyof typeof ticketPricing.singlePass];
 const singlePassPresaleEndsAt = Date.parse(singlePassPricing.presaleEndsAt);
 
 const ticketProductDefinitions: TicketProduct[] = [

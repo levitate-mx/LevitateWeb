@@ -1,8 +1,22 @@
 {
   "singlePass": {
-    "presalePrice": 250,
-    "regularPrice": 350,
-    "presaleEndsAt": "2026-10-21T00:00:00-06:00",
-    "timeZone": "America/Mexico_City"
+    "edomex-2026-otono": {
+      "presalePrice": 250,
+      "regularPrice": 350,
+      "presaleEndsAt": "2026-10-21T00:00:00-06:00",
+      "timeZone": "America/Mexico_City"
+    },
+    "orizaba-2027": {
+      "presalePrice": 200,
+      "regularPrice": 300,
+      "presaleEndsAt": "2027-01-21T00:00:00-06:00",
+      "timeZone": "America/Mexico_City"
+    },
+    "cdmx-2027": {
+      "presalePrice": 200,
+      "regularPrice": 300,
+      "presaleEndsAt": "2027-03-21T00:00:00-06:00",
+      "timeZone": "America/Mexico_City"
+    }
   }
 }

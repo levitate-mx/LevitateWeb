@@ -21,9 +21,9 @@ import { getParticipantDriveDiscovery } from "./participant-drive-discovery.js";
 import { getParticipantPhotoDriveConfig, hasParticipantPhotoDriveConfig } from "./participant-photo-drive-config.js";
 import { getParticipantMediaStorageRouter } from "./participant-media-storage-router.js";
 import { serveParticipantDemoPhoto } from "./participant-demo-media.js";
-import { getSinglePassPrice, repriceSinglePassOrder, refreshSinglePassPrices, singlePassPresaleEndsAt,
+import { getSinglePassPrice, getSinglePassPricing, getSinglePassPricingForOrder, repriceSinglePassOrder, refreshSinglePassPrices,
   hasOnlyCancelledShopTickets, preserveSinglePassPricingAudit, getLatestShopProofMetadata,
-  getSinglePassProofSnapshot, latestShopProofSnapshotSql, validEarlyShopProofSql } from "./ticket-pricing.js";
+  getSinglePassProofSnapshot, getValidEarlyShopProofSql, latestShopProofSnapshotSql } from "./ticket-pricing.js";
 import { getRegistrationEventTicketSpecs, getRegistrationTicketPassType, getRegistrationTicketCoverage } from "./ticket-entitlements.js";
 import { getWorkshopLookup, saveWorkshopEnrollment, getAdminWorkshops, saveWorkshopCapacity, saveWorkshopPayment, workshopEvent,
   submitWorkshopPaymentProof, getWorkshopPaymentProof, reviewWorkshopPaymentProof } from "./workshops.js";
@@ -242,6 +242,7 @@ const registrationMediaGroupExtraParticipantPrice = 300;
 const registrationTicketBlocks = ticketEvent.blocks;
 const ticketSalesEndsAt = Date.parse(ticketEvent.salesEndsAt);
 const ticketSalesEndsAtUnixSeconds = Math.floor(ticketSalesEndsAt / 1000);
+const registrationSinglePassPricing = getSinglePassPricing(ticketEvent.eventId);
 const registrationShopProducts = new Map([
   [
     "ticket-block",
@@ -249,7 +250,7 @@ const registrationShopProducts = new Map([
       id: "ticket-block",
       name: "Boleto por bloque",
       category: "Boletos",
-      price: 250,
+      price: registrationSinglePassPricing.presalePrice,
       visual: "ticket",
       itemType: "ticket",
     },
@@ -330,7 +331,7 @@ const registrationShopProducts = new Map([
       id: "block",
       name: "Single pass",
       category: "Boletos",
-      price: 250,
+      price: registrationSinglePassPricing.presalePrice,
       visual: "ticket",
       itemType: "ticket",
     },
@@ -4822,7 +4823,7 @@ async function createRegistrationShopOrder(db, { buyerContact, buyerPhoneContact
     participantSnapshot.venueKey,
   );
   Object.assign(normalizedCart, getRegistrationShopCartTotals(normalizedCart.lineItems, discountCode));
-  const reusableCandidate = await getReusableRegistrationShopOrderWithoutProof(db, curp);
+  const reusableCandidate = await getReusableRegistrationShopOrderWithoutProof(db, curp, shopEvent.id);
   const reusableOrder = reusableCandidate && !(
     hasMediaLineItems
     && parseRegistrationOrderLineItems(reusableCandidate.line_items_json).some(isRegistrationShopTicketPaymentLineItem)
@@ -5168,7 +5169,9 @@ function normalizeRegistrationShopCart(rawItems, discountCode) {
 
   const lineItems = Array.from(groupedItems.values()).map((groupedItem) => {
     const { danceId, danceTitle, groupKey, optionId, optionLabel, product, quantity } = groupedItem;
-    const unitPrice = getRegistrationTicketPassType(product.id) === "block" ? getSinglePassPrice() : product.price;
+    const unitPrice = getRegistrationTicketPassType(product.id) === "block"
+      ? getSinglePassPrice(Date.now(), ticketEvent.eventId)
+      : product.price;
     const amount = unitPrice * quantity;
     const title = [product.name, optionLabel || danceTitle].filter(Boolean).join(" · ");
 
@@ -5484,7 +5487,10 @@ function isRegistrationShopTicketPaymentLineItem(lineItem) {
   const itemType = optionalString(lineItem?.itemType).toLowerCase();
   const productCategory = optionalString(lineItem?.productCategory ?? lineItem?.category).toLowerCase();
 
-  return itemType === "ticket" || productCategory.includes("boleto") || productId.startsWith("ticket-");
+  return itemType === "ticket"
+    || productCategory.includes("boleto")
+    || productId.startsWith("ticket-")
+    || Boolean(getRegistrationTicketPassType(productId));
 }
 
 async function getRegistrationInscriptionOrderByReference(db, reference) {
@@ -5621,7 +5627,7 @@ async function getRegistrationShopOrderRecordById(db, orderId) {
   return refreshSinglePassPrices(db, { order });
 }
 
-async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
+async function getReusableRegistrationShopOrderWithoutProof(db, curp, eventId) {
   try {
     return await db
       .prepare(
@@ -5629,6 +5635,10 @@ async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
           SELECT registration_shop_orders.*
           FROM registration_shop_orders
           WHERE registration_shop_orders.curp = ?
+            AND (
+              registration_shop_orders.event_id = ?
+              OR (registration_shop_orders.event_id IS NULL AND ? = ?)
+            )
             AND registration_shop_orders.status IN ('pending_payment', 'rejected')
             AND NOT EXISTS (
               SELECT 1 FROM registration_event_tickets
@@ -5643,7 +5653,7 @@ async function getReusableRegistrationShopOrderWithoutProof(db, curp) {
           LIMIT 1
         `,
       )
-      .bind(curp)
+      .bind(curp, eventId, eventId, ticketEvent.eventId)
       .first();
   } catch (error) {
     if (isMissingRegistrationShopPaymentProofsTable(error)) {
@@ -5825,8 +5835,20 @@ async function updateRegistrationShopOrderStatus(db, {
   const nextReviewedBy = reviewedBy || "Admin";
   const nextRejectionReason = status === "rejected" ? rejectionReason : "";
   const nextRejectionMessage = status === "rejected" ? optionalString(rejectionMessage) : "";
+  const ticketLineItems = parseRegistrationOrderLineItems(existingOrder.line_items_json)
+    .filter(isRegistrationShopTicketPaymentLineItem);
+  const ticketEventIds = new Set(ticketLineItems.map((line) => (
+    optionalString(line.eventId) || optionalString(existingOrder.event_id) || ticketEvent.eventId
+  )));
 
   if (status === "paid") {
+    if (ticketLineItems.length && (ticketEventIds.size !== 1 || !ticketEventIds.has(ticketEvent.eventId))) {
+      throwHttpError(
+        "ticket_event_not_available",
+        "La edición de estos boletos aún no tiene un catálogo de acceso habilitado.",
+        409,
+      );
+    }
     if (cancelled) {
       throwHttpError("ticket_order_cancelled", "Los boletos de esta orden están cancelados y no pueden volver a aprobarse.", 409);
     }
@@ -5850,8 +5872,13 @@ async function updateRegistrationShopOrderStatus(db, {
   }
 
   // D1's clock closes the last race between validation and committing an old-price approval.
-  const presaleApproval = status === "paid" && existingOrder.status !== "paid"
-    && Boolean(repriceSinglePassOrder(existingOrder, singlePassPresaleEndsAt));
+  const singlePassPricing = getSinglePassPricingForOrder(existingOrder);
+  const presaleApproval = status === "paid" && existingOrder.status !== "paid" && singlePassPricing
+    && Boolean(repriceSinglePassOrder(existingOrder, singlePassPricing.presaleEndsAt));
+  const validCampaignProofSql = getValidEarlyShopProofSql(singlePassPricing?.eventId);
+  const singlePassCutoffUnixSeconds = Math.floor(
+    (singlePassPricing?.presaleEndsAt ?? registrationSinglePassPricing.presaleEndsAt) / 1000,
+  );
   const result = await db
     .prepare(
       `
@@ -5878,7 +5905,7 @@ async function updateRegistrationShopOrderStatus(db, {
         WHERE id = ? AND status = ? AND amount = ? AND line_items_json = ?
           AND (? != 'paid' OR ? >= amount)
           AND ${latestShopProofSnapshotSql} IS ?
-          AND (? = 0 OR unixepoch('now') < ? OR ${validEarlyShopProofSql})
+          AND (? = 0 OR unixepoch('now') < ? OR ${validCampaignProofSql})
           AND (? != 'paid' OR NOT (
             EXISTS (SELECT 1 FROM registration_event_tickets t
               WHERE t.source_order_type = 'shop' AND t.source_order_id = registration_shop_orders.id)
@@ -5905,7 +5932,7 @@ async function updateRegistrationShopOrderStatus(db, {
       nextPaidAmount,
       getSinglePassProofSnapshot(proof),
       presaleApproval ? 1 : 0,
-      singlePassPresaleEndsAt / 1000,
+      singlePassCutoffUnixSeconds,
       status,
     )
     .run();

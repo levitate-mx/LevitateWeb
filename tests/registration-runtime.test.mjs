@@ -1393,6 +1393,72 @@ async function singlePassAdmin(f, suffix = 'presale-admin') {
   return admin;
 }
 
+test('future Single Pass orders refresh at their own cutoff without changing Edomex history', async t => {
+  const f = await fixture(t);
+  const admin = await singlePassAdmin(f, 'future-single-pass-admin');
+  const insert = f.db.sqlite.prepare(`INSERT INTO registration_shop_orders
+    (id, curp, participant_name, academy_id, academy_name, venue, event_id, reference, amount,
+      status, line_items_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const seed = ({ id, eventId, venue, unitPrice, status = 'pending_payment', createdAt }) => {
+    const lines = JSON.stringify([{
+      amount: unitPrice,
+      eventId,
+      optionId: 'bloque-1',
+      productId: 'block',
+      quantity: 1,
+      unitPrice,
+    }]);
+    insert.run(id, `${id}-CURP`, id, admin.academyId, 'Academia de prueba', venue, eventId,
+      `REF-${id}`, unitPrice, status, lines, createdAt, createdAt);
+  };
+  seed({
+    id: 'single-pass-history', eventId: 'edomex-2026-otono', venue: 'edomex', unitPrice: 250,
+    status: 'paid', createdAt: '2026-10-20 12:00:00',
+  });
+  seed({
+    id: 'single-pass-orizaba', eventId: 'orizaba-2027', venue: 'veracruz', unitPrice: 200,
+    createdAt: '2027-01-20 12:00:00',
+  });
+  seed({
+    id: 'single-pass-cdmx', eventId: 'cdmx-2027', venue: 'cdmx', unitPrice: 200,
+    createdAt: '2027-03-20 12:00:00',
+  });
+
+  let now = Date.parse('2027-01-21T06:00:00.000Z');
+  t.mock.method(Date, 'now', () => now);
+  await f.request('/admin/payment-orders', { cookie: admin.cookie });
+  assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_shop_orders WHERE id = ?').get('single-pass-orizaba').amount, 300);
+  assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_shop_orders WHERE id = ?').get('single-pass-cdmx').amount, 200);
+  assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_shop_orders WHERE id = ?').get('single-pass-history').amount, 250);
+  const orizabaAudit = f.db.sqlite.prepare('SELECT notes FROM registration_shop_orders WHERE id = ?').get('single-pass-orizaba').notes;
+  assert.match(orizabaAudit, /^\[single-pass-price orizaba-2027 2027-01-21T00:00:00-06:00\]/);
+  await f.request('/admin/payment-orders', { cookie: admin.cookie });
+  assert.equal(f.db.sqlite.prepare('SELECT notes FROM registration_shop_orders WHERE id = ?').get('single-pass-orizaba').notes,
+    orizabaAudit, 'the campaign adjustment remains idempotent');
+
+  now = Date.parse('2027-03-21T06:00:00.000Z');
+  await f.request('/admin/payment-orders', { cookie: admin.cookie });
+  assert.equal(f.db.sqlite.prepare('SELECT amount FROM registration_shop_orders WHERE id = ?').get('single-pass-cdmx').amount, 300);
+  assert.match(f.db.sqlite.prepare('SELECT notes FROM registration_shop_orders WHERE id = ?').get('single-pass-cdmx').notes,
+    /^\[single-pass-price cdmx-2027 2027-03-21T00:00:00-06:00\]/);
+
+  f.db.sqlite.prepare(`INSERT INTO registration_shop_payment_proofs
+    (id, order_id, file_name, content_type, file_size, data_url, uploaded_at, created_at)
+    VALUES ('future-proof', 'single-pass-orizaba', 'pago.png', 'image/png', 3,
+      'data:image/png;base64,AQID', '2027-01-21 06:00:00', '2027-01-21 06:00:00')`).run();
+  f.db.sqlite.prepare("UPDATE registration_shop_orders SET status = 'payment_reported' WHERE id = 'single-pass-orizaba'").run();
+  const { json: blockedApproval } = await f.request('/admin/inscription-order/status', {
+    method: 'POST', cookie: admin.cookie, status: 409,
+    body: { id: 'single-pass-orizaba', orderType: 'shop', status: 'paid', paidAmount: 300 },
+  });
+  assert.equal(blockedApproval.error.code, 'ticket_event_not_available');
+  assert.equal(f.db.sqlite.prepare('SELECT status FROM registration_shop_orders WHERE id = ?').get('single-pass-orizaba').status,
+    'payment_reported');
+  assert.equal(f.db.sqlite.prepare('SELECT COUNT(*) AS total FROM registration_event_tickets WHERE source_order_id = ?')
+    .get('single-pass-orizaba').total, 0);
+});
+
 test('ticket sales close at exactly 4 pm CDMX while earlier unpaid orders remain lookup-only', async t => {
   const f = await fixture(t);
   assert.equal(ticketEvent.salesEndsAt, '2026-11-13T16:00:00-06:00');
